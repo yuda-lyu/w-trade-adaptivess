@@ -5025,13 +5025,14 @@ if (es.length > 0) {
     
     <dt class="tag-description">Description:</dt>
     <dd class="tag-description"><ul class="dummy"><li><p>起跑前查詢各角色所用訂閱之額度(唯讀;查詢本身失敗不擋,僅記 note)</p>
-<p>回傳內容不含金鑰、帳號與電子郵件。</p></li></ul></dd>
+<p>回傳內容不含金鑰、帳號與電子郵件。
+probe 為 true 時,主模型之全部金鑰皆達門檻而設有 fallback 者,會實際試一次備援(免費池之備援用盡即擋下);未給 probe 者不探測。</p></li></ul></dd>
     
 
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="arsi_dispatchers.mjs.html">arsi/dispatchers.mjs</a>, <a href="arsi_dispatchers.mjs.html#line154">line 154</a>
+        <a href="arsi_dispatchers.mjs.html">arsi/dispatchers.mjs</a>, <a href="arsi_dispatchers.mjs.html#line340">line 340</a>
     </li></ul></dd>
     
 
@@ -5185,7 +5186,7 @@ console.log(q.ok)</code></pre>
                 </td>
             
 
-            <td class="description last"><p>輸入各角色設定(同 makeDispatch)</p></td>
+            <td class="description last"><p>輸入各角色設定(同 makeDispatch;角色之 quotaMaxPercent 優先於 maxPercent)</p></td>
         </tr>
 
     
@@ -5299,7 +5300,125 @@ console.log(q.ok)</code></pre>
                 </td>
             
 
-            <td class="description last"><p>輸入用量上限百分比,任一視窗達此值即視為擋下,預設95</p></td>
+            <td class="description last"><p>輸入用量上限百分比,任一視窗達此值即視為擋下,非有限數取預設,預設95</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>probe</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Boolean</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>false</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>輸入是否於主模型達門檻而有 fallback 時實際探測備援,預設 false</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>probeTimeoutMs</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Number</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>60000</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>輸入每次探測之逾時毫秒數,預設 60000</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>inject</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>輸入測試用之替身:{ wda(派工套件之替身) }</p></td>
         </tr>
 
     
@@ -5332,7 +5451,7 @@ console.log(q.ok)</code></pre>
 
         
 <div class="param-desc">
-    <p>回傳 Promise,resolve 為 { ok, why, rows },rows 每列為 { role, kind, model, windows: [{ label, percent, resetAt }], blocked, note }</p>
+    <p>回傳 Promise,resolve 為 { ok, why, retryAt, rows },retryAt 為被擋之角色達門檻之視窗全部重置之時刻(查不到或未被擋為 null),rows 每列為 { role, kind, model, windows: [{ label, percent, resetAt }], blocked, note, maxPercent, retryAt, limited(主模型之全部金鑰皆達門檻時,是否有金鑰被限流) }</p>
 </div>
 
 
@@ -10444,13 +10563,15 @@ dispatch.skillsRoot 未給時取使用者家目錄下之 .claude/skills; 回傳�
     
     <dt class="tag-description">Description:</dt>
     <dd class="tag-description"><ul class="dummy"><li><p>建立派工函數(以 w-dispatch-ai 呼叫各家 CLI;模型由 agents.<role> 指定,可含 fallback 鏈)</p>
-<p>金鑰自 envFile 讀取,只傳給該次子程序。回傳之函數依序嘗試 agents[role] 與其 fallback,首個成功者即回傳。</p></li></ul></dd>
+<p>金鑰自 envFile 讀取,只傳給該次子程序。回傳之函數依序嘗試 agents[role] 與其 fallback,首個成功者即回傳。
+因額度而未完成(主模型之用量達門檻而不派、或派工套件回報 errorType 為 quota)者記為額度之失敗;鏈上每一家皆如此時結果帶 quota: true。
+全部 opencode 條目之錯誤輸出(stderr)經共用遮罩後附寫到派工紀錄檔同夾之「主檔名.stderr.log」。</p></li></ul></dd>
     
 
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="arsi_dispatchers.mjs.html">arsi/dispatchers.mjs</a>, <a href="arsi_dispatchers.mjs.html#line28">line 28</a>
+        <a href="arsi_dispatchers.mjs.html">arsi/dispatchers.mjs</a>, <a href="arsi_dispatchers.mjs.html#line184">line 184</a>
     </li></ul></dd>
     
 
@@ -10563,6 +10684,8 @@ let r = await dispatch('node', { prompt, tag: 'r001_node', logFile: './work/agen
         
 
         
+        <th>Default</th>
+        
 
         <th class="last">Description</th>
     </tr>
@@ -10597,8 +10720,12 @@ let r = await dispatch('node', { prompt, tag: 'r001_node', logFile: './work/agen
             
 
             
+                <td class="default">
+                
+                </td>
+            
 
-            <td class="description last"><p>輸入各角色設定,agents.<role> 為 { kind: 'opencode', id, variant, timeoutMin, fallback } 或 { kind: 'claude', model, effort, timeoutMin }</p></td>
+            <td class="description last"><p>輸入各角色設定,agents.<role> 為 { kind: 'opencode', id, variant, timeoutMin, quotaMaxPercent, fallback } 或 { kind: 'claude', model, effort, timeoutMin };quotaMaxPercent 為該角色之用量守門百分比(優先於 maxPercent;大於 100 表示不以用量守門,被限流者仍不派)</p></td>
         </tr>
 
     
@@ -10628,6 +10755,10 @@ let r = await dispatch('node', { prompt, tag: 'r001_node', logFile: './work/agen
                 </td>
             
 
+            
+                <td class="default">
+                
+                </td>
             
 
             <td class="description last"><p>輸入 w-dispatch-ai 所在之技能根路徑(其 node_modules 內須有 w-dispatch-ai)</p></td>
@@ -10663,6 +10794,10 @@ let r = await dispatch('node', { prompt, tag: 'r001_node', logFile: './work/agen
             
 
             
+                <td class="default">
+                
+                </td>
+            
 
             <td class="description last"><p>輸入金鑰環境檔路徑</p></td>
         </tr>
@@ -10697,8 +10832,90 @@ let r = await dispatch('node', { prompt, tag: 'r001_node', logFile: './work/agen
             
 
             
+                <td class="default">
+                
+                </td>
+            
 
             <td class="description last"><p>輸入子程序工作路徑</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>maxPercent</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Number</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>95</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>輸入訂閱之用量守門百分比,任一視窗達此值即不派該條目(由 fallback 接手),非有限數取預設,預設95</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>inject</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>輸入測試用之替身:{ wda(派工套件之替身) }</p></td>
         </tr>
 
     
@@ -10731,7 +10948,7 @@ let r = await dispatch('node', { prompt, tag: 'r001_node', logFile: './work/agen
 
         
 <div class="param-desc">
-    <p>回傳 async (role, { prompt, tag, logFile }) → { ok, error, agent, ... } 之派工函數;該 role 未設定時回傳 ok 為 false</p>
+    <p>回傳 async (role, { prompt, tag, logFile }) → { ok, error, agent, quota, ... } 之派工函數;該 role 未設定時回傳 ok 為 false;quota 為 true 表示鏈上每一家皆因額度而未能完成</p>
 </div>
 
 
@@ -18500,7 +18717,7 @@ console.log(n)
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 21:49:06 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Mon Nov 16 2026 00:52:53 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>
