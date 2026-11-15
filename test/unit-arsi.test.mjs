@@ -24,6 +24,9 @@ let setup = (t, o = {}) => {
         artifactFiles: ['x.mjs'],
         dispatch: async (role, a) => {
             calls.dispatch.push({ role, tag: a.tag })
+            if (o.dispatchThrow) {
+                throw o.dispatchThrow
+            }
             let wd = path.dirname(a.logFile)
             if (role === 'node') {
                 fs.writeFileSync(path.join(wd, 'x.mjs'), `v${calls.dispatch.length}`)
@@ -95,7 +98,8 @@ describe('arsi:節點(派工 → 迴圈重跑 → 節點文件)', function () {
     it('額度用盡而未完成(派工結果 quota: true)⇒ 不重跑驗證、不把工作夾內之半成品當成交付;節點文件記 failed、呼叫 onNodeDone、拋錯(錯誤物件帶 quota 與 doc)', async () => {
         //R-RUN-8(Gitea #156): 替身之派工照樣在工作夾留下成品檔與文件(= 半成品), 但回 quota: true ⇒ verify 不得被呼叫
         let { arsi, records, calls } = setup(t, { dispatchResult: { ok: false, quota: true, error: 'm: 額度用盡', agent: { kind: 'fake', model: 'fake-node' } } })
-        await assert.rejects(() => arsi.runNode({ nodeId: 'n1', spec: { arms: ['A'] }, round: 1, task: {} }), (e) => /額度用盡而未完成/.test(e.message) && e.quota === true && e.doc.status === 'failed' && e.doc.nodeId === 'n1')
+        //R-RUN-8⑦(Gitea #157): 額度造成之失敗為暫時性失敗 ⇒ 錯誤物件另帶 transient: true(嚴格為 true; 引擎前緣結案據此不計 retries)
+        await assert.rejects(() => arsi.runNode({ nodeId: 'n1', spec: { arms: ['A'] }, round: 1, task: {} }), (e) => /額度用盡而未完成/.test(e.message) && e.quota === true && e.transient === true && e.doc.status === 'failed' && e.doc.nodeId === 'n1')
         assert.equal(calls.verify.length, 0, '不重跑驗證')
         let d = records.getNodeDoc('n1')
         assert.deepEqual([d.status, d.attempt, d.harness.ok, d.agent.ok, d.results, d.conclusion, d.plan, d.code], ['failed', 1, false, false, null, null, null, null])
@@ -112,6 +116,20 @@ describe('arsi:節點(派工 → 迴圈重跑 → 節點文件)', function () {
             await c.arsi.runNode({ nodeId: 'n3', spec: {}, round: 1, task: {} })
             assert.equal(c.calls.verify.length, 1, `quota = ${String(q)}`)
         }
+    })
+
+    it('額度以外之失敗(成品無法評估、驗證拋錯、派工拋錯)⇒ 錯誤物件不帶 transient(也不帶 quota); 前緣照舊計 retries(R-RUN-8⑦, Gitea #157)', async () => {
+        //成品無法評估(驗證回 ok: false): 拋錯附 doc, 既有行為
+        let a = setup(t, { verify: () => ({ ok: false, error: '成品無法評估', issues: [], checks: {} }) })
+        await assert.rejects(() => a.arsi.runNode({ nodeId: 'n1', spec: {}, round: 1, task: {} }), (e) => /節點未交付可評估之成品/.test(e.message) && e.doc.status === 'failed' && e.transient === undefined && e.quota === undefined)
+        //驗證本身拋錯: 原錯誤逕拋, 不被加上標記
+        let b = setup(t, { verify: () => {
+            throw new Error('驗證炸了')
+        } })
+        await assert.rejects(() => b.arsi.runNode({ nodeId: 'n2', spec: {}, round: 1, task: {} }), (e) => e.message === '驗證炸了' && e.transient === undefined && e.quota === undefined)
+        //派工器拋例外: 原錯誤逕拋(引擎視為一般失敗)
+        let c = setup(t, { dispatchThrow: new Error('派工炸了') })
+        await assert.rejects(() => c.arsi.runNode({ nodeId: 'n3', spec: {}, round: 1, task: {} }), (e) => e.message === '派工炸了' && e.transient === undefined && e.quota === undefined)
     })
 
     it('重做之派工因額度而未完成 ⇒ 節點文件之次數加一並留歷史、記 failed;不動前次已移入 attempt 夾之交付物', async () => {
@@ -132,7 +150,7 @@ describe('arsi:節點(派工 → 迴圈重跑 → 節點文件)', function () {
             texts: { nodeBrief: () => 'b', nodePrompt: () => 'p', nodeTemplate: () => ({ t: 1 }), dreamBrief: () => 'd', dreamPrompt: () => 'p', dreamTemplate: () => ({ t: 1 }) },
             hooks: {},
         })
-        await assert.rejects(() => arsi2.runNode({ nodeId: 'n1', spec: {}, round: 1, task: {}, rework: '請補對照' }), (e) => e.quota === true && e.doc.attempt === 2)
+        await assert.rejects(() => arsi2.runNode({ nodeId: 'n1', spec: {}, round: 1, task: {}, rework: '請補對照' }), (e) => e.quota === true && e.transient === true && e.doc.attempt === 2)
         let d = a.records.getNodeDoc('n1')
         assert.deepEqual([d.status, d.attempt, d.history.length, d.history[0].attempt], ['failed', 2, 1, 1])
         assert(fs.existsSync(path.join(t.dir, 'work', 'n1', 'attempt1', 'x.mjs')), '前次之成品檔留在 attempt1')

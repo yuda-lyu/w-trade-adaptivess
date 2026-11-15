@@ -125,7 +125,7 @@ node node_modules/w-trade-adaptivess/src/tools/initProject.mjs --root .
 - 節點與做夢各依任務書工作;交付之文件有固定規格(`arsi.node/3`、`arsi.dream/3`;見 `src/arsi/records.mjs` 檔頭),由迴圈檢核、渲染與存檔.
 - 迴圈對每個節點之成品**重跑**取得正本數字(另換亂數種子與同分次序重放),並掃描 agent 之操作紀錄(禁區、工作夾外之寫入、評估次數).
 - 主控之工具:`node tools/armDecide.mjs`(審臂目錄之提案)、`node g_rsi.mjs --mode frontier|board|annotate|reverify|extfill`、`node tools/quota.mjs`、`node tools/replayCheck.mjs`、`node tools/fakeRound.mjs`(以假 agent 走完整一輪,不耗模型額度;改流程後之回歸).
-- 節點額度用盡時之行為:主模型(`opencode-go` 之條目)用量達門檻(預設 95)時派工改用 `fallback`.備援為 opencode 之免費池者,用量用盡時 CLI 不會自行結束;偵測與終止由派工套件 `w-dispatch-ai` 負責(其結果 `errorType` 為 `quota`,數秒內回),本套件依此欄判定 —— 派工結果帶 `quota: true`(鏈上每一家皆因額度而未完成,含主模型因用量達門檻而不派;任一家為其他原因之失敗者不標),節點記為失敗且**不重跑驗證、不以半成品入樹**,提案留在前緣待日後重試.起跑前與連跑時之額度檢查會實際試一次備援,備援亦因額度而不可用即不啟動(離開碼 3;事件 `skipped`,`reason: quota`,帶 `retryAt` = 達門檻之視窗全部重置之時刻);`node tools/quota.mjs --probe` 可先行試算(未給 `--probe` 只看用量、不探測).門檻取 `settings.rsi.preflight.quotaMaxPercent`,各角色另可設 `agents.<role>.quotaMaxPercent`(優先;派工與起跑前之檢查同一個值;大於 100 = 不以用量守門,用到訂閱實際用盡為止,被限流者仍不派).每次 opencode 派工之錯誤輸出(stderr;已經 wsemi 之共用遮罩遮去本次讀到之金鑰)附寫於派工紀錄檔同夾之 `<主檔名>.stderr.log`.額度用盡即止需 `dispatch.skillsRoot` 之 `w-dispatch-ai` 為含此修正之版本(1.0.95 起;技能根經 AI 設定庫更新後取得);較舊之版本下備援用盡時仍會空等至逾時.
+- 節點額度用盡時之行為:主模型(`opencode-go` 之條目)用量達門檻(預設 95)時派工改用 `fallback`.備援為 opencode 之免費池者,用量用盡時 CLI 不會自行結束;偵測與終止由派工套件 `w-dispatch-ai` 負責(其結果 `errorType` 為 `quota`,數秒內回),本套件依此欄判定 —— 派工結果帶 `quota: true`(鏈上每一家皆因額度而未完成,含主模型因用量達門檻而不派;任一家為其他原因之失敗者不標),節點記為失敗且**不重跑驗證、不以半成品入樹**,提案留在前緣待日後重試.額度造成之失敗為暫時性失敗:節點拋出之錯誤另帶 `transient: true`,引擎 `w-recursi`(1.0.12 起)據此於前緣結案時**不消耗重試次數 `retries`**、另記 `transients`,故連續多輪額度用盡不會把該提案封存(其他原因之失敗照舊計 `retries`).引擎之 `frontier.maxTransient`(暫時性失敗之累計上限;預設不設)目前未開放於專案設定,即不設上限.起跑前與連跑時之額度檢查會實際試一次備援,備援亦因額度而不可用即不啟動(離開碼 3;事件 `skipped`,`reason: quota`,帶 `retryAt` = 達門檻之視窗全部重置之時刻);`node tools/quota.mjs --probe` 可先行試算(未給 `--probe` 只看用量、不探測).門檻取 `settings.rsi.preflight.quotaMaxPercent`,各角色另可設 `agents.<role>.quotaMaxPercent`(優先;派工與起跑前之檢查同一個值;大於 100 = 不以用量守門,用到訂閱實際用盡為止,被限流者仍不派).每次 opencode 派工之錯誤輸出(stderr;已經 wsemi 之共用遮罩遮去本次讀到之金鑰)附寫於派工紀錄檔同夾之 `<主檔名>.stderr.log`.額度用盡即止需 `dispatch.skillsRoot` 之 `w-dispatch-ai` 為含此修正之版本(1.0.95 起;技能根經 AI 設定庫更新後取得);較舊之版本下備援用盡時仍會空等至逾時.
 - 專案自有之收尾(例如更新專案之指引文件)以輪末回調與事件提供,不寫死在通用層.
 
 ## 5. 依賴注入
@@ -148,7 +148,8 @@ npm test
 | `unit-armCatalog.test.mjs` | 10 | 臂目錄之提案、審定與生效目錄 |
 | `unit-backtestGrade.test.mjs` | 10 | 檢定旗標之分級 |
 | `unit-score.test.mjs` | 10 | S、階梯與否決 |
-| `unit-arsi.test.mjs` | 11 | 通用流程(派工、驗證、任務書皆以假件注入;含額度用盡而未完成之節點不重跑驗證、不入樹) |
+| `unit-arsi.test.mjs` | 12 | 通用流程(派工、驗證、任務書皆以假件注入;含額度用盡而未完成之節點不重跑驗證、不入樹,其錯誤帶 `quota` 與 `transient`,額度以外之失敗不帶) |
+| `unit-frontierTransient.test.mjs` | 4 | 額度失敗不消耗前緣重試之接縫:真 `w-recursi` + 真領域,只把派工換成假的;額度用盡 ⇒ 前緣提案維持 `proposed`、`retries` 不增、`transients` 逐輪加一,一般失敗照舊計 `retries` 至封存 |
 | `unit-dispatchQuota.test.mjs` | 26 | 派工之額度處置(派工套件以替身注入):結果帶 `quota`、用量門檻(全域與各角色)、錯誤輸出留存與遮罩、起跑前之備援探測與 `retryAt` |
 | `unit-quotaCli.test.mjs` | 6 | 額度處置之接線:以命令列程式於合成專案根實跑(替身派工套件),驗起跑前與連跑時之探測、事件 `skipped` 之 `retryAt`、門檻經領域層傳到派工器、`tools/quota.mjs --probe` |
 | `unit-package.test.mjs` | 11 | 發布面、依賴、專案根之錨點、`initProject`、去識別(本機路徑、內網主機名與位址之通則檢查與其自驗);於 npm 包內(無 `.git` 亦無 `.gitignore`)略過 `.gitignore` 之列項檢查、掃描範圍改為包內全部文字檔 |

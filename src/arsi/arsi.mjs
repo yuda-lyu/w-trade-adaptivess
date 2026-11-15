@@ -89,7 +89,7 @@ let createArsi = ({ records, dispatch, verify, texts, hooks = {}, workDir, artif
     }
 
     //runNode, 執行一個節點任務(首次或重做); 回 { doc, raw }; 成品無法評估 ⇒ 拋錯(錯誤物件附 doc);
-    //  派工結果 quota: true(額度用盡而未完成; 規則 R-RUN-8)⇒ 不重跑驗證、節點文件記 failed、拋錯(錯誤物件附 doc 並帶 quota: true)
+    //  派工結果 quota: true(額度用盡而未完成; 規則 R-RUN-8)⇒ 不重跑驗證、節點文件記 failed、拋錯(錯誤物件附 doc 並帶 quota: true 與 transient: true)
     let runNode = async ({ nodeId, spec, round, task, rework = null }) => {
         let wd = nodeWorkDir(nodeId)
         fs.mkdirSync(wd, { recursive: true })
@@ -132,7 +132,7 @@ let createArsi = ({ records, dispatch, verify, texts, hooks = {}, workDir, artif
         let r = await dispatch('node', { prompt: texts.nodePrompt(ctx), tag: `${roundName(round)}_${nodeId.slice(0, 8)}_a${attempt}`, logFile: path.join(wd, `agent_a${attempt}.log`) })
         let agent = { role: 'node', ...(r.agent || {}), startedAt, endedAt: nowIso(), durationSec: Math.round((Date.now() - t0) / 1000), ok: r.ok === true, error: r.ok === true ? null : String(r.error || '').slice(0, 500) }
         //額度用盡而未完成(派工結果 quota: true; 規則 R-RUN-8): agent 未跑完, 工作夾內只有半成品(範本原樣之文件、草稿)⇒ 不重跑驗證、不當成交付,
-        //  節點文件記 failed、呼叫 onNodeDone 後拋錯(錯誤物件帶 quota: true 與 doc); 引擎把該提案留在前緣, 額度恢復後之輪次重試
+        //  節點文件記 failed、呼叫 onNodeDone 後拋錯(錯誤物件帶 quota: true、transient: true 與 doc); 引擎把該提案留在前緣(不計 retries、另記 transients), 額度恢復後之輪次重試
         //  其他原因之派工失敗(逾時、離開碼非零…)維持既有行為: 照常讀 node.json 並重跑驗證
         if (r.ok !== true && r.quota === true) {
             let why = '節點 agent 之額度用盡而未完成(未重跑驗證; 額度恢復後重試)'
@@ -155,7 +155,9 @@ let createArsi = ({ records, dispatch, verify, texts, hooks = {}, workDir, artif
             })
             await call('onNodeDone', doc)
             log(`節點 ${nodeId.slice(0, 8)} 失敗: ${why}(agent ${agent.durationSec}s)`)
-            throw Object.assign(new Error(`${why}: ${String(r.error || '').slice(0, 300)}`), { doc, quota: true })
+            //transient: true(Gitea #157; w-recursi 1.0.12 起): 額度用盡不是候選本身之問題 ⇒ 引擎前緣結案不計 retries、另記 transients(同程序與子程序兩種評估模式皆依拋出之值之 transient === true 判定);
+            //  評估器(domain.mjs 之 evaluator.evaluate)不攔截此錯誤、原物件逕拋給引擎, 欄位不會被重包而遺失
+            throw Object.assign(new Error(`${why}: ${String(r.error || '').slice(0, 300)}`), { doc, quota: true, transient: true })
         }
         let part = readJson(path.join(wd, 'node.json'))
         let docIssues = part ? checkNodeAgentPart(part) : ['未交付 node.json 或其內容不是合法 JSON']
