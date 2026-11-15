@@ -142,15 +142,15 @@ npm test
 | `unit-guard.test.mjs` | 31 | 架構邊界(含子行程隱藏視窗之守門與其自驗);agent 操作紀錄之掃描與禁區 |
 | `unit-run.test.mjs` | 18 | 執行規模、資源閘、單一執行之鎖、事件檔 |
 | `unit-records.test.mjs` | 16 | 節點文件與做夢文件之規格、檢核、渲染 |
-| `unit-texts.test.mjs` | 11 | 任務書文字 |
+| `unit-texts.test.mjs` | 12 | 任務書文字(含「不得改」之程式夾由所在推得、探索類方向之去重說明、前次方向回顧之範本) |
 | `unit-armCatalog.test.mjs` | 10 | 臂目錄之提案、審定與生效目錄 |
 | `unit-backtestGrade.test.mjs` | 10 | 檢定旗標之分級 |
 | `unit-score.test.mjs` | 10 | S、階梯與否決 |
 | `unit-arsi.test.mjs` | 9 | 通用流程(派工、驗證、任務書皆以假件注入) |
-| `unit-package.test.mjs` | 9 | 發布面、依賴、專案根之錨點、`initProject`、去識別(本機路徑、內網主機名與位址之通則檢查與其自驗) |
+| `unit-package.test.mjs` | 11 | 發布面、依賴、專案根之錨點、`initProject`、去識別(本機路徑、內網主機名與位址之通則檢查與其自驗);於 npm 包內(無 `.git` 亦無 `.gitignore`)略過 `.gitignore` 之列項檢查、掃描範圍改為包內全部文字檔 |
 | `unit-toolbox.test.mjs` | 7 | 共用工具區之機械檢查 |
 | `unit-briefTrials.test.mjs` | 6 | 任務書條款之隨機對照 |
-| `unit-claimKey.test.mjs` | 5 | 驗證類方向之主張鍵 |
+| `unit-claimKey.test.mjs` | 8 | 驗證類方向之主張鍵;探索類方向與既有節點同臂同起點時另帶區分用之鍵(含已執行者逐字重提之略過);輪末摘要「方向未入前緣」各行 |
 | `unit-pickLoader.test.mjs` | 4 | 挑選模組之靜態檢查與載入 |
 | `unit-pickStore.test.mjs` | 3 | 共同儲存區 |
 | `unit-ledgerReal.test.mjs` | 3 | 真實帳本與官方回測逐張一致(本機無策略庫與帳本時略過) |

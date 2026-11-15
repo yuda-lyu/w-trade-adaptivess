@@ -61,7 +61,7 @@ else if (mode === 'dry') {
     let r = await rsi.explore({ dry: true, arms: P.run.nodesPerRound, novelty: P.run.nodesPerRound })
     console.log(`下一輪 ${roundName(r.round)} 之計畫(${r.items.length} 個節點;同時 ${P.run.parallelNodes} 個;本次執行連跑 ${P.run.roundsPerRun} 輪):`)
     for (let it of r.items) {
-        console.log(`  ${it.id.slice(0, 10)} ${it.kindOf} ${P.typeOf(it.spec) === 'verify' ? '〔驗證〕' : '〔探索〕'}${it.spec.arms.join('+')}${it.spec.base ? ` ←${it.spec.base.slice(0, 8)}` : ''}${it.spec.claim ? `〔主張 ${it.spec.claim}〕` : ''} | ${it.reason || ''}`)
+        console.log(`  ${it.id.slice(0, 10)} ${it.kindOf} ${P.typeOf(it.spec) === 'verify' ? '〔驗證〕' : '〔探索〕'}${it.spec.arms.join('+')}${it.spec.base ? ` ←${it.spec.base.slice(0, 8)}` : ''}${it.spec.claim ? `〔${P.typeOf(it.spec) === 'verify' ? '主張' : '鍵'} ${it.spec.claim}〕` : ''} | ${it.reason || ''}`)
     }
     for (let x of r.rejected) {
         console.log(`  (拒) ${x.spec.arms.join('+')}: ${x.why}`)
@@ -419,7 +419,7 @@ else if (mode === 'extfill') {
 }
 else if (mode === 'frontier') {
     //列出前緣; 或結案: node g_rsi.mjs --mode frontier --close A02_ntPit[+B14_pitKey] --why "<理由>" [--claim <主張鍵>]
-    //  --claim: 主張鍵(8 個十六進位字; 列示中之〔主張 …〕); 取命令列之原字串(全為數字之鍵不得被轉成數值)
+    //  --claim: 主張鍵(8 個十六進位字; 列示中之〔主張 …〕; 探索類之區分用之鍵列為〔鍵 …〕, 同以本參數指明); 取命令列之原字串(全為數字之鍵不得被轉成數值)
     let claimArg = () => {
         let i = process.argv.indexOf('--claim'); let v = i > 0 ? process.argv[i + 1] : undefined; return typeof v === 'string' && /^[0-9a-f]{8}$/.test(v) ? v : undefined
     }
@@ -454,7 +454,7 @@ else if (mode === 'frontier') {
         }
     }
     for (let f of rsi.store.listFrontier()) {
-        console.log(`  ${f.status.padEnd(14)} p${f.priority === undefined ? '-' : f.priority} ${f.spec && f.spec.arms ? f.spec.arms.join('+') : '?'}${f.spec && f.spec.base ? ` ←${String(f.spec.base).slice(0, 8)}` : ''}${f.spec && f.spec.claim ? `〔主張 ${f.spec.claim}〕` : ''} | ${String(f.reason || '').slice(0, 80)}`)
+        console.log(`  ${f.status.padEnd(14)} p${f.priority === undefined ? '-' : f.priority} ${f.spec && f.spec.arms ? f.spec.arms.join('+') : '?'}${f.spec && f.spec.base ? ` ←${String(f.spec.base).slice(0, 8)}` : ''}${f.spec && f.spec.claim ? `〔${P.typeOf(f.spec) === 'verify' ? '主張' : '鍵'} ${f.spec.claim}〕` : ''} | ${String(f.reason || '').slice(0, 80)}`)
     }
 }
 else if (mode === 'annotate') {

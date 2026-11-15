@@ -32,6 +32,10 @@ let walk = (dir, out = []) => {
 }
 let relOf = (fp) => path.relative(FD_ROOT, fp).replace(/\\/g, '/')
 let pkg = JSON.parse(read('package.json'))
+//installed: 套件夾既無 .git 亦無 .gitignore ⇒ 安裝後或解開之 npm 包(npm 預設不收 .gitignore, 包內之檔 = 已發布之內容)。
+//  此時以 .gitignore 為對象之檢查(列項)改略過並說明, 以 .gitignore 定掃描範圍者改以包內之全部文字檔為範圍(不含 node_modules 與測試自己產生之暫存夾);
+//  repo 內(有 .git 或 .gitignore)之檢查不變 —— 有 .git 而缺 .gitignore 時仍讀檔失敗, 不因本旗標放寬
+let installed = !fs.existsSync(path.join(FD_ROOT, '.git')) && !fs.existsSync(path.join(FD_ROOT, '.gitignore'))
 
 describe('套件:發布面與依賴', function () {
     it('package.json:scripts 只有 test 與 deploy;不設 exports / files / type;main 指 dist 之 UMD;test 指令為規定之字串', () => {
@@ -41,6 +45,13 @@ describe('套件:發布面與依賴', function () {
         assert(pkg.exports === undefined && pkg.files === undefined && pkg.type === undefined)
         assert.equal(pkg.main, 'dist/w-trade-adaptivess.umd.js')
         assert(!fs.existsSync(path.join(FD_ROOT, '.mocharc.json')) && !fs.existsSync(path.join(FD_ROOT, '.npmignore')))
+    })
+
+    it('.gitignore:列 node_modules、tmp 等;不得排除 sgud / src / test(npm 包不含 .gitignore ⇒ 於包內略過)', function () {
+        //R-PKG-1; 套件夾既無 .git 亦無 .gitignore(npm 包)⇒ 無從檢查, 略過; repo 內缺 .gitignore 者(有 .git)照舊失敗
+        if (installed) {
+            this.skip()
+        }
         let gi = read('.gitignore').split(/\r?\n/)
         for (let x of ['node_modules', 'tmp', 'test/_tmp', 'CLAUDE*.md', 'rsi', 'data']) {
             assert(gi.includes(x), `.gitignore 須列 ${x}`)
@@ -181,8 +192,11 @@ describe('套件:發布內容不含宿主之痕跡', function () {
     //R-PKG-5: 只做「通則」之檢查(本機路徑、內網位址與主機名), 不列任何使用端之名稱 —— 名單本身寫進公開庫即是洩漏; 使用端名稱與帳號由發布前之外部去識別檢查負責
     //  掃描範圍 = 版控與 npm 包之內容: 套件根之全部檔(含本檔與建置產物 dist、docs), 依 .gitignore 略過版控所排除者(執行時讀取, 不另抄一份清單)與 .git;
     //    文字檔以內容判別(前 8 KB 無 NUL 位元組), 不以副檔名
-    let ignoredOf = () => {
-        let rules = read('.gitignore').split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !l.startsWith('!')).map((r) => {
+    //  installed(npm 包; 無 .gitignore)者以 INSTALLED_SKIP 代之: 包內之檔本即已發布之內容, 只略過安裝時帶入之 node_modules(任一層)與測試自己產生之暫存夾(只認包根下之路徑;
+    //  前導 / 者錨定於包根 —— 不帶斜線之名稱會比對任一路徑段, 已發布之 src/tmp/ 之類即被略過而漏查)
+    let INSTALLED_SKIP = ['node_modules', '/tmp', 'test/_tmp', '/testPending', '/_test_adaptivess']
+    let ignoredOf = (lines = installed ? INSTALLED_SKIP : read('.gitignore').split(/\r?\n/)) => {
+        let rules = lines.map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !l.startsWith('!')).map((r) => {
             let g = r.replace(/^\//, '').replace(/\/$/, '')
             return { anchored: r.includes('/'), re: new RegExp(`^${g.split('*').map((x) => x.replace(/[.+?^$()|[\]\\{}]/g, '\\$&')).join('[^/]*')}$`) }
         })
@@ -340,6 +354,17 @@ describe('套件:發布內容不含宿主之痕跡', function () {
         assert.deepEqual(tracesOf(`前文 ${fake}yz/file 後文`, homesOf(fake)), [], '相似名稱不算')
     })
 
+    it('檢查本身:npm 包內之掃描範圍(INSTALLED_SKIP)—— 只略過任一層之 node_modules 與包根下之暫存夾;已發布之同名子夾(如 src/tmp/)仍在範圍內', () => {
+        //Gitea #154 外審之補格: 不帶斜線之名稱會比對任一路徑段, 曾使已發布之 src/tmp/ 、docs/testPending/ 漏查
+        let skip = ignoredOf(INSTALLED_SKIP)
+        for (let r of ['node_modules/a/b.js', 'docs/node_modules/x.txt', 'tmp/wta/a.txt', 'test/_tmp/c/a.txt', 'testPending/x.png', '_test_adaptivess/a.json', '.git/config']) {
+            assert.equal(skip(r), true, `應略過 ${r}`)
+        }
+        for (let r of ['src/tmp/a.txt', 'docs/testPending/n.md', 'src/domain/_test_adaptivess/a.json', 'test/unit-package.test.mjs', 'src/WTradeAdaptivess.mjs', 'sgud/state/state.md']) {
+            assert.equal(skip(r), false, `應在範圍內 ${r}`)
+        }
+    })
+
     it('檢查本身:UTF-16(有 BOM)之文字檔依其編碼讀取;二進位檔略過', () => {
         let t = makeTmp('packageText')
         try {
@@ -365,7 +390,7 @@ describe('套件:發布內容不含宿主之痕跡', function () {
         let files = listPub()
         let rels = new Set(files.map(relOf))
         //範圍未壞: 代表檔皆在內(掃描回空不算通過); 版控所排除者不在內
-        for (let x of ['package.json', 'README.md', 'LICENSE', 'settings.json', 'script.txt', '.gitignore', '.jsdoc', 'src/WTradeAdaptivess.mjs', 'src/cfg.mjs', 'test/unit-package.test.mjs', 'test/tools/synthLedger.mjs', 'sgud/state/state.md', 'contract/pick-contract.md', 'arms/base.json', 'examples/pick_example.mjs', 'toolg/gDistRollup.mjs', 'g_eval.mjs']) {
+        for (let x of ['package.json', 'README.md', 'LICENSE', 'settings.json', 'script.txt', ...(installed ? [] : ['.gitignore']), '.jsdoc', 'src/WTradeAdaptivess.mjs', 'src/cfg.mjs', 'test/unit-package.test.mjs', 'test/tools/synthLedger.mjs', 'sgud/state/state.md', 'contract/pick-contract.md', 'arms/base.json', 'examples/pick_example.mjs', 'toolg/gDistRollup.mjs', 'g_eval.mjs']) {
             assert(rels.has(x), `掃描範圍須含 ${x}`)
         }
         if (fs.existsSync(path.join(FD_ROOT, 'dist', 'w-trade-adaptivess.umd.js'))) {

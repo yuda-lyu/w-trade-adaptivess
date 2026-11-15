@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { getSettings } from '../src/cfg.mjs'
 import { makeTexts } from '../src/domain/texts.mjs'
-import { outwardNoteOf, OUT_CHECK_MIN } from '../src/domain/domain.mjs'
+import { outwardNoteOf, prevDirectionOf, OUT_CHECK_MIN } from '../src/domain/domain.mjs'
 
 
 //任務書文字(src/domain/texts.mjs): 任務類型決定節點之做法要求(R-REC-8); 共用工具區之指引(R-TB-3); 做夢之擴建一節(R-TB-2); 節點任務書之大小(處理要點 §7: 逾 15 KB 即整併)
@@ -152,6 +152,10 @@ describe('texts:任務類型與共用工具區', function () {
         assert(s.includes('`rsi/toolbox/README.md`:**共用工具索引**') && s.includes('現有 3 個'))
         assert(s.includes('`code.shareable`'))
         assert(s.includes('、共用工具區 與其他任何檔') && s.includes('共用工具區 `rsi/toolbox/`'))
+        //Gitea #154:「不得改」之程式夾由任務書程式之所在推得(套件夾內為 src/, 安裝於專案後為 node_modules/w-trade-adaptivess/src/); 不寫死舊配置之夾名 lib/
+        assert(/不得改 `(?:node_modules\/w-trade-adaptivess\/)?src\/`、`g_\*\.mjs`/.test(s) && !s.includes('`lib/`'), '節點任務書之「不得改」')
+        //「讀過評估器或迴圈之其他原始碼」一句所指之夾亦由所在推得(安裝後不在 src/ 而在 node_modules 內)
+        assert(/`g_eval\.mjs`、`(?:node_modules\/w-trade-adaptivess\/)?src\/eval\/`、`(?:node_modules\/w-trade-adaptivess\/)?src\/arsi\/`/.test(s), '節點任務書之原始碼夾')
         assert(Array.isArray(texts.nodeTemplate({ workDir: wd, task: task() }).code.shareable))
         let off = brief(task({ toolbox: null }))
         assert(!off.includes('共用工具') && !off.includes('code.shareable'))
@@ -178,6 +182,13 @@ describe('texts:任務類型與共用工具區', function () {
         //可選臂全數試過後, 「向外」另認無起點而押新家族之探索(否則「每輪至少 1 條向外」無法滿足); 去重之說明含驗證類之主張(規則 R-REC-24)
         assert(s.includes('押新家族(`newFamily: true`') && s.includes('可選之臂皆已試過時,向外即指後者'), '向外之定義含押新家族之從零探索')
         assert(s.includes('**驗證類:去重另含主張**'), '驗證類方向之去重說明')
+        //Gitea #154: 探索類與既有節點同臂同起點 ⇒ 不再略過, 規格另帶區分用之鍵後入前緣(domain.mjs 之 proposeDirection); 任務書同步說明, 並勸寬臂另提新臂
+        assert(s.includes('另帶一個區分用之鍵') && s.includes('依據文字完全相同者(同一探索之重提)才略過') && s.includes('宜另提新臂(`guidance.armProposals`)') && !s.includes('同起點之節點若已存在會被略過'), '探索類方向之去重說明')
+        //仍會略過之情形亦須寫明(無依據文字者、樹上尚無同規格之節點而前緣已有同臂同起點之待執行提案者): 否則做夢以為「只有依據相同才略過」
+        assert(s.includes('無依據文字者、或樹上尚無同規格之節點而前緣內已有同臂同起點之待執行提案者,仍會被略過'), '探索類方向仍略過之情形')
+        //禁止段與共用工具區之診斷腳本一條: 程式夾由所在推得; 暫存檔放自己之工作夾
+        assert(/不得改 `(?:node_modules\/w-trade-adaptivess\/)?src\/`、`g_\*\.mjs`/.test(s) && !s.includes('`lib/`') && s.includes('暫存檔一律放你的工作夾(不寫專案之 `tmp/`)'), '做夢任務書之禁止段')
+        assert(/不得匯入迴圈與評估器之程式\(`(?:node_modules\/w-trade-adaptivess\/)?src\/`\)/.test(s), '診斷腳本一條所指之程式夾')
         //規則 R-REC-26:「每輪至少 1 條向外」之例外 —— 可選之臂皆已試過、且本輪已預先核對 3 種以上而皆無內容; 種數與迴圈之門檻(OUT_CHECK_MIN)一致
         assert(s.includes('**例外(向外可為 0 條)**') && s.includes(`**${OUT_CHECK_MIN} 種以上**`) && s.includes('`synthesis.overview.outwardChecked`') && s.includes('尚有未試之臂、或只核了 1 ~ 2 種者,照舊須有向外'), '配比之例外條款')
         assert.equal(texts.dreamTemplate(ctx(toolbox)).synthesis.overview.outwardChecked, null, '交付範本含此欄(預設 null = 不適用)')
@@ -197,5 +208,19 @@ describe('texts:任務類型與共用工具區', function () {
         let off = texts.dreamBrief(ctx(null))
         assert(!off.includes('擴建') && off.includes('## 4. 參考') && off.includes('## 6. 禁止'))
         assert.equal(texts.dreamTemplate(ctx(null)).expansion, undefined)
+    })
+
+    it('做夢範本之前次方向回顧(Gitea #154):帶鍵之探索方向(無主張)列依據之開頭;帶鍵之驗證列主張;不帶鍵者皆無;節點已自判者預填其判定', () => {
+        //帶鍵之探索方向與既有節點同臂同起點 ⇒ 範本須能分辨兩條(不得兩條皆只有臂與輪次)
+        let dir = (x, ck) => prevDirectionOf(3, { arms: ['A04_act'], base: null, ...x }, ck)
+        //第三條: 探索類之方向殘留多餘之 claim 欄(例: 未刪範本之佔位文字)⇒ 依類型取依據, 不取 claim
+        let pds = [dir({ type: 'explore', rationale: '  依據甲  ' }, 'a1b2c3d4'), dir({ type: 'verify', claim: '主張乙', rationale: 'r' }, '0a1b2c3d'), dir({ type: 'explore', claim: '殘留之佔位', rationale: '依據丁' }, 'e5f6a7b8'), dir({ rationale: '依據丙' }, null)]
+        let node = { nodeId: 'n1aaaaaaaaaaaaaa', arms: ['A04_act'], base: null, S: 1, worst: 0, excess: 0, ladder: 0, vetoed: false, claimedS: 1, nEvals: 1, nFull: 1, nFullSel: 1, issues: [], type: 'explore', docMd: 'd.md', workDir: 'rsi/work/n1', from: { round: 3, arms: ['A04_act'], base: null, claimKey: 'a1b2c3d4' }, claimVerdict: 'confirmed', claimNote: '節點之自判' }
+        let c = { round: 4, nodeIds: ['n1aaaaaaaaaaaaaa'], reworkedIds: [], workDir: path.join(st.records.workDir, 'dream_r004'), context: { nodes: [node], failed: [], refs: [], prevDirections: pds, maxDirections: 7, extra: '2. 更新文件', toolbox } }
+        let out = texts.dreamTemplate(c).synthesis.prevDirections
+        assert.deepEqual(out.map((x) => [x.claim, x.rationale]), [[undefined, '依據甲'], ['主張乙', undefined], [undefined, '依據丁'], [undefined, undefined]])
+        assert.deepEqual(pds.map((x) => x.claimKey), ['a1b2c3d4', '0a1b2c3d', 'e5f6a7b8', undefined])
+        //節點之來源方向帶同一鍵者預填自判之判定; 不帶鍵之同臂方向不吃到(鍵不同 ⇒ 不是同一條)
+        assert.deepEqual(out.map((x) => x.verdict.startsWith('confirmed |') ? 'pending' : x.verdict), ['confirmed', 'pending', 'pending', 'pending'])
     })
 })

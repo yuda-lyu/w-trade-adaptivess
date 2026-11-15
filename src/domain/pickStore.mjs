@@ -29,7 +29,7 @@ let FIELD_DEFS = [
     ['round', '執行之輪次'],
     ['type', '任務類型: explore(探索)/ verify(驗證)'],
     ['arms / base', '指派之臂與起點節點(無 = 從零)'],
-    ['claimKey / claim', '驗證類之主張鍵與主張(開頭 200 字); 探索類為 null'],
+    ['claimKey / claim', '驗證類之主張鍵與主張(開頭 200 字); 探索類之 claim 為 null, claimKey 僅在該方向與既有節點同臂同起點時為區分用之鍵、否則 null'],
     ['family', '做夢最近一次整體研判所歸之機制家族(未歸類為 null)'],
     ['status.trust / action', '做夢審計之可信度(trusted / partial / untrusted)與處置; 尚未審計為 null'],
     ['status.vetoed / ladder', '是否被否決、回測期階梯'],

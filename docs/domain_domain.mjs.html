@@ -110,6 +110,27 @@ let outwardNoteOf = ({ nOut, nDirs, nUntried, nChecked }) => {
         : `;**無向外之方向**(可選之臂皆已試過;預先核對而皆無內容之向外候選 ${nChecked} 種,未達 ${OUT_CHECK_MIN} 種)`
 }
 
+//unproposedNoteOf, 輪末摘要「方向未入前緣」之各行(純函數; Gitea #154): proposals = 做夢文件 harness.applied.proposals(與 guidance.directions 逐條對齊; 每條 { arms, base, ok, note, ... })
+//  回傳字串陣列: 全數入前緣 ⇒ []; 否則首行為筆數與說明, 其後每條未入者一行(序號自 1 起、臂、起點、原因; 起點為空者寫「起點 無」)
+//  —— 做夢文件內仍有該方向, 不列則只能由「入前緣」之筆數看出下一輪少了節點; 一條一行, 免得一頁摘要(roundDigest 每行截 400 字)截掉後面之條目
+//  此處不承諾「由前緣內既有之提案執行」: 既有項之狀態與方向之內容是否相同, 由主控核對(原因欄已註明既有項非待執行者)
+let unproposedNoteOf = (proposals) => {
+    let miss = (Array.isArray(proposals) ? proposals : []).map((x, k) => ({ x, k })).filter((o) => o.x &amp;&amp; !o.x.ok)
+    if (!miss.length) {
+        return []
+    }
+    let one = ({ x, k }) => `方向未入前緣:方向 ${k + 1}(${(Array.isArray(x.arms) ? x.arms : []).join(' + ')};${x.base ? `起點 ${String(x.base).slice(0, 8)}` : '起點 無'}):${String(x.note || '').slice(0, 160)}`
+    return [`**方向未入前緣 ${miss.length} 條**(各條不會另成節點;原因見下列各行,待主控核對)`, ...miss.map(one)]
+}
+
+//prevDirectionOf, 做夢任務書「前次方向之回顧」之一條(純函數): r = 做夢之輪次, x = 方向(做夢文件之方向, 或節點之來源方向), ck = 該方向入前緣時所帶之鍵(無則 null)
+//  帶鍵之方向(規則 R-REC-24 之主張鍵; 探索類之區分用之鍵 —— Gitea #154)另以鍵區分: 驗證類附主張之開頭, 探索類附依據之開頭(依方向之類型, 不依有無 claim 欄:
+//  探索類之方向可能殘留多餘之 claim 欄), 供做夢辨認同臂同起點之數條方向
+let prevDirectionOf = (r, x, ck = null) => {
+    let head = (v) => String(v || '').trim().slice(0, 120)
+    return { round: r, arms: x.arms, base: x.base || null, ...(ck ? { claimKey: ck, ...(x.type === 'verify' ? { claim: head(x.claim) } : { rationale: head(x.rationale) }) } : {}) }
+}
+
 //makeProject(st, inject): inject.dispatch 可換掉派工器(測試以假 agent 走完整流程; 他專案可接自己的派工方式)
 /**
  * 組裝專案領域(臂目錄、節點任務、驗證、做夢、看板、回測期旗標與引擎),回傳專案物件
@@ -182,13 +203,16 @@ let makeProject = (st = getSettings(), inject = {}) => {
         if (!(spec.base === null || (typeof spec.base === 'string' &amp;&amp; spec.base.length > 0))) {
             throw new Error('spec.base 須為節點 id 或 null')
         }
-        //claim(選配; 規則 R-REC-24): 驗證類方向之主張鍵 —— 同臂同起點而主張不同之驗證各為一個節點; 探索類與既有節點之規格無此鍵
+        //claim(選配; 規則 R-REC-24): 驗證類方向之主張鍵 —— 同臂同起點而主張不同之驗證各為一個節點; 探索類僅在與既有節點同臂同起點時另帶區分用之鍵(exploreKeyOf), 其餘無此鍵
         if (spec.claim !== undefined &amp;&amp; !(typeof spec.claim === 'string' &amp;&amp; /^[0-9a-f]{8}$/.test(spec.claim))) {
             throw new Error('spec.claim 須為 8 個十六進位字(主張鍵)')
         }
     }
     //claimKeyOf, 做夢方向之主張鍵: 驗證類而有主張者 = 主張文字(去頭尾空白)之雜湊前 8 字; 其餘 null
     let claimKeyOf = (x) => (x &amp;&amp; x.type === 'verify' &amp;&amp; typeof x.claim === 'string' &amp;&amp; x.claim.trim() ? sha(x.claim.trim(), 8) : null)
+    //exploreKeyOf, 探索類方向之區分用之鍵(Gitea #154): 探索類(type 非 verify; 未標類型者視同探索)而有依據文字者 = 依據文字(去頭尾空白)之雜湊前 8 字(加前綴 explore| 以不與主張鍵相撞); 其餘 null
+    //  只在方向與既有節點同臂同起點時才取用(proposeDirection); 未相撞者規格不帶鍵
+    let exploreKeyOf = (x) => (x &amp;&amp; x.type !== 'verify' &amp;&amp; typeof x.rationale === 'string' &amp;&amp; x.rationale.trim() ? sha(`explore|${x.rationale.trim()}`, 8) : null)
 
     //目錄之落成名列有 add:&lt;臂> 而不可選者(引擎之治理所停用之臂: 留在目錄、落成名不變)亦登錄而永不適用
     //  (w-recursi 1.0.9 組裝時會以「算子不在登錄表」拋錯; 1.0.10 起引擎已把停用之臂視為 lenient(issue #144), 此登錄已非必要 —— 行為相同, 保留作雙重保險)
@@ -1032,11 +1056,12 @@ let makeProject = (st = getSettings(), inject = {}) => {
         {
             let seen = new Set()
             //帶主張鍵之方向(規則 R-REC-24)另以鍵區分, 並附主張之開頭供做夢辨認: 同臂同起點之數條驗證各自回顧
+            //  探索類之區分用之鍵(Gitea #154)無主張, 改附依據之開頭(同臂同起點之探索與既有節點之方向各自回顧)
             let add = (r, x, ck = null) => {
                 let k = `${r}|${armKey(x.arms)}|${x.base || ''}|${ck || ''}`
                 if (!seen.has(k)) {
                     seen.add(k)
-                    prevDirections.push({ round: r, arms: x.arms, base: x.base || null, ...(ck ? { claimKey: ck, claim: String(x.claim || '').trim().slice(0, 120) } : {}) })
+                    prevDirections.push(prevDirectionOf(r, x, ck))
                 }
             }
             let last = prevDocs.slice(-1)[0]
@@ -1127,6 +1152,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let sgud = Object.fromEntries(sgudFiles.map((f) => [f, after[f] > before[f]]))
         let a = ap.applied
         lines.push(`代理式做夢(${dr.doc.agent.model};${dr.doc.agent.durationSec}s):審計 ${nodeIds.length} 節點 ⇒ 採納 ${a.accepted.length}、重做 ${a.rework.length}(成功 ${a.rework.filter((x) => x.ok).length})、刪除 ${a.deleted.length};方向 ${a.proposals.length} 條(入前緣 ${a.proposals.filter((x) => x.ok).length});做夢文件 ${rel(records.paths.dreamMd(round))}`)
+        lines.push(...unproposedNoteOf(a.proposals))
         lines.push(`專案文件更新:${sgudFiles.map((f) => `${f} ${sgud[f] ? '已更新' : '**未更新**'}`).join(';')}${dr.issues.length ? `;做夢文件之格式問題 ${dr.issues.length} 項:${dr.issues.slice(0, 3).join(';')}` : ''}`)
         //專案指引文件之自動整理(規則 R-REC-17): 經驗檔、回饋檔逾上限即把較舊者原文搬到同夾之 &lt;名>_&lt;年月日>.md, 主檔留索引(只搬不刪; 於更新時間之核對之後才做)
         //  上限取 settings.rsi.docLimits = { maxBytes, keepBytes, keepRows }(預設 30000 / 18000 / 14); settings.rsi.docLimits === false 關閉
@@ -1633,6 +1659,12 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //proposeDirection, 做夢之一條方向入前緣(輪末由做夢之套用呼叫): 回 { ok, note, nodeId?, claimKey? }
     //  驗證類方向之規格另帶主張鍵(規則 R-REC-24): 同一候選之不同主張之驗證(半庫、鄰格、換定義重複)可同臂同起點而各為一個節點;
     //  主張相同者仍為同規格而略過; 探索類維持「臂 + 起點」。鍵隨回傳值記入做夢文件(harness.applied.proposals[].claimKey), 節點之來源方向依此對應
+    //  探索類而與既有節點同臂同起點者(Gitea #154; 寬臂之下之另一種機制 —— 做夢排方向時無從得知樹上已有同規格之節點): 規格另帶「區分用之鍵」
+    //    (exploreKeyOf = 依據文字之雜湊; 沿用主張鍵之欄位 spec.claim 與上述之回傳 / 對應機制)後照常入前緣, 不再靜默略過 —— 否則該方向只留在做夢文件, 下一輪少一個節點;
+    //    依據文字相同者(同一探索之重提)鍵相同, 仍為同規格而略過; 既有節點本身即出自同一依據(其節點文件所記之來源方向)者亦略過(已執行之探索逐字重提不得再跑一次);
+    //    無依據文字者無從取鍵, 照舊略過。未與既有節點相撞者規格不變(既有節點之 id 不受影響); 驗證類不走此路。
+    //    樹上尚無同規格之節點而前緣內已有同臂同起點之待執行提案者(同一輪內之兩條探索、或上一輪之提案尚未跑)維持略過(不改帶鍵: 同一方向重寫依據文字不得變成兩個節點),
+    //    由輪末摘要之「方向未入前緣」列出; 已相撞而帶鍵者, 依據文字不同即為另一個規格(單憑文字無從分辨「改寫」與「另一種機制」, 取後者以免靜默漏掉機制)
     let proposeDirection = (d, round) => {
         let ck = claimKeyOf(d)
         let keyed = ck ? { claimKey: ck } : {}
@@ -1650,21 +1682,53 @@ let makeProject = (st = getSettings(), inject = {}) => {
             }
             let id = idOf(spec)
             let ex = rsi.store.getNode(id)
-            if (ex &amp;&amp; ['executed', 'planned', 'running', 'rejectedByGate'].includes(ex.status)) {
-                return { ok: false, note: `同規格之節點已存在(${id.slice(0, 8)} ${ex.status})`, nodeId: id, ...keyed }
+            let taken = (n) => !!n &amp;&amp; ['executed', 'planned', 'running', 'rejectedByGate'].includes(n.status)
+            let viaKey = ''
+            //探索類(有依據文字者): 同一依據之探索若已以帶鍵之規格排入或執行(先前相撞而帶鍵、或帶鍵之方向改掛後)⇒ 同一探索之重提, 略過(不論不帶鍵之規格是否被占用)
+            let mk = exploreKeyOf(d)
+            if (mk) {
+                let kspec = { ...spec, claim: mk }
+                validateSpec(kspec)
+                let kex = rsi.store.getNode(idOf(kspec))
+                if (taken(kex)) {
+                    return { ok: false, note: `同規格之節點已存在(${idOf(kspec).slice(0, 8)} ${kex.status};依據相同之探索)`, nodeId: idOf(kspec), claimKey: mk }
+                }
+            }
+            if (taken(ex)) {
+                if (!mk) {
+                    return { ok: false, note: `同規格之節點已存在(${id.slice(0, 8)} ${ex.status})`, nodeId: id, ...keyed }
+                }
+                //既有節點(不帶鍵之規格)即出自同一依據(其節點文件所記之來源方向之依據, 去頭尾空白後相同)⇒ 同一探索之重提, 照舊略過; 出自他處(載體、算子、其他依據)者才改帶鍵
+                let od = records.getNodeDoc(id)
+                let oldR = od &amp;&amp; od.task &amp;&amp; od.task.direction &amp;&amp; typeof od.task.direction.rationale === 'string' ? od.task.direction.rationale.trim() : ''
+                if (oldR &amp;&amp; oldR === d.rationale.trim()) {
+                    return { ok: false, note: `同規格之節點已存在(${id.slice(0, 8)} ${ex.status};依據相同之探索)`, nodeId: id, ...keyed }
+                }
+                //探索類: 改帶區分用之鍵(該鍵之規格已有節點者於上方已略過)
+                let id0 = id
+                spec = { ...spec, claim: mk }
+                validateSpec(spec)
+                keyed = { claimKey: mk }
+                id = idOf(spec)
+                viaKey = `(與既有節點 ${id0.slice(0, 8)} 同臂同起點,規格另帶區分用之鍵)`
             }
             let added = rsi.store.pushFrontier([{ spec, specHash: specHash(spec), kind: 'arm', reason: `做夢 ${roundName(round)}:${String(d.rationale || '').slice(0, 240)}`, origin: { topic: 'dream', operator: 'dream', round }, priority: 1 }])
             //前緣內已有同規格而該條已結案(blocked: 改掛後之舊項、主控結案、重試用盡)且樹上無此節點 ⇒ 重開, 不當成重複:
             //  做夢常把新機制暫掛於同一組寬臂(例: B15_newKey + C23_recent365), 上一輪改掛後留下之已結案項會使下一輪之同規格方向永遠入不了前緣
+            let dup = '前緣已有同規格'
             if (!(added > 0)) {
                 let h = specHash(spec)
                 let old = rsi.store.listFrontier().find((f) => f.specHash === h)
                 if (old &amp;&amp; old.status === 'blocked') {
                     rsi.store.markFrontier([h], 'proposed')
-                    return { ok: true, note: '已入前緣(重開先前已結案之同規格提案)', nodeId: id, ...keyed }
+                    return { ok: true, note: `已入前緣(重開先前已結案之同規格提案)${viaKey}`, nodeId: id, ...keyed }
+                }
+                //前緣內之同規格已非待執行(例: 規格不過閘而標 rejectedByGate)⇒ 該項不會執行, 註明其狀態(待執行者維持原字樣)
+                if (old &amp;&amp; old.status !== 'proposed') {
+                    dup = `前緣已有同規格(該項狀態 ${old.status},不會執行)`
                 }
             }
-            return { ok: added > 0, note: added > 0 ? '已入前緣' : '前緣已有同規格', nodeId: id, ...keyed }
+            return { ok: added > 0, note: added > 0 ? `已入前緣${viaKey}` : dup, nodeId: id, ...keyed }
         }
         catch (err) {
             return { ok: false, note: String((err &amp;&amp; err.message) || err).slice(0, 200), ...keyed }
@@ -1788,7 +1852,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
 }
 
 
-export { makeProject, outwardNoteOf, OUT_CHECK_MIN }
+export { makeProject, outwardNoteOf, unproposedNoteOf, prevDirectionOf, OUT_CHECK_MIN }
 export default makeProject
 </code></pre>
         </article>
@@ -1804,7 +1868,7 @@ export default makeProject
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 15:49:29 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 20:41:56 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>
