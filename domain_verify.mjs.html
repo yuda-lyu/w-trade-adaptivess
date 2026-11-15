@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>domain/verify.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">domain/verify.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import fs from 'fs'
+import path from 'path'
+import crypto from 'crypto'
+import { scoreOf } from '../eval/score.mjs'
+import { stripComments } from '../eval/pickLoader.mjs'
+import { runNodeProc } from './proc.mjs'
+import { makeBacktest } from './backtest.mjs'
+import { gradeLabel } from './backtestGrade.mjs'
+
+
+//節點成品之機械驗證(迴圈之正本數字): 以子行程重跑 g_eval.mjs --mode full, 不採信 agent 自報
+//  另做檢查(只列為問題, 不直接判失敗; 由做夢審計裁量):
+//    ① 成品之 meta.arms 是否涵蓋指定之臂 ② 原始碼內是否有疑似硬編之序號清單(長整數陣列)③ agent 自跑之 result_full.json 之 selHash 是否與重跑相同
+//    ④ agent 之操作紀錄與其所寫之檔是否觸及禁區(帳本檔、策略庫、私有根、回測期工具)
+//  樣本外驗證(回測期旗標): 訓練期階梯達門檻(settings.backtest.minLadder)且未被否決者, 另以全期帳本於回測期重放, 只取回旗標(見 backtest.mjs)
+let readJson = (fp) => {
+    try {
+        return JSON.parse(fs.readFileSync(fp, 'utf8'))
+    }
+    catch (err) {
+        return null
+    }
+}
+
+//callsOf, 自一列操作紀錄(JSON 事件)取出工具呼叫 [{ tool(小寫之工具名), input }](可能多個); 兩種格式:
+//  ① opencode --format json: part.tool 與 part.state.input  ② claude --output-format stream-json: message.content[*](type 為 tool_use)之 name 與 input
+let callsOf = (j) => {
+    let out = []
+    let a = j &amp;&amp; j.part &amp;&amp; j.part.state &amp;&amp; j.part.state.input
+    if (a &amp;&amp; typeof a === 'object') {
+        //status / error: 該次工具呼叫之結果(opencode 之紀錄才有; 供分辨「被權限拒絕而未執行」者)
+        out.push({ tool: String((j.part &amp;&amp; j.part.tool) || '').toLowerCase(), input: a, status: typeof j.part.state.status === 'string' ? j.part.state.status : null, error: typeof j.part.state.error === 'string' ? j.part.state.error : null })
+    }
+    let cs = j &amp;&amp; j.message &amp;&amp; Array.isArray(j.message.content) ? j.message.content : []
+    for (let c of cs) {
+        if (c &amp;&amp; c.type === 'tool_use' &amp;&amp; c.input &amp;&amp; typeof c.input === 'object') {
+            out.push({ tool: String(c.name || '').toLowerCase(), input: c.input })
+        }
+    }
+    return out
+}
+
+//deniedHalt, 操作紀錄是否結束於「被權限拒絕」之工具呼叫(規則 R-RUN-7): opencode 於 ask 被自動拒絕後可能結束整個工作階段(離開碼 0),
+//  節點因此未交付成品; 派工設定已帶 continue_loop_on_deny, 本函式供失敗訊息標明原因(該設定失效時之警示)
+//  判法: 最後一步(最後一個 step_start 之後)內有被拒之工具呼叫 —— 同一步並行發出數個呼叫時, 被拒者不一定是最後一筆;
+//    紀錄無 step_start 者(其他格式)只看最後一筆工具呼叫。被拒後續做而以文字收尾者, 最後一步無工具呼叫 ⇒ null
+//  回 null | { tool, target }(target = 該呼叫之路徑或指令, 前 120 字元)
+let deniedHalt = (logFile) => {
+    let cur = []
+    let sawStep = false
+    try {
+        for (let line of fs.readFileSync(logFile, 'utf8').split('\n')) {
+            if (!line.startsWith('{')) {
+                continue
+            }
+            let j
+            try {
+                j = JSON.parse(line)
+            }
+            catch (err) {
+                continue
+            }
+            if (j.type === 'step_start' || (j.part &amp;&amp; j.part.type === 'step-start')) {
+                sawStep = true
+                cur = []
+            }
+            for (let c of callsOf(j)) {
+                cur.push(c)
+            }
+        }
+    }
+    catch (err) {
+        return null
+    }
+    let last = (sawStep ? cur : cur.slice(-1)).find((c) => c.status === 'error' &amp;&amp; typeof c.error === 'string' &amp;&amp; /rejected permission|permission (was |is )?denied|not permitted/i.test(c.error))
+    if (!last) {
+        return null
+    }
+    let inp = last.input || {}
+    return { tool: last.tool, target: String(inp.filePath || inp.file_path || inp.path || inp.command || '').replace(/\s+/g, ' ').slice(0, 120) }
+}
+
+//absOf, 把 agent 所給之路徑(相對於專案根、Windows 絕對、或 Git Bash 之 /d/… 形式)轉為絕對路徑
+let absOf = (root, p) => {
+    let s = String(p).replace(/^["']|["']$/g, '')
+    let m = /^\/([a-zA-Z])\/(.*)$/.exec(s)
+    if (m) {
+        s = `${m[1].toUpperCase()}:/${m[2]}`
+    }
+    return path.resolve(root, s)
+}
+
+//scanTrace, 掃 agent 之工具呼叫輸入(指令、檔案路徑; 不掃工具輸出, 以免任務書本身之字樣誤中)與其所寫之程式檔
+//  logFile: 操作紀錄(每列一個 JSON 事件; 其他格式之紀錄略過不掃, 回 note); 省略時取 workDir/agent_a{attempt}.log
+//  root + writeRoots(選配): 給定時另查「寫到允許範圍之外」—— 寫檔 / 改檔工具之路徑、指令之 --out 與輸出重導向, 須落在 writeRoots 之一以內
+//  回 { issues, note, nEvals(由操作紀錄數得之評估次數; 以 shell 迴圈批次評估者會低估) }
+//  workRoot + allowWork(選配): 給定時另查「存取其他節點之工作夾」—— 指令或路徑提到 workRoot 下非自己(workDir)且不在 allowWork(任務書列為參考之節點 id)內之工作夾
+//  fileHits(選配; 預設 'issue'): 所寫之程式檔內含禁區字樣時如何記 —— 'issue' 列為問題(節點); 'note' 另列於 fileNotes 待人核對
+//    (做夢 agent 會自寫稽核腳本, 其內以禁區字樣為搜尋目標, 不是存取禁區; 其工具呼叫之輸入仍照常列為問題)
+//  nodeRules(選配; 預設 false): 節點專用之三項 —— 讀取回測期重放 / 迴圈驗證之程式(src/domain/backtest*、verify*)列為觸及禁區;
+//    提到工作夾之根本身(例如 ls rsi/work)列為「存取其他節點之工作夾(列出 …)」(任務書 §8; 做夢 agent 須讀各節點之工作夾, 不適用);
+//    節點文件(node.json)之首次寫入晚於第一次完整評估者列為「規劃於評估後才寫」(任務書 §6「先寫規劃再評估」; 只列不否決;
+//    planRule 給 false 可單獨關閉此項 —— 重掃舊節點時, 其任務書尚無此要求者不適用)
+//  「存取其他節點之工作夾」只看指令與路徑: 寫檔 / 改檔工具寫入**文件**(非程式檔)之內容不算
+//    (節點文件內「未列出 rsi/work/ 或讀其他節點之工作夾」之類揭露句是文字, 不是存取; 此類曾被誤報)
+let CONTENT_KEYS = ['content', 'new_string', 'old_string', 'newString', 'oldString']
+let CODE_EXT = /\.(mjs|js|cjs|ts|py|sh|ps1|bat|cmd)$/i
+//程式夾之位置: 本套件之原始碼在 &lt;套件夾>/src —— 安裝於專案後為 node_modules/w-trade-adaptivess/src, 於套件夾內開發時為 src;
+//  沿用舊配置(程式直接放在專案之 lib)之專案亦一併涵蓋。迴圈驗證之程式 = 其 domain 夾之 backtest*、verify*
+let PKG_NAME = 'w-trade-adaptivess'
+//GUARD_EXTRA, 專案另加之禁區字樣(套件本身不寫死任何專案之名稱): 由領域層於組裝時依設定給定(setGuardExtra(guardExtraOf(st)))
+//  guardExtraOf(st): 策略庫位於專案夾之外時, 其所在之資料夾名列為「策略庫專案」(settings.source.libraryRoot 之末段為 data、library 等通用名者取上一層);
+//    另加 settings.guard.forbidden = [{ pattern(正則之原始字串; 不分大小寫), label }]
+let GUARD_EXTRA = []
+let escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&amp;')
+/**
+ * 設定專案另加之禁區字樣(模組層狀態,供 forbiddenPats 使用);不合格之項(無 pattern 或無非空 label)會被略過
+ *
+ * @param {Array&lt;Object>} items 輸入禁區項陣列,每項 { pattern, label },pattern 為 RegExp(沿用其本身之旗標)或正則之原始字串(以旗標 i 建立,不分大小寫)
+ * @returns {Number} 回傳生效之禁區項數
+ * @example
+ * let n = setGuardExtra([{ pattern: 'secret', label: '機密字樣' }])
+ */
+let setGuardExtra = (items) => {
+    GUARD_EXTRA = (Array.isArray(items) ? items : []).filter((x) => x &amp;&amp; x.pattern &amp;&amp; typeof x.label === 'string' &amp;&amp; x.label.trim()).map((x) => [x.pattern instanceof RegExp ? x.pattern : new RegExp(String(x.pattern), 'i'), x.label.trim()])
+    return GUARD_EXTRA.length
+}
+/**
+ * 由設定導出專案另加之禁區項:策略庫位於專案夾之外時,其所在之資料夾名列為「策略庫專案」;另加 settings.guard.forbidden
+ *
+ * @param {Object} st 輸入設定物件,讀取 st.source.libraryRoot、st.FD_ROOT、st.guard.forbidden
+ * @returns {Array&lt;Object>} 回傳禁區項陣列,每項 { pattern(正則字串), label },可交給 setGuardExtra
+ * @example
+ * setGuardExtra(guardExtraOf(st))
+ */
+let guardExtraOf = (st) => {
+    let out = []
+    let lib = st &amp;&amp; st.source &amp;&amp; typeof st.source.libraryRoot === 'string' ? st.source.libraryRoot : ''
+    let root = st &amp;&amp; typeof st.FD_ROOT === 'string' ? st.FD_ROOT : null
+    if (lib) {
+        let abs = path.resolve(root || '.', lib)
+        let outside = !root || path.relative(root, abs).startsWith('..') || path.isAbsolute(path.relative(root, abs))
+        if (outside) {
+            let segs = abs.split(/[\\/]+/).filter((s) => s &amp;&amp; !/^[A-Za-z]:$/.test(s))
+            let generic = /^(data|library|lib|strategies|strategy|db|store|out|output)$/i
+            let name = segs.reverse().find((s) => !generic.test(s))
+            if (name &amp;&amp; name.length >= 4) {
+                out.push({ pattern: escRe(name), label: '策略庫專案' })
+            }
+        }
+    }
+    let more = st &amp;&amp; st.guard &amp;&amp; Array.isArray(st.guard.forbidden) ? st.guard.forbidden : []
+    for (let x of more) {
+        if (x &amp;&amp; typeof x.pattern === 'string' &amp;&amp; x.pattern &amp;&amp; typeof x.label === 'string' &amp;&amp; x.label.trim()) {
+            out.push({ pattern: x.pattern, label: x.label.trim() })
+        }
+    }
+    return out
+}
+//forbiddenPats, 禁區字樣(帳本檔、data 夾、私有根、回測期工具、迴圈專用之環境變數、專案另加者(策略庫專案等); nodeRules 另加回測期重放 / 迴圈驗證之程式)
+/**
+ * 取得禁區字樣清單(回測工具、迴圈專用環境變數、私有根、帳本檔、data 夾、專案另加者、舊制備份;nodeRules 時另加回測期重放與迴圈驗證之程式)
+ *
+ * @param {String} privateRoot 輸入私有根路徑(取其末段夾名作字樣)
+ * @param {Boolean} [nodeRules=false] 輸入是否套用節點專用規則,預設false
+ * @returns {Array&lt;Array>} 回傳陣列,每項 [RegExp, 名稱]
+ * @example
+ * let pats = forbiddenPats('./private', true)
+ */
+let forbiddenPats = (privateRoot, nodeRules = false) => [
+    [/g_backtest/i, '回測期工具 g_backtest'],
+    [/ARSI_HARNESS/, '迴圈專用之環境變數'],
+    [new RegExp(escRe(path.basename(privateRoot)), 'i'), '私有根'],
+    [/ledger[\\/]+(train|full|eval|latest)/i, '帳本檔'],
+    [/(^|[\s"'=(,])\.?[\\/]?data[\\/]/i, '專案之 data 夾'],
+    ...GUARD_EXTRA,
+    //整批封存之舊制紀錄(夾名形如 archive_&lt;八位日期>_regime&lt;n>): 其節點、做夢文件與經驗不得作為現行制之參考
+    [/archive_\d{8}_regime\d*/i, '舊制之備份'],
+    ...(nodeRules ? [[/(?:lib|src)[\\/]+domain[\\/]+(backtest|verify)/i, '回測期重放 / 迴圈驗證之程式']] : []),
+]
+//節點專用、只套用於工具呼叫之指令與路徑(不套用於檔案內容與共用工具區之逐檔檢查 —— 程式內容中之「lib」「src」可能只是變數名):
+//  ①以目錄或萬用字元涵蓋迴圈驗證之程式者(…/domain/*.mjs、rg … &lt;程式夾>/domain、ls &lt;程式夾>/domain/、grep -r … &lt;程式夾>、列出套件夾或其 src): 其輸出會含 verify.mjs 之內容
+//  ②迴圈之日誌 rsi/logs(不在節點之可讀之列)。皆只列出、不否決; 指名之其他檔(eval/evalCore.mjs、arsi/records.mjs 等)不列
+let NODE_CMD_KEYS = ['command', 'filePath', 'file_path', 'path', 'pattern', 'glob', 'include']
+let NODE_CMD_PATS = [
+    [new RegExp([
+        //&lt;程式夾>/domain/*
+        '(?:lib|src)[\\\\/]+domain[\\\\/]*\\*',
+        //&lt;程式夾>/domain 整個目錄
+        '(^|[\\s"\'=(,\\\\/])\\.?[\\\\/]?(?:lib|src)[\\\\/]+domain[\\\\/]?(?=$|[\\s"\'|;&amp;)])',
+        //以列出 / 搜尋類指令涵蓋專案根之程式夾本身
+        '\\b(ls|dir|find|tree|du|grep|egrep|rg|findstr)\\b[^|;&amp;\\n]*[\\s"\']\\.?[\\\\/]?(?:lib|src)[\\\\/]?(?=$|[\\s"\'|;&amp;)])',
+        //套件夾或其 src 本身(含 …/src/*)
+        `${escRe(PKG_NAME)}(?:[\\\\/]+src)?[\\\\/]*\\*?(?=$|[\\s"'|;&amp;)])`,
+    ].join('|'), 'i'), '以目錄或萬用字元涵蓋迴圈驗證之程式(程式夾本身、其 domain 夾)'],
+    [/rsi[\\/]+logs/i, '迴圈之日誌 rsi/logs'],
+]
+let nodeCmdHits = (k, v) => NODE_CMD_PATS.filter(([re], i) => re.test(v) || (i === 0 &amp;&amp; k !== 'command' &amp;&amp; /^\.?[\\/]?(?:lib|src)[\\/]?$/.test(v))).map(([, label]) => label)
+//contentHits, 一段程式內容(先去註解)所含之禁區字樣之名稱清單(共用工具區之逐檔檢查用; 與操作掃描同一組字樣)
+let contentHits = (src, privateRoot, nodeRules = true) => {
+    let s = stripComments(String(src))
+    return forbiddenPats(privateRoot, nodeRules).filter(([re]) => re.test(s)).map(([, label]) => label)
+}
+//stripSearchPatterns, 去掉指令內搜尋類指令(grep / egrep / fgrep / rg / ag / ack / findstr / git grep)之「搜尋樣式」引數; 其餘(含被搜尋之路徑)原樣保留
+//  做夢 agent 會以禁區字樣為搜尋目標自檢(例: grep -rlE "g_backtest|ARSI_HARNESS" rsi/toolbox/): 樣式不是存取, 被搜尋之路徑仍照查
+//  (例: 做夢交付前以 grep 自檢共用工具區與自己的腳本, 曾被記為觸及禁區 —— 誤報)
+//  只認「該段指令以搜尋指令開頭」者(經 xargs、env 前綴等間接呼叫者不去, 寧可多報)
+let SEARCH_CMD = /^(?:(?:\S*[\\/])?(?:grep|egrep|fgrep|rg|ag|ack|findstr)(?:\.exe)?|git(?:\s+-C\s+\S+)?\s+grep)(?=\s|$)/i
+let SEARCH_OPT_VAL = /^(-[ABCmdDfgt]|--(?:max-count|after-context|before-context|context|include|exclude|exclude-dir|glob|type|file))$/
+let stripSearchPatterns = (cmd) => {
+    //引號內之內容先以佔位符保護(樣式內之 |、;、&amp; 不是指令分隔)
+    let quoted = []
+    let masked = String(cmd).replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, (m) => {
+        quoted.push(m)
+        return `\u0001${quoted.length - 1}\u0002`
+    })
+    let segs = masked.split(/(&amp;&amp;|\|\||[;|\n])/).map((seg) => {
+        let lead = /^\s*/.exec(seg)[0]
+        let body = seg.slice(lead.length)
+        let m0 = SEARCH_CMD.exec(body)
+        if (!m0) {
+            return seg
+        }
+        let isFindstr = /findstr/i.test(m0[0])
+        let toks = body.slice(m0[0].length).split(/(\s+)/)
+        let removed = false
+        let skipNext = false
+        for (let i = 0; i &lt; toks.length; i++) {
+            let t = toks[i]
+            if (!t || /^\s+$/.test(t)) {
+                continue
+            }
+            if (skipNext) {
+                skipNext = false
+                continue
+            }
+            if (/^(-e|--regexp)$/.test(t)) {
+                //其後第一個引數即樣式
+                for (let k = i + 1; k &lt; toks.length; k++) {
+                    if (toks[k] &amp;&amp; !/^\s+$/.test(toks[k])) {
+                        toks[k] = ' '
+                        break
+                    }
+                }
+                removed = true
+                continue
+            }
+            if (/^--regexp=/.test(t)) {
+                toks[i] = '--regexp='
+                removed = true
+                continue
+            }
+            if (isFindstr &amp;&amp; /^\/[A-Za-z]+(:.*)?$/.test(t)) {
+                if (/^\/C:/i.test(t)) {
+                    toks[i] = '/C:'
+                    removed = true
+                }
+                continue
+            }
+            if (SEARCH_OPT_VAL.test(t)) {
+                skipNext = true
+                continue
+            }
+            if (t.startsWith('-')) {
+                continue
+            }
+            //第一個非選項引數 = 樣式(已由 -e / --regexp / /C: 給樣式者, 其餘皆為路徑)
+            if (!removed) {
+                toks[i] = ' '
+                removed = true
+            }
+            break
+        }
+        return lead + m0[0] + toks.join('')
+    })
+    return segs.join('').replace(/\u0001(\d+)\u0002/g, (_, i) => quoted[Number(i)]) // eslint-disable-line no-control-regex
+}
+/**
+ * 掃 agent 之工具呼叫輸入(指令、檔案路徑,不掃工具輸出)與其所寫之程式檔,找出觸及禁區、寫到允許範圍外、存取其他節點工作夾等問題(詳見檔內上方說明)
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {String} opt.workDir 輸入節點工作夾路徑
+ * @param {Number} [opt.attempt] 輸入嘗試序號,未給 logFile 時必給(取 workDir/agent_a{attempt}.log);給了 logFile 者可省
+ * @param {String|null} [opt.logFile=null] 輸入操作紀錄路徑,預設null
+ * @param {String} opt.privateRoot 輸入私有根路徑
+ * @param {String|null} [opt.root=null] 輸入專案根路徑,與 writeRoots 並用時查寫出範圍
+ * @param {Array&lt;String>|null} [opt.writeRoots=null] 輸入允許寫入之範圍路徑陣列,預設null
+ * @param {String|null} [opt.workRoot=null] 輸入各節點工作夾之根路徑,給定時查存取其他節點工作夾
+ * @param {Array&lt;String>} [opt.allowWork=[]] 輸入允許讀取之節點 id 陣列,預設[]
+ * @param {String} [opt.fileHits='issue'] 輸入程式檔含禁區字樣之記法('issue' 列為問題、'note' 另列待核對),預設'issue'
+ * @param {Boolean} [opt.nodeRules=false] 輸入是否套用節點專用規則,預設false
+ * @param {Boolean|null} [opt.planRule=null] 輸入是否查「規劃先於評估」,預設null(同 nodeRules)
+ * @returns {Object} 回傳 { issues, note, nEvals, fileNotes, planAfterEval }
+ * @example
+ * let r = scanTrace({ workDir: './rsi/work/node1', attempt: 1, privateRoot: './private', nodeRules: true })
+ */
+let scanTrace = ({ workDir, attempt, logFile = null, privateRoot, root = null, writeRoots = null, workRoot = null, allowWork = [], fileHits = 'issue', nodeRules = false, planRule = null }) => {
+    let planOn = planRule === null ? nodeRules : planRule === true
+    let pats = forbiddenPats(privateRoot, nodeRules)
+    //工作夾之根(相對於專案根; 例如 rsi/work)後面不接節點 id 者 = 列出全部節點之工作夾
+    let reListRoot = null
+    if (nodeRules &amp;&amp; workRoot) {
+        let segs = path.relative(root || path.dirname(path.dirname(workRoot)), workRoot).split(/[\\/]+/).filter((x) => x &amp;&amp; x !== '.').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&amp;'))
+        if (segs.length) {
+            reListRoot = new RegExp(`(^|[\\s"'=(\\\\/])${segs.join('[\\\\/]+')}[\\\\/]*(?=$|[\\s"'|;&amp;)*])`)
+        }
+    }
+    let hits = new Map()
+    let fileMap = new Map()
+    let test = (s, where, to = hits) => {
+        for (let [re, label] of pats) {
+            if (re.test(s)) {
+                let k = `${label}(${where})`
+                if (!to.has(k)) {
+                    to.set(k, String(s).replace(/\s+/g, ' ').slice(0, 160))
+                }
+            }
+        }
+    }
+    let note = null
+    let nEvals = null
+    //規劃先於評估(nodeRules): 第幾個工具呼叫首次寫入節點文件、第幾個首次以完整模式評估自己的實驗檔(起點之複本 base_pick.mjs、參考節點成品之複本 ref_&lt;id 前 8 碼>.mjs 與範例不算: 重現既有成品不是選版)
+    let firstDoc = null
+    let firstFull = null
+    let fpLog = logFile || path.join(workDir, `agent_a${attempt}.log`)
+    if (fs.existsSync(fpLog)) {
+        let nEv = 0
+        nEvals = 0
+        for (let line of fs.readFileSync(fpLog, 'utf8').split('\n')) {
+            if (!line.startsWith('{')) {
+                continue
+            }
+            let j
+            try {
+                j = JSON.parse(line)
+            }
+            catch (err) {
+                continue
+            }
+            for (let { tool, input: inp, status, error } of callsOf(j)) {
+                nEv++
+                //被權限拒絕之工具呼叫: 未執行(例: 寫檔工具以打錯之絕對路徑呼叫而被拒); 其寫檔目標另標「企圖」, 不與實際寫出者同列
+                let denied = status === 'error' &amp;&amp; typeof error === 'string' &amp;&amp; /rejected permission|permission (was |is )?denied|not permitted/i.test(error)
+                let fpTarget = inp.filePath || inp.file_path || inp.path
+                let isWriteTool = /write|edit|patch|create/.test(tool)
+                let isSearchTool = /grep|search/i.test(tool)
+                for (let [k, v] of Object.entries(inp)) {
+                    //寫檔工具之 content 是檔案內容(其程式檔另由下方掃), 不當成指令或路徑
+                    if (typeof v !== 'string' || CONTENT_KEYS.includes(k)) {
+                        continue
+                    }
+                    //做夢(非節點規則): 搜尋樣式與指令之說明文字不是存取(以禁區字樣為搜尋目標之自檢); 被搜尋之路徑照查。
+                    //  節點搜尋禁區字樣屬探查, 照列
+                    if (!nodeRules) {
+                        if (k === 'description' || (isSearchTool &amp;&amp; /^(pattern|query|regex)$/i.test(k))) {
+                            continue
+                        }
+                        if (k === 'command') {
+                            test(stripSearchPatterns(v), '指令或路徑')
+                            continue
+                        }
+                    }
+                    test(v, '指令或路徑')
+                    if (nodeRules &amp;&amp; NODE_CMD_KEYS.includes(k)) {
+                        for (let label of nodeCmdHits(k, v)) {
+                            let kk = `${label}(指令或路徑)`
+                            if (!hits.has(kk)) {
+                                hits.set(kk, String(v).replace(/\s+/g, ' ').slice(0, 160))
+                            }
+                        }
+                    }
+                }
+                //評估次數: 指令內每出現一次「node … g_eval.mjs … --pick」算一次(以 shell 迴圈批次評估者會低估; 以 grep / cat 提到檔名者不算)
+                if (typeof inp.command === 'string') {
+                    nEvals += (inp.command.match(/node\s[^|;&amp;]*g_eval\.mjs[^|;&amp;]*--pick\s/g) || []).length
+                }
+                //規劃先於評估: 節點文件之首次寫入(寫檔 / 改檔工具, 或指令以重導向、tee、writeFileSync 寫 node.json; 以 cp 複製範本不算)與第一次完整評估
+                if (planOn) {
+                    if (firstDoc === null) {
+                        let byTool = isWriteTool &amp;&amp; typeof fpTarget === 'string' &amp;&amp; /(^|[\\/])node\.json$/i.test(fpTarget)
+                        let byCmd = typeof inp.command === 'string' &amp;&amp; /(>>?\s*["']?[^\s"'|;&amp;&lt;>]*node\.json|\btee\s+(-a\s+)?["']?[^\s"'|;&amp;&lt;>]*node\.json|writeFileSync\([^)]*node\.json)/i.test(inp.command)
+                        if (byTool || byCmd) {
+                            firstDoc = nEv
+                        }
+                    }
+                    if (firstFull === null &amp;&amp; typeof inp.command === 'string') {
+                        for (let m of inp.command.matchAll(/node\s[^|;&amp;]*g_eval\.mjs[^|;&amp;]*/g)) {
+                            let pk = /--pick[=\s]+("[^"]+"|'[^']+'|[^\s|;&amp;)]+)/.exec(m[0])
+                            if (/--mode[=\s]+full\b/.test(m[0]) &amp;&amp; pk &amp;&amp; !/(^|[\\/])(base_pick|ref_[0-9a-f]{8})\.mjs["']?$/i.test(pk[1]) &amp;&amp; !/(^|[\\/"'])examples[\\/]/i.test(pk[1])) {
+                                firstFull = nEv
+                                break
+                            }
+                        }
+                    }
+                }
+                //存取其他節點之工作夾(併行節點互看會使結果不獨立; 只可讀任務書列為參考者)
+                if (workRoot) {
+                    let own = path.basename(workDir)
+                    let base = path.basename(workRoot).replace(/[.*+?^${}()|[\]\\]/g, '\\$&amp;')
+                    //寫入文件(非程式檔)之內容是文字, 不是存取; 寫入程式檔之內容照查(腳本內讀他人工作夾者)
+                    let docWrite = isWriteTool &amp;&amp; typeof fpTarget === 'string' &amp;&amp; !CODE_EXT.test(fpTarget)
+                    let codeWrite = isWriteTool &amp;&amp; typeof fpTarget === 'string' &amp;&amp; CODE_EXT.test(fpTarget)
+                    for (let [k, v0] of Object.entries(inp)) {
+                        if (typeof v0 !== 'string' || (docWrite &amp;&amp; CONTENT_KEYS.includes(k))) {
+                            continue
+                        }
+                        //寫入程式檔之內容先去註解(與下方逐檔掃描同一作法): 共用片段之檔頭註解常含「出處 rsi/work/&lt;某工作夾>/…」,
+                        //  照方向複製片段原文者不是存取(此類曾被誤報); 非註解之程式碼照查
+                        let v = codeWrite &amp;&amp; CONTENT_KEYS.includes(k) ? stripComments(v0) : v0
+                        for (let m of v.matchAll(new RegExp(`${base}[\\\\/]+([A-Za-z0-9_]+)`, 'g'))) {
+                            let id = m[1]
+                            if (id !== own &amp;&amp; !allowWork.includes(id)) {
+                                let key = `存取其他節點之工作夾(${id.slice(0, 12)})`
+                                if (!hits.has(key)) {
+                                    hits.set(key, v.replace(/\s+/g, ' ').slice(0, 160))
+                                }
+                            }
+                        }
+                        if (reListRoot &amp;&amp; reListRoot.test(v)) {
+                            let key = '存取其他節點之工作夾(列出工作夾之根)'
+                            if (!hits.has(key)) {
+                                hits.set(key, v.replace(/\s+/g, ' ').slice(0, 160))
+                            }
+                        }
+                    }
+                }
+                //寫到允許範圍之外
+                if (root &amp;&amp; writeRoots) {
+                    let targets = []
+                    let fp = inp.filePath || inp.file_path || inp.path
+                    if (/write|edit|patch|create/.test(tool) &amp;&amp; typeof fp === 'string') {
+                        targets.push(fp)
+                    }
+                    if (typeof inp.command === 'string') {
+                        for (let m of inp.command.matchAll(/--out[=\s]+("[^"]+"|'[^']+'|[^\s|;&amp;)]+)/g)) {
+                            //純數字不是路徑(agent 自寫之腳本可能以 --out 為數量參數, 例如「--out 2500」)
+                            if (!/^["']?\d+(\.\d+)?["']?$/.test(m[1])) {
+                                targets.push(m[1])
+                            }
+                        }
+                        //輸出重導向: 先去掉 here-doc 之內文(只留其首列; 內文之 > 不是重導向 —— 例: 以 cat >> 檔 &lt;&lt; 'EOF' 追加文件時之誤報),
+                        //  再去掉引號內之內容(node -e "…" 等內嵌程式之 =>、> 不是重導向), 再找 > 或 >>
+                        let noDoc = inp.command.replace(/(&lt;&lt;-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\2[^\n]*)\n[\s\S]*?\n[ \t]*\3[ \t]*(?=\n|$)/g, '$1')
+                        let bare = noDoc.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, ' Q ')
+                        for (let m of bare.matchAll(/(?:^|[^0-9&amp;>=-])>>?\s*([^\s|;&amp;)&lt;>=]+)/g)) {
+                            if (!/^&amp;|^\/dev\/null$|^NUL$|^Q$/i.test(m[1])) {
+                                //相對路徑之重導向以其前最近一個 cd 之目錄為準(cd &lt;夾> &amp;&amp; … > 檔 —— 例: 於自己之工作夾內如此寫檔而被誤報);
+                                //  該目錄無法靜態判定者(引號內、含 shell 變數)照舊以專案根為準
+                                let cds = [...bare.slice(0, m.index).matchAll(/(?:^|&amp;&amp;|;|\n)\s*cd\s+([^\s;&amp;|]+)/g)]
+                                let cd = cds.length ? cds[cds.length - 1][1] : null
+                                let relative = !/^([a-zA-Z]:[\\/]|[\\/]|~)/.test(m[1])
+                                targets.push(cd &amp;&amp; cd !== 'Q' &amp;&amp; !/\$|`/.test(cd) &amp;&amp; relative ? path.resolve(absOf(root, cd), m[1]) : m[1])
+                            }
+                        }
+                    }
+                    for (let t of targets) {
+                        if (/\$|`/.test(t)) {
+                            continue //含 shell 變數之路徑無法靜態判定
+                        }
+                        let abs = absOf(root, t)
+                        let ok = writeRoots.some((w) => {
+                            let r = path.relative(w, abs); return r === '' || (!r.startsWith('..') &amp;&amp; !path.isAbsolute(r))
+                        })
+                        if (!ok) {
+                            //被權限拒絕者未寫出任何檔: 仍列出(供審計), 但標為企圖(例: 寫檔工具以打錯專案名之絕對路徑呼叫而被拒)
+                            let key = `${denied ? '寫到工作夾外之企圖(被拒,未寫出)' : '寫到工作夾外'}(${path.relative(root, abs).replace(/\\/g, '/')})`
+                            if (!hits.has(key)) {
+                                hits.set(key, String(inp.command || fp).replace(/\s+/g, ' ').slice(0, 160))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (nEv === 0) {
+            note = '操作紀錄無可解析之工具呼叫(未掃指令)'
+            nEvals = null
+        }
+    }
+    else {
+        note = '無操作紀錄檔'
+    }
+    for (let f of fs.readdirSync(workDir)) {
+        let fp = path.join(workDir, f)
+        if (!fs.statSync(fp).isFile() || !/\.(mjs|js|cjs|ts|py|sh|ps1|bat|cmd)$/i.test(f)) {
+            continue
+        }
+        if (fs.statSync(fp).size > 2 * 1024 * 1024) {
+            continue
+        }
+        test(stripComments(fs.readFileSync(fp, 'utf8')), `檔 ${f}`, fileHits === 'note' ? fileMap : hits)
+    }
+    let issues = [...hits.entries()].map(([k, s]) => (/^(寫到工作夾外|存取其他節點之工作夾)/.test(k) ? `${k}: ${s}` : `觸及禁區: ${k}: ${s}`))
+    //規劃於評估後才寫: 兩個時點皆由操作紀錄看得到才判(看不到節點文件之寫入者不判, 以免誤報)
+    let planAfterEval = planOn &amp;&amp; firstDoc !== null &amp;&amp; firstFull !== null &amp;&amp; firstDoc > firstFull ? { docCall: firstDoc, evalCall: firstFull } : null
+    if (planAfterEval) {
+        issues.push(`規劃於評估後才寫: 節點文件(node.json)首次寫入為第 ${firstDoc} 個工具呼叫, 第一次完整評估為第 ${firstFull} 個(任務書 §6「先寫規劃再評估」)`)
+    }
+    return { issues, note, nEvals, fileNotes: [...fileMap.keys()], planAfterEval }
+}
+
+//evalLines, 工作夾之 .evals.log 之各列(原文); 無此檔回 null
+//  until(選配; ISO 時刻): 只取 at ≤ until 之列 —— 節點之 agent 結束之後才寫入之列不是該節點之操作
+//    (做夢或主控日後直接評估該工作夾內之模組時, 評估器照樣記於此檔); 讀不出 at 之列照留
+let evalLines = (workDir, until = null) => {
+    let fp = path.join(workDir, '.evals.log')
+    if (!fs.existsSync(fp)) {
+        return null
+    }
+    let ls = fs.readFileSync(fp, 'utf8').split('\n')
+    if (typeof until !== 'string' || !until) {
+        return ls
+    }
+    return ls.filter((l) => {
+        let m = /"at":"([^"]+)"/.exec(l)
+        return !m || m[1] &lt;= until
+    })
+}
+
+//evalsLogged, 評估器自己記下之評估次數(工作夾之 .evals.log; 每次 g_eval.mjs 執行一列); 無此檔回 null
+let evalsLogged = (workDir, until = null) => {
+    let ls = evalLines(workDir, until)
+    if (!ls) {
+        return null
+    }
+    return ls.filter((l) => l.trim().startsWith('{')).length
+}
+
+//evalsDistinct, 完整評估之次數與其相異版本數(工作夾之 .evals.log; 只計成功之 full 列); 無此檔回 null
+//  nFull = 完整評估之次數; nFullSel = 其相異 selHash 數(相異之選集序列; 只差 tag、只加 --ref 或同一內容重跑者不算新版本);
+//  nFullMod = 其相異模組雜湊數(相異之檔案內容; 舊紀錄無 h 者不計)
+//  「試得越多, 其中最佳者越可能只是運氣」以相異 selHash 數衡量; 總次數照記(evalsLogged)
+let evalsDistinct = (workDir, until = null) => {
+    let ls = evalLines(workDir, until)
+    if (!ls) {
+        return null
+    }
+    let nFull = 0
+    let sel = new Set()
+    let mod = new Set()
+    for (let l of ls) {
+        if (!l.trim().startsWith('{')) {
+            continue
+        }
+        let j
+        try {
+            j = JSON.parse(l)
+        }
+        catch (err) {
+            continue
+        }
+        //只計評估期(回測期)之完整評估; --period train 之診斷不是版本之評估
+        if (j.ok !== true || j.mode !== 'full' || (j.period &amp;&amp; j.period !== 'backtest')) {
+            continue
+        }
+        nFull++
+        if (typeof j.selHash === 'string') {
+            sel.add(j.selHash)
+        }
+        if (typeof j.h === 'string') {
+            mod.add(j.h)
+        }
+    }
+    return { nFull, nFullSel: sel.size, nFullMod: mod.size }
+}
+
+//noLogTried, .evals.log 內標記 noLogIgnored 之列數(非迴圈之呼叫者帶 --no-log 而被照記者)
+let noLogTried = (workDir, until = null) => {
+    let ls = evalLines(workDir, until)
+    if (!ls) {
+        return 0
+    }
+    return ls.filter((l) => l.includes('"noLogIgnored":true')).length
+}
+
+//lostVersions, 已以完整模式評估過、而工作夾內現已無任何檔之內容與之相同之版本(評估後覆寫了該檔 ⇒ 該次實驗無檔可重現; 任務書「一實驗一檔」)
+//  依 .evals.log 各列之 h(模組內容之雜湊; g_eval.mjs 所記)與工作夾內現有程式檔之雜湊比對; 回 [{ pick, n }](依檔名彙整; 舊紀錄無 h 者略過)
+let lostVersions = (workDir, until = null) => {
+    let ls = evalLines(workDir, until)
+    if (!ls) {
+        return []
+    }
+    let now = new Set()
+    for (let f of fs.readdirSync(workDir)) {
+        let p = path.join(workDir, f)
+        if (/\.(mjs|js|cjs)$/i.test(f) &amp;&amp; fs.statSync(p).isFile()) {
+            now.add(crypto.createHash('sha1').update(fs.readFileSync(p)).digest('hex').slice(0, 12))
+        }
+    }
+    let lost = new Map()
+    for (let l of ls) {
+        if (!l.trim().startsWith('{')) {
+            continue
+        }
+        let j
+        try {
+            j = JSON.parse(l)
+        }
+        catch (err) {
+            continue
+        }
+        if (j.ok === true &amp;&amp; j.mode === 'full' &amp;&amp; !(j.period &amp;&amp; j.period !== 'backtest') &amp;&amp; typeof j.h === 'string' &amp;&amp; !now.has(j.h)) {
+            if (!lost.has(j.pick)) {
+                lost.set(j.pick, new Set())
+            }
+            lost.get(j.pick).add(j.h)
+        }
+    }
+    return [...lost.entries()].map(([pick, hs]) => ({ pick, n: hs.size }))
+}
+
+//summaryOf, 節點文件之重點數字(與 agent 自報 results.claimed 同鍵者逐項比對); 全部為評估期(回測期)之數字; trainScore = 不含檢定旗標之判讀(agent 自跑看得到的那一份)
+/**
+ * 取得節點文件之重點數字(與 agent 自報 results.claimed 同鍵者逐項比對;皆為回測期之數字)
+ *
+ * @param {Object} m 輸入評估之 metrics,讀取 op.eqYr、op.monthlyOrders、op.peakHold、null、selHash
+ * @param {Object} trainScore 輸入不含檢定旗標之判讀,讀取 S、ladder
+ * @returns {Array&lt;Object>} 回傳陣列,每項 { key, label, value, tol? },key 為 S、ladder、eqYrMean、eqYrMin、monthlyOrders、peakHold、nullP、selHash
+ * @example
+ * let rows = summaryOf(metrics, { S: 1.2, ladder: 2 })
+ */
+let summaryOf = (m, trainScore) => [
+    { key: 'S', label: 'S(回測期)', value: trainScore.S },
+    { key: 'ladder', label: '階梯(回測期)', value: trainScore.ladder, tol: 0 },
+    { key: 'eqYrMean', label: '等效年化 七相位平均(%;回測期)', value: m.op.eqYr.mean },
+    { key: 'eqYrMin', label: '等效年化 最差相位(%;回測期)', value: m.op.eqYr.min },
+    { key: 'monthlyOrders', label: '月均單', value: m.op.monthlyOrders.mean },
+    { key: 'peakHold', label: '最大同時持倉', value: m.op.peakHold.max, tol: 0 },
+    { key: 'nullP', label: '同劑量虛無 p', value: m.null ? m.null.p : null, tol: 0.0001 },
+    { key: 'selHash', label: 'selHash(選集與下單序列之指紋)', value: m.selHash },
+]
+
+//notesOf, 節點文件之補充說明列(領域指標; 全部為評估期 = 回測期之數字)
+//  seedS(選配): 迴圈換亂數種子重放所得之 S(主種子以外者)
+//  train(選配): 迴圈以訓練期之診斷重放所得之選集組成 { longRatio, tags }(只記組成, 不記績效 —— 訓練期之績效不是目標)
+//下單流量偏一側之機械判讀(規則 R-REC-15)
+//  shortShareOf(metrics): 做空單 ÷ 全部下單(各相位平均之單數; 無下單或無此欄 ⇒ null)
+//  sideFlowIssue(回測期之值, 訓練期診斷之值, cfg): 兩期皆 ≥ 全體隨機基準之 hi 倍(或皆 ≤ lo 倍)⇒ 回問題字串, 否則 null
+//    基準 = 中性隨機 40 隻(templates/neutral_random40.mjs)之同一比例: 回測期約 0.16、訓練期(quick 診斷)約 0.22; 可由 settings.score.sideFlow 覆寫
+//    例: 「做多取甲規則、做空取乙規則」之分側組合, 席次之做多比例兩期皆正常(固定側別之檢查不列), 但兩期之下單皆大半為做空單 ——
+//    兩側之活躍度不對稱使下單集中於做空側, 等於把回測期之方向寫進模組; S、階梯與同側同活躍度虛無都照樣保留它, 故另設此檢查(不否決, 由做夢審計)
+let SIDE_FLOW = { baseShort: { backtest: 0.16, train: 0.22 }, hi: 2.5, lo: 0.4 }
+let shortShareOf = (m) => {
+    let b = m &amp;&amp; m.op &amp;&amp; m.op.bySide
+    if (!b || !b.long || !b.short || typeof b.long.orders !== 'number' || typeof b.short.orders !== 'number' || b.long.orders + b.short.orders &lt;= 0) {
+        return null
+    }
+    return Math.round((b.short.orders / (b.long.orders + b.short.orders)) * 1000) / 1000
+}
+let sideFlowIssue = (bt, tr, cfg = null) => {
+    if (typeof bt !== 'number' || typeof tr !== 'number') {
+        return null
+    }
+    let c = { ...SIDE_FLOW, ...(cfg || {}), baseShort: { ...SIDE_FLOW.baseShort, ...((cfg &amp;&amp; cfg.baseShort) || {}) } }
+    let up = bt >= c.baseShort.backtest * c.hi &amp;&amp; tr >= c.baseShort.train * c.hi
+    let dn = bt &lt;= c.baseShort.backtest * c.lo &amp;&amp; tr &lt;= c.baseShort.train * c.lo
+    if (!up &amp;&amp; !dn) {
+        return null
+    }
+    return `下單流量偏一側: 做空單之比例 訓練期 ${tr} / 回測期 ${bt}(全體隨機約 ${c.baseShort.train} / ${c.baseShort.backtest};兩期皆${up ? `≥ ${c.hi} 倍` : `≤ ${c.lo} 倍`} ⇒ 下單偏${up ? '做空' : '做多'}側屬組成,回測期之方向可能經由兩側活躍度之不對稱寫進模組;由審計判定)`
+}
+
+//  replays(選配): 各次重放之 { S, comp(組成對照之超額), recent(近期活躍度之組成對照之超額) }(規則 R-EV-24; 有給時該列一併列出)
+/**
+ * 產生節點文件之補充說明列(領域指標;皆為回測期之數字)
+ *
+ * @param {Object} m 輸入評估之 metrics,讀取 period、op、nullSideAct、ext
+ * @param {Array&lt;Number>|null} [seedS=null] 輸入換亂數種子重放所得之 S 陣列,預設null
+ * @param {Object|null} [train=null] 輸入訓練期診斷之選集組成 { longRatio, tags },預設null
+ * @param {Array&lt;Object>|null} [replays=null] 輸入各次重放之 { S, comp, recent },預設null
+ * @param {Boolean} [half=false] 輸入是否為半庫版,預設false
+ * @returns {Array&lt;String>} 回傳說明列字串陣列
+ * @example
+ * let lines = notesOf(metrics, [1.1, 1.3], null, null, false)
+ */
+let notesOf = (m, seedS = null, train = null, replays = null, half = false) => {
+    let f1 = (x) => (typeof x === 'number' ? x.toFixed(1) : '—')
+    let out = []
+    if (m.period &amp;&amp; m.period.evalFrom) {
+        out.push(`評估期間(回測期): ${String(m.period.evalFrom).slice(0, 10)} 起至 ${String(m.period.endTime).slice(0, 10)};首個計入之決策 ${String(m.period.firstEvalDecision || '').slice(0, 10)};各相位決策 ${m.op.nDecisions.join(' / ')} 次`)
+    }
+    out.push(`各相位之等效年化(%): ${m.op.eqYr.byPhase.map((v) => f1(v)).join(' / ')}(為正之相位 ${m.op.eqYr.byPhase.filter((v) => v > 0).length} / ${m.op.eqYr.byPhase.length})`)
+    if (Array.isArray(seedS) &amp;&amp; seedS.length) {
+        //半庫版: 換同分次序即換一種切法 ⇒ 重放之 S 隨成員擺動, 不是「入選者由同分決定」
+        if (half) {
+            out.push('半庫版(成品之 meta.params.half 為 0 或 1; 以 ctx.meta.tie 之雜湊把策略庫切半): 下列重放 = 另兩種切法, S 隨成員擺動, 不作「分數不穩」之判讀; 判內容以正本與重放之組成對照之均')
+        }
+        let hasRp = Array.isArray(replays) &amp;&amp; replays.length === seedS.length &amp;&amp; replays.some((x) => x &amp;&amp; (typeof x.comp === 'number' || typeof x.recent === 'number'))
+        let rp = hasRp ? `;組成對照之超額 ${replays.map((x) => f1(x.comp)).join(' / ')}${m.nullSideAct &amp;&amp; typeof m.nullSideAct.excess === 'number' ? `(正本 ${f1(m.nullSideAct.excess)})` : ''};近期活躍度之組成對照之超額 ${replays.map((x) => f1(x.recent)).join(' / ')}${m.ext &amp;&amp; m.ext.nullRecentAct &amp;&amp; m.ext.nullRecentAct.side &amp;&amp; typeof m.ext.nullRecentAct.side.excess === 'number' ? `(正本 ${f1(m.ext.nullRecentAct.side.excess)})` : ''}` : ''
+        out.push(`換亂數種子與同分次序之重放(迴圈${hasRp ? ';組成對照 32 抽' : ';不含虛無'}): S ${seedS.map((v) => f1(v)).join(' / ')}${rp} —— 每次同時換 ctx.rand 之種子與同分次序(ctx.meta.tie、同一進場棒之訊號先後);含隨機抽取、或主鍵大量同分(入選者實際由 tie 決定)之成品其結果隨之波動;各次之 S 與主分數相差很大者,主分數不可靠${hasRp ? ';**判內容以正本與各次重放之超額之平均為準,不以單抽**' : ''}`)
+    }
+    if (m.null) {
+        out.push(`同劑量虛無(${m.null.draws} 抽;同決策日、同選集大小、同執行規則之隨機挑): 均 ${f1(m.null.mean)}%、sd ${f1(m.null.sd)};本成品之超額 ${f1(m.null.excess)} 個百分點(z ${m.null.z}、p ${m.null.p})`)
+    }
+    if (m.nullVol) {
+        out.push(`同訊號量虛無(選集之每隻訊號數為全體隨機之 ${m.nullVol.ratio} 倍 ⇒ 改與隨機 ${f1(m.nullVol.sizeMean)} 隻、訊號量相當者比較): 均 ${f1(m.nullVol.mean)}%、sd ${f1(m.nullVol.sd)};超額 ${f1(m.nullVol.excess)} 個百分點(z ${m.nullVol.z}、p ${m.nullVol.p})—— 等效年化受訊號量之影響很大,不匹配訊號量會把較活躍或較安靜誤當成內容${m.nullAct ? ';本成品另有同活躍度虛無,判讀臂之內容以該列為準' : ''}`)
+    }
+    if (m.nullAct) {
+        out.push(`同活躍度虛無(隨機選集之活躍度分層與成品相同:各決策依決策日以前之累計進場數分 ${m.nullAct.bins} 層、各層抽同樣隻數): 均 ${f1(m.nullAct.mean)}%、sd ${f1(m.nullAct.sd)};超額 ${f1(m.nullAct.excess)} 個百分點(z ${m.nullAct.z}、p ${m.nullAct.p})—— 選集比隨機安靜或活躍時,同訊號量之超額含「活躍度層」本身之差異,扣掉後剩多少看此列`)
+    }
+    //各三等分段之均(與成品之三等分並列): 成品之超額是否只集中於某一段
+    let th3 = (x) => (Array.isArray(x.thirdsMean) &amp;&amp; Array.isArray(m.op.thirds) &amp;&amp; m.op.thirds.length === 3 ? `;三等分之均 ${x.thirdsMean.map((v) => f1(v)).join(' / ')}(成品 ${m.op.thirds.map((g) => f1(g.eqYr.mean)).join(' / ')})` : '')
+    if (m.nullSideAct) {
+        out.push(`同側同活躍度虛無(組成對照:把選集之每一隻換成同方向、決策日以前累計進場數之名次 ±${m.nullSideAct.half} 名內之隨機一隻): 均 ${f1(m.nullSideAct.mean)}%、sd ${f1(m.nullSideAct.sd)};超額 ${f1(m.nullSideAct.excess)} 個百分點(z ${m.nullSideAct.z}、p ${m.nullSideAct.p})${typeof m.nullSideAct.share === 'number' ? `;**組成可重現之比例 ${f1(m.nullSideAct.share * 100)}%**` : ''}${th3(m.nullSideAct)} —— ${m.nullSideAct.triggered === false ? '選集之每隻訊號數與做多比例皆與全體隨機相近(此列不入階梯);' : ''}「方向 × 活躍度」之組成本身就有績效;同組成內是否挑得比隨機好,以此列為準`)
+    }
+    if (m.nullSideGeo) {
+        out.push(`同側同幾何同活躍度虛無(幾何對照:再匹配該側內止盈 ${m.nullSideGeo.nTp} 等分 × 止損 ${m.nullSideGeo.nSl} 等分;只供判讀、不入階梯): 均 ${f1(m.nullSideGeo.mean)}%、sd ${f1(m.nullSideGeo.sd)};超額 ${f1(m.nullSideGeo.excess)} 個百分點(z ${m.nullSideGeo.z}、p ${m.nullSideGeo.p})${typeof m.nullSideGeo.share === 'number' ? `;可重現之比例 ${f1(m.nullSideGeo.share * 100)}%` : ''}${th3(m.nullSideGeo)}`)
+    }
+    //擴充診斷(共用工具區 metrics/; 由做夢擴建; 每次完整評估自動算出): 每個一列, 取其自述之一行說明
+    for (let [nm, r] of Object.entries(m.ext || {})) {
+        out.push(`擴充診斷 ${nm}: ${r &amp;&amp; r.error ? `未算(${r.error})` : (r &amp;&amp; typeof r.text === 'string' ? r.text.slice(0, 600) : JSON.stringify(r).slice(0, 300))}`)
+    }
+    if (m.op.bySide) {
+        let sd = (x) => `${f1(x.orders)} 單、損益 ${x.pnl}、勝率 ${f1(x.winRate * 100)}%`
+        out.push(`損益歸因(各相位平均;損益 = 每單 1 單位之損益和,合計 ${m.op.pnl}): 做多 ${sd(m.op.bySide.long)};做空 ${sd(m.op.bySide.short)}${Array.isArray(m.op.byGroup) &amp;&amp; m.op.byGroup.length > 1 ? `;依子帳: ${m.op.byGroup.map((g) => `子帳 ${g.group}(每次決策 ${f1(g.seats)} 席)${sd(g)}`).join(' | ')}` : ''}${m.sel &amp;&amp; Array.isArray(m.sel.tagPerf) &amp;&amp; m.sel.tagPerf.length ? `;依 tag(前 6 種): ${m.sel.tagPerf.slice(0, 6).map((t) => `${t.tag} ${t.decisions} 次決策、${f1(t.orders)} 單、損益 ${t.pnl}`).join(' | ')}` : ''}`)
+    }
+    if (Array.isArray(m.op.thirds) &amp;&amp; m.op.thirds.length) {
+        out.push(`評估期間三等分(各段自空倉起算;看績效是否集中於某一段): ${m.op.thirds.map((g) => `${String(g.from).slice(0, 10)} ~ ${String(g.to).slice(0, 10)} 均 ${f1(g.eqYr.mean)}%(最差相位 ${f1(g.eqYr.min)}${typeof g.nullMean === 'number' ? `;隨機挑 ${f1(g.nullMean)}` : ''})`).join(' | ')}`)
+    }
+    if (train &amp;&amp; typeof train.longRatio === 'number' &amp;&amp; m.sel &amp;&amp; typeof m.sel.longRatio === 'number') {
+        let tg = (xs) => (Array.isArray(xs) &amp;&amp; xs.length ? xs.slice(0, 4).map((t) => `${t.tag} ${t.share}`).join('、') : '無')
+        out.push(`選集之做多比例: 訓練期(診斷)${train.longRatio} / 回測期 ${m.sel.longRatio};tag 之決策比例(前 4 種): 訓練期 ${tg(train.tags)} / 回測期 ${tg(m.sel.tags)} —— 兩期之側別或狀態比例皆固定於一端者,該規則並未隨當下狀態切換`)
+        let sb = shortShareOf(m)
+        if (typeof train.shortShare === 'number' &amp;&amp; sb !== null) {
+            out.push(`下單之做空比例(做空單 ÷ 全部下單): 訓練期(診斷)${train.shortShare} / 回測期 ${sb};全體隨機約 ${SIDE_FLOW.baseShort.train} / ${SIDE_FLOW.baseShort.backtest} —— 席次之做多比例正常而下單偏在一側者,是兩側活躍度不對稱所致之組成;兩期皆遠高(或遠低)於隨機者,回測期之方向可能經此寫進模組`)
+        }
+    }
+    if (m.fresh) {
+        out.push(`新鮮度(七相位均 %): ${Object.keys(m.fresh).map((H) => `${H}d ${f1(m.fresh[H].eqYr.mean)}`).join(' | ')}`)
+    }
+    if (m.sel) {
+        out.push(`選集: 大小均 ${f1(m.sel.sizeMean)}(${m.sel.sizeMin} ~ ${m.sel.sizeMax});換手 Jaccard ${m.sel.turnoverJaccard};執行規則 ${m.hasAccept ? `有(下單率 ${f1(m.op.acceptRate * 100)}%)` : '無'};勝率 ${f1(m.op.winRate * 100)}%`)
+        if (typeof m.sel.sigPerPick === 'number') {
+            //選集組成: 分數受活躍度與多空組成之影響很大, 故與同劑量虛無(全體隨機)並列, 一眼可見成品是否只是換了活躍度或多空比例
+            out.push(`選集組成(括號內為同劑量虛無 = 全體隨機): 每隻每個決策視窗之訊號數 ${m.sel.sigPerPick}${m.null &amp;&amp; typeof m.null.sigPerPick === 'number' ? `(${m.null.sigPerPick})` : ''};做多比例 ${m.sel.longRatio}${m.null &amp;&amp; typeof m.null.longRatio === 'number' ? `(${m.null.longRatio})` : ''};平均因子數 ${m.sel.nKeysMean};平均止盈 / 止損 ${m.sel.tpMean} / ${m.sel.slMean}`)
+        }
+        if (m.sel.orders) {
+            //下單集中度: 選集很大而下單率低時, 實際下單者可能集中在少數策略 / 因子組合 / 進場棒
+            out.push(`下單集中度(各相位平均): 實際下單之不同策略 ${f1(m.sel.orders.strats)} 隻、不同因子組合 ${f1(m.sel.orders.combos)} 種;下單最多之前 1% 進場棒占全部下單 ${f1(m.sel.orders.barTop1Share * 100)}%;單一進場棒最多 ${m.sel.orders.perBarMax} 單`)
+        }
+    }
+    return out
+}
+
+//datedIn, 一段程式(已去註解)內第一個落在某期間之年份內之日期字樣(YYYY-MM 或 YYYY-MM-DD; 分隔可為 - / .); 無則 null
+//  period = { start, end }(時間字串): 只看年份範圍 —— 粗篩「依評估期間內之日期寫死行為」; 訓練期之日期(例如求解窗終點)不列
+let datedIn = (src, period) => {
+    let y0 = Number(String(period.start).slice(0, 4))
+    let y1 = Number(String(period.end).slice(0, 4))
+    let m0 = Number(String(period.start).slice(5, 7))
+    let years = []
+    for (let y = y0; y &lt;= y1; y++) {
+        years.push(y)
+    }
+    let re = new RegExp(`(${years.join('|')})[-/.](0[1-9]|1[0-2])(?:[-/.](?:[0-2]\\d|3[01]))?`, 'g')
+    for (let m of String(src).matchAll(re)) {
+        //起始年之內, 早於期間起始月者屬期間之前(例: 回測期自 2025-10 起, 2025-04 為訓練期內之日期)
+        if (Number(m[1]) === y0 &amp;&amp; Number(m[2]) &lt; m0) {
+            continue
+        }
+        return m[0]
+    }
+    return null
+}
+
+//  refsOf(spec)(選配): 回傳任務書列為參考之節點 id 陣列(其工作夾可讀)
+/**
+ * 建立節點之迴圈驗證函數(重跑完整評估、掃操作紀錄、必要時重放回測期旗標);驗證時會起子行程,不宜於文件範例中實跑
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {Object} opt.st 輸入設定物件(getSettings 之結果)
+ * @param {String} opt.FD_ROOT 輸入專案根路徑
+ * @param {Function} opt.layerOfSpec 輸入由規格取得所屬層之函數
+ * @param {Function|null} [opt.refsOf=null] 輸入回傳任務書列為參考之節點 id 陣列之函數(輸入 spec),預設null
+ * @returns {Function} 回傳非同步驗證函數 async ({ nodeId, spec, workDir, attempt=1, keepValidation=null, evalsUntil=null }),成功回傳 { ok:true, raw, score, summary, notes, fingerprint, issues, checks, validation, evalJson },失敗回傳 { ok:false, error, issues }
+ * @example
+ * let verify = makeVerify({ st, FD_ROOT, layerOfSpec })
+ * let r = await verify({ nodeId, spec, workDir })
+ */
+let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
+    let backtest = makeBacktest({ st, FD_ROOT })
+    //  keepValidation(選配): 給定 { flag, at } 時不重放回測期, 沿用該旗標(評估器只改訓練期之輸出、回測期重放之結果不變時用; 見 reverifyAll)
+    //  evalsUntil(選配; ISO 時刻): 評估紀錄只計至該時刻(節點之 agent 結束之時刻); 事後重跑(reverifyAll)時給定 —— 其後寫入之列是做夢或主控之評估, 不是節點之操作
+    return async ({ nodeId, spec, workDir, attempt = 1, keepValidation = null, evalsUntil = null }) => {
+        let rel = (p) => path.relative(FD_ROOT, p).replace(/\\/g, '/')
+        let fpPick = path.join(workDir, 'pick.mjs')
+        let fpOut = path.join(workDir, 'harness_full.json')
+        if (!fs.existsSync(fpPick)) {
+            let dh = deniedHalt(path.join(workDir, `agent_a${attempt}.log`))
+            return { ok: false, error: `未交付 pick.mjs${dh ? `(工作階段結束於被權限拒絕之工具呼叫: ${dh.tool} ${dh.target})` : ''}`, issues: [] }
+        }
+        try {
+            fs.rmSync(fpOut, { force: true })
+        }
+        catch (err) {}
+        //agent 之評估次數(評估器自己記於 .evals.log)須在迴圈重跑之前讀; 迴圈之重跑帶 --no-log 不計
+        let nLogged = evalsLogged(workDir, evalsUntil)
+        //--no-log 只在 ARSI_HARNESS=1 時生效(g_eval.mjs); 節點自己帶 --no-log 者照記並標記
+        let nNoLog = noLogTried(workDir, evalsUntil)
+        let r = await runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), '--pick', fpPick, '--mode', 'full', '--out', fpOut, '--no-log'], { cwd: FD_ROOT, timeoutMs: (st.eval.timeoutSec || 900) * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })
+        let out = readJson(fpOut)
+        if (r.timeout) {
+            return { ok: false, error: `重跑逾時(${st.eval.timeoutSec || 900}s; 挑選模組過慢)`, issues: [] }
+        }
+        if (!out || out.ok !== true) {
+            return { ok: false, error: `重跑失敗(離開碼 ${r.code}): ${out &amp;&amp; out.error ? out.error : r.out.split('\n').slice(-6).join(' | ').slice(0, 600)}`, issues: (out &amp;&amp; out.issues) || [] }
+        }
+        let issues = []
+        let declared = out.pickMeta &amp;&amp; Array.isArray(out.pickMeta.arms) ? out.pickMeta.arms : null
+        if (!declared) {
+            issues.push('成品未宣告 meta.arms')
+        }
+        else {
+            let miss = spec.arms.filter((a) => !declared.includes(a))
+            if (miss.length) {
+                issues.push(`成品之 meta.arms 未含指定之臂 ${miss.join('、')}`)
+            }
+        }
+        let src = stripComments(fs.readFileSync(fpPick, 'utf8'))
+        if (/\[\s*(?:\d+\s*,\s*){20,}\d+\s*\]/.test(src)) {
+            issues.push('原始碼含長整數陣列(疑似硬編序號清單)')
+        }
+        //把回測期之答案寫進模組之粗篩: 原始碼含評估期間內之日期字樣(依日期寫死行為); 依 ctx.k / ctx.day 之特定值切換者無法機械判定, 由審計看
+        {
+            let hit = datedIn(src, st.periods.backtest)
+            if (hit) {
+                issues.push(`原始碼含評估期間內之日期字樣「${hit}」(疑似依日期寫死行為;合約 §2「不得把回測期之答案寫進模組」)`)
+            }
+        }
+        let own = readJson(path.join(workDir, 'result_full.json'))
+        if (!own || !own.metrics) {
+            issues.push('未交付 result_full.json(agent 自跑之完整評估)')
+        }
+        else if (own.period &amp;&amp; own.period.name &amp;&amp; own.period.name !== 'backtest') {
+            issues.push(`agent 之 result_full.json 不是回測期之評估(${own.period.name});交付用之結果須為預設之評估期間`)
+        }
+        else if (own.metrics.selHash !== out.metrics.selHash) {
+            issues.push(`agent 之 result_full.json 之 selHash ${own.metrics.selHash} 與重跑 ${out.metrics.selHash} 不同(交付後成品有改, 或結果不可重現)`)
+        }
+        //擴充診斷自帶之提示(規則 R-REC-21): 列入迴圈檢查, 不否決
+        for (let f of extSurfaceOf(out.metrics).flags) {
+            issues.push(extFlagIssue(f))
+        }
+        //換亂數種子與同分次序之重放(規則 R-EV-17、R-EV-22): 節點只看得到主種子與正本之同分次序 ⇒ 迴圈另重放 settings.eval.replicaSeeds 次(七相位、不算虛無), 記其 S
+        //  每次同時換 ctx.rand 之種子(--seed)與同分次序(--tie-salt: ctx.meta.tie 與同一進場棒之訊號先後):
+        //    含隨機抽取之成品隨種子波動; 主鍵大量同分之成品其入選者實際由 tie 決定(= 固定種子之隨機抽取), 只換種子驗不到(例: 換種子 S 不變、換 tie 即由正轉負)
+        //  第一次重放之選集與 S 皆與主重放相同者(未用亂數、同分不影響入選、持倉上限未因先後而擋單)不再重放
+        //  每次重放另附算組成對照(32 抽)與近期活躍度之組成對照(擴充診斷 nullRecentAct)之超額(規則 R-EV-24):
+        //    只列 S 時看不出「內容」在重放下是否仍在; 單抽之組成對照不足以判內容(全庫隨機之兩組抽取 +1.3 / +11.6), 兩次重放即現成之第二、三抽
+        let seedS = []
+        let replays = []
+        let isHalf = !!(out.pickMeta &amp;&amp; out.pickMeta.params &amp;&amp; (out.pickMeta.params.half === 0 || out.pickMeta.params.half === 1))
+        {
+            let nRep = Number.isInteger(st.eval.replicaSeeds) ? st.eval.replicaSeeds : 0
+            let seed0 = st.eval.seed === undefined ? 1 : st.eval.seed
+            let nDraw = Number.isInteger(st.eval.replicaNullDraws) ? st.eval.replicaNullDraws : 32
+            for (let i = 1; i &lt;= nRep; i++) {
+                let fpS = path.join(workDir, `harness_seed${i}.json`)
+                try {
+                    fs.rmSync(fpS, { force: true })
+                }
+                catch (err) {}
+                let rs = await runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), '--pick', fpPick, '--mode', 'full', '--null', String(nDraw), '--ext-only', 'nullRecentAct', '--seed', String(seed0 + i), '--tie-salt', String(i), '--out', fpS, '--no-log'], { cwd: FD_ROOT, timeoutMs: (st.eval.timeoutSec || 900) * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })
+                let o = readJson(fpS)
+                if (rs.timeout || !o || o.ok !== true || !o.score) {
+                    issues.push(`換亂數種子與同分次序之重放失敗(第 ${i} 次)`)
+                    break
+                }
+                if (i === 1 &amp;&amp; o.metrics.selHash === out.metrics.selHash &amp;&amp; out.score &amp;&amp; o.score.S === out.score.S) {
+                    break //結果不依賴亂數種子與同分次序
+                }
+                seedS.push(o.score.S)
+                let nr = o.metrics.ext &amp;&amp; o.metrics.ext.nullRecentAct &amp;&amp; o.metrics.ext.nullRecentAct.side
+                replays.push({ S: o.score.S, comp: o.metrics.nullSideAct &amp;&amp; typeof o.metrics.nullSideAct.excess === 'number' ? o.metrics.nullSideAct.excess : null, recent: nr &amp;&amp; typeof nr.excess === 'number' ? nr.excess : null })
+            }
+            //主分數為正而重放後為零或負: 分數依賴亂數抽取或同分次序(不否決, 由做夢審計)
+            //  半庫版(成品自述 meta.params.half 為 0 或 1; 共用工具區之 *_half.mjs 樣板: 以 ctx.meta.tie 之雜湊切半)換同分次序即換一種切法 ⇒ 不列「分數不穩」,
+            //  改於判讀加註(判準由成品自述, 由審計核對 —— 與擴充診斷之 notContent 同一作法)
+            let sMain = out.score &amp;&amp; typeof out.score.S === 'number' ? out.score.S : null
+            if (!isHalf &amp;&amp; seedS.length &amp;&amp; sMain !== null &amp;&amp; sMain > 0 &amp;&amp; Math.min(...seedS) &lt;= 0) {
+                issues.push(`分數不穩: 主 S ${sMain},換亂數種子與同分次序後為 ${seedS.join(' / ')}(由正轉負;含隨機抽取或主鍵大量同分 ⇒ 入選者實際由亂數或 ctx.meta.tie 決定,由審計判定)`)
+            }
+        }
+        //固定側別之機械判讀: 另以訓練期之診斷重放一次(quick、不算虛無), 只取選集組成(做多比例、tag 之決策比例)
+        //  回測期若為單邊行情, 固定只挑一側者即可得高分而毫無自適應; 訓練期與回測期之做多比例皆 &lt; 0.1 或皆 > 0.9 者列為問題(不否決, 由做夢審計)
+        let train = null
+        {
+            let fpT = path.join(workDir, 'harness_train.json')
+            try {
+                fs.rmSync(fpT, { force: true })
+            }
+            catch (err) {}
+            let rt = await runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), '--pick', fpPick, '--mode', 'quick', '--period', 'train', '--null', '0', '--out', fpT, '--no-log'], { cwd: FD_ROOT, timeoutMs: (st.eval.timeoutSec || 900) * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })
+            let o = readJson(fpT)
+            if (!rt.timeout &amp;&amp; o &amp;&amp; o.ok === true &amp;&amp; o.metrics &amp;&amp; o.metrics.sel &amp;&amp; typeof o.metrics.sel.longRatio === 'number') {
+                train = { longRatio: o.metrics.sel.longRatio, tags: (o.metrics.sel.tags || []).slice(0, 4), ...(shortShareOf(o.metrics) === null ? {} : { shortShare: shortShareOf(o.metrics) }) }
+                let a = train.longRatio
+                let b = out.metrics.sel.longRatio
+                if (out.metrics.sel.sizeMax > 0 &amp;&amp; ((a &lt; 0.1 &amp;&amp; b &lt; 0.1) || (a > 0.9 &amp;&amp; b > 0.9))) {
+                    issues.push(`固定側別: 選集之做多比例 訓練期 ${a} / 回測期 ${b}(兩期皆只挑${a &lt; 0.1 ? '做空' : '做多'}側;回測期之行情方向可能被寫進模組,由審計判定)`)
+                }
+                //下單流量偏一側(規則 R-REC-15): 席次之做多比例正常, 仍可經由兩側活躍度之不對稱使下單集中在一側
+                let sf = sideFlowIssue(shortShareOf(out.metrics), train.shortShare, st.score &amp;&amp; st.score.sideFlow)
+                if (sf) {
+                    issues.push(sf)
+                }
+            }
+        }
+        //寫到工作夾之外之檔(常見: 路徑少一個分隔符 ⇒ &lt;工作區>/&lt;節點 id>&lt;檔名>): 移入工作夾之 _stray/ 並列為問題
+        {
+            let wr = path.dirname(workDir)
+            let strays = []
+            try {
+                strays = fs.readdirSync(wr).filter((f) => f.startsWith(nodeId) &amp;&amp; f !== path.basename(workDir) &amp;&amp; fs.statSync(path.join(wr, f)).isFile())
+            }
+            catch (err) {}
+            if (strays.length) {
+                let moved = []
+                for (let f of strays) {
+                    try {
+                        fs.mkdirSync(path.join(workDir, '_stray'), { recursive: true })
+                        fs.renameSync(path.join(wr, f), path.join(workDir, '_stray', f.slice(nodeId.length) || f))
+                        moved.push(f.slice(nodeId.length) || f)
+                    }
+                    catch (err) {}
+                }
+                issues.push(`有 ${strays.length} 個檔寫在工作夾之外(${strays.slice(0, 4).join('、')}${strays.length > 4 ? ' …' : ''};路徑少了分隔符)${moved.length ? `,已移入工作夾之 _stray/` : ''}`)
+            }
+        }
+        //可讀之他節點工作夾: 起點(spec.base)與任務書列為參考之節點(由呼叫端經 allowWork 給入)
+        let tr = scanTrace({ workDir, attempt, privateRoot: backtest.cfg.privateRoot, root: FD_ROOT, writeRoots: [workDir], workRoot: st.records.workDir, allowWork: [...(spec.base ? [spec.base] : []), ...(typeof refsOf === 'function' ? refsOf(spec) : [])], nodeRules: true })
+        issues.push(...tr.issues)
+        if (nNoLog > 0) {
+            issues.push(`以 --no-log 執行評估 ${nNoLog} 次(該旗標只供迴圈重跑; 已照記入評估次數)`)
+        }
+        let lost = lostVersions(workDir, evalsUntil)
+        if (lost.length) {
+            issues.push(`已完整評估而現無檔可重現之版本 ${lost.reduce((s, x) => s + x.n, 0)} 個(${lost.map((x) => `${x.pick} × ${x.n}`).join('、')}): 評估後覆寫了該檔(一實驗一檔)`)
+        }
+        //評估次數: 以評估器之紀錄為準; 無紀錄檔(舊交付)才用操作紀錄數得者
+        let nEvals = nLogged !== null ? nLogged : tr.nEvals
+        //完整評估之相異版本數(迴圈之重跑帶 --no-log 不記, 故此處讀到的只有 agent 自己的評估)
+        let nDist = evalsDistinct(workDir, evalsUntil)
+        let layer = layerOfSpec(spec)
+        let score = scoreOf(out.metrics, { limits: st.eval.limits, score: st.score, layer })
+        let trainScore = score
+        //檢定旗標(「回測期旗標」機制; 隨附之參考設定明設 settings.backtest.enabled = false(未設時 backtestCfg 視為啟用): 不啟用時評估期即回測期, 節點自己看得到數字;
+        //  日後若由主控以保留期或他幣作檢定, 可沿用此接口, 見 sgud/proc/process.md §5)
+        let validation = null
+        if (keepValidation &amp;&amp; typeof keepValidation.flag === 'string' &amp;&amp; backtest.cfg.enabled) {
+            validation = { name: 'backtest', flag: keepValidation.flag, label: gradeLabel(keepValidation.flag), at: keepValidation.at || null, error: null }
+            score = scoreOf(out.metrics, { limits: st.eval.limits, score: st.score, layer, evidence: { backtest: keepValidation.flag } })
+        }
+        else if (backtest.cfg.enabled &amp;&amp; score.ladder >= backtest.cfg.minLadder &amp;&amp; !score.flags.vetoed) {
+            let b = await backtest.run({ nodeId, attempt, workDir })
+            validation = { name: 'backtest', flag: b.flag, label: b.flag ? gradeLabel(b.flag) : null, at: b.at, error: b.error }
+            if (b.flag) {
+                score = scoreOf(out.metrics, { limits: st.eval.limits, score: st.score, layer, evidence: { backtest: b.flag } })
+            }
+        }
+        return {
+            ok: true,
+            raw: { metrics: out.metrics, selHash: out.metrics.selHash, seedS, replays, ...(train ? { train } : {}) },
+            score,
+            summary: summaryOf(out.metrics, trainScore),
+            notes: notesOf(out.metrics, seedS, train, replays, isHalf),
+            fingerprint: out.metrics.selHash,
+            issues,
+            checks: { ...(nEvals === null ? {} : { nEvals }), ...(nDist ? { ...nDist, nEvalsNote: `其中完整評估 ${nDist.nFull} 次、相異之選集(selHash)${nDist.nFullSel} 個;只差 tag、只加 --ref 或同一內容重跑者不算新版本` } : {}), ...(tr.note ? { traceNote: tr.note } : {}) },
+            validation,
+            evalJson: rel(fpOut),
+        }
+    }
+}
+
+
+//擴充診斷自帶之看板值與迴圈提示(規則 R-REC-21): 共用工具區 metrics/*.mjs 之回傳物件可另帶
+//  board(看板之值; 字串或有限數字, 取前 32 字元)、boardLabel(該值之欄名; 取前 32 字元, 預設 = 診斷之檔名)、flag(迴圈檢查之提示; 非空字串, 取前 160 字元; 不否決)
+//  ⇒ 做夢所建之診斷可自行上看板、列入迴圈檢查, 不必每次由主控改迴圈; 診斷出錯(error)或未帶者略過; 直線與換行改為空白(看板為表格)
+//  notContent(規則 R-REC-22): 非空字串(取前 160 字元)= 診斷自述「此成品之組成對照不是挑選內容之量」及其理由
+//    (例: 成品之執行規則非中性且本身帶來大增益 ⇒ 組成對照共用該規則, 其超額含執行層之增益)
+//    ⇒ 搜尋地圖不把該成品計入「有內容」與量尺之「挑選內容」, 譜系與看板於組成對照旁註明; 該診斷之數值另以 board 上看板
+/**
+ * 取出擴充診斷自帶之看板值與迴圈提示(來自 metrics.ext 各診斷之 board、boardLabel、flag、notContent、subset;字串去除直線與換行)
+ *
+ * @param {Object} m 輸入評估之 metrics,讀取 m.ext
+ * @returns {Object} 回傳 { cells, flags, notContent, subsets }:cells 每項 { name, label, value },flags 與 notContent 每項 { name, text },subsets 每項 { name, label }
+ * @example
+ * let s = extSurfaceOf({ ext: { demo: { board: 3, flag: '提示' } } })
+ */
+let extSurfaceOf = (m) => {
+    let ext = m &amp;&amp; m.ext &amp;&amp; typeof m.ext === 'object' &amp;&amp; !Array.isArray(m.ext) ? m.ext : {}
+    let clean = (v, n) => String(v).replace(/[|\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n)
+    //  subset(規則 R-REC-27): 非空字串(取前 32 字元)= 診斷自述「此成品屬於某個子集」之名稱(例: 「時效 ≥ 15」)
+    //    ⇒ 搜尋地圖 §1 於現行量尺旁, 另列各子集內「有內容且可信」之最高者(並列、不取代現行量尺); 條件不成立時回 null 或不帶; 子集之定義由診斷自述, 迴圈不寫死哪一個診斷
+    let cells = []
+    let flags = []
+    let notContent = []
+    let subsets = []
+    for (let name of Object.keys(ext).sort()) {
+        let o = ext[name]
+        if (!o || typeof o !== 'object' || Array.isArray(o) || o.error) {
+            continue
+        }
+        if (typeof o.subset === 'string' &amp;&amp; o.subset.trim()) {
+            subsets.push({ name, label: clean(o.subset, 32) })
+        }
+        if ((typeof o.board === 'string' &amp;&amp; o.board.trim()) || (typeof o.board === 'number' &amp;&amp; Number.isFinite(o.board))) {
+            cells.push({ name, label: typeof o.boardLabel === 'string' &amp;&amp; o.boardLabel.trim() ? clean(o.boardLabel, 32) : name, value: clean(o.board, 32) })
+        }
+        if (typeof o.flag === 'string' &amp;&amp; o.flag.trim()) {
+            flags.push({ name, text: clean(o.flag, 160) })
+        }
+        if (typeof o.notContent === 'string' &amp;&amp; o.notContent.trim()) {
+            notContent.push({ name, text: clean(o.notContent, 160) })
+        }
+    }
+    return { cells, flags, notContent, subsets }
+}
+let EXT_FLAG_HEAD = '提示(擴充診斷 '
+let extFlagIssue = (f) => `${EXT_FLAG_HEAD}${f.name}): ${f.text}(共用工具區之擴充診斷所列;不否決,由審計判定)`
+
+export { makeVerify, scanTrace, deniedHalt, stripSearchPatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, runNodeProc, shortShareOf, sideFlowIssue, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD }
+export default makeVerify
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 15:49:29 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

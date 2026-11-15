@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>eval/ledger.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">eval/ledger.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import fs from 'fs'
+import path from 'path'
+
+
+//訂單帳本之載入: 讀 ledgerBuild 產出之二進位欄, 並建「依出場棒排序」之輔助欄(供「某時點以前已結之單」之統計以二分搜尋取得)
+//  回傳 L: { meta, n(策略數), nBars, off/ent/ext/pnl(依進場棒升冪之逐單欄), xoff/xExt/xPnlCum/xWinCum(依出場棒升冪之已結單欄; Cum 為策略內前綴和), 靜態欄, fac(因子序列欄; 用到才讀) }
+let readBin = (fp, Ctor) => {
+    let b = fs.readFileSync(fp)
+    let ab = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)
+    return new Ctor(ab)
+}
+
+/**
+ * 載入訂單帳本資料夾(由 buildLedger 產出之 meta.json 與二進位欄), 並建立依出場棒排序之已結單欄
+ * 因子序列欄 fac 為延遲讀取(首次存取 L.fac 才載入; 無檔者為 null)
+ *
+ * @param {String} dir 輸入帳本資料夾路徑
+ * @returns {Object} 回傳帳本物件L, 含 dir、meta、n(策略數)、nBars、barsPerDay、逐單欄(off、ent、ext、pnl)、靜態欄(mode、tp、sl、nKeys、lv、fitNt、cls、keyOff、keyIdx、keyNames、px、keySym、keyTh、keyOr; px、keySym、keyTh、keyOr 於無檔時為 null)、依出場棒升冪之已結單欄(xoff、xExt、xPnlCum、xWinCum)與延遲讀取之 fac
+ * @example
+ * let L = loadLedger('./data/ledger/eval')
+ */
+let loadLedger = (dir) => {
+    let meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'))
+    let L = {
+        dir,
+        meta,
+        n: meta.nStrategies,
+        nBars: meta.nBars,
+        barsPerDay: Math.round(24 / meta.barHours),
+        off: readBin(path.join(dir, 'off.u32'), Uint32Array),
+        ent: readBin(path.join(dir, 'ent.i32'), Int32Array),
+        ext: readBin(path.join(dir, 'ext.i32'), Int32Array),
+        pnl: readBin(path.join(dir, 'pnl.f32'), Float32Array),
+        mode: readBin(path.join(dir, 'mode.i8'), Int8Array),
+        tp: readBin(path.join(dir, 'tp.f32'), Float32Array),
+        sl: readBin(path.join(dir, 'sl.f32'), Float32Array),
+        nKeys: readBin(path.join(dir, 'nKeys.u8'), Uint8Array),
+        lv: readBin(path.join(dir, 'lv.i32'), Int32Array),
+        fitNt: readBin(path.join(dir, 'fitNt.i32'), Int32Array),
+        cls: readBin(path.join(dir, 'cls.u8'), Uint8Array),
+        keyOff: readBin(path.join(dir, 'keyOff.u32'), Uint32Array),
+        keyIdx: readBin(path.join(dir, 'keyIdx.u16'), Uint16Array),
+        keyNames: meta.keyNames,
+        px: fs.existsSync(path.join(dir, 'px.f64')) ? readBin(path.join(dir, 'px.f64'), Float64Array) : null,
+        //進場規則之各條件(與 keyIdx 逐格對齊; 規則 R-EV-29); 舊帳本無此三欄者為 null
+        keySym: fs.existsSync(path.join(dir, 'keySym.i8')) ? readBin(path.join(dir, 'keySym.i8'), Int8Array) : null,
+        keyTh: fs.existsSync(path.join(dir, 'keyTh.f64')) ? readBin(path.join(dir, 'keyTh.f64'), Float64Array) : null,
+        keyOr: fs.existsSync(path.join(dir, 'keyOr.u8')) ? readBin(path.join(dir, 'keyOr.u8'), Uint8Array) : null,
+    }
+    //fac, 因子序列欄(fac[ki * nBars + i]; 約 60 MB): 用到才讀 —— 未呼叫 ctx.factor 之評估不付載入之時間與記憶體; 舊帳本無此欄者為 null
+    let fpFac = path.join(dir, 'fac.f64')
+    let fac
+    Object.defineProperty(L, 'fac', {
+        enumerable: false,
+        configurable: true,
+        get: () => {
+            if (fac === undefined) {
+                fac = fs.existsSync(fpFac) ? readBin(fpFac, Float64Array) : null
+            }
+            return fac
+        },
+    })
+    //依出場棒排序之已結單欄
+    let n = L.n
+    let xoff = new Uint32Array(n + 1)
+    let nClosed = 0
+    for (let j = 0; j &lt; L.ext.length; j++) {
+        if (L.ext[j] >= 0) {
+            nClosed++
+        }
+    }
+    let xExt = new Int32Array(nClosed)
+    let xPnlCum = new Float64Array(nClosed)
+    let xWinCum = new Int32Array(nClosed)
+    let p = 0
+    let tmp = []
+    for (let s = 0; s &lt; n; s++) {
+        xoff[s] = p
+        tmp.length = 0
+        for (let j = L.off[s]; j &lt; L.off[s + 1]; j++) {
+            if (L.ext[j] >= 0) {
+                tmp.push(j)
+            }
+        }
+        tmp.sort((a, b) => L.ext[a] - L.ext[b] || a - b)
+        let cp = 0
+        let cw = 0
+        for (let j of tmp) {
+            cp += L.pnl[j]
+            cw += L.pnl[j] > 0 ? 1 : 0
+            xExt[p] = L.ext[j]
+            xPnlCum[p] = cp
+            xWinCum[p] = cw
+            p++
+        }
+    }
+    xoff[n] = p
+    L.xoff = xoff
+    L.xExt = xExt
+    L.xPnlCum = xPnlCum
+    L.xWinCum = xWinCum
+    return L
+}
+
+//ids, 策略序號 → 策略檔名(需要時才讀)
+/**
+ * 讀取帳本資料夾內之 ids.json, 取得策略序號對應之策略檔名陣列
+ *
+ * @param {String} dir 輸入帳本資料夾路徑
+ * @returns {Array} 回傳策略檔名陣列, 以策略序號為索引
+ * @example
+ * let ids = loadIds('./data/ledger/eval')
+ */
+let loadIds = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'ids.json'), 'utf8'))
+
+
+export { loadLedger, loadIds }
+export default loadLedger
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 15:49:29 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

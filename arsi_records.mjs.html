@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>arsi/records.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">arsi/records.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import fs from 'fs'
+import path from 'path'
+
+
+//節點文件(node)與做夢文件(dream)之統一規格、檢核、渲染與儲存
+//  通用件(不含任何領域用語): 「代理式節點 → 審計式做夢」之迴圈以這兩種文件作為 agent 之間、輪與輪之間之唯一交接物
+//  儲存採依賴注入: createFileRecords({ nodeDir, dreamDir, trashDir }) 為預設之檔案儲存(每份文件一個 JSON 正本 + 一個由正本渲染之 Markdown);
+//    要換儲存(資料庫、物件儲存、他種路徑規則)⇒ 提供同介面之物件即可(putNodeDoc / getNodeDoc / listNodeDocs / removeNodeDoc / putDreamDoc / getDreamDoc / listDreamDocs)
+//  JSON 為正本(機器可檢核); Markdown 一律由正本渲染(格式統一, agent 與人讀同一份), 不接受手改
+//
+//  節點文件 arsi.node/3(/2 → /3 之選配欄見下方「/2 → /3」; /1 → /2: code.pick 改名 code.artifact; harness 之領域數字改由專案以 summary / notes / raw 提供, 本檔不認識任何領域指標):
+//    nodeId, round, attempt, status('verified' | 'failed'), createdAt, updatedAt
+//    spec        節點規格(專案定義之物件)
+//    task        迴圈指派之任務(專案定義; 渲染用到 goal、refs[{ nodeId | dream | file, why }]、rework)
+//    agent       { role, kind, model, variant | effort, startedAt, endedAt, durationSec, ok, error }
+//    plan        { target, approach, hypotheses[] }                                   —— agent 填
+//    code        { artifact(成品路徑), files[], reused[], notes, inactiveArms?[](指派之臂中, 交付版未作用者之 id) } —— agent 填
+//    results     { claimed{ 鍵: 值 }(自報之最終結果; 鍵由專案之任務書規定), experiments[{ what, outcome }] } —— agent 填
+//    conclusion  { outcome('improved' | 'neutral' | 'worse' | 'failed'), summary, findings[], limitations[], nextIdeas[] } —— agent 填
+//    harness     迴圈重跑成品之結果(正本):
+//                { ok, summary[{ key, label, value }](與 claimed 同鍵者並列對照), notes[字串](專案之補充說明列), score{ S, ladder, flags{ vetoed, why[] } },
+//                  fingerprint(成品行為之指紋), checks{ issues[字串], …專案之其他機械檢查值 }, validation{ name, flag(專案自訂之旗標字串, 如 'pass' / 'fail' 或分級; null = 未取得), label(選配; 給人讀之說明), at, error }(選配之獨立驗證),
+//                  raw(專案之完整數字), evalJson(重跑結果檔), error }
+//    audit       做夢之審計 { round, by, trust, action, evidence[], issues[], reworkBrief, deleteWhy, inactiveArms?[](審計所定之「未作用之臂」; 有此鍵者優先於節點自報) }
+//    history     重做前各次之摘要 [{ attempt, S, fingerprint, audit }]
+//  做夢文件 arsi.dream/3(/2 → /3 之選配欄見下方「/2 → /3」; /1 → /2: guidance.toolRequests(未分類之字串)改為 guidance.improvements(分類之改進項); 加 synthesis.prevDirections(前次方向之回顧); /1 之文件照常可讀可渲染):
+//    round, createdAt, updatedAt, agent, scope{ nodes[], reworked[] }
+//    audits[{ nodeId, trust('trusted' | 'partial' | 'untrusted'), action('accept' | 'rework' | 'delete'), evidence[], issues[], reworkBrief?, deleteWhy?, inactiveArms?[] }]
+//    synthesis{ summary, worked[], failed[], patterns[], prevDirections?[{ round, arms[], verdict, note }], overview?{ coverage{ verdict, why }, progress{ verdict, why }, localOptimum{ risk, why }, blindSpots?[], adjust?, prevReview? }(整體研判; 值域見 OVERVIEW_*) }
+//    guidance{ directions[{ arms[], base, rationale, expect }], avoid[], openQuestions[], improvements?[{ kind, target, what, evidence? }], toolRequests?[](/1 之舊欄) }
+//    docsUpdated[{ file, what }], harness{ docIssues[], tally(見 tallyDream), applied{ accepted, rework, deleted, proposals, skipped } }
+//  改進項(improvements)只收「原則性 / 結構性 / 共用」之改進, 依作用對象分類(IMPROVE_KINDS); 維護者依類別處置(合理即改, 每輪都改亦屬常態; 各類之筆數逐輪下降 = 該層趨於穩定):
+//    loop        迴圈架構: 流程、紀錄、機械檢查與稽核、派工、資源
+//    dream       做夢之評估 / 審計之原則性指導(做夢任務書之規程; 不是某一輪之審計內容)
+//    node        節點任務之原則性指導與限制(節點任務書之通則; 不是對某個節點或某條方向之建議)
+//    tool        節點與做夢共用之工具、介面與其說明文件
+//    score       績效之計算與判準中, agent 看得到數字之部分
+//    validation  獨立驗證之判準(agent 只看得到旗標之部分): 每改一次即多用一次驗證資料, 須從嚴(由維護者研判, 不因個別成品之旗標而改)
+//    external    專案以外: 所用之套件、跨專案之設定(維護者經其通報管道轉報)
+//  不屬改進項者: 某一輪之審計內容與彙整(隨材料而變, 寫在 audits / synthesis); 對個別節點、個別機制之修改建議與提示(寫在 guidance.avoid / directions, 供日後之節點參考)
+//  前次方向之回顧(prevDirections)之判定 DIR_VERDICTS: confirmed(預期成立)/ refuted(已如實執行而預期不成立)/ inconclusive(已執行但無法判定)/ flawed(方向本身有設計或邏輯之錯)/ not-run(尚未執行)
+//  /2 → /3(皆為選配欄; /1、/2 之文件照常可讀可渲染):
+//    任務類型 TASK_TYPES: explore(探索: 寫出新機制, 或在起點上加臂 / 改進)/ verify(驗證: 檢驗一項既有之主張 —— 消融、以不同定義重複、穩健性; 設計由方向定死, 不做變體搜尋)
+//      做夢於 guidance.directions[] 各條給 type(省略 = explore; verify 須附 claim = 要檢驗之主張); 節點文件之 task.type / task.claim 由迴圈自來源方向帶入
+//    擴建(共用工具之統籌; 由做夢 agent 親手完成, 維護者只做機械檢查):
+//      節點文件 code.shareable?[{ file, what }]: 節點自報「本次所寫、其他節點也可能用到之輔助」
+//      做夢文件 expansion?[{ item, sources?[], decision, files?[], verify?, note? }]: 每項可共用之輔助之處置; decision 為 EXPAND_DECISIONS:
+//        built(新增至共用工具區)/ updated(更新既有之共用工具)/ declined(不納入; note 寫理由)/ core(須改維護者管理之核心才做得到 ⇒ 另列改進項)
+//        built / updated 須附 files(共用工具區內之檔)與 verify(怎麼驗、看到什麼)
+//      做夢文件 harness.toolbox: 迴圈對共用工具區之機械檢查結果 { ok, changed{ added[], changed[], removed[] }, reverted[{ rel, why }], issues[] }(見 toolbox.mjs)
+/**
+ * 節點文件之結構版本字串
+ *
+ * @type {String}
+ */
+let NODE_SCHEMA = 'arsi.node/3'
+/**
+ * 做夢文件之結構版本字串
+ *
+ * @type {String}
+ */
+let DREAM_SCHEMA = 'arsi.dream/3'
+/**
+ * 做夢審計之可信度合法值('trusted'、'partial'、'untrusted')
+ *
+ * @type {Array}
+ */
+let TRUST = ['trusted', 'partial', 'untrusted']
+/**
+ * 做夢審計之處置合法值('accept'、'rework'、'delete')
+ *
+ * @type {Array}
+ */
+let ACTIONS = ['accept', 'rework', 'delete']
+/**
+ * 節點結論 outcome 之合法值('improved'、'neutral'、'worse'、'failed')
+ *
+ * @type {Array}
+ */
+let OUTCOMES = ['improved', 'neutral', 'worse', 'failed']
+/**
+ * 任務類型合法值('explore' 探索、'verify' 驗證)
+ *
+ * @type {Array}
+ */
+let TASK_TYPES = ['explore', 'verify']
+let TASK_LABELS = { explore: '探索', verify: '驗證' }
+/**
+ * 做夢 expansion(共用工具擴建)之處置 decision 合法值('built'、'updated'、'declined'、'core')
+ *
+ * @type {Array}
+ */
+let EXPAND_DECISIONS = ['built', 'updated', 'declined', 'core']
+let EXPAND_LABELS = { built: '新增', updated: '更新', declined: '不納入', core: '須改核心(另列改進項)' }
+/**
+ * 做夢改進項(guidance.improvements)之分類 kind 合法值('loop'、'dream'、'node'、'tool'、'score'、'validation'、'external')
+ *
+ * @type {Array}
+ */
+let IMPROVE_KINDS = ['loop', 'dream', 'node', 'tool', 'score', 'validation', 'external']
+let IMPROVE_LABELS = { loop: '迴圈架構', dream: '做夢原則', node: '節點原則', tool: '共用工具', score: '績效判準', validation: '獨立驗證判準', external: '專案外' }
+let DIR_VERDICTS = ['confirmed', 'refuted', 'inconclusive', 'flawed', 'not-run']
+let DIR_LABELS = { 'confirmed': '預期成立', 'refuted': '預期不成立', 'inconclusive': '無法判定', 'flawed': '方向本身有錯', 'not-run': '尚未執行' }
+//整體研判(synthesis.overview; 選配): 做夢除審計本輪之節點外, 另就「當前與過往之整體搜尋」下判斷, 供下一輪之節點與日後之做夢參考
+//  coverage{ verdict, why }      搜尋之集中度: concentrated(擠在少數區域 / 單一譜系 / 同一機制家族)/ balanced / scattered(到處淺試, 無一條線驗到可下結論)
+//  progress{ verdict, why }      進度之量尺逐輪是否仍在前進: advancing / flat / regressing
+//  localOptimum{ risk, why }     是否卡在局部最佳點: low / medium / high
+//  blindSpots[]                  尚未觸及或過早放棄之區域
+//  adjust                        據此對方向之配比與選題之調整;  prevReview?  前次之整體研判哪些被本輪支持 / 推翻
+//  outwardChecked?{ kinds, files[] }  本輪已預先核對而皆無內容之向外候選之種數與其檔(無向外之方向時之依據; 是否足以免除由領域層判定)
+//  三個判定皆可填 unknown(樣本不足以判定; why 寫還缺什麼) —— 節點尚少時不硬下結論
+let OVERVIEW_COVERAGE = ['concentrated', 'balanced', 'scattered', 'unknown']
+let OVERVIEW_PROGRESS = ['advancing', 'flat', 'regressing', 'unknown']
+let OVERVIEW_RISK = ['low', 'medium', 'high', 'unknown']
+let OVERVIEW_LABELS = { concentrated: '過於集中', balanced: '均衡', scattered: '過於發散', advancing: '前進中', flat: '停滯', regressing: '倒退', low: '低', medium: '中', high: '高', unknown: '樣本不足以判定' }
+
+//臂目錄之提案(armProposals; 選配):臂目錄不是封閉的 —— 節點與做夢皆可提「新臂 / 新層(新的臂之種類)/ 修訂 / 停用」,
+//  由主控(迴圈之維護者)審查, 通過者於下一輪加入目錄; 提案不是方向(方向之 arms 仍須為目錄內之臂), 也不是改進項
+//  節點文件 conclusion.armProposals?[…]、做夢文件 guidance.armProposals?[…], 每筆:
+//    kind       new(新臂)/ layer(新的一層)/ revise(修訂既有臂之定義、範圍或可否選用)/ retire(停用或併入他臂)
+//    arm        既有臂之 id(revise / retire 必填)
+//    layer      所屬之層(new: 既有層之代號; layer: 新層之名稱與它管什麼)
+//    title      名稱(new / layer 必填)
+//    mechanism  機制之中性描述(做什麼、用到什麼資訊; 不寫結論與數字); revise = 修訂後之定義; retire = 停用之理由
+//    boundary?  與既有臂之界線(哪些既有臂相近、差在哪); evidence?  依據(節點、數字); sources?[]  出處之節點 id
+//主張之判定(節點文件 conclusion.claimVerdict; 選配): 有待驗之主張者(驗證類; 或方向寫有預先登錄之判定之探索類)依方向所寫之判定方式自判
+//  confirmed(成立)/ refuted(不成立); claimNote = 一句話: 哪一項未過、差多少; 與 outcome(相對比較對象之 improved / neutral / worse)分開 ——
+//  例: 三個節點之 outcome 皆 improved, 而主張分別為不成立 / 不成立 / 成立, 須讀摘要全文才分得出
+//  驗證類節點: 結論即主張之判定 —— 任務書不要求 outcome(有 claimVerdict 者可省), 節點文件亦不列 outcome
+/**
+ * 節點結論 conclusion.claimVerdict(主張之判定)之合法值('confirmed' 成立、'refuted' 不成立)
+ *
+ * @type {Array}
+ */
+let CLAIM_VERDICTS = ['confirmed', 'refuted']
+let CLAIM_LABELS = { confirmed: '成立', refuted: '不成立' }
+/**
+ * 臂目錄提案之 kind 合法值('new' 新臂、'layer' 新層、'revise' 修訂、'retire' 停用)
+ *
+ * @type {Array}
+ */
+let ARM_KINDS = ['new', 'layer', 'revise', 'retire']
+let ARM_LABELS = { new: '新臂', layer: '新層', revise: '修訂', retire: '停用' }
+
+let isStr = (x) => typeof x === 'string'
+let isArr = (x) => Array.isArray(x)
+let isObj = (x) => x !== null &amp;&amp; typeof x === 'object' &amp;&amp; !Array.isArray(x)
+let strArr = (x) => isArr(x) &amp;&amp; x.every(isStr)
+
+//checkArmProposals, 臂目錄之提案之檢核 ⇒ 問題清單(空 = 合格); where = 欄位路徑(訊息用)
+/**
+ * 檢核臂目錄之提案(armProposals)
+ *
+ * 須為陣列,每筆 kind 須在 ARM_KINDS 內、mechanism 不得為空;new 與 layer 須附 title,revise 與 retire 須附 arm。
+ *
+ * @param {Array} xs 輸入提案陣列
+ * @param {String} where 輸入欄位路徑(僅用於問題訊息)
+ * @returns {Array} 回傳問題字串陣列,空陣列代表合格
+ * @example
+ * let es = checkArmProposals([{ kind: 'new', mechanism: 'm' }], 'x')
+ * console.log(es)
+ * // => [ 'x[0] 之 kind 為 new 時須附 title(名稱)' ]
+ */
+let checkArmProposals = (xs, where) => {
+    if (!isArr(xs)) {
+        return [`${where} 須為陣列(沒有提案給空陣列)`]
+    }
+    let e = []
+    xs.forEach((x, i) => {
+        if (!isObj(x) || !ARM_KINDS.includes(x.kind)) {
+            e.push(`${where}[${i}].kind 須為 ${ARM_KINDS.join(' / ')}`)
+        }
+        else if (!isStr(x.mechanism) || !x.mechanism.trim()) {
+            e.push(`${where}[${i}].mechanism 不得為空(機制之中性描述;revise = 修訂後之定義;retire = 停用之理由)`)
+        }
+        else if ((x.kind === 'new' || x.kind === 'layer') &amp;&amp; (!isStr(x.title) || !x.title.trim())) {
+            e.push(`${where}[${i}] 之 kind 為 ${x.kind} 時須附 title(名稱)`)
+        }
+        else if ((x.kind === 'revise' || x.kind === 'retire') &amp;&amp; (!isStr(x.arm) || !x.arm.trim())) {
+            e.push(`${where}[${i}] 之 kind 為 ${x.kind} 時須附 arm(既有臂之 id)`)
+        }
+        else if (['arm', 'layer', 'title', 'boundary', 'evidence'].some((k) => x[k] !== undefined &amp;&amp; x[k] !== null &amp;&amp; !isStr(x[k])) || (x.sources !== undefined &amp;&amp; !strArr(x.sources))) {
+            e.push(`${where}[${i}] 須為 { kind, arm?, layer?, title?, mechanism, boundary?, evidence?, sources?[] }(字串欄須為字串)`)
+        }
+    })
+    return e
+}
+//armProposalLine, 一筆提案之單行文字(節點文件、做夢文件、提案帳共用)
+let armProposalLine = (x) => `〔${ARM_LABELS[x.kind] || x.kind}〕${x.arm ? `${x.arm} ` : ''}${x.title ? `${x.title}` : ''}${x.layer ? `(層:${x.layer})` : ''}:${x.mechanism}${x.boundary ? `;與既有臂之界線:${x.boundary}` : ''}${x.evidence ? `(依據:${x.evidence})` : ''}${isArr(x.sources) &amp;&amp; x.sources.length ? `(出處:${x.sources.join('、')})` : ''}`
+
+//agent 交付之節點文件部分(plan / code / results / conclusion)之檢核 ⇒ 問題清單(空 = 合格)
+/**
+ * 檢核 agent 交付之節點文件部分(plan、code、results、conclusion)
+ *
+ * @param {Object} a 輸入 agent 交付之節點文件物件
+ * @returns {Array} 回傳問題字串陣列,空陣列代表合格;非物件時回傳 ['節點文件不是 JSON 物件']
+ * @example
+ * let es = checkNodeAgentPart(JSON.parse(text))
+ * if (es.length > 0) {
+ *     console.log(es)
+ * }
+ */
+let checkNodeAgentPart = (a) => {
+    let e = []
+    if (!isObj(a)) {
+        return ['節點文件不是 JSON 物件']
+    }
+    if (!isObj(a.plan) || !isStr(a.plan.target) || !a.plan.target.trim() || !isStr(a.plan.approach) || !a.plan.approach.trim()) {
+        e.push('plan.target、plan.approach 須為非空字串')
+    }
+    else if (a.plan.hypotheses !== undefined &amp;&amp; !strArr(a.plan.hypotheses)) {
+        e.push('plan.hypotheses 須為字串陣列')
+    }
+    let art = isObj(a.code) ? (a.code.artifact === undefined ? a.code.pick : a.code.artifact) : null //code.pick 為 /1 之舊名
+    if (!isObj(a.code) || !isStr(art) || !art.trim()) {
+        e.push('code.artifact 須為成品之路徑字串')
+    }
+    else {
+        if (a.code.reused !== undefined &amp;&amp; !strArr(a.code.reused)) {
+            e.push('code.reused 須為字串陣列')
+        }
+        if (a.code.files !== undefined &amp;&amp; !strArr(a.code.files)) {
+            e.push('code.files 須為字串陣列')
+        }
+        if (a.code.shareable !== undefined &amp;&amp; !(isArr(a.code.shareable) &amp;&amp; a.code.shareable.every((x) => isObj(x) &amp;&amp; isStr(x.file) &amp;&amp; isStr(x.what)))) {
+            e.push('code.shareable 須為 [{ file, what }] 陣列(沒有可共用者給空陣列)')
+        }
+        if (a.code.inactiveArms !== undefined &amp;&amp; !strArr(a.code.inactiveArms)) {
+            e.push('code.inactiveArms 須為字串陣列(指派之臂中, 交付版未作用者之 id;沒有則空陣列)')
+        }
+    }
+    if (!isObj(a.results) || !isObj(a.results.claimed)) {
+        e.push('results.claimed 須為物件(自報之最終績效)')
+    }
+    else if (a.results.experiments !== undefined &amp;&amp; !(isArr(a.results.experiments) &amp;&amp; a.results.experiments.every((x) => isObj(x) &amp;&amp; isStr(x.what) &amp;&amp; isStr(x.outcome)))) {
+        e.push('results.experiments 須為 [{ what, outcome }] 陣列')
+    }
+    //outcome(相對其比較對象之判定): 有主張之判定(claimVerdict)者可省 —— 驗證類節點之結論即主張之判定, 其任務書不要求 outcome; 給了仍須在值域內
+    let hasVerdict = isObj(a.conclusion) &amp;&amp; CLAIM_VERDICTS.includes(a.conclusion.claimVerdict)
+    if (!isObj(a.conclusion) || !(OUTCOMES.includes(a.conclusion.outcome) || (hasVerdict &amp;&amp; a.conclusion.outcome === undefined)) || !isStr(a.conclusion.summary) || !a.conclusion.summary.trim()) {
+        e.push(`conclusion.outcome 須為 ${OUTCOMES.join(' / ')} 之一(有 claimVerdict 者可省), conclusion.summary 須為非空字串`)
+    }
+    else {
+        for (let k of ['findings', 'limitations', 'nextIdeas']) {
+            if (a.conclusion[k] !== undefined &amp;&amp; !strArr(a.conclusion[k])) {
+                e.push(`conclusion.${k} 須為字串陣列`)
+            }
+        }
+        if (a.conclusion.armProposals !== undefined) {
+            e.push(...checkArmProposals(a.conclusion.armProposals, 'conclusion.armProposals'))
+        }
+        if (a.conclusion.claimVerdict !== undefined &amp;&amp; a.conclusion.claimVerdict !== null &amp;&amp; !CLAIM_VERDICTS.includes(a.conclusion.claimVerdict)) {
+            e.push(`conclusion.claimVerdict 須為 ${CLAIM_VERDICTS.join(' / ')}(主張依方向所寫之判定方式是否成立;無待驗之主張者省略此鍵)`)
+        }
+        if (a.conclusion.claimNote !== undefined &amp;&amp; a.conclusion.claimNote !== null &amp;&amp; !isStr(a.conclusion.claimNote)) {
+            e.push('conclusion.claimNote 須為字串')
+        }
+    }
+    return e
+}
+
+//做夢 agent 交付之做夢文件部分(audits / synthesis / guidance / docsUpdated)之檢核; scope = 本輪應審之節點 id
+/**
+ * 檢核做夢 agent 交付之做夢文件部分(audits、synthesis、guidance、docsUpdated 等)
+ *
+ * @param {Object} a 輸入做夢 agent 交付之文件物件
+ * @param {Array} [scope=[]] 輸入本輪應審之節點 id 陣列,預設[]
+ * @returns {Array} 回傳問題字串陣列,空陣列代表合格;非物件時回傳 ['做夢文件不是 JSON 物件']
+ * @example
+ * let es = checkDreamAgentPart(JSON.parse(text), nodeIds)
+ * if (es.length > 0) {
+ *     console.log(es)
+ * }
+ */
+let checkDreamAgentPart = (a, scope = []) => {
+    let e = []
+    if (!isObj(a)) {
+        return ['做夢文件不是 JSON 物件']
+    }
+    if (!isArr(a.audits)) {
+        e.push('audits 須為陣列')
+    }
+    else {
+        let seen = new Set()
+        for (let x of a.audits) {
+            if (!isObj(x) || !isStr(x.nodeId)) {
+                e.push('audits 之每項須含 nodeId')
+                continue
+            }
+            seen.add(x.nodeId)
+            if (!TRUST.includes(x.trust)) {
+                e.push(`audits[${x.nodeId.slice(0, 8)}].trust 須為 ${TRUST.join(' / ')}`)
+            }
+            if (!ACTIONS.includes(x.action)) {
+                e.push(`audits[${x.nodeId.slice(0, 8)}].action 須為 ${ACTIONS.join(' / ')}`)
+            }
+            if (!strArr(x.evidence || []) || !strArr(x.issues || [])) {
+                e.push(`audits[${x.nodeId.slice(0, 8)}].evidence / issues 須為字串陣列`)
+            }
+            if (x.action === 'rework' &amp;&amp; !(isStr(x.reworkBrief) &amp;&amp; x.reworkBrief.trim())) {
+                e.push(`audits[${x.nodeId.slice(0, 8)}] 之 action 為 rework 時須附 reworkBrief`)
+            }
+            if (x.action === 'delete' &amp;&amp; !(isStr(x.deleteWhy) &amp;&amp; x.deleteWhy.trim())) {
+                e.push(`audits[${x.nodeId.slice(0, 8)}] 之 action 為 delete 時須附 deleteWhy`)
+            }
+            if (x.inactiveArms !== undefined &amp;&amp; !strArr(x.inactiveArms)) {
+                e.push(`audits[${x.nodeId.slice(0, 8)}].inactiveArms 須為字串陣列(該節點指派之臂中, 交付版未作用者之 id;沒有則空陣列)`)
+            }
+        }
+        for (let id of scope) {
+            if (!seen.has(id)) {
+                e.push(`audits 缺節點 ${id.slice(0, 8)}`)
+            }
+        }
+    }
+    if (!isObj(a.synthesis) || !isStr(a.synthesis.summary) || !a.synthesis.summary.trim()) {
+        e.push('synthesis.summary 須為非空字串')
+    }
+    else {
+        for (let k of ['worked', 'failed', 'patterns']) {
+            if (a.synthesis[k] !== undefined &amp;&amp; !strArr(a.synthesis[k])) {
+                e.push(`synthesis.${k} 須為字串陣列`)
+            }
+        }
+        let pd = a.synthesis.prevDirections
+        if (pd !== undefined &amp;&amp; !(isArr(pd) &amp;&amp; pd.every((x) => isObj(x) &amp;&amp; Number.isInteger(x.round) &amp;&amp; strArr(x.arms) &amp;&amp; x.arms.length > 0 &amp;&amp; DIR_VERDICTS.includes(x.verdict) &amp;&amp; isStr(x.note)))) {
+            e.push(`synthesis.prevDirections 須為 [{ round: 整數, arms: [臂 id], verdict: ${DIR_VERDICTS.join(' / ')}, note }] 陣列`)
+        }
+        //plain(選配): 給使用者之白話摘要(字串); 輪末摘要與做夢文件之最前面
+        if (a.synthesis.plain !== undefined &amp;&amp; !isStr(a.synthesis.plain)) {
+            e.push('synthesis.plain 須為字串(給使用者之白話摘要)')
+        }
+        //整體研判(選配): 有給即查格式(三個判定之值域、各附非空之依據)
+        let ov = a.synthesis.overview
+        if (ov !== undefined) {
+            let okPart = (x, key, dom) => isObj(x) &amp;&amp; dom.includes(x[key]) &amp;&amp; isStr(x.why) &amp;&amp; x.why.trim().length > 0
+            if (!isObj(ov)) {
+                e.push('synthesis.overview 須為物件')
+            }
+            else {
+                if (!okPart(ov.coverage, 'verdict', OVERVIEW_COVERAGE)) {
+                    e.push(`synthesis.overview.coverage 須為 { verdict: ${OVERVIEW_COVERAGE.join(' / ')}, why: 非空字串 }`)
+                }
+                if (!okPart(ov.progress, 'verdict', OVERVIEW_PROGRESS)) {
+                    e.push(`synthesis.overview.progress 須為 { verdict: ${OVERVIEW_PROGRESS.join(' / ')}, why: 非空字串 }`)
+                }
+                if (!okPart(ov.localOptimum, 'risk', OVERVIEW_RISK)) {
+                    e.push(`synthesis.overview.localOptimum 須為 { risk: ${OVERVIEW_RISK.join(' / ')}, why: 非空字串 }`)
+                }
+                if (ov.blindSpots !== undefined &amp;&amp; !strArr(ov.blindSpots)) {
+                    e.push('synthesis.overview.blindSpots 須為字串陣列')
+                }
+                //families(選配): 機制家族之歸類(機器可讀; 下一輪之搜尋地圖據以標示各節點之家族, 日後之做夢沿用或推翻)
+                if (ov.families !== undefined &amp;&amp; !(isArr(ov.families) &amp;&amp; ov.families.every((f) => isObj(f) &amp;&amp; isStr(f.name) &amp;&amp; f.name.trim() &amp;&amp; strArr(f.nodes) &amp;&amp; isStr(f.basis)))) {
+                    e.push('synthesis.overview.families 須為 [{ name: 家族名, nodes: [節點 id], basis: 歸類之依據 }] 陣列')
+                }
+                for (let k of ['adjust', 'prevReview']) {
+                    if (ov[k] !== undefined &amp;&amp; !isStr(ov[k])) {
+                        e.push(`synthesis.overview.${k} 須為字串`)
+                    }
+                }
+                //outwardChecked(選配): 本輪已預先核對而皆無內容之向外候選(種數與其檔) —— 無向外之方向時之依據(由領域層決定是否足以免除「須有向外」)
+                if (ov.outwardChecked !== undefined &amp;&amp; ov.outwardChecked !== null &amp;&amp; !(isObj(ov.outwardChecked) &amp;&amp; Number.isInteger(ov.outwardChecked.kinds) &amp;&amp; ov.outwardChecked.kinds >= 1 &amp;&amp; strArr(ov.outwardChecked.files) &amp;&amp; ov.outwardChecked.files.length >= 1)) {
+                    e.push('synthesis.overview.outwardChecked 須為 { kinds: 正整數(已預先核對而皆無內容之向外候選之種數), files: [檔名](至少 1 個) }')
+                }
+            }
+        }
+    }
+    if (!isObj(a.guidance) || !isArr(a.guidance.directions)) {
+        e.push('guidance.directions 須為陣列')
+    }
+    else {
+        for (let d of a.guidance.directions) {
+            if (!isObj(d) || !strArr(d.arms) || d.arms.length === 0 || !(d.base === null || isStr(d.base)) || !isStr(d.rationale)) {
+                e.push('guidance.directions 之每項須為 { arms: [臂 id], base: 節點 id 或 null, rationale, expect? }')
+                break
+            }
+            if (d.type !== undefined &amp;&amp; !TASK_TYPES.includes(d.type)) {
+                e.push(`guidance.directions 之 type 須為 ${TASK_TYPES.join(' / ')}(省略 = explore)`)
+                break
+            }
+            if (d.type === 'verify' &amp;&amp; !(isStr(d.claim) &amp;&amp; d.claim.trim())) {
+                e.push('guidance.directions 之 type 為 verify 時須附 claim(要檢驗之主張)')
+                break
+            }
+            //newFamily(選配; 布林): 此方向是否押不同於現有候選之機制家族(換資訊源或換機制)—— 以臂 / 層區分之「向外」擋不住「換一個臂、仍是同一家族」
+            if (d.newFamily !== undefined &amp;&amp; typeof d.newFamily !== 'boolean') {
+                e.push('guidance.directions 之 newFamily 須為布林值(此方向是否押新的機制家族)')
+                break
+            }
+        }
+        for (let k of ['avoid', 'openQuestions', 'toolRequests']) {
+            if (a.guidance[k] !== undefined &amp;&amp; !strArr(a.guidance[k])) {
+                e.push(`guidance.${k} 須為字串陣列`)
+            }
+        }
+        let im = a.guidance.improvements
+        if (im !== undefined) {
+            if (!isArr(im)) {
+                e.push('guidance.improvements 須為陣列')
+            }
+            else {
+                im.forEach((x, i) => {
+                    if (!isObj(x) || !IMPROVE_KINDS.includes(x.kind)) {
+                        e.push(`guidance.improvements[${i}].kind 須為 ${IMPROVE_KINDS.join(' / ')}`)
+                    }
+                    else if (!isStr(x.target) || !x.target.trim() || !isStr(x.what) || !x.what.trim() || (x.evidence !== undefined &amp;&amp; !isStr(x.evidence))) {
+                        e.push(`guidance.improvements[${i}] 須為 { kind, target(對象), what(內容), evidence?(依據) }, target 與 what 不得為空`)
+                    }
+                })
+            }
+        }
+        if (a.guidance.armProposals !== undefined) {
+            e.push(...checkArmProposals(a.guidance.armProposals, 'guidance.armProposals'))
+        }
+    }
+    if (a.docsUpdated !== undefined &amp;&amp; !(isArr(a.docsUpdated) &amp;&amp; a.docsUpdated.every((x) => isObj(x) &amp;&amp; isStr(x.file) &amp;&amp; isStr(x.what)))) {
+        e.push('docsUpdated 須為 [{ file, what }] 陣列')
+    }
+    if (a.expansion !== undefined) {
+        if (!isArr(a.expansion)) {
+            e.push('expansion 須為陣列')
+        }
+        else {
+            a.expansion.forEach((x, i) => {
+                if (!isObj(x) || !EXPAND_DECISIONS.includes(x.decision)) {
+                    e.push(`expansion[${i}].decision 須為 ${EXPAND_DECISIONS.join(' / ')}`)
+                }
+                else if (!isStr(x.item) || !x.item.trim() || (x.sources !== undefined &amp;&amp; !strArr(x.sources)) || (x.files !== undefined &amp;&amp; !strArr(x.files)) || (x.verify !== undefined &amp;&amp; !isStr(x.verify)) || (x.note !== undefined &amp;&amp; !isStr(x.note))) {
+                    e.push(`expansion[${i}] 須為 { item(項目), sources?[], decision, files?[], verify?, note? }, item 不得為空`)
+                }
+                else if ((x.decision === 'built' || x.decision === 'updated') &amp;&amp; !(isArr(x.files) &amp;&amp; x.files.length > 0 &amp;&amp; isStr(x.verify) &amp;&amp; x.verify.trim())) {
+                    e.push(`expansion[${i}] 之 decision 為 ${x.decision} 時須附 files(共用工具區內之檔)與 verify(怎麼驗、看到什麼)`)
+                }
+            })
+        }
+    }
+    return e
+}
+
+//tallyDream, 做夢文件之改進項依類別之筆數與前次方向回顧之判定筆數(逐輪比較用: 各類之筆數下降 = 該層趨於穩定; 方向之判定 = 做夢品質之量測)
+//  回 { improvements: { total, loop, dream, node, tool, score, validation, external, unclassified }, prevDirections: { total, confirmed, refuted, inconclusive, flawed, 'not-run' } }
+//  unclassified = /1 文件之 toolRequests 筆數, 以及 kind 不在值域者
+//  另回 expansion: { total, built, updated, declined, core }(擴建項依處置之筆數; 處置不在值域者只計入 total)
+/**
+ * 統計做夢文件之改進項、前次方向判定、擴建處置與臂提案之筆數(逐輪比較用)
+ *
+ * @param {Object} d 輸入做夢文件(可僅含部分欄位)
+ * @returns {Object} 回傳物件,含 improvements、prevDirections、expansion、armProposals(各為筆數統計物件)、overview(整體研判之三個判定,無則null)、hasPlain(是否有白話總結)
+ * @example
+ * let t = tallyDream({ guidance: { improvements: [{ kind: 'loop' }, { kind: 'x' }] } })
+ * console.log(t.improvements)
+ * // => { total: 2, loop: 1, dream: 0, node: 0, tool: 0, score: 0, validation: 0, external: 0, unclassified: 1 }
+ */
+let tallyDream = (d) => {
+    let g = (d &amp;&amp; d.guidance) || {}
+    let im = { total: 0, ...Object.fromEntries(IMPROVE_KINDS.map((k) => [k, 0])), unclassified: 0 }
+    for (let x of isArr(g.improvements) ? g.improvements : []) {
+        im.total++
+        if (isObj(x) &amp;&amp; IMPROVE_KINDS.includes(x.kind)) {
+            im[x.kind]++
+        }
+        else {
+            im.unclassified++
+        }
+    }
+    let legacy = isArr(g.toolRequests) ? g.toolRequests.length : 0
+    im.total += legacy
+    im.unclassified += legacy
+    let pd = { total: 0, ...Object.fromEntries(DIR_VERDICTS.map((k) => [k, 0])) }
+    for (let x of isArr(d &amp;&amp; d.synthesis &amp;&amp; d.synthesis.prevDirections) ? d.synthesis.prevDirections : []) {
+        if (isObj(x) &amp;&amp; DIR_VERDICTS.includes(x.verdict)) {
+            pd.total++
+            pd[x.verdict]++
+        }
+    }
+    let ex = { total: 0, ...Object.fromEntries(EXPAND_DECISIONS.map((k) => [k, 0])) }
+    for (let x of isArr(d &amp;&amp; d.expansion) ? d.expansion : []) {
+        ex.total++
+        if (isObj(x) &amp;&amp; EXPAND_DECISIONS.includes(x.decision)) {
+            ex[x.decision]++
+        }
+    }
+    //整體研判之三個判定(無此欄或不在值域 ⇒ null); 逐輪比較用
+    let ov = d &amp;&amp; d.synthesis &amp;&amp; isObj(d.synthesis.overview) ? d.synthesis.overview : null
+    let pickOf = (x, key, dom) => (isObj(x) &amp;&amp; dom.includes(x[key]) ? x[key] : null)
+    let overview = ov ? { coverage: pickOf(ov.coverage, 'verdict', OVERVIEW_COVERAGE), progress: pickOf(ov.progress, 'verdict', OVERVIEW_PROGRESS), localOptimum: pickOf(ov.localOptimum, 'risk', OVERVIEW_RISK), nFamilies: isArr(ov.families) ? ov.families.length : null, outwardChecked: isObj(ov.outwardChecked) &amp;&amp; Number.isInteger(ov.outwardChecked.kinds) &amp;&amp; ov.outwardChecked.kinds >= 1 ? ov.outwardChecked.kinds : 0 } : null
+    let plain = d &amp;&amp; d.synthesis &amp;&amp; isStr(d.synthesis.plain) ? d.synthesis.plain.trim() : ''
+    //臂目錄之提案依類別之筆數(類別不在值域者只計入 total)
+    let ap = { total: 0, ...Object.fromEntries(ARM_KINDS.map((k) => [k, 0])) }
+    for (let x of isArr(g.armProposals) ? g.armProposals : []) {
+        ap.total++
+        if (isObj(x) &amp;&amp; ARM_KINDS.includes(x.kind)) {
+            ap[x.kind]++
+        }
+    }
+    return { improvements: im, prevDirections: pd, expansion: ex, armProposals: ap, overview, hasPlain: plain.length > 0 &amp;&amp; ![0xFF08, 0x28].includes(plain.charCodeAt(0)) }
+}
+
+let li = (xs) => (isArr(xs) &amp;&amp; xs.length ? xs.map((x) => `- ${x}`).join('\n') : '- (無)')
+
+let cell = (x) => {
+    if (x === undefined || x === null || x === '') {
+        return '—'
+    }
+    if (typeof x === 'number') {
+        return Number.isFinite(x) ? String(Math.round(x * 10000) / 10000) : '—'
+    }
+    return String(x).replace(/\|/g, '/')
+}
+
+/**
+ * 由節點文件正本渲染為 Markdown 文字(格式統一,不接受手改)
+ *
+ * @param {Object} d 輸入節點文件物件(arsi.node/3)
+ * @returns {String} 回傳 Markdown 字串
+ * @example
+ * let md = renderNodeMd(nodeDoc)
+ */
+let renderNodeMd = (d) => {
+    let h = d.harness || {}
+    let sc = h.score || {}
+    let cl = (d.results &amp;&amp; d.results.claimed) || {}
+    let au = d.audit
+    let out = []
+    out.push(`# 節點文件 ${d.nodeId}`)
+    out.push('')
+    out.push(`- 規格: ${NODE_SCHEMA};輪次 r${String(d.round).padStart(3, '0')};第 ${d.attempt} 次交付;狀態 ${d.status}`)
+    out.push(`- 臂: ${((d.spec &amp;&amp; d.spec.arms) || []).join(' + ')};起點(base): ${d.spec &amp;&amp; d.spec.base ? d.spec.base : '無'}`)
+    out.push(`- agent: ${d.agent ? `${d.agent.kind} ${d.agent.model}${d.agent.variant ? ` (${d.agent.variant})` : ''};${d.agent.startedAt} ~ ${d.agent.endedAt}(${d.agent.durationSec}s);${d.agent.ok ? '正常結束' : `異常: ${d.agent.error || ''}`}` : '—'}`)
+    out.push('')
+    out.push('## 1. 任務(迴圈指派)')
+    out.push('')
+    out.push(d.task &amp;&amp; d.task.goal ? d.task.goal : '—')
+    if (d.task &amp;&amp; d.task.type) {
+        out.push('')
+        out.push(`任務類型: **${TASK_LABELS[d.task.type] || d.task.type}**(${d.task.type})${d.task.claim ? `;待驗之主張: ${d.task.claim}` : ''}`)
+    }
+    //任務書條款之試驗(選配; 由專案之任務指派帶入: task.trial = { id, variant }): 同一輪之節點任務書有兩種版本時, 記本節點拿到哪一種
+    if (d.task &amp;&amp; d.task.trial &amp;&amp; d.task.trial.id) {
+        out.push('')
+        out.push(`任務書條款之試驗: ${d.task.trial.id} / ${d.task.trial.variant} 組(A = 現行條款、B = 新條款;組別不代表好壞)`)
+    }
+    if (d.task &amp;&amp; isArr(d.task.refs) &amp;&amp; d.task.refs.length) {
+        out.push('')
+        //參考之標識: 節點 id / 做夢輪次 / 檔案路徑(三種 kind 之欄位不同; 皆無則用 path)
+        out.push(`參考: ${d.task.refs.map((r) => `${r.nodeId || (r.dream !== undefined &amp;&amp; r.dream !== null ? `做夢 ${r.dream}` : null) || r.file || r.path || '?'}(${r.why || ''})`).join(';')}`)
+    }
+    if (d.task &amp;&amp; d.task.rework) {
+        out.push('')
+        out.push(`**重做要求(來自做夢審計)**: ${d.task.rework}`)
+    }
+    out.push('')
+    out.push('## 2. 規劃(agent)')
+    out.push('')
+    out.push(`- 目標: ${d.plan ? d.plan.target : '—'}`)
+    out.push(`- 探索方式: ${d.plan ? d.plan.approach : '—'}`)
+    out.push('- 假設:')
+    out.push(li(d.plan &amp;&amp; d.plan.hypotheses))
+    out.push('')
+    out.push('## 3. 程式(agent)')
+    out.push('')
+    out.push(`- 成品: ${d.code ? (d.code.artifact || d.code.pick || '—') : '—'}`)
+    out.push(`- 其他檔: ${d.code &amp;&amp; isArr(d.code.files) &amp;&amp; d.code.files.length ? d.code.files.join('、') : '(無)'}`)
+    out.push(`- 引用既有程式: ${d.code &amp;&amp; isArr(d.code.reused) &amp;&amp; d.code.reused.length ? d.code.reused.join('、') : '(無)'}`)
+    if (d.code &amp;&amp; d.code.notes) {
+        out.push(`- 說明: ${d.code.notes}`)
+    }
+    if (d.code &amp;&amp; isArr(d.code.shareable) &amp;&amp; d.code.shareable.length) {
+        out.push(`- 自報可共用之輔助(由做夢整併): ${d.code.shareable.map((x) => `${x.file}(${x.what})`).join(';')}`)
+    }
+    if (d.code &amp;&amp; isArr(d.code.inactiveArms) &amp;&amp; d.code.inactiveArms.length) {
+        out.push(`- 指派之臂中交付版未作用者(自報): ${d.code.inactiveArms.join('、')}`)
+    }
+    out.push('')
+    out.push('## 4. 績效')
+    out.push('')
+    //對照表: 迴圈之 summary 逐項與 agent 自報之同鍵並列; 自報有而 summary 無之鍵列於其後
+    let sum = isArr(h.summary) ? h.summary.filter((r) => isObj(r) &amp;&amp; isStr(r.key)) : []
+    out.push('| 項 | agent 自報 | 迴圈重跑(正本) |')
+    out.push('|---|---|---|')
+    for (let r of sum) {
+        out.push(`| ${cell(r.label || r.key)} | ${cell(cl[r.key])} | ${cell(r.value)} |`)
+    }
+    for (let k of Object.keys(cl)) {
+        if (!sum.some((r) => r.key === k)) {
+            out.push(`| ${cell(k)} | ${cell(cl[k])} | — |`)
+        }
+    }
+    out.push('')
+    out.push(`- 迴圈判讀: ${h.ok === false ? `未取得可評估之結果(${h.error || ''})` : `階梯 ${sc.ladder === undefined ? '—' : sc.ladder}${sc.flags &amp;&amp; sc.flags.vetoed ? ';否決' : ''}${sc.flags &amp;&amp; isArr(sc.flags.why) &amp;&amp; sc.flags.why.length ? `;${sc.flags.why.join(';')}` : ''}`}`)
+    for (let s of isArr(h.notes) ? h.notes : []) {
+        out.push(`- ${s}`)
+    }
+    if (h.validation) {
+        out.push(`- **獨立驗證(${h.validation.name}): ${h.validation.flag ? (h.validation.label || (h.validation.flag === 'pass' ? 'pass(通過)' : (h.validation.flag === 'fail' ? 'fail(未通過 ⇒ 否決)' : h.validation.flag))) : `未取得(${h.validation.error || ''})`}**(只揭露旗標, 不含數字)`)
+    }
+    if (h.checks) {
+        out.push(`- 迴圈檢查: ${isArr(h.checks.issues) &amp;&amp; h.checks.issues.length ? h.checks.issues.join(';') : '無異常'}${typeof h.checks.nEvals === 'number' ? `;agent 於本次交付前共執行評估 ${h.checks.nEvals} 次${typeof h.checks.nEvalsNote === 'string' &amp;&amp; h.checks.nEvalsNote ? `(${h.checks.nEvalsNote})` : ''}(試得越多, 其中最佳者越可能只是運氣)` : ''}`)
+    }
+    out.push('')
+    out.push('### 實驗紀錄(agent)')
+    out.push('')
+    let ex = d.results &amp;&amp; d.results.experiments
+    out.push(isArr(ex) &amp;&amp; ex.length ? ex.map((x, i) => `${i + 1}. ${x.what} → ${x.outcome}`).join('\n') : '(無)')
+    out.push('')
+    out.push('## 5. 結論(agent)')
+    out.push('')
+    //agent 之判定是它自己依可見之資料對比較對象下的(未必與獨立驗證同向); 有獨立驗證之結果時註明以其為準, 以免後讀者把自判當成結論
+    //主張之判定(conclusion.claimVerdict; 選配): 驗證類節點(與附有預先登錄之判定之探索類)依方向所寫之判定方式自判; 列於結論之首, 與「相對比較對象之判定」分開
+    if (d.conclusion &amp;&amp; CLAIM_VERDICTS.includes(d.conclusion.claimVerdict)) {
+        out.push(`- **主張之判定(agent 依方向所寫之判定方式自判): ${CLAIM_LABELS[d.conclusion.claimVerdict]}**${isStr(d.conclusion.claimNote) &amp;&amp; d.conclusion.claimNote.trim() ? ` —— ${d.conclusion.claimNote.trim()}` : ''}`)
+    }
+    //驗證類節點(task.type = verify)而有主張之判定者不列「相對比較對象之判定」: 其結論即主張之判定 —— 半庫等驗證之交付版其 S 本來就低於對照,
+    //  並列「判定 worse」與「主張之判定 成立」只生混淆, 文字條款擋不住; 探索類照列
+    if (!(d.task &amp;&amp; d.task.type === 'verify' &amp;&amp; d.conclusion &amp;&amp; CLAIM_VERDICTS.includes(d.conclusion.claimVerdict))) {
+        out.push(`- 判定(agent 自判;相對其比較對象): ${d.conclusion &amp;&amp; d.conclusion.outcome ? d.conclusion.outcome : '—'}${d.harness &amp;&amp; d.harness.validation &amp;&amp; d.harness.validation.flag ? `(**不是獨立驗證之結果**;獨立驗證見上:${d.harness.validation.flag})` : ''}`)
+    }
+    out.push(`- 摘要: ${d.conclusion ? d.conclusion.summary : '—'}`)
+    out.push('- 發現:')
+    out.push(li(d.conclusion &amp;&amp; d.conclusion.findings))
+    out.push('- 限制:')
+    out.push(li(d.conclusion &amp;&amp; d.conclusion.limitations))
+    out.push('- 後續想法:')
+    out.push(li(d.conclusion &amp;&amp; d.conclusion.nextIdeas))
+    if (d.conclusion &amp;&amp; isArr(d.conclusion.armProposals) &amp;&amp; d.conclusion.armProposals.length) {
+        out.push('- 臂目錄之提案(由做夢彙整、主控審查):')
+        out.push(d.conclusion.armProposals.filter(isObj).map((x) => `  - ${armProposalLine(x)}`).join('\n'))
+    }
+    out.push('')
+    out.push('## 6. 審計(做夢)')
+    out.push('')
+    if (au) {
+        out.push(`- 輪次 r${String(au.round).padStart(3, '0')};可信度 **${au.trust}**;處置 **${au.action}**`)
+        out.push('- 證據:')
+        out.push(li(au.evidence))
+        out.push('- 問題:')
+        out.push(li(au.issues))
+        if (au.reworkBrief) {
+            out.push(`- 重做要求: ${au.reworkBrief}`)
+        }
+        if (au.deleteWhy) {
+            out.push(`- 刪除理由: ${au.deleteWhy}`)
+        }
+        if (isArr(au.inactiveArms)) {
+            out.push(`- 未作用之臂(審計所定): ${au.inactiveArms.length ? au.inactiveArms.join('、') : '無'}`)
+        }
+    }
+    else {
+        out.push('(尚未審計)')
+    }
+    //主控補記之未作用之臂(審計之後才發生者: 臂之定義修訂使本節點不再屬該臂, 或此欄設立前已審之節點; 規則 R-REC-20): 以此列為準
+    if (isObj(d.control) &amp;&amp; isObj(d.control.inactiveArms) &amp;&amp; isArr(d.control.inactiveArms.arms)) {
+        let c = d.control.inactiveArms
+        out.push(`- 未作用之臂(主控補記${typeof c.at === 'string' ? `;${c.at.slice(0, 10)}` : ''};以此為準): ${c.arms.length ? c.arms.join('、') : '無'}${isArr(c.offDef) &amp;&amp; c.offDef.length ? `(其中依修訂後之定義不屬該臂、不計入已試: ${c.offDef.join('、')})` : ''}${typeof c.why === 'string' &amp;&amp; c.why ? ` —— ${c.why}` : ''}`)
+    }
+    out.push('')
+    return out.join('\n')
+}
+
+/**
+ * 由做夢文件正本渲染為 Markdown 文字(格式統一,不接受手改)
+ *
+ * @param {Object} d 輸入做夢文件物件(arsi.dream/3)
+ * @returns {String} 回傳 Markdown 字串,首行為「# 做夢文件 r{輪次三位數}」
+ * @example
+ * let md = renderDreamMd({ round: 3, audits: [], harness: null })
+ * console.log(md.split('\n')[0])
+ * // => # 做夢文件 r003
+ */
+let renderDreamMd = (d) => {
+    let out = []
+    out.push(`# 做夢文件 r${String(d.round).padStart(3, '0')}`)
+    out.push('')
+    out.push(`- 規格: ${DREAM_SCHEMA};agent: ${d.agent ? `${d.agent.kind} ${d.agent.model}${d.agent.effort ? ` (${d.agent.effort})` : ''};${d.agent.startedAt} ~ ${d.agent.endedAt}(${d.agent.durationSec}s)` : '—'}`)
+    out.push(`- 審計範圍: ${((d.scope &amp;&amp; d.scope.nodes) || []).length} 個節點${d.scope &amp;&amp; isArr(d.scope.reworked) &amp;&amp; d.scope.reworked.length ? `(含上輪重做 ${d.scope.reworked.length})` : ''}`)
+    out.push('')
+    //迴圈註記: 做夢完成後才發生、會影響本文件結論效力之事(由迴圈之維護者後補; 正文不改)
+    let add = d.harness &amp;&amp; isArr(d.harness.addendum) ? d.harness.addendum : []
+    if (add.length) {
+        out.push('## 0. 迴圈註記(本文件完成後之更正;**與正文牴觸時以此為準**)')
+        out.push('')
+        for (let a of add) {
+            out.push(`- (${String(a.at || '').slice(0, 10)})${a.text}`)
+        }
+        out.push('')
+    }
+    out.push('## 1. 節點審計')
+    out.push('')
+    out.push('| 節點 | 可信度 | 處置 | 問題數 |')
+    out.push('|---|---|---|---|')
+    for (let a of d.audits || []) {
+        out.push(`| ${a.nodeId.slice(0, 10)} | ${a.trust} | ${a.action} | ${(a.issues || []).length} |`)
+    }
+    for (let a of d.audits || []) {
+        out.push('')
+        out.push(`### ${a.nodeId}(${a.trust} / ${a.action})`)
+        out.push('')
+        out.push('- 問題:')
+        out.push(li(a.issues))
+        out.push('- 證據:')
+        out.push(li(a.evidence))
+        if (a.reworkBrief) {
+            out.push(`- 重做要求: ${a.reworkBrief}`)
+        }
+        if (a.deleteWhy) {
+            out.push(`- 刪除理由: ${a.deleteWhy}`)
+        }
+        if (isArr(a.inactiveArms) &amp;&amp; a.inactiveArms.length) {
+            out.push(`- 未作用之臂(指派而交付版未實現者): ${a.inactiveArms.join('、')}`)
+        }
+    }
+    out.push('')
+    out.push('## 2. 彙整')
+    out.push('')
+    //(範本之佔位文字以括號開頭 —— 全形 0xFF08 或半形 0x28 —— 未改寫者不列)
+    if (d.synthesis &amp;&amp; isStr(d.synthesis.plain) &amp;&amp; d.synthesis.plain.trim() &amp;&amp; ![0xFF08, 0x28].includes(d.synthesis.plain.trim().charCodeAt(0))) {
+        out.push(`> **白話摘要(給使用者)**:${d.synthesis.plain.trim().replace(/\s*\n+\s*/g, ' ')}`)
+        out.push('')
+    }
+    out.push(d.synthesis ? d.synthesis.summary : '—')
+    out.push('')
+    let ov = d.synthesis &amp;&amp; isObj(d.synthesis.overview) ? d.synthesis.overview : null
+    if (ov) {
+        let lab = (v) => OVERVIEW_LABELS[v] || v || '—'
+        out.push('### 整體研判(跨輪;供下一輪之節點與日後之做夢參考)')
+        out.push('')
+        out.push(`- 搜尋之集中度:**${lab(ov.coverage &amp;&amp; ov.coverage.verdict)}** —— ${(ov.coverage &amp;&amp; ov.coverage.why) || ''}`)
+        out.push(`- 進度:**${lab(ov.progress &amp;&amp; ov.progress.verdict)}** —— ${(ov.progress &amp;&amp; ov.progress.why) || ''}`)
+        out.push(`- 卡在局部最佳點之風險:**${lab(ov.localOptimum &amp;&amp; ov.localOptimum.risk)}** —— ${(ov.localOptimum &amp;&amp; ov.localOptimum.why) || ''}`)
+        if (isArr(ov.families) &amp;&amp; ov.families.length) {
+            out.push('- 機制家族之歸類(哪些成品押同一種結構):')
+            out.push(ov.families.map((f) => `  - **${f.name}**:${(f.nodes || []).map((id) => `\`${String(id).slice(0, 8)}\``).join('、') || '—'} —— ${f.basis || ''}`).join('\n'))
+        }
+        if (isArr(ov.blindSpots) &amp;&amp; ov.blindSpots.length) {
+            out.push('- 尚未觸及或過早放棄之區域:')
+            out.push(ov.blindSpots.map((x) => `  - ${x}`).join('\n'))
+        }
+        if (ov.adjust) {
+            out.push(`- 據此之調整:${ov.adjust}`)
+        }
+        if (isObj(ov.outwardChecked) &amp;&amp; Number.isInteger(ov.outwardChecked.kinds)) {
+            out.push(`- 已預先核對而皆無內容之向外候選:${ov.outwardChecked.kinds} 種(${(isArr(ov.outwardChecked.files) ? ov.outwardChecked.files : []).map((f) => `\`${f}\``).join('、') || '未列檔'})`)
+        }
+        if (ov.prevReview) {
+            out.push(`- 前次整體研判之回顧:${ov.prevReview}`)
+        }
+        out.push('')
+    }
+    out.push('- 有效:')
+    out.push(li(d.synthesis &amp;&amp; d.synthesis.worked))
+    out.push('- 無效:')
+    out.push(li(d.synthesis &amp;&amp; d.synthesis.failed))
+    out.push('- 型態:')
+    out.push(li(d.synthesis &amp;&amp; d.synthesis.patterns))
+    let pd = d.synthesis &amp;&amp; d.synthesis.prevDirections
+    if (isArr(pd) &amp;&amp; pd.length) {
+        out.push('- 前次方向之回顧:')
+        out.push(pd.map((x) => `  - r${String(x.round).padStart(3, '0')} 臂 ${(x.arms || []).join(' + ')}:**${DIR_LABELS[x.verdict] || x.verdict}** —— ${x.note || ''}`).join('\n'))
+    }
+    out.push('')
+    out.push('## 3. 給下一輪之方向')
+    out.push('')
+    let ds = d.guidance &amp;&amp; d.guidance.directions
+    out.push(isArr(ds) &amp;&amp; ds.length ? ds.map((x, i) => `${i + 1}. ${x.type ? `〔${TASK_LABELS[x.type] || x.type}〕` : ''}${x.newFamily === true ? '〔換家族〕' : ''}臂 ${x.arms.join(' + ')}${isArr(x.rearmedFrom) &amp;&amp; x.rearmedFrom.length ? `(原暫掛 ${x.rearmedFrom.join(' + ')};臂之提案通過後由主控改掛)` : ''};起點 ${x.base || '無'}${x.claim ? `;待驗之主張: ${x.claim}` : ''} —— ${x.rationale}${x.expect ? `(預期: ${x.expect})` : ''}`).join('\n') : '(無)')
+    out.push('')
+    out.push('- 避免:')
+    out.push(li(d.guidance &amp;&amp; d.guidance.avoid))
+    out.push('- 待解問題:')
+    out.push(li(d.guidance &amp;&amp; d.guidance.openQuestions))
+    let im = d.guidance &amp;&amp; d.guidance.improvements
+    let tr = d.guidance &amp;&amp; d.guidance.toolRequests
+    if (isArr(im)) {
+        out.push('- 改進項(原則性 / 結構性 / 共用;依類別):')
+        out.push(im.length ? im.map((x) => `  - 〔${IMPROVE_LABELS[x.kind] || x.kind}〕${x.target}:${x.what}${x.evidence ? `(依據:${x.evidence})` : ''}`).join('\n') : '  - (無)')
+    }
+    if (!isArr(im) || (isArr(tr) &amp;&amp; tr.length)) {
+        out.push('- 工具 / 評估器之需求(未分類):')
+        out.push(li(tr))
+    }
+    //臂目錄之提案只在文件有此欄時列出(舊文件不出現)
+    let aps = d.guidance &amp;&amp; d.guidance.armProposals
+    if (isArr(aps)) {
+        out.push('- 臂目錄之提案(待主控審查;通過者下一輪加入目錄):')
+        out.push(aps.length ? aps.filter(isObj).map((x) => `  - ${armProposalLine(x)}`).join('\n') : '  - (無)')
+    }
+    out.push('')
+    //擴建一節只在文件有 expansion 欄時列出(/3 起); 其後之節號順延, 舊文件之節號不變
+    let no = 4
+    if (isArr(d.expansion)) {
+        out.push(`## ${no++}. 擴建(共用工具;由做夢統籌)`)
+        out.push('')
+        out.push(d.expansion.length ? d.expansion.map((x) => `- 〔${EXPAND_LABELS[x.decision] || x.decision}〕${x.item}${isArr(x.sources) &amp;&amp; x.sources.length ? `(出處:${x.sources.join('、')})` : ''}${isArr(x.files) &amp;&amp; x.files.length ? `;檔:${x.files.join('、')}` : ''}${x.verify ? `;驗證:${x.verify}` : ''}${x.note ? `;${x.note}` : ''}`).join('\n') : '(無)')
+        let tb = d.harness &amp;&amp; d.harness.toolbox
+        if (tb) {
+            let ch = tb.changed || {}
+            out.push('')
+            out.push(`迴圈之機械檢查:${tb.ok ? '通過' : '**有問題**'};新增 ${(ch.added || []).length} 檔、修改 ${(ch.changed || []).length} 檔${isArr(tb.reverted) &amp;&amp; tb.reverted.length ? `;**已還原 ${tb.reverted.length} 檔**(${tb.reverted.map((r) => `${r.rel}:${r.why}`).join(';')})` : ''}${isArr(tb.issues) &amp;&amp; tb.issues.length ? `;問題:${tb.issues.join(';')}` : ''}`)
+        }
+        out.push('')
+    }
+    out.push(`## ${no++}. 專案文件之更新`)
+    out.push('')
+    out.push(isArr(d.docsUpdated) &amp;&amp; d.docsUpdated.length ? d.docsUpdated.map((x) => `- ${x.file}: ${x.what}`).join('\n') : '(無)')
+    out.push('')
+    if (d.harness) {
+        out.push(`## ${no++}. 迴圈之執行結果`)
+        out.push('')
+        out.push('```json')
+        out.push(JSON.stringify(d.harness, null, 1))
+        out.push('```')
+        out.push('')
+    }
+    return out.join('\n')
+}
+
+/**
+ * 輪次轉檔名用之名稱(r 加三位數補零)
+ *
+ * @param {Number} r 輸入輪次
+ * @returns {String} 回傳輪次名稱字串
+ * @example
+ * console.log(roundName(7))
+ * // => r007
+ */
+let roundName = (r) => `r${String(r).padStart(3, '0')}`
+
+//預設之檔案儲存; opt: { nodeDir, dreamDir, trashDir }
+/**
+ * 建立預設之檔案儲存(每份文件一個 JSON 正本加一個由正本渲染之 Markdown)
+ *
+ * 未給 nodeDir 或 dreamDir 會拋錯;目錄於寫入時自動建立。
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {String} opt.nodeDir 輸入節點文件資料夾
+ * @param {String} opt.dreamDir 輸入做夢文件資料夾
+ * @param {String} [opt.trashDir] 輸入回收夾,removeNodeDoc 需要此設定,未給則呼叫時拋錯
+ * @returns {Object} 回傳物件,含 paths(nodeJson、nodeMd、dreamJson、dreamMd 路徑函數)與方法 putNodeDoc(寫入節點文件並渲染)、getNodeDoc(讀取節點文件)、listNodeDocs(列出節點文件,可帶 { round } 篩選)、removeNodeDoc(移入回收夾並寫原因)、putDreamDoc(寫入做夢文件並渲染)、getDreamDoc(依輪次讀取)、listDreamDocs(依輪次升冪列出)
+ * @example
+ * let records = createFileRecords({ nodeDir: './nodes', dreamDir: './dreams', trashDir: './trash' })
+ * records.putDreamDoc({ round: 2, audits: [] })
+ * console.log(records.getDreamDoc(2).round)
+ * // => 2
+ */
+let createFileRecords = ({ nodeDir, dreamDir, trashDir }) => {
+    if (!nodeDir || !dreamDir) {
+        throw new Error('createFileRecords: 須給 nodeDir 與 dreamDir')
+    }
+    let ensure = () => {
+        for (let d of [nodeDir, dreamDir, trashDir].filter(Boolean)) {
+            fs.mkdirSync(d, { recursive: true })
+        }
+    }
+    let paths = {
+        nodeJson: (id) => path.join(nodeDir, `${id}.json`),
+        nodeMd: (id) => path.join(nodeDir, `${id}.md`),
+        dreamJson: (r) => path.join(dreamDir, `${roundName(r)}.json`),
+        dreamMd: (r) => path.join(dreamDir, `${roundName(r)}.md`),
+    }
+    let readJson = (fp) => {
+        try {
+            return JSON.parse(fs.readFileSync(fp, 'utf8'))
+        }
+        catch (err) {
+            return null
+        }
+    }
+    let putNodeDoc = (doc) => {
+        ensure()
+        let d = { ...doc, schema: NODE_SCHEMA, updatedAt: new Date().toISOString() }
+        fs.writeFileSync(paths.nodeJson(d.nodeId), JSON.stringify(d, null, 1), 'utf8')
+        fs.writeFileSync(paths.nodeMd(d.nodeId), renderNodeMd(d), 'utf8')
+        return d
+    }
+    let getNodeDoc = (id) => readJson(paths.nodeJson(id))
+    let listNodeDocs = ({ round = null } = {}) => {
+        ensure()
+        return fs.readdirSync(nodeDir).filter((f) => f.endsWith('.json')).map((f) => readJson(path.join(nodeDir, f))).filter((d) => d &amp;&amp; (round === null || d.round === round))
+    }
+    let removeNodeDoc = (id, why) => {
+        ensure()
+        if (!trashDir) {
+            throw new Error('removeNodeDoc: 未設定 trashDir')
+        }
+        let moved = []
+        for (let fp of [paths.nodeJson(id), paths.nodeMd(id)]) {
+            if (fs.existsSync(fp)) {
+                let to = path.join(trashDir, `${new Date().toISOString().replace(/[:.]/g, '-')}_${path.basename(fp)}`)
+                fs.renameSync(fp, to)
+                moved.push(to)
+            }
+        }
+        if (moved.length) {
+            fs.writeFileSync(path.join(trashDir, `${new Date().toISOString().replace(/[:.]/g, '-')}_${id}.why.txt`), String(why || ''), 'utf8')
+        }
+        return moved
+    }
+    let putDreamDoc = (doc) => {
+        ensure()
+        let d = { ...doc, schema: DREAM_SCHEMA, updatedAt: new Date().toISOString() }
+        fs.writeFileSync(paths.dreamJson(d.round), JSON.stringify(d, null, 1), 'utf8')
+        fs.writeFileSync(paths.dreamMd(d.round), renderDreamMd(d), 'utf8')
+        return d
+    }
+    let getDreamDoc = (r) => readJson(paths.dreamJson(r))
+    let listDreamDocs = () => {
+        ensure()
+        return fs.readdirSync(dreamDir).filter((f) => /^r\d+\.json$/.test(f)).map((f) => readJson(path.join(dreamDir, f))).filter(Boolean).sort((a, b) => a.round - b.round)
+    }
+    return { paths, putNodeDoc, getNodeDoc, listNodeDocs, removeNodeDoc, putDreamDoc, getDreamDoc, listDreamDocs }
+}
+
+
+export { NODE_SCHEMA, DREAM_SCHEMA, TRUST, ACTIONS, OUTCOMES, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, TASK_LABELS, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_COVERAGE, OVERVIEW_PROGRESS, OVERVIEW_RISK, OVERVIEW_LABELS, CLAIM_VERDICTS, CLAIM_LABELS, ARM_KINDS, ARM_LABELS, checkArmProposals, armProposalLine, checkNodeAgentPart, checkDreamAgentPart, tallyDream, renderNodeMd, renderDreamMd, createFileRecords, roundName }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 15:49:29 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>
