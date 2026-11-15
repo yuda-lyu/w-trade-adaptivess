@@ -31,15 +31,16 @@
 | dist 之限制 | 以 `import.meta.url` 定位套件檔者(`initProject`、`makeTexts` 之程式夾)於 dist 內以 `dist/` 為準而定位錯誤:經 dist 呼叫 `initProject` 拋 ENOENT;README 註明一律以 ESM 深層路徑取用 | README §Installation |
 | 對外介面之 JSDoc | 聚合入口匯出之函數與常數於定義處皆有 JSDoc(`@param` 212、`@example` 62 處) | R-PKG-7 |
 | 去識別 | 發布檔(含 dist、docs;有 `.git` 時以 `git ls-files` 取範圍)不含本機路徑(磁碟機、file URL、家目錄、UNC)、內網主機名與私有網段位址(通則檢查,不列使用端名稱);註解內可辨識出處之來源輪次、日期、人名、實測統計已清除(作為預設常數或測試資料之數值保留);**執行期字串內者未清**(§5);已知限制見 R-PKG-5 | R-PKG-5;`unit-package` |
-| 子行程隱藏視窗 | src 10 處、test 3 處(全集)皆 `windowsHide: true`;守門以括號配對只看該次呼叫引數之頂層物件(含字串內組出者),`child_process` 只准具名不改名;涵蓋 src、套件根 `g*.mjs`、test;已知限制見 R-OPS-1 | R-OPS-1;`unit-guard` |
+| 子行程隱藏視窗 | src 10 處、test 4 處(全集)皆 `windowsHide: true`;守門以括號配對只看該次呼叫引數之頂層物件(含字串內組出者),`child_process` 只准具名不改名;涵蓋 src、套件根 `g*.mjs`、test;已知限制見 R-OPS-1 | R-OPS-1;`unit-guard` |
 | 計時器相關之測試 | 測試皆以注入(`opt.sleep` / `opt.read`)或狀態同步,無「延時後斷言」 | R-PKG-8;`unit-run` |
 | 方向入前緣之去重(Gitea #154) | 探索類方向與樹上既有節點同臂同起點 ⇒ 規格另帶區分用之鍵(依據文字之雜湊)後入前緣;同一探索之重提(鍵之規格已有節點;或既有節點本身即出自同一依據)略過;未相撞者規格不變;樹上無同規格之節點而前緣內已有同臂同起點之待執行提案者維持略過;輪末摘要另列「方向未入前緣」各行(首行筆數,其後一條一行:序號、臂、起點、原因;前緣內之同規格已非待執行者註明其狀態);前次方向回顧之範本依方向之類型附識別文字(探索類列依據之開頭);命令列列示分〔鍵〕與〔主張〕 | R-REC-24、R-REC-28;`unit-claimKey`、`unit-texts` |
 | 任務書之程式夾(Gitea #154) | 節點與做夢任務書之「不得改」、診斷腳本「不得匯入」、「讀過評估器或迴圈之其他原始碼」所指之夾由 `codeRootRel` 推得(套件夾內為 `src/`,安裝後為 `node_modules/w-trade-adaptivess/src/`),不含 `lib/`;做夢任務書之禁止段補「暫存檔一律放你的工作夾」;探索類去重說明含仍會略過之情形 | R-PKG-6;`unit-texts` |
+| 外部序列介面(Gitea #155;選配、純新增) | `buildLedger` 之 `seriesDir` 與 `settings.source.seriesDir`(相對專案根)建入 `ser.f64`、`meta.seriesNames`;`loadLedger` 之 `L.seriesNames` / `L.ser`;`ctx.series(name, nBack = 180)`(決策棒以前、不含決策棒)與凍結之 `ctx.meta.seriesNames`;合約 §3 與 README 已補,含「時間標記 = 棒之開盤時間、值視為於該棒收盤時已得知、較晚得知者由使用端標在其後之棒」;帳本鍵與既有各欄不變、無此欄之帳本結果逐位不變;變異 37 處(含範圍改為含決策棒、僅特定 nBack 時含決策棒)皆被新增測試擋下 | R-EV-34;`unit-evalCore`、`unit-ledgerSeries` |
 | 於 npm 包內執行測試 | `unit-package` 於無 `.git` 且無 `.gitignore` 時略過 `.gitignore` 之列項檢查、去識別掃描改以包內全部文字檔為範圍(只略過任一層 `node_modules` 與包根下之測試暫存夾);`npm pack` 解開後跑全套 0 失敗(188 通過、4 略過);有 `.git` 而缺 `.gitignore` 者仍失敗 | R-PKG-1、R-PKG-5;`unit-package` |
 
 ## 4. 測試
 
-- `npm test`:189 項通過、3 項略過(`unit-ledgerReal`:本機無策略庫與帳本時略過).於 npm 包內(`npm pack` 解開)為 188 通過、4 略過(另略過 `.gitignore` 之列項檢查).
+- `npm test`:210 項通過、3 項略過(`unit-ledgerReal`:本機無策略庫與帳本時略過;含 Gitea #155 新增之 21 項:`unit-evalCore` 4、`unit-ledgerSeries` 17).於 npm 包內(`npm pack` 解開、工作目錄為包夾)為 209 通過、4 略過(另略過 `.gitignore` 之列項檢查).
 - `node g.mjs`:選集指紋 `d5a093f6b1b07a997c90`,`reproducible: true`.
 - `initProject` 對空資料夾寫入 27 檔;重跑 0 檔;對套件夾拒絕.
 - 未在套件內執行者:`tools/fakeRound.mjs`(假 agent 之整輪回歸;需真實帳本).
@@ -49,6 +50,8 @@
 - **輪末摘要「方向未入前緣」之呼叫站點**:該行之組句(`unproposedNoteOf`)有單元測試,而輪末鉤子內之呼叫(`afterRound` 之一行)只能由整輪回歸(`tools/fakeRound.mjs --redream --two`;需真實帳本)觸及,套件內尚無對應之整輪測試(併入下一項之合成帳本整輪回歸).
 - **方向入前緣與來源方向對應之既有限制**(Gitea #154 外審所見;皆早於該修正,對驗證類與不帶鍵之探索同樣存在,未在該修正內處置):①`directionOf` 取最近一份做夢文件中臂、起點、鍵相符者,不核對該條是否成功入前緣(同一規格後來被略過之重提會成為來源方向)②方向之 `arms` 含重複時,入前緣以去重後之臂,`directionOf` 只排序不去重而對不到來源③命令列 `--mode frontier --close` 未把 `--base` 傳給 `closeFrontier`,且 `--claim` 值格式不合時退化為不篩選鍵④`rearmFrontier` 之目的規格已有 `blocked` 紀錄時不重開⑤改掛後前緣內留下之 `blocked` 舊項找不到來源方向,命令列列示標〔鍵〕而非〔主張〕⑥區分用之鍵與主張鍵同為 8 個十六進位字:不同文字同鍵之機率約 2^-32,且主張文字恰為 `explore|<探索依據>` 時必同鍵(實務上不致發生).
 - **同臂同起點之探索「改寫」與「另一種機制」無從由文字分辨**:已相撞而帶鍵者,依據文字不同即為另一個規格(取後者以免靜默漏掉機制);同一方向跨輪改寫依據文字重提,可能多跑一個節點.若須更嚴,宜由做夢明給機制識別,或改為列出供主控裁示(後續,待使用端回報).
+- **外部序列之外審所見而未處置者**(Gitea #155 外審;皆非本次引入,待主控裁示):①**挑選函數可覆寫內建 typed array 之 `slice` 而讀得帳本全欄**(`Object.getPrototypeOf(ctx.xxx(…))` 取得共用原型,暫時把 `slice` 換成回傳 `this`;已實測於既有之 `ctx.entryBars`〔回傳含決策棒以後之全部進場棒〕、`ctx.factor`〔全部因子欄〕,新增之 `ctx.series` 同形);`pickLoader` 之字樣檢查只擋 `__proto__`、未擋 `Object.getPrototypeOf`,其檔頭已註明非安全沙箱、審計仍須讀碼;根治需擷取內建方法於載入時(不經可被覆寫之原型)或於隔離之 realm 執行挑選函數 ②帳本之重建為就地逐檔覆寫(非原子):已加「寫出前先移除舊 `meta.json`」使中斷者載入即失敗,但各欄之間仍無整體切換 ③`ctx.meta.ntAll` 於呼叫端未給 `L.ntStatic` 時取帳本全期進場數(命令列路徑皆會給;直接以 API 組評估器而帳本涵蓋訓練期以後者須自行給)④帳本鍵不含外部序列之內容,評估結果未帶序列之快照識別(序列更新後同鍵之結果不可直接比較;是否於 meta 記序列摘要並帶入評估結果,待裁示).
+- **外部序列之已知限制**(Gitea #155):①時間標記之誠實性(值得知之時點不晚於所標記之棒之收盤)由使用端負責,評估器無從檢查(合約 §3 明寫)②另建之帳本(保留期等)要評估用到序列之成品,須以各自之序列夾建入同名序列,否則該成品於該帳本上拋錯③`src/cli/build.mjs` 之 `source.libraryRoot` 未經 `P()` 以專案根解析(相對於工作目錄;與 README「設定檔內之相對路徑一律以專案根解析」不一致,專案根即工作目錄時無差別;早於本項,未處置)④序列以時間字串精確對位,異格式之時間對不到棒(建帳本時於記錄提示對不到棒之列數與一個值也對不到者,不拋錯)⑤終點 `endTime` 與 K 線之 `time` 以字串比較(既有之約定):格式不同或不在棒界時,以開盤時間截斷之棒可含收盤晚於終點者(外審所見;合約已註明 `endTime` 須同格式並落在棒界,程式未檢查).
 - **合成帳本之整輪回歸**:`tools/fakeRound.mjs` 需專案之真實帳本;改以 `test/tools/synthLedger.mjs` 之合成帳本即可成為套件內自足之整合測試(後續).
 - **計時器之觀察回調**:`src/arsi/resources.mjs`(資源取樣與資源閘)、`src/tools/waitEvent.mjs`(事件檔輪詢)、`src/domain/proc.mjs`(子行程逾時)尚未提供 `opt.onTrace`;依跨套件規格須沿用 wsemi 之 `getTrace`,而本套件目前未依賴 wsemi(後續;需新增依賴並改 R-PKG-2 與其測試).
 - **輸入參數之檢測機制**(跨套件規格,草案):對外函數之參數由各函數自行檢查,未以 wsemi 共用函數宣告種類(後續).

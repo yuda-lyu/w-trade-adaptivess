@@ -25,9 +25,10 @@ let lcg = (seed) => {
 
 let writeBin = (fp, arr) => fs.writeFileSync(fp, Buffer.from(arr.buffer, arr.byteOffset, arr.byteLength))
 
-//writeSynthLedger, 於 dir 寫出合成帳本; opt: { n(策略數), nBars(K 棒數; 4 小時一根), seed, identical(true = 全部策略之訂單相同) }
+//writeSynthLedger, 於 dir 寫出合成帳本; opt: { n(策略數), nBars(K 棒數; 4 小時一根), seed, identical(true = 全部策略之訂單相同), series(外部序列之名稱陣列; 預設無) }
 //  每隻策略: 逐棒以各自之機率進場(同棒至多一單), 持有 1 ~ 40 棒後出場; 出場棒超出帳本者為未結(ext = -1, pnl = 0); 損益為 ±
-export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical = false } = {}) => {
+//  series(規則 R-EV-34): 給名稱者另寫 ser.f64(另用一組亂數, 不動既有欄之內容; 第 1 條序列之前 3 根為缺值)與 meta.seriesNames; 未給者不寫(與舊帳本同)
+export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical = false, series = null } = {}) => {
     fs.mkdirSync(dir, { recursive: true })
     let rnd = lcg(seed)
     let off = new Uint32Array(n + 1)
@@ -118,7 +119,17 @@ export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical 
     writeBin(path.join(dir, 'keyOff.u32'), keyOff)
     writeBin(path.join(dir, 'keyIdx.u16'), keyIdx)
     writeBin(path.join(dir, 'px.f64'), px)
+    let seriesNames = Array.isArray(series) && series.length ? series.slice() : null
+    if (seriesNames) {
+        let rs = lcg(seed + 13)
+        let ser = new Float64Array(seriesNames.length * nBars)
+        for (let i = 0; i < ser.length; i++) {
+            ser[i] = rs() * 100
+        }
+        ser.fill(NaN, 0, 3)
+        writeBin(path.join(dir, 'ser.f64'), ser)
+    }
     fs.writeFileSync(path.join(dir, 'ids.json'), JSON.stringify(Array.from({ length: n }, (_, i) => `s${i}.json`)), 'utf8')
-    fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ version: 0, key: `synth${seed}${identical ? 'i' : ''}`, endTime: '2099-01-01T00:00:00', time0: '2022-07-01T00:00:00', barHours: 4, nBars, nStrategies: n, nOrders: ent.length, keyNames: ['k0', 'k1'] }), 'utf8')
+    fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ version: 0, key: `synth${seed}${identical ? 'i' : ''}`, endTime: '2099-01-01T00:00:00', time0: '2022-07-01T00:00:00', barHours: 4, nBars, nStrategies: n, nOrders: ent.length, keyNames: ['k0', 'k1'], ...(seriesNames ? { seriesNames } : {}) }), 'utf8')
     return { dir, n, nBars, nOrders: ent.length }
 }

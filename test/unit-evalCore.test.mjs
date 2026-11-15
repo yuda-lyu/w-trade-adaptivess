@@ -1,4 +1,6 @@
 import assert from 'assert'
+import fs from 'fs'
+import path from 'path'
 import { loadLedger } from '../src/eval/ledger.mjs'
 import { makeEvaluator } from '../src/eval/evalCore.mjs'
 import { makeTmp, writeSynthLedger } from './tools/synthLedger.mjs'
@@ -380,6 +382,205 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         assert.throws(() => ev0.runPick((ctx) => {
             ctx.factor(0, 3); return []
         }, 0), /請重建帳本/)
+    })
+
+    it('ctx.series 與外部序列欄(R-EV-34):逐決策核對 —— 只含決策棒以前之值(由舊至新、缺值照給、複本);名稱列於 ctx.meta.seriesNames;未建入或名稱不合者拋錯', () => {
+        //另建一份含外部序列之合成帳本(同一種子 ⇒ 訂單與既有各欄與 L 相同; 多 ser.f64 與 meta.seriesNames)
+        let t2 = makeTmp('evalCoreSeries')
+        try {
+            writeSynthLedger(t2.dir, { n: 60, nBars: 2400, seed: 5, series: ['ser_a', 'ser_b'] })
+            let L2 = loadLedger(t2.dir)
+            assert.deepEqual(L2.seriesNames, ['ser_a', 'ser_b'])
+            let S = L2.ser
+            assert.equal(S.length, 2 * L2.nBars)
+            let ev2 = makeEvaluator(L2, CFG)
+            assert.deepEqual(Array.from(ev2.meta.seriesNames), ['ser_a', 'ser_b'])
+            assert(Object.isFrozen(ev2.meta.seriesNames), '合約 §3: ctx.meta.seriesNames 為凍結之名稱陣列')
+            let seen = 0
+            for (let phase of CFG.phases) {
+                ev2.runPick((ctx) => {
+                    let b = ctx.bar
+                    for (let [si, nm] of [[0, 'ser_a'], [1, 'ser_b']]) {
+                        //合約 §3: series(name, nBack) = 該序列於決策棒以前最近 nBack 根之值; 最後一格 = 決策棒之前一根, 不含決策棒
+                        let v = ctx.series(nm, 12)
+                        assert.equal(v.length, 12)
+                        for (let i = 0; i < 12; i++) {
+                            assert(Object.is(v[i], S[si * L2.nBars + b - 12 + i]), `series(${nm}, 12)[${i}] 決策棒 ${b}`)
+                        }
+                        assert(Object.is(ctx.series(nm, 1)[0], S[si * L2.nBars + b - 1]), 'series(name, 1)[0] = 決策棒之前一根')
+                        //nBack 超過已有之棒數 ⇒ 只給到數據起點(長度 = 決策棒序號); 第 1 條序列之前 3 根為缺值, 照給 NaN
+                        let all = ctx.series(nm, 1e9)
+                        assert.equal(all.length, b)
+                        assert.equal(Number.isNaN(all[0]), si === 0)
+                        assert(!Number.isNaN(all[3]))
+                        //回傳為複本: 改它不影響帳本
+                        v[0] = 12345
+                        assert(!Object.is(S[si * L2.nBars + b - 12], 12345))
+                    }
+                    assert.equal(ctx.series('ser_a').length, Math.min(180, b), '合約 §3: nBack 預設 180')
+                    assert.equal(ctx.series('ser_a', 0).length, 0)
+                    //非典型之 nBack: 慣例同 ctx.factor(取整、負數為 0、非有限數〔NaN、Infinity、非數字〕為 0、封頂於決策棒序號); 長度與 factor 逐一相同
+                    for (let x of [1.5, 2.4, 0.4, -3, NaN, Infinity, -Infinity, '5', null, undefined, 1e9]) {
+                        let want = x === undefined ? Math.min(180, b) : ctx.factor(0, x).length
+                        assert.equal(ctx.series('ser_a', x).length, want, `nBack ${String(x)}`)
+                    }
+                    assert.equal(ctx.series('ser_a', 1.5).length, 2, 'Math.round(1.5) = 2')
+                    assert(Object.is(ctx.series('ser_a', 1.5)[1], S[b - 1]) && Object.is(ctx.series('ser_a', 1.5)[0], S[b - 2]))
+                    assert.equal(ctx.series('ser_a', -3).length, 0)
+                    assert.throws(() => ctx.series('nope', 5), /無此序列.*可用: ser_a、ser_b/)
+                    assert.throws(() => ctx.series(0, 5), /無此序列/)
+                    assert.throws(() => ctx.series(undefined, 5), /無此序列/)
+                    seen++
+                    return []
+                }, phase)
+            }
+            assert(seen > 10)
+            //未建入外部序列之帳本(含舊帳本): seriesNames 為空陣列, series 拋錯並說明未建入
+            assert.deepEqual(L.seriesNames, [])
+            assert.equal(L.ser, null)
+            assert.deepEqual(Array.from(ev.meta.seriesNames), [])
+            assert.throws(() => ev.runPick((ctx) => {
+                ctx.series('ser_a', 3); return []
+            }, 0), /無此序列.*帳本未建入外部序列/)
+            //名稱與欄不符(有名稱而無檔)⇒ 拋「請重建帳本」
+            let L3 = loadLedger(t2.dir)
+            Object.defineProperty(L3, 'ser', { value: null })
+            assert.throws(() => makeEvaluator(L3, CFG).runPick((ctx) => {
+                ctx.series('ser_a', 3); return []
+            }, 0), /請重建帳本/)
+        }
+        finally {
+            t2.cleanup()
+        }
+    })
+
+    it('ctx.series 無前視(R-EV-34):序列之值 = 其棒序號時,各決策回傳之最大值 = 決策棒之前一棒、全部 < 決策棒;各 nBack 與全部相位皆然', () => {
+        //合約 §3: 序列之 time = 棒之開盤時間, 於該棒收盤時得知 ⇒ 決策棒 b 只見棒序 < b; 值 = si * 1e6 + 棒序號 ⇒ 由值即可讀出所取之棒
+        let t2 = makeTmp('evalCoreSeriesNoLook')
+        try {
+            writeSynthLedger(t2.dir, { n: 60, nBars: 2400, seed: 5, series: ['ser_a', 'ser_b'] })
+            let nBars = 2400
+            let ser = new Float64Array(2 * nBars)
+            for (let si = 0; si < 2; si++) {
+                for (let i = 0; i < nBars; i++) {
+                    ser[si * nBars + i] = si * 1e6 + i
+                }
+            }
+            fs.writeFileSync(path.join(t2.dir, 'ser.f64'), Buffer.from(ser.buffer, ser.byteOffset, ser.byteLength))
+            let ev2 = makeEvaluator(loadLedger(t2.dir), CFG)
+            let nChk = 0
+            //七個相位(0 ~ 6)全部核對, 不只 CFG.phases; 含首個與最末個決策
+            let bars = []
+            for (let phase of [0, 1, 2, 3, 4, 5, 6]) {
+                ev2.runPick((ctx) => {
+                    let b = ctx.bar
+                    bars.push(b)
+                    for (let [si, nm] of [[0, 'ser_a'], [1, 'ser_b']]) {
+                        for (let nBack of [1, 1.5, 2, 2.5, 7, 180, 1e9]) {
+                            let v = ctx.series(nm, nBack)
+                            let len = Math.min(Math.round(nBack), b)
+                            assert.equal(v.length, len, `長度 ${nm} nBack ${nBack} 決策棒 ${b}`)
+                            for (let i = 0; i < len; i++) {
+                                assert.equal(v[i], si * 1e6 + (b - len + i), `${nm} nBack ${nBack} 決策棒 ${b} 第 ${i} 格`)
+                            }
+                            assert(len === 0 || v[len - 1] === si * 1e6 + b - 1, '最後一格 = 決策棒之前一棒')
+                            assert(Array.from(v).every((x) => x < si * 1e6 + b), `${nm} 不得含決策棒 ${b} 或其後之棒`)
+                            nChk++
+                        }
+                    }
+                    return []
+                }, phase)
+            }
+            assert(nChk > 100, `核對 ${nChk} 次`)
+            //涵蓋首個決策(暖機 60 日 = 360 棒;相位 0)與最末一批決策(其後之視窗須完整落在 2400 棒內 ⇒ 最後之決策棒 ≤ 2400 - 42)
+            assert.equal(Math.min(...bars), 360)
+            assert(Math.max(...bars) > 2400 - 42 - 42 && Math.max(...bars) <= 2400 - 42, `最末決策棒 ${Math.max(...bars)}`)
+        }
+        finally {
+            t2.cleanup()
+        }
+    })
+
+    it('損毀之外部序列欄(R-EV-34):meta.seriesNames 型態不合 ⇒ 載入即拋錯;ser.f64 位元組數非 8 之倍數 ⇒ 拋含檔名與「請重建帳本」之錯;少一個浮點數 ⇒ ctx.series 拋「請重建帳本」', () => {
+        let t2 = makeTmp('evalCoreSeriesBad')
+        try {
+            writeSynthLedger(t2.dir, { n: 20, nBars: 600, seed: 5, series: ['ser_a'] })
+            let fpMeta = path.join(t2.dir, 'meta.json')
+            let fpSer = path.join(t2.dir, 'ser.f64')
+            let meta0 = fs.readFileSync(fpMeta, 'utf8')
+            let ser0 = fs.readFileSync(fpSer)
+            //meta.seriesNames 存在而型態不合(字串、含非字串者)⇒ 不得靜默當成未建入
+            for (let bad of ['s', [1, 2], { a: 1 }, 5]) {
+                fs.writeFileSync(fpMeta, JSON.stringify({ ...JSON.parse(meta0), seriesNames: bad }), 'utf8')
+                assert.throws(() => loadLedger(t2.dir), /meta\.seriesNames.*請重建帳本/, JSON.stringify(bad))
+            }
+            //欄缺 meta.seriesNames(舊帳本)或為 null ⇒ 視為未建入
+            let m0 = JSON.parse(meta0)
+            delete m0.seriesNames
+            fs.writeFileSync(fpMeta, JSON.stringify(m0), 'utf8')
+            assert.deepEqual(loadLedger(t2.dir).seriesNames, [])
+            fs.writeFileSync(fpMeta, JSON.stringify({ ...m0, seriesNames: null }), 'utf8')
+            assert.deepEqual(loadLedger(t2.dir).seriesNames, [])
+            fs.writeFileSync(fpMeta, meta0, 'utf8')
+            //ser.f64 多 1 位元組 ⇒ 位元組數非 8 之倍數
+            fs.writeFileSync(fpSer, Buffer.concat([ser0, Buffer.from([1])]))
+            let L1 = loadLedger(t2.dir)
+            assert.throws(() => L1.ser, /ser\.f64.*非 8 之倍數.*請重建帳本/)
+            assert.throws(() => makeEvaluator(L1, CFG).runPick((ctx) => {
+                ctx.series('ser_a', 3); return []
+            }, 0), /非 8 之倍數/)
+            //ser.f64 少一個浮點數 ⇒ 長度與名稱不符
+            fs.writeFileSync(fpSer, ser0.subarray(0, ser0.length - 8))
+            assert.throws(() => makeEvaluator(loadLedger(t2.dir), CFG).runPick((ctx) => {
+                ctx.series('ser_a', 3); return []
+            }, 0), /外部序列欄與名稱不符.*請重建帳本/)
+            //還原後可用
+            fs.writeFileSync(fpSer, ser0)
+            let n = 0
+            makeEvaluator(loadLedger(t2.dir), { ...CFG, warmupDays: 20 }).runPick((ctx) => {
+                assert.equal(ctx.series('ser_a', 3).length, 3)
+                n++
+                return []
+            }, 0)
+            assert(n > 0)
+        }
+        finally {
+            t2.cleanup()
+        }
+    })
+
+    it('加外部序列欄與 ctx.series 不改變既有數字:不呼叫 series 之挑選,其 selHash 與績效在有 / 無此欄之帳本上相同;以序列為鍵之挑選可評估、可重現、且確由序列決定', () => {
+        //R-EV-34: 純新增之欄與存取函式; 成品之評估路徑不變
+        let t2 = makeTmp('evalCoreSeriesSame')
+        try {
+            writeSynthLedger(t2.dir, { n: 60, nBars: 2400, seed: 5, series: ['ser_a', 'ser_b'] })
+            let ev2 = makeEvaluator(loadLedger(t2.dir), CFG)
+            let pick = (ctx) => {
+                let st = ctx.stat(60)
+                return Array.from({ length: ctx.n }, (_, s) => s).sort((x, y) => (st.pnl[y] - st.pnl[x]) || (ctx.meta.tie[x] - ctx.meta.tie[y])).slice(0, 10)
+            }
+            let a = ev.evalPolicy(pick, {})
+            let c = ev2.evalPolicy(pick, {})
+            assert.equal(a.selHash, c.selHash)
+            assert.deepEqual(a.op.eqYr, c.op.eqYr)
+            assert.deepEqual(a.null, c.null)
+            //以序列為鍵之挑選: 近 6 根均值 > 50 取做多、否則取做空
+            let nBranch = [0, 0]
+            let pickS = (ctx) => {
+                let x = ctx.series('ser_b', 6)
+                let m = x.reduce((u, v) => u + v, 0) / Math.max(1, x.length)
+                nBranch[m > 50 ? 1 : 0]++
+                return Array.from({ length: ctx.n }, (_, s) => s).filter((s) => (m > 50) === (ctx.meta.mode[s] > 0)).slice(0, 10)
+            }
+            let r1 = ev2.evalPolicy(pickS, {})
+            assert(nBranch[0] > 0 && nBranch[1] > 0, `兩個分支皆被走到(序列確實決定選集): ${nBranch}`)
+            let r2 = ev2.evalPolicy(pickS, {})
+            assert.equal(r1.selHash, r2.selHash, '同一挑選模組重跑, 選集指紋相同')
+            assert.notEqual(r1.selHash, a.selHash)
+        }
+        finally {
+            t2.cleanup()
+        }
     })
 
     it('加條件欄與 ctx.factor 不改變既有數字:不呼叫 factor 之挑選,其 selHash 與績效在有 / 無此欄之帳本上相同', () => {

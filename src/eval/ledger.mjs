@@ -3,7 +3,7 @@ import path from 'path'
 
 
 //訂單帳本之載入: 讀 ledgerBuild 產出之二進位欄, 並建「依出場棒排序」之輔助欄(供「某時點以前已結之單」之統計以二分搜尋取得)
-//  回傳 L: { meta, n(策略數), nBars, off/ent/ext/pnl(依進場棒升冪之逐單欄), xoff/xExt/xPnlCum/xWinCum(依出場棒升冪之已結單欄; Cum 為策略內前綴和), 靜態欄, fac(因子序列欄; 用到才讀) }
+//  回傳 L: { meta, n(策略數), nBars, off/ent/ext/pnl(依進場棒升冪之逐單欄), xoff/xExt/xPnlCum/xWinCum(依出場棒升冪之已結單欄; Cum 為策略內前綴和), 靜態欄, fac(因子序列欄; 用到才讀), seriesNames / ser(外部序列之名稱與欄; 欄用到才讀) }
 let readBin = (fp, Ctor) => {
     let b = fs.readFileSync(fp)
     let ab = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)
@@ -12,10 +12,10 @@ let readBin = (fp, Ctor) => {
 
 /**
  * 載入訂單帳本資料夾(由 buildLedger 產出之 meta.json 與二進位欄), 並建立依出場棒排序之已結單欄
- * 因子序列欄 fac 為延遲讀取(首次存取 L.fac 才載入; 無檔者為 null)
+ * 因子序列欄 fac 為延遲讀取(首次存取 L.fac 才載入; 無檔者為 null); 外部序列欄 ser 同(首次存取 L.ser 才載入; 無檔者為 null), 其名稱 seriesNames 取自 meta.seriesNames(舊帳本無此欄者為空陣列)
  *
  * @param {String} dir 輸入帳本資料夾路徑
- * @returns {Object} 回傳帳本物件L, 含 dir、meta、n(策略數)、nBars、barsPerDay、逐單欄(off、ent、ext、pnl)、靜態欄(mode、tp、sl、nKeys、lv、fitNt、cls、keyOff、keyIdx、keyNames、px、keySym、keyTh、keyOr; px、keySym、keyTh、keyOr 於無檔時為 null)、依出場棒升冪之已結單欄(xoff、xExt、xPnlCum、xWinCum)與延遲讀取之 fac
+ * @returns {Object} 回傳帳本物件L, 含 dir、meta、n(策略數)、nBars、barsPerDay、逐單欄(off、ent、ext、pnl)、靜態欄(mode、tp、sl、nKeys、lv、fitNt、cls、keyOff、keyIdx、keyNames、px、keySym、keyTh、keyOr; px、keySym、keyTh、keyOr 於無檔時為 null)、依出場棒升冪之已結單欄(xoff、xExt、xPnlCum、xWinCum)、延遲讀取之 fac 與外部序列(seriesNames、延遲讀取之 ser)
  * @example
  * let L = loadLedger('./data/ledger/eval')
  */
@@ -58,6 +58,33 @@ let loadLedger = (dir) => {
                 fac = fs.existsSync(fpFac) ? readBin(fpFac, Float64Array) : null
             }
             return fac
+        },
+    })
+    //seriesNames / ser, 外部序列(規則 R-EV-34; 選配; ser[si * nBars + i], 缺值 NaN): 名稱取自 meta.seriesNames(舊帳本無此欄者為空陣列), 欄同 fac 用到才讀; 無檔者為 null
+    //  存在而型態不合(非字串陣列)者拋錯, 不當成未建入(免得有序列欄而名稱被靜默忽略)
+    if (meta.seriesNames !== undefined && meta.seriesNames !== null && !(Array.isArray(meta.seriesNames) && meta.seriesNames.every((x) => typeof x === 'string'))) {
+        throw new Error(`帳本 meta.seriesNames 之格式不合(須為名稱字串陣列; 請重建帳本): ${dir}`)
+    }
+    L.seriesNames = Array.isArray(meta.seriesNames) ? meta.seriesNames : []
+    let fpSer = path.join(dir, 'ser.f64')
+    let ser
+    Object.defineProperty(L, 'ser', {
+        enumerable: false,
+        configurable: true,
+        get: () => {
+            if (ser === undefined) {
+                if (fs.existsSync(fpSer)) {
+                    let sz = fs.statSync(fpSer).size
+                    if (sz % 8 !== 0) {
+                        throw new Error(`帳本之外部序列欄 ser.f64 之位元組數(${sz})非 8 之倍數(請重建帳本): ${fpSer}`)
+                    }
+                    ser = readBin(fpSer, Float64Array)
+                }
+                else {
+                    ser = null
+                }
+            }
+            return ser
         },
     })
     //依出場棒排序之已結單欄

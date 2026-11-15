@@ -99,6 +99,9 @@ let makeEvaluator = (L, cfg = {}) => {
     let n = L.n
     let nBars = L.nBars
     let nFac = L.keyNames.length
+    //外部序列(規則 R-EV-34; 選配): 名稱 → 序號; 帳本未建入者(含舊帳本)為空
+    let serNames = Array.isArray(L.seriesNames) ? L.seriesNames : []
+    let serIdx = new Map(serNames.map((k, i) => [k, i]))
     let bpd = L.barsPerDay
     let warmupDays = cfg.warmupDays === undefined ? 180 : cfg.warmupDays
     let cadenceDays = cfg.cadenceDays === undefined ? 7 : cfg.cadenceDays
@@ -184,6 +187,8 @@ let makeEvaluator = (L, cfg = {}) => {
         keySym: L.keySym ? Int8Array.from(L.keySym) : null,
         keyTh: L.keyTh ? Float64Array.from(L.keyTh) : null,
         keyOr: L.keyOr ? Uint8Array.from(L.keyOr) : null,
+        //外部序列之名稱(規則 R-EV-34; 以 ctx.series(name, nBack) 取值); 帳本未建入者為空陣列
+        seriesNames: Object.freeze(serNames.slice()),
         ntAll,
         tie,
     })
@@ -423,8 +428,24 @@ let makeEvaluator = (L, cfg = {}) => {
                 let m = Number.isFinite(nBack) ? Math.max(0, Math.min(Math.round(nBack), b)) : 0
                 return F.slice(ki * nBars + b - m, ki * nBars + b)
             }
+            //series, 外部序列 name(ctx.meta.seriesNames 之一)於決策棒以前最近 nBack 根 K 棒之值(Float64Array 複本, 由舊至新; 不含決策棒; 缺值 NaN; 規則 R-EV-34)
+            //  慣例同 factor: 只含棒序 < 決策棒者(slice 之終點 = 決策棒之起點, 不含) ⇒ 無前視; 序列於建帳本時以棒之開盤時間對位並於帳本終點截斷(src/eval/ledgerBuild.mjs),
+            //  其值視為「於該棒收盤時已得知」(與因子、K 線同一約定)——量在該棒收盤後才得知者, 使用端須自行把它標在其後之棒(合約 §3)
+            //  帳本未建入任何外部序列、或名稱不在其內 ⇒ 拋錯(訊息列出可用之名稱)
+            let series = (name, nBack = 180) => {
+                let si = serIdx.get(name)
+                if (si === undefined) {
+                    throw new Error(`ctx.series: 無此序列 ${typeof name === 'string' ? JSON.stringify(name) : String(name)}(可用: ${serNames.length ? serNames.join('、') : '無;帳本未建入外部序列'})`)
+                }
+                let S = L.ser
+                if (!S || S.length !== serNames.length * nBars) {
+                    throw new Error('ctx.series: 帳本之外部序列欄與名稱不符(請重建帳本)')
+                }
+                let m = Number.isFinite(nBack) ? Math.max(0, Math.min(Math.round(nBack), b)) : 0
+                return S.slice(si * nBars + b - m, si * nBars + b)
+            }
             let day = Math.floor(b / bpd)
-            let ctx = { n, meta, bar: b, day, dow: (dow0 + day) % 7, time: timeOf(b), k, phase, nDecisions: bars.length, cadenceDays, state, prev, rand: mulberry32(seed * 1000003 + phase * 9973 + k), stat, orders, entryDays, entryBars, exitDays, exitBars, market, factor }
+            let ctx = { n, meta, bar: b, day, dow: (dow0 + day) % 7, time: timeOf(b), k, phase, nDecisions: bars.length, cadenceDays, state, prev, rand: mulberry32(seed * 1000003 + phase * 9973 + k), stat, orders, entryDays, entryBars, exitDays, exitBars, market, factor, series }
             let r = normSel(pickFn(ctx))
             sels.push(r.sel)
             tags.push(r.tag)

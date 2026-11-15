@@ -1,5 +1,5 @@
 import path from 'path'
-import { getSettings, argOf } from '../cfg.mjs'
+import { getSettings, argOf, P } from '../cfg.mjs'
 import buildLedger from '../eval/ledgerBuild.mjs'
 
 
@@ -9,6 +9,8 @@ import buildLedger from '../eval/ledgerBuild.mjs'
 //                                 --limit 只建前 N 隻(試算用, 輸出落 <ledgerDir>_limitN)
 //  node g_build.mjs --train       只到訓練期終點之帳本(data/ledger/train; 核對或診斷用, 評估器不使用)
 //  保留期(settings.periods.holdoutFrom 起)與他幣之帳本不由本腳本建立: 該數據保留給監控日後檢定, 須另行授權
+//  外部序列(選配; 規則 R-EV-34): settings.source.seriesDir(相對專案根)下之各 <名>.json 一併建入帳本, 供挑選函數以 ctx.series 取用;
+//    序列同樣於帳本終點截斷(時間 ≥ 終點之列對不到棒; 訓練期帳本亦然); 未設定或資料夾不存在者不建入
 let st = getSettings()
 let limit = argOf('limit', 0)
 let train = argOf('train', false) === true
@@ -26,5 +28,6 @@ let meta = await buildLedger({
     endTime,
     outDir,
     limit: train ? 0 : limit,
+    seriesDir: typeof st.source.seriesDir === 'string' && st.source.seriesDir ? P(st.source.seriesDir) : null,
 })
-console.log(JSON.stringify({ key: meta.key, endTime: meta.endTime, nBars: meta.nBars, nStrategies: meta.nStrategies, nOrders: meta.nOrders, nUnsettled: meta.nUnsettled, check: meta.check, buildSec: meta.buildSec }))
+console.log(JSON.stringify({ key: meta.key, endTime: meta.endTime, nBars: meta.nBars, nStrategies: meta.nStrategies, nOrders: meta.nOrders, nUnsettled: meta.nUnsettled, check: meta.check, seriesNames: meta.seriesNames, buildSec: meta.buildSec }))

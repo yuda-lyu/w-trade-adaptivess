@@ -107,13 +107,14 @@ node node_modules/w-trade-adaptivess/src/tools/initProject.mjs --root .
 
 **專案根之決定**:環境變數 `ARSI_ROOT`(進入檔設定;其子行程繼承),未設時為行程之工作目錄;不以套件檔之位置推導.設定檔內之相對路徑一律以專案根解析.
 
-`settings.json` 之主要欄:`source`(策略庫位置、K 線之鍵、每根小時數)、`periods`(訓練期 / 回測期 / 保留期之起點)、`eval`(帳本夾、暖機日數、決策間隔、相位、新鮮度地平線、虛無抽數、硬上限)、`score`(階梯門檻)、`rsi`(狀態根、每輪節點數、併行數、一次跑幾輪)、`records`(節點文件 / 做夢文件 / 工作夾 / 共用工具區之路徑)、`agents`(節點與做夢各用哪個 agent 與模型)、`dispatch`(派工套件之位置、金鑰之 `.env`)、`resources`(全機 CPU / 記憶體上限)、`guard.forbidden`(選配;專案另加之禁區字樣 `[{ pattern, label }]`).
+`settings.json` 之主要欄:`source`(策略庫位置、K 線之鍵、每根小時數;選配之 `seriesDir` = 外部序列之資料夾,相對專案根,見 §3)、`periods`(訓練期 / 回測期 / 保留期之起點)、`eval`(帳本夾、暖機日數、決策間隔、相位、新鮮度地平線、虛無抽數、硬上限)、`score`(階梯門檻)、`rsi`(狀態根、每輪節點數、併行數、一次跑幾輪)、`records`(節點文件 / 做夢文件 / 工作夾 / 共用工具區之路徑)、`agents`(節點與做夢各用哪個 agent 與模型)、`dispatch`(派工套件之位置、金鑰之 `.env`)、`resources`(全機 CPU / 記憶體上限)、`guard.forbidden`(選配;專案另加之禁區字樣 `[{ pattern, label }]`).
 
 ## 3. 評估器與挑選模組之合約
 
 - 建帳本:`node g_build.mjs`(由 `source.libraryRoot` 之策略庫與 K 線,產生各策略之進出場與每單位損益;止於回測期終點).
+- 外部序列(選配):策略庫以外、屬標的自身之序列,由專案備成與因子檔同格式之檔 `<名>.json` = `[{ time, value }]`(`time` 為 K 棒之開盤時間,與 K 線同一字串格式;缺值之棒不列),置於 `settings.source.seriesDir`;建帳本時對位到 K 棒並於帳本終點截斷(`ser.f64`、`meta.seriesNames`),挑選函數以 `ctx.series(name, nBack)` 取決策棒以前之值(不含決策棒).序列之值視為於其標記之棒收盤時已得知,得知較晚者須由使用端標在其後之棒(見合約).名稱限英文字母起首之英數與底線(至多 32 字);檔名以底線起首者略過.未設定者不建入,既有結果不變(帳本鍵不因此改變).
 - 評估:`node g_eval.mjs --pick <模組.mjs> --mode quick|full [--out <結果.json>]`.挑選函數自帳本起點連續執行,只有落在評估期之決策計入績效.
-- 挑選模組之形狀、`ctx` 之每個介面(`stat`、`orders`、`entryDays` / `entryBars`、`exitDays` / `exitBars`、`market`、`factor`、`meta`、`state`、`rand`)、`accept(sig, book)`、分帳、輸出之讀法與擴充診斷之寫法,全部寫在合約 `contract/pick-contract.md`(專案內為 `docs/pick-contract.md`).
+- 挑選模組之形狀、`ctx` 之每個介面(`stat`、`orders`、`entryDays` / `entryBars`、`exitDays` / `exitBars`、`market`、`factor`、`series`、`meta`、`state`、`rand`)、`accept(sig, book)`、分帳、輸出之讀法與擴充診斷之寫法,全部寫在合約 `contract/pick-contract.md`(專案內為 `docs/pick-contract.md`).
 - 判讀:`S = 0.7 × 七相位平均 + 0.3 × 最差相位`;階梯 1 ~ 3 與否決見 `src/eval/score.mjs` 檔頭.
 - 擴充診斷:共用工具區 `metrics/*.mjs` 每次完整評估自動載入;可自帶看板值(`board`)、提示(`flag`)、「不計為挑選內容」(`notContent`)與量尺之子集(`subset`).
 
