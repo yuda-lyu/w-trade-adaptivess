@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>WTradeAdaptivess.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">WTradeAdaptivess.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>//w-trade-adaptivess 之聚合入口(自有套件慣例 src/W&lt;Name>.mjs: 預設匯出全部 API 之物件, 供打包為 dist/w-trade-adaptivess.umd.js 作 main; ESM 使用者仍可深層匯入 src/**)
+//  不另放邏輯; 各模組之函數皆可自其檔以深層路徑取用
+//  三組: 評估器(eval; 與迴圈無關, 可單獨使用)、代理式迴圈之通用層(arsi; 不含交易領域之用語)、領域接線(domain; 把兩者接到 w-recursi 之樹與臂目錄)
+//  命令列程式(src/cli/*.mjs)與工具(src/tools/*.mjs)是「執行即動作」之指令稿, 不在此匯出: 由專案根之進入檔載入(node src/tools/initProject.mjs 產生)
+import { makeEvaluator, lowerBound, mulberry32 } from './eval/evalCore.mjs'
+import { loadLedger, loadIds } from './eval/ledger.mjs'
+import { buildLedger, LEDGER_VERSION } from './eval/ledgerBuild.mjs'
+import { scanPick, scanSnippet, loadPick, stripComments } from './eval/pickLoader.mjs'
+import { scoreOf } from './eval/score.mjs'
+import { createArsi } from './arsi/arsi.mjs'
+import { NODE_SCHEMA, DREAM_SCHEMA, TRUST, ACTIONS, OUTCOMES, IMPROVE_KINDS, TASK_TYPES, EXPAND_DECISIONS, ARM_KINDS, CLAIM_VERDICTS, checkArmProposals, checkNodeAgentPart, checkDreamAgentPart, tallyDream, renderNodeMd, renderDreamMd, createFileRecords, roundName } from './arsi/records.mjs'
+import { createToolbox } from './arsi/toolbox.mjs'
+import { makeDispatch, checkQuota } from './arsi/dispatchers.mjs'
+import { createResourceMonitor } from './arsi/resources.mjs'
+import { runRounds, resolveRunConfig, acquireRunLock, peekRunLock, appendEvent, readEvents, trailingFailures } from './arsi/runner.mjs'
+import { makeProject, outwardNoteOf, OUT_CHECK_MIN } from './domain/domain.mjs'
+import { makeTexts } from './domain/texts.mjs'
+import { makeVerify, scanTrace, forbiddenPats, setGuardExtra, guardExtraOf, extSurfaceOf, summaryOf, notesOf } from './domain/verify.mjs'
+import { buildPickStore, infoOf, FIELD_DEFS, COLUMNS } from './domain/pickStore.mjs'
+import { ARM_ID, mkArm, proposalOf, decideArgsOf } from './domain/armCatalog.mjs'
+import { makeToolboxRules } from './domain/toolboxRules.mjs'
+import { archiveExperience, archiveFeedback } from './domain/archiveDocs.mjs'
+import { backtestCfg } from './domain/backtestCfg.mjs'
+import { initProject } from './tools/initProject.mjs'
+import { FD_ROOT, P, getSettings, argOf, readJson, writeJson } from './cfg.mjs'
+
+
+/**
+ * 自適應挑選策略之探尋框架之聚合物件(與各模組之匯出為同一實體)
+ *
+ * 總組裝：makeProject(st, inject)(別名createAdaptivess)；評估器：buildLedger、loadLedger、makeEvaluator、loadPick、scoreOf；
+ * 代理式迴圈之通用層：createArsi、createFileRecords、createToolbox、makeDispatch、checkQuota、createResourceMonitor、runRounds、acquireRunLock、appendEvent等；
+ * 領域接線：makeTexts、makeVerify、scanTrace、buildPickStore、mkArm、decideArgsOf、makeToolboxRules等；專案接入：initProject、getSettings
+ *
+ * @type {Object}
+ * @example
+ * need test in nodejs.
+ *
+ * import WTradeAdaptivess from 'w-trade-adaptivess/src/WTradeAdaptivess.mjs'
+ *
+ * //評估器單獨使用: 由策略庫建訂單帳本後, 評估一個挑選函數
+ * let L = WTradeAdaptivess.loadLedger('./data/ledger/eval')
+ * let ev = WTradeAdaptivess.makeEvaluator(L, { warmupDays: 180, cadenceDays: 7 })
+ * let m = ev.evalPolicy((ctx) => [0, 1, 2], { accept: (sig, book) => book.open &lt; 30, nullDraws: 16 })
+ * console.log(m.op.eqYr.mean, m.selHash)
+ */
+let WTradeAdaptivess = {
+
+    //總組裝(專案根由環境變數 ARSI_ROOT 或工作目錄決定; 見 cfg.mjs)
+    makeProject,
+    createAdaptivess: makeProject,
+    initProject,
+
+    //設定與路徑
+    getSettings,
+    FD_ROOT,
+    P,
+    argOf,
+    readJson,
+    writeJson,
+
+    //評估器
+    buildLedger,
+    LEDGER_VERSION,
+    loadLedger,
+    loadIds,
+    makeEvaluator,
+    lowerBound,
+    mulberry32,
+    loadPick,
+    scanPick,
+    scanSnippet,
+    stripComments,
+    scoreOf,
+
+    //代理式迴圈之通用層
+    createArsi,
+    createFileRecords,
+    createToolbox,
+    makeDispatch,
+    checkQuota,
+    createResourceMonitor,
+    runRounds,
+    resolveRunConfig,
+    acquireRunLock,
+    peekRunLock,
+    appendEvent,
+    readEvents,
+    trailingFailures,
+    NODE_SCHEMA,
+    DREAM_SCHEMA,
+    TRUST,
+    ACTIONS,
+    OUTCOMES,
+    IMPROVE_KINDS,
+    TASK_TYPES,
+    EXPAND_DECISIONS,
+    ARM_KINDS,
+    CLAIM_VERDICTS,
+    checkArmProposals,
+    checkNodeAgentPart,
+    checkDreamAgentPart,
+    tallyDream,
+    renderNodeMd,
+    renderDreamMd,
+    roundName,
+
+    //領域接線
+    makeTexts,
+    makeVerify,
+    scanTrace,
+    forbiddenPats,
+    setGuardExtra,
+    guardExtraOf,
+    extSurfaceOf,
+    summaryOf,
+    notesOf,
+    buildPickStore,
+    infoOf,
+    FIELD_DEFS,
+    COLUMNS,
+    ARM_ID,
+    mkArm,
+    proposalOf,
+    decideArgsOf,
+    makeToolboxRules,
+    archiveExperience,
+    archiveFeedback,
+    backtestCfg,
+    outwardNoteOf,
+    OUT_CHECK_MIN,
+
+}
+
+
+export default WTradeAdaptivess
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 14:42:16 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

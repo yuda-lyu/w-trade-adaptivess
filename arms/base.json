@@ -1,0 +1,1452 @@
+{
+ "version": 1,
+ "name": "adaptivess arms",
+ "note": "74 臂之基底: 只定義可探索之方向與機制, 不含任何已試結果; 全部由使用專案之 rsi 由零探索",
+ "layers": {
+  "A": "資格層:誰能進候選池",
+  "B": "排序鍵層:池內怎麼排",
+  "C": "結構分群層:依行為結構把策略分群",
+  "D": "選集層:分群 / 排序後怎麼取",
+  "E": "執行層:選集之訊號哪些真的下單(accept)",
+  "F": "條件層:依市況或自身狀態切換",
+  "G": "組合層:多個規則怎麼合成",
+  "H": "搜尋與生成(rsi 迴圈自身之臂; 不派給節點)",
+  "I": "評估與對照(量尺; 不派給節點)",
+  "J": "封鎖(僅列名; 本專案不開)"
+ },
+ "arms": [
+  {
+   "id": "A01_nt",
+   "n": 1,
+   "layer": "A",
+   "title": "交易數資格(靜態)",
+   "desc": "以策略於整段訓練期之進場數(ctx.meta.ntAll)設上限或下限, 作為進候選池之資格。屬靜態之樣本內屬性。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:A01_nt"
+    },
+    {
+     "kind": "carrier",
+     "name": "A01_nt"
+    }
+   ],
+   "grid": {
+    "ntMax": [
+     50,
+     100,
+     150,
+     200,
+     300,
+     500
+    ]
+   }
+  },
+  {
+   "id": "A02_ntPit",
+   "n": 2,
+   "layer": "A",
+   "title": "交易數資格(走勢前向)",
+   "desc": "以決策日以前之累計進場數(ctx.stat(0).entries)或近 N 日進場數設上限、下限或區間。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:A02_ntPit"
+    },
+    {
+     "kind": "carrier",
+     "name": "A02_ntPit"
+    }
+   ]
+  },
+  {
+   "id": "A03_midHighFreq",
+   "n": 3,
+   "layer": "A",
+   "title": "中高頻資格(走勢前向)",
+   "desc": "只留決策日以前累計進場數達某下限者(例如 ≥ 100), 使候選有足夠之歷史單數可供統計。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:A03_midHighFreq"
+    },
+    {
+     "kind": "carrier",
+     "name": "A03_midHighFreq"
+    }
+   ]
+  },
+  {
+   "id": "A04_act",
+   "n": 4,
+   "layer": "A",
+   "title": "近期活躍度門檻",
+   "desc": "以近 N 日(例如 90 日)之進場數低於或高於門檻 θ 作為資格(近期安靜者 / 近期活躍者)。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:A04_act"
+    },
+    {
+     "kind": "carrier",
+     "name": "A04_act"
+    }
+   ],
+   "grid": {
+    "theta": [
+     10,
+     20,
+     70,
+     80,
+     90,
+     100,
+     120,
+     150
+    ],
+    "windowDays": [
+     90
+    ]
+   }
+  },
+  {
+   "id": "A05_nKeys",
+   "n": 5,
+   "layer": "A",
+   "title": "因子數資格",
+   "desc": "依策略條件之因子個數(ctx.meta.nKeys)設下限或上限。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:A05_nKeys"
+    },
+    {
+     "kind": "carrier",
+     "name": "A05_nKeys"
+    }
+   ],
+   "grid": {
+    "nKeys": [
+     2,
+     3,
+     4,
+     5
+    ]
+   }
+  },
+  {
+   "id": "A06_scarce",
+   "n": 6,
+   "layer": "A",
+   "title": "稀缺 / 常見因子資格",
+   "desc": "以全庫各因子(或因子家族)之出現頻率定義稀缺因子, 依策略所含稀缺因子數設資格, 或提高含稀缺因子者被選中之機率。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:A06_scarce"
+    },
+    {
+     "kind": "carrier",
+     "name": "A06_scarce"
+    }
+   ],
+   "grid": {
+    "scarceCount": [
+     1,
+     2,
+     3,
+     4
+    ]
+   }
+  },
+  {
+   "id": "A07_modePure",
+   "n": 7,
+   "layer": "A",
+   "title": "方向與純度資格",
+   "desc": "依策略方向(做多 / 做空)分池或只取單邊; 或依策略之因子是否全屬同一時間尺度(純短週期 / 純長週期)設資格。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:A07_modePure"
+    },
+    {
+     "kind": "carrier",
+     "name": "A07_modePure"
+    }
+   ]
+  },
+  {
+   "id": "A08_win",
+   "n": 8,
+   "layer": "A",
+   "title": "統計回看窗長",
+   "desc": "建立資格、排序或結構時所用之歷史窗長(例如 365 / 550 / 1100 日); 窗長本身即為可調之臂。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:A08_win"
+    },
+    {
+     "kind": "carrier",
+     "name": "A08_win"
+    }
+   ],
+   "grid": {
+    "windowDays": [
+     365,
+     550,
+     1100
+    ]
+   }
+  },
+  {
+   "id": "A09_tpSl",
+   "n": 9,
+   "layer": "A",
+   "title": "止盈止損幾何資格",
+   "desc": "依策略之止盈 tp、止損 sl 或其比值(賠率)設資格。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:A09_tpSl"
+    },
+    {
+     "kind": "carrier",
+     "name": "A09_tpSl"
+    }
+   ]
+  },
+  {
+   "id": "A10_behaviorPre",
+   "n": 10,
+   "layer": "A",
+   "title": "行為屬性資格",
+   "desc": "依策略之行為特徵設資格: 各種市況下皆有交易、進場時點之獨特性(與他策略少重疊)、條件間之綁定程度、因子觸發之時機等。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:A10_behaviorPre"
+    },
+    {
+     "kind": "carrier",
+     "name": "A10_behaviorPre"
+    }
+   ]
+  },
+  {
+   "id": "A11_plateau",
+   "n": 11,
+   "layer": "A",
+   "title": "參數鄰域平原度",
+   "desc": "同一因子組合而門檻或 tp / sl 不同之鄰居策略, 其走勢前向績效是否一致; 以鄰域平穩者為資格。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:A11_plateau"
+    },
+    {
+     "kind": "carrier",
+     "name": "A11_plateau"
+    }
+   ]
+  },
+  {
+   "id": "A12_universe",
+   "n": 12,
+   "layer": "A",
+   "title": "宇集上游規則",
+   "desc": "候選宇集之建立規則(去重口徑、同組合取最佳變體等)。屬策略庫上游, 本專案不由節點處理。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "B13_staticKey",
+   "n": 13,
+   "layer": "B",
+   "title": "靜態績效鍵",
+   "desc": "以策略求解時之樣本內績效排序。評估器不提供樣本內績效欄, 故不可選。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "B14_pitKey",
+   "n": 14,
+   "layer": "B",
+   "title": "走勢前向排序鍵",
+   "desc": "以決策日以前之績效統計為排序鍵(近窗之每單平均損益、損益和、勝率、交易數、報酬對回撤比等; 升冪或降冪皆為可試之方向)。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:B14_pitKey"
+    },
+    {
+     "kind": "carrier",
+     "name": "B14_pitKey"
+    }
+   ],
+   "grid": {
+    "key": [
+     "近窗每單平均損益",
+     "近窗損益和",
+     "近窗勝率",
+     "近窗交易數(升冪)",
+     "近窗報酬對回撤比"
+    ]
+   }
+  },
+  {
+   "id": "B15_newKey",
+   "n": 15,
+   "layer": "B",
+   "title": "新排序鍵",
+   "desc": "其他走勢前向之排序鍵: 回撤、權益曲線斜率之穩定度(K-ratio)、因子家族之近期動能、每因子平均貢獻等。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:B15_newKey"
+    },
+    {
+     "kind": "carrier",
+     "name": "B15_newKey"
+    }
+   ]
+  },
+  {
+   "id": "B16_perTradeQuality",
+   "n": 16,
+   "layer": "B",
+   "title": "每單品質鍵",
+   "desc": "每單平均損益、超額勝率(實際勝率減去 tp / sl 隱含之損益兩平勝率)等以單為單位之品質鍵; 可分靜態期與近期。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:B16_perTradeQuality"
+    },
+    {
+     "kind": "carrier",
+     "name": "B16_perTradeQuality"
+    }
+   ]
+  },
+  {
+   "id": "B17_rollingKeys",
+   "n": 17,
+   "layer": "B",
+   "title": "滾動與節奏鍵",
+   "desc": "多窗滾動績效、扣除群體平均後之殘差績效、單位持倉時間之損益、訊號開火率、低頻 / 高頻節奏、取名次區間(非頂端)等。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:B17_rollingKeys"
+    },
+    {
+     "kind": "carrier",
+     "name": "B17_rollingKeys"
+    }
+   ]
+  },
+  {
+   "id": "B18_keyAgree",
+   "n": 18,
+   "layer": "B",
+   "title": "兩鍵共識 / 分歧",
+   "desc": "以兩種排序鍵之名次一致(皆在前段)或分歧程度作為篩選或排序。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:B18_keyAgree"
+    },
+    {
+     "kind": "carrier",
+     "name": "B18_keyAgree"
+    }
+   ]
+  },
+  {
+   "id": "C19_jaccard",
+   "n": 19,
+   "layer": "C",
+   "title": "進場日集合之 Jaccard 分群",
+   "desc": "以各策略進場日集合之 Jaccard 相似度分群, 供群內取位、去重或分散。群數為可調格點。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:C19_jaccard"
+    },
+    {
+     "kind": "carrier",
+     "name": "C19_jaccard"
+    }
+   ],
+   "grid": {
+    "numGroup": [
+     12,
+     18,
+     25,
+     40,
+     "不分群"
+    ]
+   }
+  },
+  {
+   "id": "C20_exitStruct",
+   "n": 20,
+   "layer": "C",
+   "title": "出場時間結構分群",
+   "desc": "以各策略之出場日集合(或其特徵)分群。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:C20_exitStruct"
+    },
+    {
+     "kind": "carrier",
+     "name": "C20_exitStruct"
+    }
+   ]
+  },
+  {
+   "id": "C21_holdStruct",
+   "n": 21,
+   "layer": "C",
+   "title": "持倉時長結構",
+   "desc": "以持倉時長之分佈(小時桶)分群或分層。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:C21_holdStruct"
+    },
+    {
+     "kind": "carrier",
+     "name": "C21_holdStruct"
+    }
+   ]
+  },
+  {
+   "id": "C22_calendar",
+   "n": 22,
+   "layer": "C",
+   "title": "在場曆日結構",
+   "desc": "以策略「有持倉之曆日集合」分群。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:C22_calendar"
+    },
+    {
+     "kind": "carrier",
+     "name": "C22_calendar"
+    }
+   ]
+  },
+  {
+   "id": "C23_recent365",
+   "n": 23,
+   "layer": "C",
+   "title": "近一年進場集合",
+   "desc": "只用近 365 日之進場日集合建立結構(使結構反映近期行為)。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:C23_recent365"
+    },
+    {
+     "kind": "carrier",
+     "name": "C23_recent365"
+    }
+   ]
+  },
+  {
+   "id": "C24_spectral",
+   "n": 24,
+   "layer": "C",
+   "title": "頻域 / 模態分群",
+   "desc": "對「策略 × 時間」之進場矩陣取模態(SVD、頻譜、Ochiai 等相似度變體)分群, 或移除主模態後以殘差分群。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:C24_spectral"
+    },
+    {
+     "kind": "carrier",
+     "name": "C24_spectral"
+    }
+   ]
+  },
+  {
+   "id": "C25_quantileBuckets",
+   "n": 25,
+   "layer": "C",
+   "title": "分位切桶",
+   "desc": "以某連續屬性之分位數切桶、多尺度集成, 或依進場採樣率重取樣後分桶。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:C25_quantileBuckets"
+    },
+    {
+     "kind": "carrier",
+     "name": "C25_quantileBuckets"
+    }
+   ]
+  },
+  {
+   "id": "C26_groupNull",
+   "n": 26,
+   "layer": "C",
+   "title": "無結構分群對照",
+   "desc": "隨機分群之對照(量尺)。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "D27_dedup",
+   "n": 27,
+   "layer": "D",
+   "title": "去重",
+   "desc": "選集內行為高度重疊者(進場日重疊高、同因子組合等)只留其一; 重疊門檻為可調格點。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:D27_dedup"
+    },
+    {
+     "kind": "carrier",
+     "name": "D27_dedup"
+    }
+   ],
+   "grid": {
+    "overlapMax": [
+     0.5,
+     0.7,
+     0.9
+    ]
+   }
+  },
+  {
+   "id": "D28_trim",
+   "n": 28,
+   "layer": "D",
+   "title": "截尾",
+   "desc": "排序後先去掉頭尾一定比例(對稱, 或只截一端)再取。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:D28_trim"
+    },
+    {
+     "kind": "carrier",
+     "name": "D28_trim"
+    }
+   ],
+   "grid": {
+    "trimPct": [
+     0,
+     0.2,
+     0.25
+    ]
+   }
+  },
+  {
+   "id": "D29_pickPos",
+   "n": 29,
+   "layer": "D",
+   "title": "取位",
+   "desc": "群內依排序取某分位位置(例如 .65 / .75 / .85)而非最頂端; 或同時取兩個位置。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:D29_pickPos"
+    },
+    {
+     "kind": "carrier",
+     "name": "D29_pickPos"
+    }
+   ],
+   "grid": {
+    "pos": [
+     0.65,
+     0.75,
+     0.85
+    ]
+   }
+  },
+  {
+   "id": "D30_volumeCut",
+   "n": 30,
+   "layer": "D",
+   "title": "量能截取",
+   "desc": "以預期月下單量為預算截取選集, 或固定席次數。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:D30_volumeCut"
+    },
+    {
+     "kind": "carrier",
+     "name": "D30_volumeCut"
+    }
+   ],
+   "grid": {
+    "monthlyBudget": [
+     6,
+     12,
+     30
+    ]
+   }
+  },
+  {
+   "id": "D31_runawayGuard",
+   "n": 31,
+   "layer": "D",
+   "title": "失控守門",
+   "desc": "對下單量暴增之策略設守門(量尺性質之保護)。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "D32_overlapNEff",
+   "n": 32,
+   "layer": "D",
+   "title": "選集重疊與有效席次",
+   "desc": "以選集內平均重疊度或有效獨立數 nEff 為目標或約束調整選集。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:D32_overlapNEff"
+    },
+    {
+     "kind": "carrier",
+     "name": "D32_overlapNEff"
+    }
+   ]
+  },
+  {
+   "id": "D33_antiSticky",
+   "n": 33,
+   "layer": "D",
+   "title": "輪替與黏性",
+   "desc": "對上期已選者加罰(反黏性輪替)或加分(在任者偏好); 用 ctx.prev / ctx.state。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:D33_antiSticky"
+    },
+    {
+     "kind": "carrier",
+     "name": "D33_antiSticky"
+    }
+   ]
+  },
+  {
+   "id": "D34_phaseConsensus",
+   "n": 34,
+   "layer": "D",
+   "title": "時間錨共識",
+   "desc": "以鄰近數個決策日(或不同起算點)之選集取交集 / 共識子集。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:D34_phaseConsensus"
+    },
+    {
+     "kind": "carrier",
+     "name": "D34_phaseConsensus"
+    }
+   ]
+  },
+  {
+   "id": "D35_sepModes",
+   "n": 35,
+   "layer": "D",
+   "title": "分邊或合併",
+   "desc": "做多與做空分開排序取位, 或合併為一池。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:D35_sepModes"
+    },
+    {
+     "kind": "carrier",
+     "name": "D35_sepModes"
+    }
+   ],
+   "grid": {
+    "sepModes": [
+     true,
+     false
+    ]
+   }
+  },
+  {
+   "id": "D36_crossRuleConsensus",
+   "n": 36,
+   "layer": "D",
+   "title": "跨規則共識",
+   "desc": "多種挑選規則各自之選集取交集, 或依被幾種規則選中加權。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:D36_crossRuleConsensus"
+    },
+    {
+     "kind": "carrier",
+     "name": "D36_crossRuleConsensus"
+    }
+   ]
+  },
+  {
+   "id": "E37_dayCap",
+   "n": 37,
+   "layer": "E",
+   "title": "每日下單上限",
+   "desc": "accept 以 book.dayCount 限制每日下單數。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:E37_dayCap"
+    },
+    {
+     "kind": "carrier",
+     "name": "E37_dayCap"
+    }
+   ],
+   "grid": {
+    "dayCap": [
+     1,
+     3,
+     12,
+     999
+    ]
+   }
+  },
+  {
+   "id": "E38_maxHoldN",
+   "n": 38,
+   "layer": "E",
+   "title": "同時持倉上限",
+   "desc": "accept 以 book.open 限制同時持倉單數。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:E38_maxHoldN"
+    },
+    {
+     "kind": "carrier",
+     "name": "E38_maxHoldN"
+    }
+   ],
+   "grid": {
+    "maxHold": [
+     15,
+     25,
+     35,
+     45
+    ]
+   }
+  },
+  {
+   "id": "E39_skipWeekend",
+   "n": 39,
+   "layer": "E",
+   "title": "週末閘",
+   "desc": "accept 於週末(或指定星期)不下單(sig.dow)。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:E39_skipWeekend"
+    },
+    {
+     "kind": "carrier",
+     "name": "E39_skipWeekend"
+    }
+   ],
+   "grid": {
+    "skipWeekend": [
+     false,
+     true
+    ]
+   }
+  },
+  {
+   "id": "E40_otherDayGates",
+   "n": 40,
+   "layer": "E",
+   "title": "其他日閘",
+   "desc": "依曆法或需求稀薄日設閘(量尺性質)。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "E41_sidePolicy",
+   "n": 41,
+   "layer": "E",
+   "title": "側別政策",
+   "desc": "accept 依多空持倉(book.openLong / openShort)決定訊號是否下單: 每訊號皆下、須同向確認、停留期、多空差額上限等。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:E41_sidePolicy"
+    },
+    {
+     "kind": "carrier",
+     "name": "E41_sidePolicy"
+    }
+   ],
+   "grid": {
+    "side": [
+     "每訊號",
+     "同向確認",
+     "停留期",
+     "差額上限"
+    ]
+   }
+  },
+  {
+   "id": "E42_seatAllocation",
+   "n": 42,
+   "layer": "E",
+   "title": "席位配給",
+   "desc": "多個子規則間之席位分配與准入 / 驅逐(須改評估器)。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "E43_reorderSizing",
+   "n": 43,
+   "layer": "E",
+   "title": "重排序與尺寸",
+   "desc": "同數量之單重排序或加權(須改評估器之每單 1 單位假設)。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "E44_positionSizing",
+   "n": 44,
+   "layer": "E",
+   "title": "部位尺寸",
+   "desc": "依信度調整每單尺寸(須改評估器)。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "E45_costSensitivity",
+   "n": 45,
+   "layer": "E",
+   "title": "成本敏感度",
+   "desc": "交易成本 / 觸價口徑之敏感度(量尺)。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "F46_retSign",
+   "n": 46,
+   "layer": "F",
+   "title": "報酬符號條件",
+   "desc": "依標的近 N 日報酬之正負(ctx.market)切換挑選分支或參數。可用「平移若干日之條件變數」作安慰劑對照。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:F46_retSign"
+    },
+    {
+     "kind": "carrier",
+     "name": "F46_retSign"
+    }
+   ],
+   "grid": {
+    "nDays": [
+     30,
+     60,
+     90
+    ]
+   }
+  },
+  {
+   "id": "F47_exogenousRegime",
+   "n": 47,
+   "layer": "F",
+   "title": "外生市況條件",
+   "desc": "依標的之波動、趨勢、量能狀態(由 ctx.market 自算)切換分支或參數。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:F47_exogenousRegime"
+    },
+    {
+     "kind": "carrier",
+     "name": "F47_exogenousRegime"
+    }
+   ]
+  },
+  {
+   "id": "F48_endogenousCond",
+   "n": 48,
+   "layer": "F",
+   "title": "內生條件",
+   "desc": "依策略庫或選集自身之狀態切換: 規則近期績效之動量、權益曲線濾網、全庫同時在場度、排序鍵近期之有效性等。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:F48_endogenousCond"
+    },
+    {
+     "kind": "carrier",
+     "name": "F48_endogenousCond"
+    }
+   ]
+  },
+  {
+   "id": "F49_xsecPersist",
+   "n": 49,
+   "layer": "F",
+   "title": "橫斷面持續性量測",
+   "desc": "市況條件下策略層績效之持續性(量尺)。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "F50_condGate",
+   "n": 50,
+   "layer": "F",
+   "title": "條件變數之前提篩",
+   "desc": "新條件變數之准入檢查(量尺)。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "G51_blendPools",
+   "n": 51,
+   "layer": "G",
+   "title": "多池配比",
+   "desc": "兩個以上之挑選規則各取一部分, 依比例合成選集(例如 50/50、75/25、三池)。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:G51_blendPools"
+    },
+    {
+     "kind": "carrier",
+     "name": "G51_blendPools"
+    }
+   ],
+   "grid": {
+    "ratio": [
+     "50/50",
+     "75/25",
+     "三池"
+    ]
+   }
+  },
+  {
+   "id": "G52_book",
+   "n": 52,
+   "layer": "G",
+   "title": "分帳",
+   "desc": "把席次分給數個獨立之子規則, 合併下單(以 pick 回傳之 tag 區分子帳)。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:G52_book"
+    },
+    {
+     "kind": "carrier",
+     "name": "G52_book"
+    }
+   ],
+   "grid": {
+    "books": [
+     2,
+     3,
+     4
+    ]
+   }
+  },
+  {
+   "id": "G53_unionFamily",
+   "n": 53,
+   "layer": "G",
+   "title": "聯集族",
+   "desc": "多規則選集之聯集(與 G51 / G36 重疊; 不另列為可選)。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "G54_sideSplit",
+   "n": 54,
+   "layer": "G",
+   "title": "分側組合",
+   "desc": "做多半邊用規則 A、做空半邊用規則 B, 兩半合併。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:G54_sideSplit"
+    },
+    {
+     "kind": "carrier",
+     "name": "G54_sideSplit"
+    }
+   ]
+  },
+  {
+   "id": "G55_crossLayerTransplant",
+   "n": 55,
+   "layer": "G",
+   "title": "跨層移植",
+   "desc": "把某層之機制搬到另一層使用(例如排序鍵改當資格、資格改當條件)。",
+   "status": "proposed",
+   "selectable": true,
+   "realize": [
+    {
+     "kind": "operator",
+     "op": "add:G55_crossLayerTransplant"
+    },
+    {
+     "kind": "carrier",
+     "name": "G55_crossLayerTransplant"
+    }
+   ]
+  },
+  {
+   "id": "H56_globalSample",
+   "n": 56,
+   "layer": "H",
+   "title": "全域取樣",
+   "desc": "rsi 迴圈之搜尋臂。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "H57_localExpand",
+   "n": 57,
+   "layer": "H",
+   "title": "局部展開",
+   "desc": "rsi 迴圈之搜尋臂。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "H58_jump",
+   "n": 58,
+   "layer": "H",
+   "title": "跳躍",
+   "desc": "rsi 迴圈之搜尋臂。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "H59_turning",
+   "n": 59,
+   "layer": "H",
+   "title": "轉折",
+   "desc": "rsi 迴圈之搜尋臂。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "H60_novelty",
+   "n": 60,
+   "layer": "H",
+   "title": "生成",
+   "desc": "rsi 迴圈之搜尋臂(生成新臂)。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "H61_policyVersions",
+   "n": 61,
+   "layer": "H",
+   "title": "探索策略版本",
+   "desc": "rsi 迴圈之策略版本。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "I62_sameDoseNull",
+   "n": 62,
+   "layer": "I",
+   "title": "同劑量虛無",
+   "desc": "量尺: 評估器已內建。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "I63_fitBalance",
+   "n": 63,
+   "layer": "I",
+   "title": "擬合配平虛無",
+   "desc": "量尺。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "I64_seatNull",
+   "n": 64,
+   "layer": "I",
+   "title": "席位層對照",
+   "desc": "量尺。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "I65_timingNullCI",
+   "n": 65,
+   "layer": "I",
+   "title": "時機虛無與區間",
+   "desc": "量尺。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "I66_shrinkRetention",
+   "n": 66,
+   "layer": "I",
+   "title": "縮庫保持率",
+   "desc": "量尺。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "I67_freshnessBreadth",
+   "n": 67,
+   "layer": "I",
+   "title": "新鮮度廣度",
+   "desc": "量尺: 評估器已內建 1 / 3 / 7 / 14 / 30 日。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "I68_crossLibrary",
+   "n": 68,
+   "layer": "I",
+   "title": "跨庫泛用",
+   "desc": "量尺。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "I69_catalogRedundancy",
+   "n": 69,
+   "layer": "I",
+   "title": "型錄冗餘",
+   "desc": "量尺。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "I70_scales",
+   "n": 70,
+   "layer": "I",
+   "title": "其他量尺",
+   "desc": "量尺。",
+   "status": "proposed",
+   "selectable": false,
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不派給節點(量尺 / 迴圈自身 / 須改評估器)"
+    }
+   ]
+  },
+  {
+   "id": "J71_vintage",
+   "n": 71,
+   "layer": "J",
+   "title": "前段回推",
+   "status": "blocked",
+   "selectable": false,
+   "blockedBy": "本專案不開(僅列名)",
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不開"
+    }
+   ]
+  },
+  {
+   "id": "J72_btcSide",
+   "n": 72,
+   "layer": "J",
+   "title": "BTC 側結構",
+   "status": "blocked",
+   "selectable": false,
+   "blockedBy": "本專案不開(僅列名)",
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不開"
+    }
+   ]
+  },
+  {
+   "id": "J73_sideImb",
+   "n": 73,
+   "layer": "J",
+   "title": "多空失衡狀態量",
+   "status": "blocked",
+   "selectable": false,
+   "blockedBy": "本專案不開(僅列名)",
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不開"
+    }
+   ]
+  },
+  {
+   "id": "J74_scarceLibrary",
+   "n": 74,
+   "layer": "J",
+   "title": "稀缺因子擴庫",
+   "status": "blocked",
+   "selectable": false,
+   "blockedBy": "本專案不開(僅列名)",
+   "realize": [
+    {
+     "kind": "manual",
+     "how": "不開"
+    }
+   ]
+  }
+ ]
+}

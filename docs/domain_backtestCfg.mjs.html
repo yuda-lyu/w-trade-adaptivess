@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>domain/backtestCfg.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">domain/backtestCfg.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import path from 'path'
+import { FD_ROOT } from '../cfg.mjs'
+
+
+//回測期旗標之設定(settings.backtest; 未設之欄用預設)
+//  privateRoot  私有根: 全期帳本與各節點之回測期數字皆放此處, 位於專案夾之外 —— 節點 agent 之工作區只限專案夾, 讀不到;
+//               回測期數字只有迴圈(與主代理)看得到, 對節點 agent 與做夢 agent 只揭露旗標(pass / fail)
+//  minLadder    節點之訓練期階梯達此值才算回測期旗標; 預設 0 = 凡可評估且未超過硬上限之成品皆算
+//               (訓練期對策略庫為樣本內, 「訓練期勝過隨機」不能當作樣本外檢驗之門檻: 依市況切換多空之類機制在訓練期看不出差別, 只在樣本外才分得出來)
+//  rule         旗標判準: 回測期七相位之等效年化平均 > meanMin 且最差相位 > worstPhaseMin(「穩定之正績效」)
+//  replicas     複製版之數目(預設 3): 以不同之亂數種子(挑選函數之 ctx.rand)各重放一次, **全部**達 rule 才 pass
+//               —— 成品若含隨機抽取, 單一種子之 pass 可能只是那一次抽到之策略碰巧賺; 不含隨機者各複製版相同, 無影響
+//  nullDraws    回測期隨機挑(虛無)之抽數; 分級(grade)以它為參照
+//  grade        分級旗標(預設啟用): 未達 pass 者再依「對訊號量相當之隨機挑」分為 above / mixed / level / below(定義見 backtestGrade.mjs)
+//               enabled false ⇒ 只有 pass / fail(二元); pAbove / pBelow 為各段合併後之單側 p 之門檻、pStrong 為單一分段「明顯較高」之門檻;
+//               splits 為回測期等分之段數(各段之超額須同為正才算 above); matchSides(預設 true)= 參照之做多比例固定為成品於回測期之平均做多比例
+//               —— 二元旗標於全部成品皆 fail 時不提供任何方向; 分級只多揭露每個成品之等級(不含數字), above / mixed 不否決、可作為起點
+/**
+ * 由設定取得回測期旗標之設定(settings.backtest;未設之欄用預設)
+ *
+ * @param {Object} st 輸入設定物件,讀取 st.backtest(enabled、privateRoot、ledgerDir、resultDir、minLadder、rule、replicas、nullDraws、grade、timeoutSec)
+ * @returns {Object} 回傳設定物件 { enabled, privateRoot, ledgerDir, resultDir, minLadder, rule, replicas, nullDraws, grade, timeoutSec };replicas 預設3、nullDraws 預設64、timeoutSec 預設1200
+ * @example
+ * let cfg = backtestCfg({ backtest: { replicas: 5 } })
+ */
+let backtestCfg = (st) => {
+    let b = st.backtest || {}
+    let privateRoot = path.resolve(b.privateRoot || `${FD_ROOT}-private`)
+    return {
+        enabled: b.enabled !== false,
+        privateRoot,
+        ledgerDir: b.ledgerDir ? path.resolve(b.ledgerDir) : path.join(privateRoot, 'ledger', 'full'),
+        resultDir: b.resultDir ? path.resolve(b.resultDir) : path.join(privateRoot, 'backtest'),
+        minLadder: Number.isInteger(b.minLadder) ? b.minLadder : 0,
+        rule: { meanMin: 0, worstPhaseMin: 0, ...(b.rule || {}) },
+        replicas: Number.isInteger(b.replicas) &amp;&amp; b.replicas >= 1 ? b.replicas : 3,
+        nullDraws: Number.isInteger(b.nullDraws) ? b.nullDraws : 64,
+        grade: { enabled: !(b.grade &amp;&amp; b.grade.enabled === false), pAbove: 0.05, pBelow: 0.95, pStrong: 0.01, splits: 2, matchSides: true, ...(b.grade || {}) },
+        timeoutSec: b.timeoutSec || 1200,
+    }
+}
+
+
+export { backtestCfg }
+export default backtestCfg
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 14:42:16 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

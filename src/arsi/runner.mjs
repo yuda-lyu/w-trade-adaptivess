@@ -1,0 +1,301 @@
+import fs from 'fs'
+import path from 'path'
+import { spawnSync } from 'child_process'
+
+
+//多輪執行之通用驅動(不含領域用語): 一次執行(run)連跑數輪, 每輪後回報並依條件決定是否續跑
+//  「每輪幾個節點、同時幾個、一次跑幾輪」由使用端依自身設備與監督方式給定:
+//    resolveRunConfig(cfg, cli) → { nodesPerRound, parallelNodes, roundsPerRun }
+//      cfg  設定檔之值(可缺); cli 命令列覆寫(可缺); 皆須為正整數, parallelNodes 不大於 nodesPerRound
+//  runRounds({ rounds, runRound, shouldStop, onRoundDone, log }) → { done: [各輪之結果], stopped: 提前停止之原因 | null }
+//    runRound({ index })      跑一輪; 回該輪之結果物件; 結果之 halt(字串)非空 ⇒ 該輪後停止(例: 輪末回調失敗, 須人處理後才續跑)
+//    shouldStop({ index, done })  每輪開始前詢問; 回非空字串 ⇒ 不再起新輪(例: 停止檔存在、額度不足、資源持續超限)
+//    onRoundDone(result, { index, rounds })  每輪結束後之回調(回報、寫摘要)
+//  無人值守(由排程器定時觸發同一道起跑指令)所需之三件事 —— 皆以檔案為介面, 不依賴任何常駐服務:
+//    acquireRunLock(fpLock, opt)   單一執行之鎖: 同一狀態根同時只允許一次執行; 上一次尚未結束時, 本次即不啟動
+//    appendEvent(fpEvents, obj) / readEvents(fpEvents)   事件檔(每列一個 JSON; 只增): 起跑、每輪結束、整次執行結束、未啟動(及其原因)
+//      監看端(人、代理、其他程式)只須等待此檔出現新的結束類事件, 不必同時看狀態檔與行程
+//    trailingFailures(events)      事件檔末尾連續失敗之輪數(起跑前自檢用: 連續失敗達上限即不再自動起跑, 等人處理)
+let posInt = (v) => (Number.isInteger(v) && v >= 1 ? v : null)
+
+/**
+ * 解析每輪節點數、同時節點數與每次執行輪數(命令列優先於設定檔,皆須為正整數,否則用預設)
+ *
+ * @param {Object} [cfg={}] 輸入設定檔之值,預設{}
+ * @param {Object} [cli={}] 輸入命令列覆寫值,預設{}
+ * @returns {Object} 回傳 { nodesPerRound(預設3), parallelNodes(預設為 nodesPerRound,且不大於 nodesPerRound), roundsPerRun(預設1) }
+ * @example
+ * let c = resolveRunConfig({ nodesPerRound: 4 }, { parallelNodes: 2 })
+ * console.log(c)
+ * // => { nodesPerRound: 4, parallelNodes: 2, roundsPerRun: 1 }
+ */
+let resolveRunConfig = (cfg = {}, cli = {}) => {
+    let pick = (k, def) => posInt(cli[k]) || posInt(cfg[k]) || def
+    let nodesPerRound = pick('nodesPerRound', 3)
+    let parallelNodes = Math.min(nodesPerRound, pick('parallelNodes', nodesPerRound))
+    let roundsPerRun = pick('roundsPerRun', 1)
+    return { nodesPerRound, parallelNodes, roundsPerRun }
+}
+
+/**
+ * 多輪執行之通用驅動:連跑數輪,每輪前詢問是否停止、每輪後回調,結果 halt 非空即於該輪後停止
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {Number} [opt.rounds=1] 輸入最多跑幾輪,預設1
+ * @param {Function} opt.runRound 輸入跑一輪之函數,形式 async ({ index }) → 該輪結果物件,結果之 halt 非空則於該輪後停止
+ * @param {Function} [opt.shouldStop=()=>null] 輸入每輪開始前之詢問函數,形式 async ({ index, done }),回傳非空字串即不再起新輪,預設回傳null
+ * @param {Function} [opt.onRoundDone=()=>{}] 輸入每輪結束後之回調,形式 async (result, { index, rounds }),預設空函數
+ * @param {Function} [opt.log=()=>{}] 輸入記錄函數,預設空函數
+ * @returns {Promise<Object>} 回傳 Promise,resolve 為 { done(各輪結果陣列), stopped(提前停止之原因字串,未提前停止為null) }
+ * @example
+ * let r = await runRounds({ rounds: 3, runRound: async ({ index }) => ({ index, halt: index === 1 ? '停' : null }) })
+ * console.log(r)
+ * // => { done: [ { index: 0, halt: null }, { index: 1, halt: '停' } ], stopped: '停' }
+ */
+let runRounds = async ({ rounds = 1, runRound, shouldStop = () => null, onRoundDone = () => {}, log = () => {} }) => {
+    let done = []
+    for (let i = 0; i < rounds; i++) {
+        let why = await shouldStop({ index: i, done })
+        if (why) {
+            log(`不再起新輪(已跑 ${done.length} / ${rounds}): ${why}`)
+            return { done, stopped: String(why) }
+        }
+        let r = await runRound({ index: i })
+        done.push(r)
+        await onRoundDone(r, { index: i, rounds })
+        if (r && r.halt) {
+            log(`本次執行於第 ${i + 1} / ${rounds} 輪後停止: ${r.halt}`)
+            return { done, stopped: String(r.halt) }
+        }
+    }
+    return { done, stopped: null }
+}
+
+//pidAlive, 行程是否仍在(訊號 0 只探測、不送訊號); EPERM = 存在但無權限
+let pidAlive = (pid) => {
+    try {
+        process.kill(pid, 0)
+        return true
+    }
+    catch (err) {
+        return !!(err && err.code === 'EPERM')
+    }
+}
+
+//procNameOf, 行程之映像名(小寫); 查不到回 null。用於辨認「鎖檔之 pid 已被別的程式重用」(機器重開後常見)
+let procNameOf = (pid) => {
+    try {
+        if (process.platform === 'win32') {
+            let r = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { windowsHide: true, encoding: 'utf8' })
+            let m = /^"([^"]+)"/m.exec(String(r.stdout || ''))
+            return m ? m[1].toLowerCase() : null
+        }
+        return fs.readFileSync(`/proc/${pid}/comm`, 'utf8').trim().toLowerCase()
+    }
+    catch (err) {
+        return null
+    }
+}
+
+//acquireRunLock, 以「獨占建立」寫鎖檔 { pid, startedAt, beatAt }
+//  opt: { staleMs(鎖之心跳逾此時間視為疑似卡住; 預設 6 小時), isSameProgram(name)(判斷鎖檔之 pid 是否仍為本程式; 預設映像名以 node 開頭), pid(測試用) }
+//  回傳:
+//    { ok: true, release(), beat() }           取得; release 只刪自己的鎖; beat 更新心跳(每輪開始與結束時呼叫)
+//    { ok: false, why: 'running', pid, startedAt, beatAt }   另一個執行仍在進行
+//    { ok: false, why: 'stale', pid, startedAt, beatAt }     鎖之行程仍在而心跳已逾時(疑似卡住)—— 不接手, 等人處理
+//  鎖檔之行程已不在、或其 pid 已被別的程式重用 ⇒ 視為殘留, 刪除後接手
+/**
+ * 取得單一執行之鎖(以獨占建立鎖檔,同一狀態根同時只允許一次執行)
+ *
+ * 鎖檔之行程已不在或其 pid 已被別的程式重用時視為殘留,刪除後接手;其餘情形見回傳說明。
+ *
+ * @param {String} fpLock 輸入鎖檔路徑
+ * @param {Object} [opt={}] 輸入設定物件,預設{}
+ * @param {Number} [opt.staleMs=21600000] 輸入心跳逾此毫秒視為疑似卡住,預設21600000(6 小時)
+ * @param {Function} [opt.isSameProgram] 輸入判斷鎖檔 pid 是否仍為本程式之函數,形式 (name) → Boolean,預設為映像名為null或以 node 開頭
+ * @param {Number} [opt.pid] 輸入本方 pid(測試用),預設process.pid
+ * @returns {Object} 取得時回傳 { ok: true, release(只刪自己的鎖), beat(更新心跳) };未取得回傳 { ok: false, why: 'running' 或 'stale', pid, startedAt, beatAt }
+ * @example
+ * let lock = acquireRunLock('./state/run.lock')
+ * if (lock.ok) {
+ *     lock.beat()
+ *     lock.release()
+ * }
+ */
+let acquireRunLock = (fpLock, opt = {}) => {
+    let staleMs = Number.isFinite(opt.staleMs) && opt.staleMs > 0 ? opt.staleMs : 6 * 3600000
+    let isSame = typeof opt.isSameProgram === 'function' ? opt.isSameProgram : (name) => name === null || /^node/.test(name)
+    let me = Number.isInteger(opt.pid) ? opt.pid : process.pid
+    fs.mkdirSync(path.dirname(fpLock), { recursive: true })
+    let read = () => {
+        try {
+            return JSON.parse(fs.readFileSync(fpLock, 'utf8'))
+        }
+        catch (err) {
+            return null
+        }
+    }
+    for (let i = 0; i < 2; i++) {
+        try {
+            let fd = fs.openSync(fpLock, 'wx')
+            let now = new Date().toISOString()
+            fs.writeSync(fd, JSON.stringify({ pid: me, startedAt: now, beatAt: now }))
+            fs.closeSync(fd)
+            let mine = () => {
+                let j = read()
+                return j && j.pid === me ? j : null
+            }
+            return {
+                ok: true,
+                release: () => {
+                    if (mine()) {
+                        try {
+                            fs.rmSync(fpLock, { force: true })
+                        }
+                        catch (err) {}
+                    }
+                },
+                beat: () => {
+                    let j = mine()
+                    if (j) {
+                        try {
+                            fs.writeFileSync(fpLock, JSON.stringify({ ...j, beatAt: new Date().toISOString() }))
+                        }
+                        catch (err) {}
+                    }
+                },
+            }
+        }
+        catch (err) {
+            if (!err || err.code !== 'EEXIST') {
+                throw err
+            }
+            let j = read()
+            if (j && Number.isInteger(j.pid) && j.pid !== me && pidAlive(j.pid) && isSame(procNameOf(j.pid))) {
+                let beat = Date.parse(j.beatAt || j.startedAt || '')
+                let why = Number.isFinite(beat) && Date.now() - beat > staleMs ? 'stale' : 'running'
+                return { ok: false, why, pid: j.pid, startedAt: j.startedAt || null, beatAt: j.beatAt || null }
+            }
+            //殘留之鎖(行程已不在、pid 已被別的程式重用、或鎖檔損壞): 刪除後重試一次
+            try {
+                fs.rmSync(fpLock, { force: true })
+            }
+            catch (e2) {}
+        }
+    }
+    return { ok: false, why: 'running', pid: null, startedAt: null, beatAt: null }
+}
+
+//peekRunLock, 只看不動: 鎖檔所記之執行是否仍在進行(供起跑包裝在產生子行程之前先判斷, 以免覆寫進行中那一次之 pid 檔與日誌路徑)
+//  回 { running, stale, pid, startedAt, beatAt }; 無鎖檔、行程已不在、或 pid 已被別的程式重用 ⇒ running = false
+/**
+ * 只看不動:鎖檔所記之執行是否仍在進行
+ *
+ * @param {String} fpLock 輸入鎖檔路徑
+ * @param {Object} [opt={}] 輸入設定物件,預設{}
+ * @param {Number} [opt.staleMs=21600000] 輸入心跳逾此毫秒視為疑似卡住,預設21600000(6 小時)
+ * @param {Function} [opt.isSameProgram] 輸入判斷鎖檔 pid 是否仍為本程式之函數,形式 (name) → Boolean,預設為映像名為null或以 node 開頭
+ * @returns {Object} 回傳 { running, stale, pid, startedAt, beatAt };無鎖檔、行程已不在或 pid 已被別的程式重用時 running 為 false
+ * @example
+ * let s = peekRunLock('./state/run.lock')
+ * console.log(s.running)
+ */
+let peekRunLock = (fpLock, opt = {}) => {
+    let staleMs = Number.isFinite(opt.staleMs) && opt.staleMs > 0 ? opt.staleMs : 6 * 3600000
+    let isSame = typeof opt.isSameProgram === 'function' ? opt.isSameProgram : (name) => name === null || /^node/.test(name)
+    let j = null
+    try {
+        j = JSON.parse(fs.readFileSync(fpLock, 'utf8'))
+    }
+    catch (err) {}
+    if (!j || !Number.isInteger(j.pid) || !pidAlive(j.pid) || !isSame(procNameOf(j.pid))) {
+        return { running: false, stale: false, pid: j && Number.isInteger(j.pid) ? j.pid : null, startedAt: (j && j.startedAt) || null, beatAt: (j && j.beatAt) || null }
+    }
+    let beat = Date.parse(j.beatAt || j.startedAt || '')
+    return { running: true, stale: Number.isFinite(beat) && Date.now() - beat > staleMs, pid: j.pid, startedAt: j.startedAt || null, beatAt: j.beatAt || null }
+}
+
+//appendEvent, 於事件檔追加一列(自動帶 at); 寫入失敗不拋(事件檔不得影響執行本身)
+/**
+ * 於事件檔追加一列 JSON(自動帶 at 時間戳;寫入失敗不拋錯)
+ *
+ * @param {String} fpEvents 輸入事件檔路徑,資料夾不存在時自動建立
+ * @param {Object} obj 輸入事件物件(其欄位置於 at 之後,同名欄位會覆蓋 at)
+ * @returns {Boolean} 回傳是否寫入成功
+ * @example
+ * appendEvent('./state/events.jsonl', { event: 'round-done', ok: true })
+ * // => true
+ */
+let appendEvent = (fpEvents, obj) => {
+    try {
+        fs.mkdirSync(path.dirname(fpEvents), { recursive: true })
+        fs.appendFileSync(fpEvents, `${JSON.stringify({ at: new Date().toISOString(), ...obj })}\n`, 'utf8')
+        return true
+    }
+    catch (err) {
+        return false
+    }
+}
+
+//readEvents, 讀事件檔(無檔或壞列略過)
+/**
+ * 讀事件檔(無檔或壞列略過)
+ *
+ * @param {String} fpEvents 輸入事件檔路徑
+ * @returns {Array} 回傳事件物件陣列
+ * @example
+ * let events = readEvents('./state/events.jsonl')
+ */
+let readEvents = (fpEvents) => {
+    let out = []
+    try {
+        for (let l of fs.readFileSync(fpEvents, 'utf8').split('\n')) {
+            if (!l.trim()) {
+                continue
+            }
+            try {
+                out.push(JSON.parse(l))
+            }
+            catch (err) {}
+        }
+    }
+    catch (err) {}
+    return out
+}
+
+//trailingFailures, 事件檔末尾連續失敗之輪數: 自末尾往前數 event === 'round-done' 且 ok === false(或 'run-failed')者, 遇成功之一輪即止
+//  'skipped'、'run-start'、'run-done' 不計也不打斷(未啟動不是失敗)
+/**
+ * 計算事件檔末尾連續失敗之輪數
+ *
+ * 自末尾往前數 event 為 'round-done' 且 ok 為 false(或 event 為 'run-failed')者,遇成功之一輪即止。
+ *
+ * @param {Array} events 輸入事件物件陣列(如 readEvents 之回傳)
+ * @returns {Number} 回傳連續失敗數
+ * @example
+ * let n = trailingFailures([{ event: 'round-done', ok: false }, { event: 'round-done', ok: false }])
+ * console.log(n)
+ * // => 2
+ */
+let trailingFailures = (events) => {
+    let n = 0
+    for (let i = events.length - 1; i >= 0; i--) {
+        let e = events[i]
+        if (e.event === 'round-done') {
+            if (e.ok === false) {
+                n++
+            }
+            else {
+                break
+            }
+        }
+        else if (e.event === 'run-failed') {
+            n++
+        }
+    }
+    return n
+}
+
+
+export { runRounds, resolveRunConfig, acquireRunLock, peekRunLock, appendEvent, readEvents, trailingFailures, pidAlive }
+export default runRounds

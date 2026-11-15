@@ -1,0 +1,11 @@
+node_modules
+data
+private
+tmp
+rsi
+test/_tmp
+testPending
+arms/catalog.json
+_test_adaptivess
+CLAUDE*.md
+.env

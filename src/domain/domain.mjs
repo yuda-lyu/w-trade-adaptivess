@@ -1,0 +1,1745 @@
+import fs from 'fs'
+import path from 'path'
+import { createRsi, nodeIdOf, specHash, makeNode, peekRound, makePaths, effectiveCatalogOf } from '../engineApi.mjs'
+import { writeFileAtomic, sha } from '../engineProtocol.mjs'
+import { getSettings, readJson, writeJson, FD_ROOT } from '../cfg.mjs'
+import { scoreOf } from '../eval/score.mjs'
+import { createFileRecords, roundName, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_LABELS, ARM_KINDS, ARM_LABELS, CLAIM_VERDICTS } from '../arsi/records.mjs'
+import { proposalOf } from './armCatalog.mjs'
+import { buildPickStore } from './pickStore.mjs'
+import { createArsi } from '../arsi/arsi.mjs'
+import { createToolbox } from '../arsi/toolbox.mjs'
+import { makeDispatch } from '../arsi/dispatchers.mjs'
+import { createResourceMonitor } from '../arsi/resources.mjs'
+import { resolveRunConfig } from '../arsi/runner.mjs'
+import { makeTexts, GUIDE, guideText } from './texts.mjs'
+import { makeVerify, summaryOf, notesOf, scanTrace, shortShareOf, sideFlowIssue, extSurfaceOf, extFlagIssue, runNodeProc, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD } from './verify.mjs'
+import { makeToolboxRules } from './toolboxRules.mjs'
+import { archiveExperience, archiveFeedback } from './archiveDocs.mjs'
+import { activeTrial, assignTrial, variantFallback } from './briefTrials.mjs'
+import { makeBacktest } from './backtest.mjs'
+import { backtestCfg } from './backtestCfg.mjs'
+import { gradeLabel } from './backtestGrade.mjs'
+
+
+//本專案之領域接線: 把「代理式節點(寫挑選模組)+ 代理式做夢(審計與彙整)」接到 w-recursi 之樹、臂目錄、策略與輪次
+//  節點規格 spec = { arms: [臂 id…(已排序)], base: 起點節點 id 或 null }
+//  評估器(同程序模式; 多節點併行): evaluate(spec) = 派節點 agent → 迴圈重跑其成品取得正本數字 → 寫節點文件 → raw
+//  算子: 每個可選臂一個 add:<臂>(於父節點之成品上加該臂)與 refine(同臂再改進); 載體: 各可選臂之單臂根節點(依層輪替排序)
+//  做夢: 輪末鉤子 afterRound = 派做夢 agent 審計本輪節點 → 寫回可信度 / 重做 / 刪除 → 方向入前緣(下一輪優先取用)→ 專案回調(更新看板、查 sgud)
+let LAYER_ORDER = 'ABCDEFG'
+//OUT_CHECK_MIN, 「每輪至少 1 條向外」之例外所需之最少種數: 做夢該輪已預先核對而皆無內容之向外候選(規則 R-REC-26; 任務書之文字見 texts.mjs 之配比)
+/**
+ * 「每輪至少 1 條向外」之例外所需之最少預先核對種數
+ *
+ * @type {Number}
+ */
+let OUT_CHECK_MIN = 3
+//outwardNoteOf, 輪末摘要「配比」一列之附註(純函數): nOut = 向外之方向數, nDirs = 方向總數, nUntried = 未試之可選臂數, nChecked = 做夢自報已預先核對而皆無內容之向外候選種數
+//  有向外或無方向 ⇒ 空字串; 尚有未試之臂 ⇒ 標示; 可選之臂皆已試過而 nChecked ≥ OUT_CHECK_MIN ⇒ 另列(不記為違反); 其餘 ⇒ 標示
+/**
+ * 產生輪末摘要「配比」一列之附註(純函數)
+ *
+ * 有向外或無方向回傳空字串;尚有未試之臂或預先核對種數不足時回傳標示文字;可選之臂皆已試過且 nChecked 達 OUT_CHECK_MIN 時另列「向外 0」。
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {Number} opt.nOut 輸入向外之方向數
+ * @param {Number} opt.nDirs 輸入方向總數
+ * @param {Number} opt.nUntried 輸入未試之可選臂數
+ * @param {Number} opt.nChecked 輸入做夢自報已預先核對而皆無內容之向外候選種數
+ * @returns {String} 回傳附註字串,無須附註時為空字串
+ * @example
+ * let s = outwardNoteOf({ nOut: 0, nDirs: 3, nUntried: 2, nChecked: 0 })
+ */
+let outwardNoteOf = ({ nOut, nDirs, nUntried, nChecked }) => {
+    if (nOut > 0 || nDirs === 0) {
+        return ''
+    }
+    if (nUntried > 0) {
+        return `;**無向外之方向**(未試之可選臂尚有 ${nUntried} 個)`
+    }
+    return nChecked >= OUT_CHECK_MIN
+        ? `;向外 0(預先核對皆不成立;${nChecked} 種)`
+        : `;**無向外之方向**(可選之臂皆已試過;預先核對而皆無內容之向外候選 ${nChecked} 種,未達 ${OUT_CHECK_MIN} 種)`
+}
+
+//makeProject(st, inject): inject.dispatch 可換掉派工器(測試以假 agent 走完整流程; 他專案可接自己的派工方式)
+/**
+ * 組裝專案領域(臂目錄、節點任務、驗證、做夢、看板、回測期旗標與引擎),回傳專案物件
+ *
+ * 組裝時讀取臂目錄之基底與評估帳本之 meta.json(settings.eval.ledgerDir;缺即拋錯,帳本之資料檔要到評估時才讀);後續之方法會派發 agent、起子行程與寫檔,不宜於文件範例中實跑。
+ *
+ * @param {Object} [st=getSettings()] 輸入設定物件,預設取 getSettings() 之結果
+ * @param {Object} [inject={}] 輸入注入設定物件,預設{}
+ * @param {Function} [inject.dispatch] 輸入派工器,測試可換為假 agent;未給則用 makeDispatch 依 st.agents 組成
+ * @param {String} [inject.catalogFile] 輸入供 agent 閱讀之生效目錄之寫出位置,預設 arms/catalog.json
+ * @param {Object} [inject.run] 輸入執行規模覆寫,與 st.rsi 合併後由 resolveRunConfig 解析
+ * @returns {Object} 回傳專案物件,主要鍵:st、rsi、arsi、records、toolbox、run、monitor、catalog、selectable、idOf、taskFor(節點任務內容)、typeOf、setDirectionTypes、writeBoard(臂看板)、writeCatalogFile、writeSearchMap、validatePending(補算回測期旗標)、reverifyAll、extFill、rescanTraces、rescanSideFlow、pendingDream、redream、inactiveArmsOf、offDefArmsOf、migrateDocs、annotateDream、closeFrontier、rearmFrontier、proposeDirection、pickStore()、setStatus、getState、setState、log、envKey、layerOfSpec、domain
+ * @example
+ * let project = makeProject(st)
+ * let project2 = makeProject(st, { dispatch: myDispatch })
+ */
+let makeProject = (st = getSettings(), inject = {}) => {
+
+    //專案另加之禁區字樣(策略庫所在之專案夾名、settings.guard.forbidden): 操作掃描、共用工具區之逐檔檢查皆用同一組(見 verify.mjs 之 forbiddenPats)
+    setGuardExtra(guardExtraOf(st))
+
+    let rel = (p) => path.relative(FD_ROOT, p).replace(/\\/g, '/')
+    //臂目錄(規則 R-ARM-2): 生效之目錄 = 基底(arms/base.json; node tools/buildCatalog.mjs 產生)+ 狀態根之擴充(<狀態根>/governance/extensions.json; 引擎之治理 ——
+    //  節點與做夢提、主控以 tools/armDecide.mjs 審); 算子與載體由目錄推導 ⇒ 於組裝領域之前取得(引擎組裝時以同一份基底 + 擴充合成 rsi.arms); 擴充檔損壞即拋錯
+    //  inject.catalogFile: 供 agent 閱讀之生效目錄之寫出位置(預設 arms/catalog.json; 假輪次改寫到其狀態根旁, 不動正式之檔)
+    let baseCatalog = readJson(path.join(FD_ROOT, 'arms', 'base.json'))
+    if (!baseCatalog) {
+        throw new Error('缺 arms/base.json(請先 node tools/buildCatalog.mjs)')
+    }
+    let catalog = effectiveCatalogOf(makePaths(st.rsi.root), baseCatalog)
+    let fpCatalogOut = inject.catalogFile || path.join(FD_ROOT, 'arms', 'catalog.json')
+    let armById = new Map(catalog.arms.map((a) => [a.id, a]))
+    let selectable = catalog.arms.filter((a) => a.selectable === true)
+    let ledgerMeta = readJson(path.join(st.eval.ledgerDir, 'meta.json'))
+    if (!ledgerMeta) {
+        throw new Error(`缺訂單帳本 ${st.eval.ledgerDir}(請先 node g_build.mjs)`)
+    }
+    let EVAL_VERSION = 2
+    let envKey = `${ledgerMeta.key}|eval${EVAL_VERSION}`
+    let idOf = (spec) => nodeIdOf(spec, envKey)
+    let normArms = (arr) => [...new Set(arr)].sort()
+    let maxArms = st.rsi.maxArmsPerNode || 4
+    //層之順序(節點所屬之層 = 其各臂中最後面之層): 基底之 A ~ G, 其後接擴充之新層(有可選臂者; 依代號; 規則 R-ARM-2)
+    let layerOrder = LAYER_ORDER + [...new Set(selectable.map((a) => a.layer))].filter((l) => !LAYER_ORDER.includes(l)).sort().join('')
+    let layerOfSpec = (spec) => {
+        let ls = (spec.arms || []).map((a) => (armById.get(a) || {}).layer || '?')
+        return ls.sort((a, b) => layerOrder.indexOf(b) - layerOrder.indexOf(a))[0] || '?'
+    }
+
+    let validateSpec = (spec) => {
+        if (!spec || !Array.isArray(spec.arms) || spec.arms.length === 0) {
+            throw new Error('spec.arms 須為非空陣列')
+        }
+        if (spec.arms.length > maxArms) {
+            throw new Error(`spec.arms 至多 ${maxArms} 臂`)
+        }
+        let sorted = normArms(spec.arms)
+        if (sorted.length !== spec.arms.length || sorted.some((a, i) => a !== spec.arms[i])) {
+            throw new Error('spec.arms 須去重並排序')
+        }
+        for (let a of spec.arms) {
+            let arm = armById.get(a)
+            if (!arm) {
+                throw new Error(`臂 ${a} 不在目錄`)
+            }
+            if (arm.selectable !== true) {
+                throw new Error(`臂 ${a} 不可選`)
+            }
+        }
+        if (!(spec.base === null || (typeof spec.base === 'string' && spec.base.length > 0))) {
+            throw new Error('spec.base 須為節點 id 或 null')
+        }
+        //claim(選配; 規則 R-REC-24): 驗證類方向之主張鍵 —— 同臂同起點而主張不同之驗證各為一個節點; 探索類與既有節點之規格無此鍵
+        if (spec.claim !== undefined && !(typeof spec.claim === 'string' && /^[0-9a-f]{8}$/.test(spec.claim))) {
+            throw new Error('spec.claim 須為 8 個十六進位字(主張鍵)')
+        }
+    }
+    //claimKeyOf, 做夢方向之主張鍵: 驗證類而有主張者 = 主張文字(去頭尾空白)之雜湊前 8 字; 其餘 null
+    let claimKeyOf = (x) => (x && x.type === 'verify' && typeof x.claim === 'string' && x.claim.trim() ? sha(x.claim.trim(), 8) : null)
+
+    //目錄之落成名列有 add:<臂> 而不可選者(引擎之治理所停用之臂: 留在目錄、落成名不變)亦登錄而永不適用
+    //  (w-recursi 1.0.9 組裝時會以「算子不在登錄表」拋錯; 1.0.10 起引擎已把停用之臂視為 lenient(issue #144), 此登錄已非必要 —— 行為相同, 保留作雙重保險)
+    let opArms = catalog.arms.filter((a) => a.selectable === true || (Array.isArray(a.realize) && a.realize.some((r) => r && r.kind === 'operator' && r.op === `add:${a.id}`)))
+    let operators = [
+        ...opArms.map((a) => ({
+            name: `add:${a.id}`,
+            family: a.layer,
+            applies: (s) => a.selectable === true && Array.isArray(s.arms) && !s.arms.includes(a.id) && s.arms.length < maxArms,
+            children: (s) => [{ spec: { arms: normArms([...s.arms, a.id]), base: idOf(s) }, params: { arm: a.id }, reason: `於 ${idOf(s).slice(0, 8)} 之成品上加入臂 ${a.id}` }],
+        })),
+        { name: 'refine', family: 'R', applies: () => true, children: (s) => [{ spec: { arms: s.arms, base: idOf(s) }, params: {}, reason: `改進 ${idOf(s).slice(0, 8)}(同臂)` }] },
+    ]
+
+    //載體: 各可選臂之單臂根節點; 依層輪替排序(A、B、C … 各取一個再回頭), 使冷啟動之各輪跨層取樣
+    //  **取法層與執行層(D、E)之臂以現有之最佳成品為底**(規則 R-REC-19): 這兩層之臂只改「排序後怎麼取」「哪些訊號真的下單」,
+    //    在中性(隨機)之底上與同劑量之隨機無從分辨(E37、E38 於中性底之組成對照 +0.6 / +1.6; D28 之節點須自行偏離中性預設、另找有內容之排序才可識別)
+    //    ⇒ 尚未試過之 D / E 臂, 其載體 = { arms: 底之臂 + 該臂, base: 底 }; 底 = carrierBase(): 樹上已審為可信、未被否決、臂數未滿者中 S 最高之成品;
+    //      樹上無此成品(冷啟動)⇒ 照舊為單臂根節點
+    //    (底會隨樹之最佳者改變; 因下述「已試過之臂不再出載體」, 同一臂不會因換底而被重派; 其後之延伸由做夢之方向決定)
+    //  組合層(G)同理:「多個規則怎麼合成」須有一個有內容之規則當成分, 在中性底上只能合成兩份隨機
+    let BASED_LAYERS = ['D', 'E', 'G']
+    let executedNodes = () => rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => rsi.store.getNode(r.id)).filter(Boolean)
+    //作用中之臂(規則 R-REC-20): 節點之 spec.arms 是「指派之臂」; 其中經實測後於交付版關閉(或交付版未實現)者為「未作用之臂」
+    //  來源: 做夢之審計所定者(evidence.inactiveArms; 主控亦可經 tools/armInactive.mjs 補記)優先; 審計未表示意見者取節點自報(節點文件 code.inactiveArms); 只認屬於該節點之臂
+    //  用途: 看板之各臂最佳 S、搜尋地圖之各層最高 S、補位載體之臂組合只計作用中之臂; 「已試之臂」照舊含未作用者(試過而關閉也是試過)
+    //  不影響計分: 節點之層(layerOfSpec)、S、階梯、選集指紋皆不因此改變
+    let inactiveArmsOf = (n) => {
+        let own = n && n.spec && Array.isArray(n.spec.arms) ? n.spec.arms : []
+        let src = n && n.evidence && Array.isArray(n.evidence.inactiveArms) ? n.evidence.inactiveArms : null
+        if (!src) {
+            let d = n ? records.getNodeDoc(n.id) : null
+            src = d && d.code && Array.isArray(d.code.inactiveArms) ? d.code.inactiveArms : []
+        }
+        return own.filter((a) => src.includes(a))
+    }
+    let activeArmsOf = (n) => {
+        let off = inactiveArmsOf(n)
+        return n.spec.arms.filter((a) => !off.includes(a))
+    }
+    //offDefArmsOf, 指派之臂中「依修訂後之定義不屬該臂」者(主控審定臂之修訂後以 tools/armInactive.mjs --offdef 補記; 必同時為未作用; 規則 R-REC-20):
+    //  與「試過後關閉」不同 —— 依現行定義, 該臂並未被此節點試過 ⇒ 計算「已試之臂」時不計(補位載體、看板之未試清單、搜尋地圖、向外之判定)
+    let offDefArmsOf = (n) => {
+        let own = n && n.spec && Array.isArray(n.spec.arms) ? n.spec.arms : []
+        let src = n && n.evidence && Array.isArray(n.evidence.offDefArms) ? n.evidence.offDefArms : []
+        return own.filter((a) => src.includes(a))
+    }
+    let triedArmsOf = (n) => {
+        let off = offDefArmsOf(n)
+        return (n && n.spec && Array.isArray(n.spec.arms) ? n.spec.arms : []).filter((a) => !off.includes(a))
+    }
+    //armsLabel, 節點之臂之顯示文字(未作用者加註)
+    let armsLabel = (n, sep = ' + ') => {
+        let off = inactiveArmsOf(n)
+        let od = offDefArmsOf(n)
+        return n.spec.arms.map((a) => (od.includes(a) ? `${a}(未作用;依修訂後之定義不屬此臂)` : (off.includes(a) ? `${a}(未作用)` : a))).join(sep)
+    }
+    let carrierBase = (nodes = executedNodes()) => nodes
+        .filter((n) => n.score && Number.isFinite(n.score.S) && !(n.score.flags && n.score.flags.vetoed) && n.evidence && n.evidence.trust === 'trusted' && n.spec && Array.isArray(n.spec.arms) && activeArmsOf(n).length < maxArms)
+        .sort((a, b) => b.score.S - a.score.S || (a.id < b.id ? -1 : 1))[0] || null
+    let carriers = () => {
+        let byLayer = {}
+        for (let a of selectable) {
+            (byLayer[a.layer] = byLayer[a.layer] || []).push(a)
+        }
+        //**只為尚未試過之臂出載體**(樹上任一已執行之節點含此臂 = 已試): 載體之用途是補位去碰沒碰過之臂;
+        //  已在組合中試過之臂其「單臂根節點」多半沒有意義(例: 回看窗長、分帳、跨層移植單獨成立不了), 不排除則方向不足額之輪次會被這類節點填滿
+        //  ⇒ 未試之臂用完後迴圈不再補位(該輪之節點數 = 做夢所給之方向數), 向外之空間改由臂目錄之提案補充(規則 R-ARM-1)
+        //  每次出計畫求值一次(讀樹)
+        //  「已試」不計依修訂後之定義不屬該臂之節點(offDefArmsOf): 修訂使唯一之節點不屬該臂者, 該臂依現行定義未試, 仍由載體補位
+        //  前緣內尚未執行之做夢方向已含之臂不另出載體: 否則同一輪內同一個未試之臂由方向與載體各試一次(例: 方向已指派新臂, 載體又出其單臂根節點)
+        let nodes = rsi ? executedNodes() : []
+        let tried = new Set(nodes.flatMap((n) => triedArmsOf(n)))
+        let pend = new Set(rsi ? rsi.store.listFrontier().filter((f) => f && f.status === 'proposed' && f.origin && f.origin.topic === 'dream' && f.spec && Array.isArray(f.spec.arms)).flatMap((f) => f.spec.arms) : [])
+        let bn = carrierBase(nodes)
+        let out = {}
+        for (let i = 0; i < selectable.length; i++) {
+            for (let L of Object.keys(byLayer).sort()) {
+                let a = byLayer[L][i]
+                if (!a || tried.has(a.id) || pend.has(a.id)) {
+                    continue
+                }
+                //底之臂只帶作用中者(未作用之臂不帶進下一個節點; 規則 R-REC-20)
+                let cSpec = BASED_LAYERS.includes(a.layer) && bn ? { arms: normArms([...activeArmsOf(bn), a.id]), base: bn.id } : { arms: [a.id], base: null }
+                //同規格之節點已存在者不出(依修訂後之定義不屬該臂之節點, 當初即以同一個底、同一組臂執行 ⇒ 規格相同; 待底換了才會再出)
+                let exN = rsi ? rsi.store.getNode(idOf(cSpec)) : null
+                if (exN && ['executed', 'planned', 'running', 'rejectedByGate'].includes(exN.status)) {
+                    continue
+                }
+                out[a.id] = cSpec
+            }
+        }
+        return out
+    }
+
+    let records = createFileRecords({ nodeDir: st.records.nodeDir, dreamDir: st.records.dreamDir, trashDir: st.records.trashDir })
+    let fpStatus = path.join(st.rsi.root, 'STATUS.json')
+    let fpState = path.join(st.rsi.root, 'arsi_state.json')
+    let fpLog = path.join(st.rsi.root, 'logs', 'arsi.log')
+    let log = (s) => {
+        let line = `[${new Date().toISOString()}] ${s}`
+        console.log(line)
+        try {
+            fs.mkdirSync(path.dirname(fpLog), { recursive: true })
+            fs.appendFileSync(fpLog, line + '\n')
+        }
+        catch (err) {}
+    }
+    let setStatus = (o) => writeJson(fpStatus, { ...(readJson(fpStatus, {}) || {}), ...o, pid: process.pid, at: new Date().toISOString() })
+    let getState = () => readJson(fpState, null) || { pendingReaudit: [] }
+    let setState = (s) => writeJson(fpState, s)
+
+    //執行規模(每輪幾個節點、同時幾個、一次跑幾輪)與資源上限: 由使用端依自身設備給定(settings.rsi / settings.resources; 命令列可覆寫, 見 g_rsi.mjs)
+    let run = resolveRunConfig(st.rsi || {}, inject.run || {})
+    let rc = st.resources || {}
+    let monitor = createResourceMonitor({ cpuMax: rc.cpuMax, ramUsedMaxGB: rc.ramUsedMaxGB, cpuStart: rc.cpuStart, ramStartGB: rc.ramStartGB, sampleSec: rc.sampleSec, pollSec: rc.pollSec, maxWaitSec: typeof rc.maxWaitMin === 'number' ? rc.maxWaitMin * 60 : undefined, log })
+
+    let texts = makeTexts({ st, FD_ROOT })
+
+    //共用工具區(由做夢 agent 統籌擴建; 迴圈只做機械檢查, 不代寫): 位置 settings.records.toolboxDir(未給 = 狀態根下之 toolbox)
+    //  snippets/  可貼入挑選模組之純函數片段(挑選模組不得 import ⇒ 節點複製使用; 須過與挑選模組相同之字樣限制)
+    //  templates/ 完整之挑選模組樣板(須過挑選模組之靜態檢查)
+    //  diag/      診斷腳本: 只讀評估結果檔與 .evals.log; 只可匯入 node 內建模組(不得匯入 lib/、不得起子行程 ⇒ 無從自行計算績效或接觸帳本)
+    //  各檔另查: 語法(node --check)、禁區字樣(與操作掃描同一組)
+    //  規則(逐檔之內容檢查、索引之初始內容)在 src/domain/toolboxRules.mjs, 與自檢入口 g_toolbox.mjs 共用
+    let toolboxDir = st.records.toolboxDir || path.join(st.rsi.root, 'toolbox')
+    let tbRules = makeToolboxRules({ privateRoot: backtestCfg(st).privateRoot })
+    let toolbox = createToolbox({ dir: toolboxDir, indexSeed: tbRules.indexSeed, checkFile: tbRules.checkFile, checkIndex: tbRules.checkIndex })
+    //toolboxInfo, 任務書用之共用工具區摘要(路徑相對專案根; nTools 不含索引)
+    let toolboxInfo = () => {
+        toolbox.ensure()
+        return { dir: rel(toolboxDir), index: rel(path.join(toolboxDir, toolbox.indexFile)), indexName: toolbox.indexFile, nTools: toolbox.list().filter((f) => f.rel !== toolbox.indexFile).length }
+    }
+
+    //dirWorkIds: 來源方向之全文內提到之工作夾(例如做夢之診斷模組所在之 rsi/work/dream_rNNN): 任務書已把該方向交給節點, 其所指之檔可讀
+    let dirWorkIds = (direction) => {
+        if (!direction) {
+            return []
+        }
+        let base = path.relative(FD_ROOT, st.records.workDir).replace(/\\/g, '/').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        return [...new Set([...`${direction.rationale || ''} ${direction.expect || ''}`.matchAll(new RegExp(`${base}/([A-Za-z0-9_]+)`, 'g'))].map((m) => m[1]))]
+    }
+    //dirNodeIds: 來源方向之全文(主張、依據、預期)內指名之節點(以完整 id 或其前 8 碼以上書寫, 且在樹上唯一對應一個已執行之節點)
+    //  方向常寫「以某節點之 pick 為底 / 為對照」而不寫路徑: 迴圈把這些成品預先複製進節點之工作夾(ref_<id 前 8 碼>.mjs), 其工作夾亦列為可讀(規則 R-REC-13)
+    let dirNodeIds = (direction) => {
+        if (!direction || !rsi) {
+            return []
+        }
+        let ids = rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => r.id)
+        let out = []
+        for (let m of `${direction.claim || ''} ${direction.rationale || ''} ${direction.expect || ''}`.matchAll(/\b[0-9a-f]{8,16}\b/g)) {
+            let hit = ids.filter((id) => id.startsWith(m[0]))
+            if (hit.length === 1 && !out.includes(hit[0])) {
+                out.push(hit[0])
+            }
+        }
+        return out
+    }
+    //refsOf: 任務書列為參考之節點(其工作夾可讀)與來源方向內提到之工作夾、指名之節點; 於驗證時呼叫(同輪內與派工時之參考相同)
+    let verify = makeVerify({
+        st,
+        FD_ROOT,
+        layerOfSpec,
+        refsOf: (spec) => {
+            let t = taskFor(spec); return [...t.refs.filter((r) => r.nodeId).map((r) => r.nodeId), ...dirWorkIds(t.direction), ...dirNodeIds(t.direction)]
+        }
+    })
+    let dispatch = typeof inject.dispatch === 'function' ? inject.dispatch : makeDispatch({ agents: st.agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, cwd: FD_ROOT })
+    let rsi = null
+
+    let domain = {
+        name: st.name,
+        evaluatorVersion: EVAL_VERSION,
+        validateSpec,
+        summarize: (spec) => `${spec.arms.join('+')}${spec.base ? ` ←${String(spec.base).slice(0, 6)}` : ''}`,
+        carrierOf: (spec) => layerOfSpec(spec),
+        envHash: () => envKey,
+        operators,
+        familyRank: { R: 0, A: 1, B: 1, E: 1, C: 2, D: 2, F: 3, G: 3 },
+        carriers,
+        //證據 = 樹上之 evidence(審計之可信度等)+ 成品之回測期旗標(raw.validation; 有算才有)
+        score: (raw, node) => {
+            let ev = { ...((node && node.evidence) || {}) }
+            if (raw && raw.validation && raw.validation.flag) {
+                ev.backtest = raw.validation.flag
+            }
+            return scoreOf(raw && raw.metrics, { limits: st.eval.limits, score: st.score, layer: node && node.spec ? layerOfSpec(node.spec) : null, evidence: ev })
+        },
+        fingerprint: (raw) => (raw && raw.selHash ? raw.selHash : null),
+        gates: {
+            //起點須為已執行之節點
+            pre: (spec, { view }) => {
+                if (!spec.base) {
+                    return { ok: true }
+                }
+                let b = (view.nodes || []).find((n) => n.id === spec.base)
+                if (!(b && b.status === 'executed')) {
+                    return { ok: false, why: `起點 ${String(spec.base).slice(0, 8)} 不存在或未執行` }
+                }
+                //起點不得為被否決者(含回測期旗標 fail)
+                let full = rsi ? rsi.store.getNode(spec.base) : null
+                if (full && full.score && full.score.flags && full.score.flags.vetoed) {
+                    return { ok: false, why: `起點 ${String(spec.base).slice(0, 8)} 已被否決` }
+                }
+                return { ok: true }
+            },
+        },
+        reportColumns: [
+            { header: '臂', of: (n) => (n.spec && n.spec.arms ? n.spec.arms.join('+') : '') },
+            { header: '月均單', of: (n) => (n.raw && n.raw.metrics ? n.raw.metrics.op.monthlyOrders.mean.toFixed(0) : '') },
+            { header: '最大持倉', of: (n) => (n.raw && n.raw.metrics ? String(n.raw.metrics.op.peakHold.max) : '') },
+            { header: '虛無 p', of: (n) => (n.raw && n.raw.metrics && n.raw.metrics.null ? String(n.raw.metrics.null.p) : '') },
+            { header: '可信度', of: (n) => (n.evidence && n.evidence.trust) || '' },
+        ],
+        evaluator: {
+            mode: 'inProcess',
+            createContext: async () => ({}),
+            evaluate: async (spec, ctx, protocol) => {
+                let nodeId = idOf(spec)
+                let round = protocol && protocol.round ? protocol.round : peekRound(rsi.paths) - 1
+                let { raw } = await arsi.runNode({ nodeId, spec, round, task: taskFor(spec, round, { prepare: true }) })
+                return raw
+            },
+        },
+        hooks: {},
+    }
+
+    //taskFor, 節點任務(迴圈指派): 指定之臂、起點、參考(由專案指定: 起點、最佳節點、最近之做夢文件、臂看板)
+    //directionOf, 節點規格所出自之做夢方向(臂之集合與起點皆相同者; 取最近一份做夢文件): { round, arms, base, doc, rationale, expect } 或 null
+    let armKey = (a) => (Array.isArray(a) ? a.slice().sort().join('+') : '')
+    //  主張鍵(規則 R-REC-24): 驗證類方向入前緣時所帶之鍵記於該文件之 harness.applied.proposals(與 guidance.directions 逐條對齊)之 claimKey;
+    //  對應 = 臂之集合、起點、主張鍵三者皆相同(規格無 claim ⇔ 該方向入前緣時無鍵: 探索類、與本規則之前之文件)⇒ 同臂同起點而主張不同之驗證各對到自己之方向
+    //  回傳另含 index(該方向於文件內之位置)與 claimKey(無則 null)
+    let claimKeyAt = (d, k) => {
+        let ap = d && d.harness && d.harness.applied && Array.isArray(d.harness.applied.proposals) ? d.harness.applied.proposals : []; return ap[k] && typeof ap[k].claimKey === 'string' ? ap[k].claimKey : null
+    }
+    let directionOf = (spec) => {
+        for (let d of records.listDreamDocs().slice().reverse()) {
+            let dirs = (d.guidance && d.guidance.directions) || []
+            let i = dirs.findIndex((x, k) => x && armKey(x.arms) === armKey(spec.arms) && (x.base || null) === (spec.base || null) && claimKeyAt(d, k) === (spec.claim || null))
+            if (i >= 0) {
+                let hit = dirs[i]
+                //type: 任務類型(做夢於方向上指定; 省略或不在值域 = explore); claim: 驗證類之待驗主張
+                return { round: d.round, arms: hit.arms, base: hit.base || null, doc: rel(records.paths.dreamMd(d.round)), rationale: String(hit.rationale || ''), expect: String(hit.expect || ''), type: TASK_TYPES.includes(hit.type) ? hit.type : 'explore', claim: typeof hit.claim === 'string' && hit.claim.trim() ? hit.claim.trim() : null, newFamily: hit.newFamily === true, index: i, claimKey: claimKeyAt(d, i) }
+            }
+        }
+        return null
+    }
+
+    //trialFor, 本節點於任務書條款之隨機對照(src/domain/briefTrials.mjs)內之組別: { id, variant } 或 null(該輪無試驗)
+    //  重做者沿用其節點文件所記之組別; 首次派工者依該輪之計畫(rounds/rNNN/plan.json 之 items)分層交替指派; 讀不到計畫時依雜湊之奇偶
+    let trialFor = (spec, round) => {
+        let id = idOf(spec)
+        let old = records.getNodeDoc(id)
+        if (old && old.task && old.task.trial && old.task.trial.id) {
+            return old.task.trial
+        }
+        let tr = activeTrial(round)
+        if (!tr) {
+            return null
+        }
+        let variant = null
+        try {
+            let plan = readJson(path.join(st.rsi.root, 'rounds', roundName(round), 'plan.json'), null)
+            let items = ((plan && plan.items) || []).filter((x) => x && x.id && x.spec).map((x) => {
+                let d = directionOf(x.spec); return { id: x.id, type: d ? d.type : 'explore' }
+            })
+            if (items.some((x) => x.id === id)) {
+                variant = assignTrial(tr.id, round, items).get(id) || null
+            }
+        }
+        catch (err) {}
+        return { id: tr.id, variant: variant || variantFallback(tr.id, id) }
+    }
+
+    //taskFor(spec, round, { prepare }): 節點任務之內容; prepare = true(派工 / 重做時)另把參考節點之成品複製進節點之工作夾
+    let taskFor = (spec, round = null, { prepare = false } = {}) => {
+        //格點: 修訂移除格點者為空物件(引擎之修訂不能刪鍵)⇒ 視同無
+        let arms = spec.arms.map((id) => {
+            let a = armById.get(id)
+            return { id, layer: a.layer, layerName: `${a.layer} ${catalog.layers[a.layer] || ''}`, title: a.title, desc: a.desc || '', grid: a.grid && Object.keys(a.grid).length ? a.grid : null }
+        })
+        let refs = []
+        let base = null
+        //copies: 本任務複製進節點工作夾之檔 [來源, 目的](起點與參考成品之複本); 重做時由通用層於封存後經 task.prepare 補回
+        let copies = []
+        if (spec.base) {
+            let bn = rsi.store.getNode(spec.base)
+            let fpBasePick = path.join(st.records.workDir, spec.base, 'pick.mjs')
+            let wd = path.join(st.records.workDir, idOf(spec))
+            fs.mkdirSync(wd, { recursive: true })
+            if (fs.existsSync(fpBasePick)) {
+                fs.copyFileSync(fpBasePick, path.join(wd, 'base_pick.mjs'))
+                copies.push([fpBasePick, path.join(wd, 'base_pick.mjs')])
+            }
+            //arms: 起點成品之臂(任務書據以分出「本節點新加之臂」: 新加者皆屬取法 / 執行層時, 對照與判讀另有規定; 規則 R-REC-19)
+            //inactiveArms: 起點之指派臂中交付版未作用者(任務書註明; 規則 R-REC-20)
+            base = { nodeId: spec.base, arms: bn && bn.spec && Array.isArray(bn.spec.arms) ? bn.spec.arms.slice() : [], inactiveArms: bn && bn.spec && Array.isArray(bn.spec.arms) ? inactiveArmsOf(bn) : [], S: bn && bn.score ? bn.score.S : null, ladder: bn && bn.score ? bn.score.ladder : null, backtest: (bn && bn.score && bn.score.flags && bn.score.flags.backtest) || null, doc: rel(records.paths.nodeMd(spec.base)) }
+            refs.push({ kind: 'node', nodeId: spec.base, path: rel(records.paths.nodeMd(spec.base)), why: '起點節點之節點文件(含審計意見)' })
+        }
+        let dreams = records.listDreamDocs().slice(-(st.rsi.refDreams || 2))
+        for (let d of dreams.reverse()) {
+            refs.push({ kind: 'dream', dream: d.round, path: rel(records.paths.dreamMd(d.round)), why: `做夢文件 ${roundName(d.round)}(審計、彙整與方向;**先讀開頭之「迴圈註記」(若有;與正文牴觸時以註記為準),再讀「整體研判」(若有)、「給下一輪之方向」與「避免」**)` })
+        }
+        //較佳節點: 不含自己(重做時)與起點; 不含被否決與不可信者; 已審(可信 / 部分可信)者優先於未審者, 同級依 S
+        let selfId = idOf(spec)
+        let rows = rsi.store.listIndex().filter((r) => r.status === 'executed' && r.id !== spec.base && r.id !== selfId)
+        //排序: 已審(可信 / 部分可信)→ 回測期之 S(評估期 = 回測期)
+        let audited = (n) => (n.evidence && (n.evidence.trust === 'trusted' || n.evidence.trust === 'partial') ? 1 : 0)
+        let excessOf = (n) => (n.raw && n.raw.metrics && n.raw.metrics.null ? n.raw.metrics.null.excess : -1e9)
+        let worstOf = (n) => (n.raw && n.raw.metrics && n.raw.metrics.op ? n.raw.metrics.op.eqYr.min : null)
+        let top = rows.map((r) => rsi.store.getNode(r.id)).filter((n) => n && n.score && !(n.score.flags && n.score.flags.vetoed) && !(n.evidence && n.evidence.trust === 'untrusted')).sort((a, b) => (audited(b) - audited(a)) || (b.score.S - a.score.S)).slice(0, st.rsi.refTopNodes || 3)
+        //參考節點之成品: 派工時複製為節點工作夾內之 ref_<id 前 8 碼>.mjs(與起點之 base_pick.mjs 同作法), 任務書指向複本 —— 節點不必進他節點之工作夾找檔
+        //  (例: 照方向複製指名之 pick 之節點曾被列「存取其他節點之工作夾」)
+        let wdSelf = path.join(st.records.workDir, selfId)
+        let refPickOf = (id) => {
+            let src = path.join(st.records.workDir, id, 'pick.mjs')
+            let dst = path.join(wdSelf, `ref_${id.slice(0, 8)}.mjs`)
+            if (!fs.existsSync(src)) {
+                return null
+            }
+            if (prepare) {
+                try {
+                    fs.mkdirSync(wdSelf, { recursive: true })
+                    fs.copyFileSync(src, dst)
+                    if (!copies.some((c) => c[1] === dst)) {
+                        copies.push([src, dst])
+                    }
+                }
+                catch (err) {
+                    return null
+                }
+            }
+            return fs.existsSync(dst) ? rel(dst) : null
+        }
+        let pickNote = (id) => {
+            let p = refPickOf(id)
+            return p ? `其挑選模組已複製到 \`${p}\`` : `其挑選模組在 ${rel(path.join(st.records.workDir, id, 'pick.mjs'))}`
+        }
+        for (let n of top) {
+            let tr = n.evidence && n.evidence.trust ? (n.evidence.trust === 'trusted' ? '審計:可信' : '審計:部分可信') : '尚未審計, 僅供參考'
+            refs.push({ kind: 'node', nodeId: n.id, path: rel(records.paths.nodeMd(n.id)), why: `目前回測期 S 較高之節點(臂 ${n.spec.arms.join('+')};**回測期 S ${n.score.S}**、最差相位 ${worstOf(n) === null ? '—' : worstOf(n).toFixed(1)}、對隨機挑之超額 ${excessOf(n) > -1e8 ? excessOf(n).toFixed(1) : '—'};${tr};${pickNote(n.id)})` })
+        }
+        if (fs.existsSync(path.join(st.rsi.root, 'ARMS_BOARD.md'))) {
+            refs.push({ kind: 'file', path: rel(path.join(st.rsi.root, 'ARMS_BOARD.md')), why: '臂看板(各臂已有之節點與最佳 S)' })
+        }
+        //來源方向: 本節點若出自做夢之方向(臂之集合與起點皆相同; 取最近一份), 把該方向之依據與預期全文交給節點 —— 方向內常有具體之實作要求與判定方式, 只給做夢文件之路徑時易被略過
+        let direction = directionOf(spec)
+        //來源方向指名之節點(不含起點、自己與已列為參考者): 列入參考並複製其成品
+        for (let id of dirNodeIds(direction)) {
+            if (id === spec.base || id === selfId || refs.some((r) => r.nodeId === id)) {
+                continue
+            }
+            let dn = rsi.store.getNode(id)
+            refs.push({ kind: 'node', nodeId: id, path: rel(records.paths.nodeMd(id)), why: `來源方向指名之節點(臂 ${dn && dn.spec ? dn.spec.arms.join('+') : '—'};回測期 S ${dn && dn.score ? dn.score.S : '—'};${pickNote(id)})` })
+        }
+        //任務類型: 出自做夢方向者依該方向之 type; 其餘(載體、算子所生)為探索
+        let type = direction ? direction.type : 'explore'
+        let claim = type === 'verify' && direction ? direction.claim : null
+        let t = { goal: `${type === 'verify' ? '〔驗證〕' : '〔探索〕'}以臂 ${spec.arms.join(' + ')} 為主軸${spec.base ? `, 於起點節點 ${String(spec.base).slice(0, 8)} 之成品上` : ', 從零'}寫出自適應挑選策略之挑選模組, 驗證並交付`, type, claim, arms, base, refs, direction, toolbox: toolboxInfo(), trial: trialFor(spec, round) }
+        //重做時通用層會先把工作夾內之檔移入 attempt{n} 夾、之後才寫任務書 ⇒ 給 prepare()(不可列舉, 不入紀錄), 由通用層於封存後呼叫, 把起點與參考成品之複本補回
+        if (prepare && copies.length) {
+            Object.defineProperty(t, 'prepare', {
+                enumerable: false,
+                value: () => {
+                    for (let [src, dst] of copies) {
+                        if (fs.existsSync(src)) {
+                            fs.mkdirSync(path.dirname(dst), { recursive: true })
+                            fs.copyFileSync(src, dst)
+                        }
+                    }
+                },
+            })
+        }
+        return t
+    }
+
+    //writeCatalogFile, 供 agent 閱讀之生效目錄(arms/catalog.json; 任務書與共用工具皆指向它): 隨看板重產; 主控審定後(tools/armDecide.mjs)以審定後之目錄另寫一次
+    //  cat 預設為本程序組裝時之生效目錄; 去掉出處(origin; 在提案帳)與空之格點, 各臂之鍵序同基底(引擎新增之臂另有鍵序); 內容不變則不寫 ⇒ 回 { written, nArms, nExt, nSelectable, file }
+    let ARM_HEAD = ['id', 'n', 'layer', 'title', 'desc', 'status', 'selectable']
+    let writeCatalogFile = (cat = catalog) => {
+        let ext = rsi.governance.extensions()
+        let nExt = ext.layers.length + ext.arms.length
+        let arms = cat.arms.map((x) => {
+            let a = {}
+            for (let k of [...ARM_HEAD.filter((k) => k in x), ...Object.keys(x).filter((k) => !ARM_HEAD.includes(k) && k !== 'origin')]) {
+                a[k] = x[k]
+            }
+            if (a.grid && !Object.keys(a.grid).length) {
+                delete a.grid
+            }
+            return a
+        })
+        let out = { ...cat, note: `${baseCatalog.note || ''}${nExt ? `;另有擴充 ${nExt} 筆(本專案之 rsi 所提、主控審定; 見 ${rel(rsi.paths.govProposalsMd)})` : ''}`, layers: cat.layers, arms }
+        let text = JSON.stringify(out, null, 1)
+        let old = null
+        try {
+            old = fs.readFileSync(fpCatalogOut, 'utf8')
+        }
+        catch (err) {}
+        if (old !== text) {
+            fs.mkdirSync(path.dirname(fpCatalogOut), { recursive: true })
+            writeFileAtomic(fpCatalogOut, text)
+        }
+        return { written: old !== text, nArms: arms.length, nExt, nSelectable: arms.filter((a) => a.selectable === true).length, file: rel(fpCatalogOut) }
+    }
+
+    //writeBoard, 臂看板(rsi/ARMS_BOARD.md): 各可選臂之節點數、最佳 S、階梯、可信度; 未試之臂; 另重寫供 agent 閱讀之生效目錄(arms/catalog.json)
+    let writeBoard = () => {
+        let nodes = rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => rsi.store.getNode(r.id)).filter(Boolean)
+        let L = []
+        L.push('# 臂看板(自動產生;每輪末更新)')
+        L.push('')
+        L.push(`樹上已執行節點 ${nodes.length} 個;階梯分佈 ${JSON.stringify(nodes.reduce((o, n) => {
+            let k = n.score ? n.score.ladder : '?'; o[k] = (o[k] || 0) + 1; return o
+        }, {}))}。臂之機制說明見 \`arms/catalog.json\`。`)
+        L.push('')
+        let vetoedOf = (n) => !!(n.score && n.score.flags && n.score.flags.vetoed)
+        let descOf = (n) => {
+            let h = readJson(path.join(st.records.workDir, n.id, 'harness_full.json'))
+            return h && h.pickMeta && h.pickMeta.desc ? String(h.pickMeta.desc).replace(/\|/g, '/').replace(/\s+/g, ' ').slice(0, 160) : ''
+        }
+        let pBt = `${st.periods.backtest.start.slice(0, 10)} ~ ${st.periods.backtest.end.slice(0, 10)}`
+        L.push('## 節點一覽(未被否決者在前;其內依回測期之 S 由高至低)')
+        L.push('')
+        L.push(`**全部數字皆為回測期(${pBt})之評估結果**(策略庫沒見過之期間;每個決策只憑決策棒以前之資訊)。目標:S 更高且各相位皆為正。S = 0.7 × 等效年化之七相位平均 + 0.3 × 最差相位;階梯 0 ~ 3 見任務書之判準。`)
+        L.push('')
+        L.push('不同選集大小與持倉上限之 S 不能直接比(虛無均隨之變動);判斷挑法有沒有內容請看**超額**(等效年化之七相位平均 − 同劑量虛無均 = 比同樣條件之隨機挑好多少)與 z。虛無 p 於 64 抽之下限為 0.0154。')
+        L.push('')
+        L.push('「同訊號量超額」= 與訊號量相當之隨機選集比;「同活躍度超額」= 與活躍度分層相同之隨機選集比(兩者皆於選集之每隻訊號數偏離全體隨機逾 10% 時才有,「—」表示訊號量與全體隨機相當)。「下單之做空比例」= 做空單 ÷ 全部下單(訓練期之診斷 / 回測期;全體隨機約 0.22 / 0.16):席次之做多比例正常而兩期皆遠高(或遠低)於隨機者,下單流量偏在一側 —— 是兩側活躍度不對稱所致之組成,不是挑選內容。「換種子與同分次序之 S」= 迴圈同時換亂數種子與同分次序(ctx.meta.tie、同一進場棒之訊號先後)重放之 S:含隨機抽取或主鍵大量同分之成品其結果隨之波動,與主分數相差很大者主分數不可靠;「—」= 第一次重放之選集與 S 皆與主分數相同,不依賴兩者。其右一欄 = 正本與各次重放之平均(S;組成對照之超額 / 近期活躍度之組成對照之超額):**判定量會隨抽取而變之成品,以這個平均判內容,不以單抽**。')
+        L.push('')
+        L.push('**「組成對照」= 同側同活躍度虛無**:把選集之每一隻換成同方向、活躍度名次相鄰之隨機一隻。「可重現」= 該隨機替換之等效年化 ÷ 成品之等效年化:接近 100% 表示成品之績效來自「方向 × 活躍度」之組成,不是挑中了哪幾隻(0% = 組成是逆風)。**「幾何對照」**再匹配該側內之止盈 / 止損三等分(只供判讀、不入階梯)。**有無挑選內容,以這兩欄之超額與 p 判讀**;標「*」者其每隻訊號數與做多比例皆與全體隨機相近(組成對照不入階梯 1)。')
+        L.push('')
+        //擴充診斷自帶之看板值(規則 R-REC-21): 各診斷於回傳物件帶 board / boardLabel 者列於「擴充診斷之看板值」一欄(「診斷名 值」; 多個以分號相隔); 欄名之意義列於表前
+        let extCellsOf = (n) => extSurfaceOf(n.raw && n.raw.metrics).cells
+        let extLabels = new Map()
+        for (let n of nodes) {
+            for (let c of extCellsOf(n)) {
+                extLabels.set(c.name, c.label)
+            }
+        }
+        if (extLabels.size) {
+            L.push(`「擴充診斷之看板值」= 共用工具區之擴充診斷(\`metrics/\`)自帶之摘要值,格式「診斷名 值」:${Array.from(extLabels.entries()).map(([k, v]) => `\`${k}\` = ${v}`).join(';')}。「—」= 該節點之完整評估早於該診斷(或該診斷未帶看板值);判讀方式見各診斷之檔頭。`)
+            L.push('')
+        }
+        //擴充診斷自述「組成對照不是挑選內容之量」者(規則 R-REC-22): 組成對照一欄標「※」, 理由列於表前
+        let ncOf = (n) => extSurfaceOf(n.raw && n.raw.metrics).notContent
+        let ncRows = nodes.filter((n) => ncOf(n).length)
+        if (ncRows.length) {
+            L.push(`組成對照一欄標「※」者:擴充診斷自述其**組成對照不是挑選內容之量**(搜尋地圖不計入「有內容」與量尺之「挑選內容」;該診斷之數值見「擴充診斷之看板值」)—— ${ncRows.map((n) => `\`${n.id.slice(0, 8)}\`(${ncOf(n).map((x) => `${x.name}: ${x.text}`).join(';')})`).join(';')}。`)
+            L.push('')
+        }
+        L.push('| 節點 | 臂 | 起點 | S | 最差相位 | 七相位平均 | 階梯 | 否決 | 虛無均 | 超額 | z | 虛無 p | 同訊號量超額 / p | 同活躍度超額 / p | 組成對照之超額 / p / 可重現 | 幾何對照之超額 / p | 換種子與同分次序之 S | 正本與重放之 S 之均;超額之均(組成對照 / 近期活躍度版) | 擴充診斷之看板值 | 每隻訊號數 | 做多比例 | 下單之做空比例(訓練期 / 回測期) | 月均單 | 最大持倉 | 選集大小 | 可信度 | 輪 | 成品之機制(自述) |')
+        L.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+        let rank = (n) => [vetoedOf(n) ? 1 : 0, -(n.score ? n.score.S : -1e9)]
+        //正本與各次重放之平均(規則 R-EV-24): S、組成對照之超額、近期活躍度之組成對照之超額; 無重放(結果不依賴種子與同分次序)者即正本
+        let avgOf = (n) => {
+            let m = n.raw && n.raw.metrics
+            let rp = n.raw && Array.isArray(n.raw.replays) ? n.raw.replays : []
+            if (!m || !n.score || rp.length === 0) {
+                return '—'
+            }
+            let mean = (xs) => {
+                let v = xs.filter((x) => typeof x === 'number'); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : '—'
+            }
+            let r0 = m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null
+            return `${mean([n.score.S, ...rp.map((x) => x.S)])};${mean([m.nullSideAct ? m.nullSideAct.excess : null, ...rp.map((x) => x.comp)])} / ${mean([r0, ...rp.map((x) => x.recent)])}`
+        }
+        let sorted = nodes.slice().sort((a, b) => {
+            let ra = rank(a); let rb = rank(b); return (ra[0] - rb[0]) || (ra[1] - rb[1])
+        })
+        let f1 = (x) => (typeof x === 'number' ? x.toFixed(1) : '')
+        for (let n of sorted) {
+            let m = n.raw && n.raw.metrics
+            let nu = m && m.null
+            let sd = n.raw && Array.isArray(n.raw.seedS) && n.raw.seedS.length ? n.raw.seedS.map((v) => f1(v)).join(' / ') : '—'
+            L.push(`| \`${n.id}\` | ${armsLabel(n)} | ${n.spec.base ? String(n.spec.base).slice(0, 8) : '無'} | **${n.score ? n.score.S : ''}** | ${m ? f1(m.op.eqYr.min) : ''} | ${m ? f1(m.op.eqYr.mean) : ''} | ${n.score ? n.score.ladder : ''} | ${vetoedOf(n) ? '是' : '否'} | ${nu ? f1(nu.mean) : ''} | ${nu ? f1(nu.excess) : ''} | ${nu ? f1(nu.z) : ''} | ${nu ? nu.p : ''} | ${m && m.nullVol ? `${f1(m.nullVol.excess)} / ${m.nullVol.p}` : '—'} | ${m && m.nullAct ? `${f1(m.nullAct.excess)} / ${m.nullAct.p}` : '—'} | ${m && m.nullSideAct ? `${f1(m.nullSideAct.excess)} / ${m.nullSideAct.p} / ${typeof m.nullSideAct.share === 'number' ? `${Math.round(m.nullSideAct.share * 100)}%` : '—'}${m.nullSideAct.triggered === false ? ' *' : ''}${ncOf(n).length ? ' ※' : ''}` : '—'} | ${m && m.nullSideGeo ? `${f1(m.nullSideGeo.excess)} / ${m.nullSideGeo.p}` : '—'} | ${sd} | ${avgOf(n)} | ${extCellsOf(n).map((c) => `${c.name} ${c.value}`).join(';') || '—'} | ${m && m.sel && typeof m.sel.sigPerPick === 'number' ? m.sel.sigPerPick.toFixed(2) : ''} |${m && m.sel && typeof m.sel.longRatio === 'number' ? m.sel.longRatio.toFixed(2) : ''} | ${n.raw && n.raw.train && typeof n.raw.train.shortShare === 'number' && shortShareOf(m) !== null ? `${n.raw.train.shortShare.toFixed(2)} / ${shortShareOf(m).toFixed(2)}` : '—'} | ${m ? m.op.monthlyOrders.mean.toFixed(0) : ''} | ${m ? m.op.peakHold.max : ''} | ${m && m.sel ? f1(m.sel.sizeMean) : ''} | ${(n.evidence && n.evidence.trust) || '未審'} | ${roundName(n.round)} | ${descOf(n)} |`)
+        }
+        L.push('')
+        L.push('## 各可選臂')
+        L.push('')
+        //「含此臂之節點」= 指派到此臂者(已試); 「其中交付版未作用」= 試過後於交付版關閉或未實現者; **最佳 S / 最佳超額只計此臂於交付版作用中之節點**(規則 R-REC-20):
+        //  未作用之節點其分數是其餘各臂之成績, 不是此臂之成績
+        L.push('「含此臂之節點」= 指派到此臂之節點(已試);「其中交付版未作用」= 試過後於交付版關閉、或交付版未實現此臂者(節點一覽之「臂」欄標「未作用」)。**最佳 S 與最佳超額只計此臂於交付版作用中之節點** —— 未作用者之分數是其餘各臂之成績。臂之定義經修訂後,原節點依新定義不屬該臂者(節點一覽標「依修訂後之定義不屬此臂」)不算試過:該臂若無其他節點,列於表末之「未試之可選臂」。')
+        L.push('')
+        L.push('| 臂 | 層 | 名稱 | 含此臂之節點 | 其中交付版未作用 | 回測期最佳 S | 回測期最佳超額 |')
+        L.push('|---|---|---|---|---|---|---|')
+        let untried = []
+        for (let a of selectable) {
+            let ns = nodes.filter((n) => n.spec.arms.includes(a.id))
+            if (!ns.some((n) => triedArmsOf(n).includes(a.id))) {
+                untried.push(a.id)
+            }
+            let act = ns.filter((n) => !inactiveArmsOf(n).includes(a.id))
+            let ex = act.map((n) => (n.raw && n.raw.metrics && n.raw.metrics.null ? n.raw.metrics.null.excess : null)).filter((v) => typeof v === 'number')
+            let ss = act.filter((n) => n.score && !vetoedOf(n)).map((n) => n.score.S)
+            L.push(`| ${a.id} | ${a.layer} | ${a.title} | ${ns.length} | ${ns.length - act.length || '—'} | ${ss.length ? Math.max(...ss).toFixed(1) : '—'} | ${ex.length ? Math.max(...ex).toFixed(1) : '—'} |`)
+        }
+        L.push('')
+        L.push(`未試之可選臂(${untried.length}):${untried.join('、') || '無'}`)
+        L.push('')
+        fs.writeFileSync(path.join(st.rsi.root, 'ARMS_BOARD.md'), L.join('\n'), 'utf8')
+        try {
+            writeCatalogFile()
+        }
+        catch (err) {
+            log(`${rel(fpCatalogOut)} 產生失敗: ${String((err && err.message) || err).slice(0, 200)}`)
+        }
+        try {
+            writeSearchMap()
+        }
+        catch (err) {
+            log(`搜尋地圖產生失敗: ${String((err && err.message) || err).slice(0, 200)}`)
+        }
+        return { nNodes: nodes.length, untried: untried.length }
+    }
+
+    //writeSearchMap, 搜尋地圖(rsi/SEARCH_MAP.md; 自動產生, 隨看板於做夢前與輪末更新; 規則 R-REC-14):
+    //  讓做夢(與監控)一眼看出「整體搜尋」之形狀 —— 逐輪之趨勢、各層之覆蓋、譜系(起點鏈)、集中度之機械指標; 供做夢之整體研判(synthesis.overview)作依據
+    //  「有挑選內容」之機械判準: 組成對照(同側同活躍度虛無)之超額 > 0、p ≤ 階梯 1 之門檻, 且組成可重現之比例 < 0.8(做夢任務書「審組成」之判準)
+    //  機制家族之歸類(哪些成品押同一種結構)無法機械判定, 由做夢為之
+    let writeSearchMap = () => {
+        let nodes = rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => rsi.store.getNode(r.id)).filter(Boolean)
+        let pMax = (st.score && st.score.ladder1 && st.score.ladder1.nullP) || 0.05
+        let compOf = (n) => (n.raw && n.raw.metrics && n.raw.metrics.nullSideAct) || null
+        //ncOf, 擴充診斷自述「此成品之組成對照不是挑選內容之量」者(規則 R-REC-22): 不計入「有內容」與量尺之「挑選內容」, 譜系另註理由
+        //  (例: 執行規則非中性且本身帶來大增益之成品, 其組成對照共用該規則 ⇒ 超額含執行層之增益; 判準由診斷自述, 迴圈不寫死哪一個診斷)
+        let ncOf = (n) => extSurfaceOf(n.raw && n.raw.metrics).notContent
+        let hasContent = (n) => {
+            let c = compOf(n); return !!c && typeof c.excess === 'number' && c.excess > 0 && typeof c.p === 'number' && c.p <= pMax && !(typeof c.share === 'number' && c.share >= 0.8) && ncOf(n).length === 0
+        }
+        let trustOf = (n) => (n.evidence && n.evidence.trust) || null
+        let vetoedOf = (n) => !!(n.score && n.score.flags && n.score.flags.vetoed)
+        let sOf = (n) => (n.score && typeof n.score.S === 'number' ? n.score.S : null)
+        let f1 = (x) => (typeof x === 'number' ? x.toFixed(1) : '—')
+        let pct = (a, b) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '—')
+        let layersOf = (n) => [...new Set(n.spec.arms.map((a) => (armById.get(a) || {}).layer || '?'))]
+        //activeLayersOf, 節點於交付版作用中之臂所屬之層(規則 R-REC-20): 各層「有內容者」與其最高 S 只計此層有作用中之臂者
+        let activeLayersOf = (n) => [...new Set(activeArmsOf(n).map((a) => (armById.get(a) || {}).layer || '?'))]
+        let typeOfNode = (n) => {
+            let d = records.getNodeDoc(n.id); return (d && d.task && d.task.type) || 'explore'
+        }
+        let rounds = [...new Set(nodes.map((n) => n.round))].filter((r) => Number.isInteger(r)).sort((a, b) => a - b)
+        let byId = new Map(nodes.map((n) => [n.id, n]))
+        let dreams = new Map(records.listDreamDocs().map((d) => [d.round, d]))
+        let best = (xs) => xs.filter((n) => sOf(n) !== null).sort((a, b) => sOf(b) - sOf(a))[0] || null
+        let tag = (n) => (n ? `${f1(sOf(n))}(\`${n.id.slice(0, 8)}\`)` : '—')
+        //contentOf, 挑選內容之超額: 選集之每隻訊號數為全體隨機之 2 倍以上者用近期活躍度版之組成對照(擴充診斷 nullRecentAct), 其餘用內建之組成對照;
+        //  取正本與各次重放之平均(無重放者即正本); 回 { v, kind, n } 或 null
+        let contentOf = (n) => {
+            let m = n.raw && n.raw.metrics
+            if (!m || ncOf(n).length) {
+                return null
+            }
+            let rp = Array.isArray(n.raw.replays) ? n.raw.replays : []
+            let active = !!(m.sel && m.null && typeof m.sel.sigPerPick === 'number' && typeof m.null.sigPerPick === 'number' && m.null.sigPerPick > 0 && m.sel.sigPerPick >= 2 * m.null.sigPerPick)
+            let r0 = m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null
+            let useRecent = active && typeof r0 === 'number'
+            let xs = [useRecent ? r0 : (m.nullSideAct ? m.nullSideAct.excess : null), ...rp.map((x) => (useRecent ? x.recent : x.comp))].filter((v) => typeof v === 'number')
+            return xs.length ? { v: xs.reduce((a, b) => a + b, 0) / xs.length, kind: useRecent ? '近期活躍度版' : '內建組成對照', n: xs.length } : null
+        }
+        let L = []
+        L.push('# 搜尋地圖(自動產生;隨看板更新)')
+        L.push('')
+        L.push(`樹上已執行節點 ${nodes.length} 個、${rounds.length} 輪。本檔只列**可機械計算**之量,供判斷整體搜尋是否過於集中或發散、進度是否停滯、是否卡在局部最佳點;「哪些成品押同一種結構」(機制家族)須由做夢歸類。`)
+        L.push('')
+        L.push(`**「有內容」**= 組成對照(同側同活躍度虛無)之超額 > 0、p ≤ ${pMax},且組成可重現之比例 < 80%(扣掉「方向 × 活躍度」後仍贏過隨機);未被否決。擴充診斷自述「組成對照不是挑選內容之量」之成品(例:執行規則非中性且本身帶來大增益者,其組成對照共用該規則)不計入,譜系於其組成對照後註明理由。**「可信」**= 做夢審計為 trusted。`)
+        L.push('')
+        L.push('## 1. 逐輪趨勢')
+        L.push('')
+        L.push('**進度之量尺 = 「有內容且可信」者之最高者**,列其 S / 最差相位 / 七相位平均 / 對組成對照之超額 / 組成之水準(組成對照之均;S ≈ 組成之水準 + 挑選內容,判進度以超額為主)。**「挑選內容」= 超額之均**:選集之每隻訊號數為全體隨機之 2 倍以上者用近期活躍度版之組成對照,其餘用內建者,取正本與各次重放之平均;挑選內容最高者不等於 S 最高者時兩者並列。「本輪最高 S」含組成,不作量尺。')
+        L.push('')
+        L.push('| 輪 | 節點(探索 / 驗證) | 新試之臂 | 本輪最高 S(含組成) | 量尺:截至該輪「有內容且可信」之最高者(S / 最差相位 / 七相位平均 / 超額 / 組成之水準) | 截至該輪「有內容」之最高 S(含部分可信與未審) | 做夢之方向(向內 / 向外;探索中押新家族者) | 前次方向之回顧(成立 / 不成立 / 其他) | 整體研判(集中度 / 進度 / 局部最佳點之風險) |')
+        L.push('|---|---|---|---|---|---|---|---|---|')
+        let seenArms = new Set()
+        for (let r of rounds) {
+            let ns = nodes.filter((n) => n.round === r)
+            let upTo = nodes.filter((n) => n.round <= r && !vetoedOf(n) && trustOf(n) !== 'untrusted')
+            let nV = ns.filter((n) => typeOfNode(n) === 'verify').length
+            let newArms = [...new Set(ns.flatMap((n) => n.spec.arms))].filter((a) => !seenArms.has(a))
+            for (let a of ns.flatMap((n) => n.spec.arms)) {
+                seenArms.add(a)
+            }
+            let d = dreams.get(r)
+            let dirs = ((d && d.guidance && d.guidance.directions) || []).filter((x) => x && Array.isArray(x.arms))
+            let nOut = dirs.filter((x) => x.type !== 'verify' && !x.base && (x.newFamily === true || x.arms.some((a) => !seenArms.has(a)))).length
+            let pd = d && d.harness && d.harness.tally && d.harness.tally.prevDirections
+            let ov = d && d.harness && d.harness.tally && d.harness.tally.overview
+            let lab = (v) => OVERVIEW_LABELS[v] || '—'
+            let cand = upTo.filter((n) => hasContent(n) && trustOf(n) === 'trusted')
+            let top = best(cand)
+            let gauge = '—'
+            if (top) {
+                let m = top.raw.metrics
+                let c = compOf(top)
+                let ct = contentOf(top)
+                gauge = `\`${top.id.slice(0, 8)}\`:${f1(sOf(top))} / ${f1(m.op.eqYr.min)} / ${f1(m.op.eqYr.mean)} / ${f1(c.excess)} / ${f1(c.mean)}${ct ? `;挑選內容 ${f1(ct.v)}(${ct.kind};${ct.n} 抽之均)` : ''}`
+                //挑選內容(超額之均)最高者不等於 S 最高者時並列(S 之升幅可能只是組成之水準)
+                let topC = cand.map((n) => ({ n, c: contentOf(n) })).filter((x) => x.c).sort((a, b) => b.c.v - a.c.v)[0]
+                if (topC && topC.n.id !== top.id) {
+                    gauge += `;**挑選內容最高** \`${topC.n.id.slice(0, 8)}\`:${f1(topC.c.v)}(${topC.c.kind};${topC.c.n} 抽之均;S ${f1(sOf(topC.n))})`
+                }
+            }
+            let exps = dirs.filter((x) => x.type !== 'verify')
+            let hasFam = dirs.some((x) => typeof x.newFamily === 'boolean')
+            L.push(`| ${roundName(r)} | ${ns.length}(${ns.length - nV} / ${nV}) | ${newArms.length} | ${tag(best(ns))} | ${gauge} | ${tag(best(upTo.filter(hasContent)))} | ${d ? `${dirs.length - nOut} / ${nOut};${hasFam ? `${exps.filter((x) => x.newFamily === true).length} / ${exps.length}` : '未標'}` : '—'} | ${pd && pd.total ? `${pd.confirmed || 0} / ${pd.refuted || 0} / ${pd.total - (pd.confirmed || 0) - (pd.refuted || 0)}` : '—'} | ${ov ? `${lab(ov.coverage)} / ${lab(ov.progress)} / ${lab(ov.localOptimum)}` : '—'} |`)
+        }
+        //量尺之子集(規則 R-REC-27): 擴充診斷自述 subset(子集之名稱)之成品, 依子集另列其內「有內容且可信」之最高者 —— 與上表之量尺並列、不取代
+        //  子集之定義(例: 時效 ≥ 15)由診斷自述, 迴圈不寫死哪一個診斷; 另列該診斷之覆蓋(幾個候選有此診斷之值), 無值者不屬任何子集
+        {
+            let cand = nodes.filter((n) => !vetoedOf(n) && hasContent(n) && trustOf(n) === 'trusted')
+            let groups = new Map()
+            for (let n of cand) {
+                for (let s of extSurfaceOf(n.raw && n.raw.metrics).subsets) {
+                    let k = `${s.name}\u0000${s.label}`
+                    if (!groups.has(k)) {
+                        groups.set(k, { name: s.name, label: s.label, ns: [] })
+                    }
+                    groups.get(k).ns.push(n)
+                }
+            }
+            if (groups.size) {
+                L.push('')
+                L.push(`**量尺之子集**(擴充診斷自述;與上表之量尺**並列、不取代**):「有內容且可信」之 ${cand.length} 個節點中,屬於各子集者之最高者 ——`)
+                L.push('')
+                for (let g of [...groups.values()].sort((a, b) => a.name.localeCompare(b.name) || a.label.localeCompare(b.label))) {
+                    let nHas = cand.filter((n) => {
+                        let e = n.raw && n.raw.metrics && n.raw.metrics.ext && n.raw.metrics.ext[g.name]; return !!e && typeof e === 'object' && !e.error
+                    }).length
+                    let top = best(g.ns)
+                    let topC = g.ns.map((n) => ({ n, c: contentOf(n) })).filter((x) => x.c).sort((a, b) => b.c.v - a.c.v)[0]
+                    let ct = top ? contentOf(top) : null
+                    L.push(`- 「${g.label}」(擴充診斷 \`${g.name}\`;${nHas} 個有此診斷之值、其中 ${g.ns.length} 個屬此子集):S 最高 ${top ? `\`${top.id.slice(0, 8)}\` ${f1(sOf(top))}(最差相位 ${f1(top.raw.metrics.op.eqYr.min)}${ct ? `;挑選內容 ${f1(ct.v)}` : ''})` : '—'}${topC && top && topC.n.id !== top.id ? `;挑選內容最高 \`${topC.n.id.slice(0, 8)}\` ${f1(topC.c.v)}(S ${f1(sOf(topC.n))})` : ''}`)
+                }
+            }
+        }
+        L.push('')
+        L.push('## 2. 各層之覆蓋')
+        L.push('')
+        L.push('「已試之臂」「含此層之節點」依指派之臂計(試過後於交付版關閉者也算試過);**「其中有內容者」與其最高 S 只計此層之臂於交付版作用中之節點**(未作用之臂見看板之節點一覽)。')
+        L.push('')
+        L.push('| 層 | 可選臂 | 已試之臂 | 含此層之節點 | 其中最近 2 輪 | 其中有內容者 | 有內容者之最高 S | 未試之臂 |')
+        L.push('|---|---|---|---|---|---|---|---|')
+        let last2 = rounds.slice(-2)
+        let tried = new Set(nodes.flatMap((n) => triedArmsOf(n)))
+        let layerIds = [...new Set(selectable.map((a) => a.layer))].sort()
+        for (let ly of layerIds) {
+            let arms = selectable.filter((a) => a.layer === ly)
+            let ns = nodes.filter((n) => layersOf(n).includes(ly))
+            let cs = ns.filter((n) => activeLayersOf(n).includes(ly) && hasContent(n) && !vetoedOf(n) && trustOf(n) !== 'untrusted')
+            let un = arms.filter((a) => !tried.has(a.id)).map((a) => a.id)
+            L.push(`| ${ly} ${catalog.layers[ly] || ''} | ${arms.length} | ${arms.length - un.length} | ${ns.length} | ${ns.filter((n) => last2.includes(n.round)).length} | ${cs.length} | ${tag(best(cs))} | ${un.join('、') || '—'} |`)
+        }
+        L.push('')
+        L.push('## 3. 譜系(起點鏈;縮排 = 以上一層為起點)')
+        L.push('')
+        //機制家族: 取最近一份有歸類之做夢文件(synthesis.overview.families); 節點 id 以完整或前綴比對
+        let famDoc = records.listDreamDocs().filter((d) => d.synthesis && d.synthesis.overview && Array.isArray(d.synthesis.overview.families) && d.synthesis.overview.families.length).sort((a, b) => b.round - a.round)[0] || null
+        let fams = famDoc ? famDoc.synthesis.overview.families : []
+        let famOf = (n) => {
+            let f = fams.find((x) => (x.nodes || []).some((id) => typeof id === 'string' && id.length >= 8 && n.id.startsWith(id))); return f ? f.name : null
+        }
+        //成品用到之 ctx 介面(靜態掃描 pick.mjs; 略去通用者): 資訊源之機械線索, 供家族歸類
+        let generic = new Set(['n', 'bar', 'k', 'day', 'state', 'meta.n', 'meta.tie', 'meta.barsPerDay'])
+        let ctxUse = (n) => {
+            try {
+                let src = fs.readFileSync(path.join(st.records.workDir, n.id, 'pick.mjs'), 'utf8')
+                return [...new Set([...src.matchAll(/\bctx\.(meta\.)?([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => `${m[1] || ''}${m[2]}`))].filter((x) => !generic.has(x) && x !== 'meta').sort().slice(0, 10)
+            }
+            catch (err) {
+                return []
+            }
+        }
+        let descOf = (n) => {
+            let h = readJson(path.join(st.records.workDir, n.id, 'harness_full.json'))
+            return h && h.pickMeta && h.pickMeta.desc ? String(h.pickMeta.desc).replace(/\|/g, '/').replace(/\s+/g, ' ').slice(0, 90) : ''
+        }
+        L.push(`各列:臂(輪;類型;S;組成對照之超額 / p;可信度)〔機制家族${famDoc ? `:做夢 ${roundName(famDoc.round)} 之歸類` : ':尚未歸類'}〕;有起點者另列**相對起點之差**(ΔS、Δ超額);「用到」= 成品所用之 \`ctx\` 介面(資訊源之線索);末為成品之自述。**譜系不等於機制家族**:不同譜系可押同一種結構。`)
+        L.push('')
+        let kids = new Map()
+        let roots = []
+        for (let n of nodes) {
+            if (n.spec.base && byId.has(n.spec.base)) {
+                kids.set(n.spec.base, [...(kids.get(n.spec.base) || []), n])
+            }
+            else {
+                roots.push(n)
+            }
+        }
+        let sizeOf = (n) => 1 + (kids.get(n.id) || []).reduce((s, k) => s + sizeOf(k), 0)
+        let depthOf = (n) => 1 + Math.max(0, ...(kids.get(n.id) || []).map(depthOf))
+        let rootOf = (n) => (n.spec.base && byId.has(n.spec.base) ? rootOf(byId.get(n.spec.base)) : n)
+        let line = (n, lv) => {
+            let c = compOf(n)
+            let par = n.spec.base && byId.has(n.spec.base) ? byId.get(n.spec.base) : null
+            let cp = par ? compOf(par) : null
+            let sg = (x) => (typeof x === 'number' ? `${x >= 0 ? '+' : ''}${x.toFixed(1)}` : '—')
+            let delta = par ? `;相對起點 ΔS ${sg(sOf(n) !== null && sOf(par) !== null ? sOf(n) - sOf(par) : null)}、Δ超額 ${sg(c && cp && typeof c.excess === 'number' && typeof cp.excess === 'number' ? c.excess - cp.excess : null)}` : ''
+            let use = ctxUse(n)
+            let ds = descOf(n)
+            //擴充診斷自帶之看板值(規則 R-REC-21; 欄名之意義見看板之節點一覽)
+            let xs = extSurfaceOf(n.raw && n.raw.metrics).cells.map((x) => `${x.name} ${x.value}`).join('、')
+            L.push(`${'  '.repeat(lv)}- \`${n.id.slice(0, 8)}\` ${armsLabel(n)}(${roundName(n.round)};${typeOfNode(n) === 'verify' ? '驗證' : '探索'};S ${f1(sOf(n))};組成對照 ${c ? `${f1(c.excess)} / p ${c.p}` : '—'}${ncOf(n).length ? `(不計為挑選內容 —— ${ncOf(n).map((x) => `${x.name}: ${x.text}`).join(';')})` : ''};${trustOf(n) || '未審'}${vetoedOf(n) ? ';否決' : ''}${hasContent(n) ? ';**有內容**' : ''}${delta}${xs ? `;擴充診斷 ${xs}` : ''})〔${famOf(n) || '未歸類'}〕${use.length ? `;用到 ${use.join('、')}` : ''}${ds ? `;${ds}` : ''}`)
+            for (let k of (kids.get(n.id) || []).slice().sort((a, b) => a.round - b.round)) {
+                line(k, lv + 1)
+            }
+        }
+        for (let r of roots.slice().sort((a, b) => (sizeOf(b) - sizeOf(a)) || (a.round - b.round))) {
+            line(r, 0)
+        }
+        L.push('')
+        L.push('## 4. 集中度之機械指標')
+        L.push('')
+        let recent = nodes.filter((n) => last2.includes(n.round))
+        let biggest = roots.slice().sort((a, b) => sizeOf(b) - sizeOf(a))[0] || null
+        let contentNodes = nodes.filter((n) => hasContent(n) && !vetoedOf(n) && trustOf(n) !== 'untrusted')
+        let contentRoots = [...new Set(contentNodes.map((n) => rootOf(n).id))]
+        L.push(`- 最近 2 輪(${last2.map(roundName).join('、') || '—'})之 ${recent.length} 個節點,含各層者之比例:${layerIds.map((ly) => `${ly} ${pct(recent.filter((n) => layersOf(n).includes(ly)).length, recent.length)}`).join('、')};其中有起點者 ${pct(recent.filter((n) => n.spec.base).length, recent.length)}。`)
+        if (fams.length) {
+            let rows = fams.map((f) => {
+                let ms = nodes.filter((n) => famOf(n) === f.name); return `${f.name} ${ms.length} 個(有內容 ${ms.filter((n) => contentNodes.includes(n)).length})`
+            })
+            let none = nodes.filter((n) => !famOf(n))
+            L.push(`- **機制家族**(做夢 ${roundName(famDoc.round)} 之歸類):${rows.join(';')}${none.length ? `;未歸類 ${none.length} 個(${none.map((n) => `\`${n.id.slice(0, 8)}\``).join('、')})` : ''}。有內容之 ${contentNodes.length} 個節點分屬 ${new Set(contentNodes.map((n) => famOf(n) || `未歸類:${n.id}`)).size} 個家族。`)
+        }
+        else {
+            L.push('- **機制家族**:尚未歸類(由做夢於整體研判之 `families` 歸類後,本檔自動標示)。')
+        }
+        L.push(`- 譜系(不等於機制家族):根 ${roots.length} 個;最大之譜系(根 \`${biggest ? biggest.id.slice(0, 8) : '—'}\`)含 ${biggest ? sizeOf(biggest) : 0} 個節點(占全部之 ${pct(biggest ? sizeOf(biggest) : 0, nodes.length)})、最深 ${biggest ? Math.max(...roots.map(depthOf)) : 0} 層。`)
+        L.push(`- 有內容之節點 ${contentNodes.length} 個,分屬 ${contentRoots.length} 個譜系(根:${contentRoots.map((id) => `\`${id.slice(0, 8)}\``).join('、') || '—'});含之層:${[...new Set(contentNodes.flatMap(layersOf))].sort().join('、') || '—'}。`)
+        L.push(`- 已試之可選臂 ${selectable.filter((a) => tried.has(a.id)).length} / ${selectable.length};完全未試之層:${layerIds.filter((ly) => selectable.filter((a) => a.layer === ly).every((a) => !tried.has(a.id))).join('、') || '無'}。`)
+        let props = rsi.store.listFrontier().filter((f) => f && f.status === 'proposed' && f.spec && Array.isArray(f.spec.arms))
+        if (props.length) {
+            let newFam = (n) => {
+                let d = directionOf(n.spec); return !!d && d.type !== 'verify' && d.newFamily === true
+            }
+            let out = props.filter((n) => !n.spec.base && (n.spec.arms.some((a) => !tried.has(a)) || newFam(n)))
+            L.push(`- 前緣(尚未執行之提案)${props.length} 條:向內 ${props.length - out.length}、向外 ${out.length}(${props.map((n) => `${n.spec.arms.join('+')}${n.spec.base ? `←${String(n.spec.base).slice(0, 8)}` : ''}`).join(';')})。`)
+        }
+        L.push('')
+        fs.writeFileSync(path.join(st.rsi.root, 'SEARCH_MAP.md'), L.join('\n'), 'utf8')
+        return { nNodes: nodes.length, nContent: contentNodes.length, nRoots: roots.length }
+    }
+
+    //臂目錄之提案帳(規則 R-ARM-1; 引擎之治理 rsi.governance): 節點與做夢之提案於輪末記入(propose), 由主控審定(tools/armDecide.mjs → decide);
+    //  做夢每輪讀引擎所渲染之 <狀態根>/governance/PROPOSALS.md(每次寫入提案帳時重產), 已在帳上者不重提
+    let validProposals = (xs) => (Array.isArray(xs) ? xs : []).filter((p) => p && typeof p === 'object' && ARM_KINDS.includes(p.kind) && typeof p.mechanism === 'string' && p.mechanism.trim())
+
+    //專案回調(事件): 做夢後之專案文件檢查、看板更新; 第三方專案可換成自己的回調
+    let sgudFiles = ['sgud/state/state.md', 'sgud/exp/experience.md']
+    let mtimes = () => Object.fromEntries(sgudFiles.map((f) => {
+        try {
+            return [f, fs.statSync(path.join(FD_ROOT, f)).mtimeMs]
+        }
+        catch (err) {
+            return [f, 0]
+        }
+    }))
+    let dreamExtra = [
+        '2. **更新專案之指引文件**(本專案之累積經驗;只改下列檔,並把改了什麼列入 `dream.json` 之 `docsUpdated`):',
+        '   - `sgud/state/state.md`:只改 **§2「rsi 現況」**(覆寫該節,不追加流水帳;其餘各節由迴圈維護者更新):已跑輪數、樹上節點數與階梯分佈、**目前回測期 S 最高且可信之成品**(id、臂、S、七相位平均、最差相位、為正之相位數、對隨機挑之超額與 p、換亂數種子與同分次序之 S、可信度)、**整體研判之結論**(搜尋之集中度、進度、卡在局部最佳點之風險與依據;同 `synthesis.overview`)、各線之現況、已試與未試之臂、前緣、共用工具區之內容、已知問題。',
+        '   - `sgud/exp/experience.md`:新增本輪之**經驗**條目(條號續編;每條一個可重複使用之教訓:對節點 agent 寫挑選模組 / 做實驗 / 填文件之建議、對審計之建議、對評估器之觀察;附依據之節點 id 與數字)。對個別機制或臂之提示也寫在這裡;**每條開頭以〔〕標明適用範圍**(臂 id、層,或〔通用〕),日後之節點才找得到與自己之臂相關者。',
+        '   - `sgud/proc/guide_dream.md`、`sgud/proc/guide_node.md`:**寫法守則**(由你維護;規則見 §3 之改進項一段)—— 有要增、改、刪之守則時直接改這兩個檔,並在 `docsUpdated` 註明改了什麼;沒有就不動。',
+        '   - `sgud/feedback/feedback.md`:`dream.json` 之**每一筆改進項**(`guidance.improvements`)各新增一列(日期、類別、對象、內容、依據);類別欄寫該筆之類別名 —— 迴圈架構(`loop`)/ 做夢原則(`dream`)/ 節點原則(`node`)/ 共用工具(`tool`)/ 績效判準(`score`)/ 量尺(`validation`)/ 自有套件、全域技能、全域設定(`external`)。主代理依類別處置並另記處置列。**不是改進項者不入回饋檔**(本輪之審計內容寫在做夢文件;對個別節點或臂之提示寫入經驗)。',
+    ].join('\n')
+
+    let arsi = createArsi({
+        records,
+        dispatch,
+        verify,
+        texts,
+        workDir: st.records.workDir,
+        artifactFiles: ['pick.mjs'],
+        gate: inject.gate === null ? null : (typeof inject.gate === 'function' ? inject.gate : (x) => monitor.wait(`${x.role} ${String(x.id).slice(0, 8)}`)),
+        toolbox,
+        log,
+        hooks: {
+            onNodeDone: (doc) => setStatus({ lastNode: { nodeId: doc.nodeId, status: doc.status, S: doc.harness && doc.harness.score ? doc.harness.score.S : null } }),
+        },
+    })
+
+    //afterRound, 輪末: 代理式做夢(審計 → 寫回 → 重做 / 刪除 → 方向入前緣)→ 專案回調
+    domain.hooks.afterRound = async ({ round, nodes }) => {
+        let lines = []
+        let state = getState()
+        let executed = (nodes || []).filter((n) => n.status === 'executed')
+        let failed = (nodes || []).filter((n) => n.status !== 'executed').map((n) => ({ nodeId: n.id, arms: n.spec.arms, error: String((n.notes && (n.notes.error || n.notes.why)) || '').split('\n')[0].slice(0, 160) }))
+        let reaudit = (state.pendingReaudit || []).filter((id) => {
+            let n = rsi.store.getNode(id); return n && n.status === 'executed' && !executed.some((e) => e.id === id)
+        })
+        let nodeIds = [...executed.map((n) => n.id), ...reaudit]
+        if (nodeIds.length === 0) {
+            lines.push('代理式做夢:本輪無可審計之節點,略過')
+            writeBoard()
+            return { lines, dream: null }
+        }
+        setStatus({ round, stage: 'dream', dreamNodes: nodeIds })
+        let before = mtimes()
+        let ctxNodes = nodeIds.map((id) => {
+            let n = rsi.store.getNode(id)
+            let d = records.getNodeDoc(id)
+            return {
+                nodeId: id,
+                arms: n.spec.arms,
+                base: n.spec.base,
+                S: n.score ? n.score.S : null,
+                ladder: n.score ? (n.score.flags && typeof n.score.flags.trainLadder === 'number' ? n.score.flags.trainLadder : n.score.ladder) : null,
+                excess: n.raw && n.raw.metrics && n.raw.metrics.null ? n.raw.metrics.null.excess : null,
+                vetoed: !!(n.score && n.score.flags && n.score.flags.vetoed),
+                worst: n.raw && n.raw.metrics && n.raw.metrics.op ? n.raw.metrics.op.eqYr.min : null,
+                //組成對照(同側同活躍度虛無; 選集之方向或活躍度偏離全體隨機時才有): 超額、p、組成可重現之比例
+                comp: n.raw && n.raw.metrics && n.raw.metrics.nullSideAct ? { excess: n.raw.metrics.nullSideAct.excess, p: n.raw.metrics.nullSideAct.p, share: n.raw.metrics.nullSideAct.share, triggered: n.raw.metrics.nullSideAct.triggered !== false } : null,
+                //幾何對照(同側 × 止盈 / 止損三等分 × 活躍度): 只供判讀
+                geo: n.raw && n.raw.metrics && n.raw.metrics.nullSideGeo ? { excess: n.raw.metrics.nullSideGeo.excess, p: n.raw.metrics.nullSideGeo.p } : null,
+                nEvals: d && d.harness && d.harness.checks && typeof d.harness.checks.nEvals === 'number' ? d.harness.checks.nEvals : null,
+                nFull: d && d.harness && d.harness.checks && typeof d.harness.checks.nFull === 'number' ? d.harness.checks.nFull : null,
+                nFullSel: d && d.harness && d.harness.checks && typeof d.harness.checks.nFullSel === 'number' ? d.harness.checks.nFullSel : null,
+                claimedS: d && d.results && d.results.claimed && typeof d.results.claimed.S === 'number' ? d.results.claimed.S : null,
+                //成品每次完整評估之挑選耗時(秒; 迴圈重跑所量): 節點之評估次數與一輪之時長受其限制; 偏高者多出自共用片段之計算量, 由做夢於擴建時改寫
+                pickSec: n.raw && n.raw.metrics && n.raw.metrics.ms && typeof n.raw.metrics.ms.pick === 'number' ? Math.round(n.raw.metrics.ms.pick / 1000) : null,
+                issues: (d && d.harness && d.harness.checks && d.harness.checks.issues) || [],
+                from: directionOf(n.spec),
+                type: (d && d.task && d.task.type) || 'explore',
+                trial: (d && d.task && d.task.trial) || null,
+                shareable: (d && d.code && Array.isArray(d.code.shareable) ? d.code.shareable : []).filter((s) => s && typeof s.file === 'string' && typeof s.what === 'string' && !/^\(/.test(s.file)),
+                armProposals: validProposals(d && d.conclusion && d.conclusion.armProposals),
+                //節點自報之「指派而交付版未作用之臂」(做夢範本之 audits[].inactiveArms 據以預填, 由做夢核對後定案; 規則 R-REC-20)
+                inactiveArms: (d && d.code && Array.isArray(d.code.inactiveArms) ? d.code.inactiveArms : []).filter((a) => n.spec.arms.includes(a)),
+                //節點自判之主張判定(選配; 做夢範本之 prevDirections 據以預填)
+                claimVerdict: d && d.conclusion && CLAIM_VERDICTS.includes(d.conclusion.claimVerdict) ? d.conclusion.claimVerdict : null,
+                claimNote: d && d.conclusion && typeof d.conclusion.claimNote === 'string' ? d.conclusion.claimNote.trim().slice(0, 300) : null,
+                docMd: rel(records.paths.nodeMd(id)),
+                workDir: rel(path.join(st.records.workDir, id)),
+            }
+        })
+        writeBoard()
+        let prevDocs = records.listDreamDocs().filter((d) => d.round < round)
+        let prevDreams = prevDocs.slice(-2).reverse().map((d) => ({ path: rel(records.paths.dreamMd(d.round)), why: `前次做夢文件 ${roundName(d.round)}(其方向是否被本輪驗證或否定,請在 \`synthesis.prevDirections\` 逐條回顧)` }))
+        //前次方向之回顧範圍: 最近一份做夢文件之全部方向 + 本輪節點所出自之(更早之)方向; 預填於範本, 由做夢逐條給判定(做夢品質之量測)
+        let prevDirections = []
+        {
+            let seen = new Set()
+            //帶主張鍵之方向(規則 R-REC-24)另以鍵區分, 並附主張之開頭供做夢辨認: 同臂同起點之數條驗證各自回顧
+            let add = (r, x, ck = null) => {
+                let k = `${r}|${armKey(x.arms)}|${x.base || ''}|${ck || ''}`
+                if (!seen.has(k)) {
+                    seen.add(k)
+                    prevDirections.push({ round: r, arms: x.arms, base: x.base || null, ...(ck ? { claimKey: ck, claim: String(x.claim || '').trim().slice(0, 120) } : {}) })
+                }
+            }
+            let last = prevDocs.slice(-1)[0]
+            for (let [k, x] of ((last && last.guidance && last.guidance.directions) || []).entries()) {
+                if (x && Array.isArray(x.arms)) {
+                    add(last.round, x, claimKeyAt(last, k))
+                }
+            }
+            for (let n of ctxNodes) {
+                if (n.from) {
+                    add(n.from.round, n.from, n.from.claimKey)
+                }
+            }
+        }
+        //共用工具區之摘要與本輪節點自報之可共用輔助(交給做夢統籌擴建)
+        let tbInfo = { ...toolboxInfo(), shareable: ctxNodes.flatMap((n) => n.shareable.map((s) => ({ nodeId: n.nodeId, file: s.file, what: s.what }))) }
+        //臂目錄之提案: 本輪節點所提者列於做夢任務書(由做夢彙整); 提案帳之渲染檔(引擎產生; 尚無提案帳者無此檔, 任務書不列)供做夢讀: 已在帳上者不重提
+        let nodeProposals = ctxNodes.flatMap((n) => n.armProposals.map((p) => ({ ...p, nodeId: n.nodeId })))
+        let ledgerMd = fs.existsSync(rsi.paths.govProposalsMd) ? rel(rsi.paths.govProposalsMd) : null
+        let dr = await arsi.runDream({ round, nodeIds, reworkedIds: reaudit, context: { nodes: ctxNodes, failed, refs: prevDreams, prevDirections, maxDirections: run.nodesPerRound + 2, extra: dreamExtra, toolbox: tbInfo, armProposals: { ledger: ledgerMd, fromNodes: nodeProposals } } })
+        if (!dr.ok) {
+            lines.push(`代理式做夢:**未交付做夢文件**(${dr.doc.agent && dr.doc.agent.error ? dr.doc.agent.error : dr.issues.join(';')});本輪節點維持未審`)
+            setStatus({ stage: 'dream-failed' })
+            return { lines, dream: null, failed: true, errors: dr.issues }
+        }
+        setStatus({ stage: 'apply' })
+        let pending = []
+        let actions = {
+            accept: async (nodeId, audit) => {
+                //inactiveArms: 審計有表示意見(給了陣列, 含空陣列)才記入樹; 未給者沿用節點自報(inactiveArmsOf; 規則 R-REC-20)
+                let an = rsi.store.getNode(nodeId)
+                let off = Array.isArray(audit.inactiveArms) ? audit.inactiveArms.filter((a) => an && an.spec && Array.isArray(an.spec.arms) && an.spec.arms.includes(a)) : null
+                rsi.setEvidence(nodeId, { trust: audit.trust, auditRound: audit.round, auditAction: audit.action, ...(off ? { inactiveArms: off } : {}) }, { ref: rel(records.paths.dreamJson(round)), note: (audit.issues || []).join(';').slice(0, 300) })
+            },
+            remove: async (nodeId, audit) => {
+                rsi.invalidate([nodeId], `做夢 ${roundName(round)} 判刪除:${audit.deleteWhy}`)
+                let moved = records.removeNodeDoc(nodeId, `做夢 ${roundName(round)} 判刪除:${audit.deleteWhy}`)
+                let wd = path.join(st.records.workDir, nodeId)
+                if (fs.existsSync(wd)) {
+                    fs.renameSync(wd, `${wd}_deleted_${Date.now()}`)
+                }
+                log(`節點 ${nodeId.slice(0, 8)} 已刪除(做夢判定):${audit.deleteWhy}`)
+                return { ok: true, moved: moved.length }
+            },
+            rework: async (nodeId, audit) => {
+                let old = rsi.store.getNode(nodeId)
+                setStatus({ stage: 'rework', reworking: nodeId })
+                try {
+                    let { raw } = await arsi.runNode({ nodeId, spec: old.spec, round: old.round, task: taskFor(old.spec, null, { prepare: true }), rework: audit.reworkBrief })
+                    let node = makeNode({ id: nodeId, spec: old.spec, parent: old.parent, round: old.round, origin: old.origin, raw, envHash: envKey, evidence: { ...(old.evidence || {}), trust: null, reworkOf: round, reworkedAt: new Date().toISOString() }, notes: old.notes, children: old.children, createdAt: old.createdAt }, domain)
+                    rsi.store.putNode(node)
+                    pending.push(nodeId)
+                    return { ok: true, S: node.score.S, ladder: node.score.ladder }
+                }
+                catch (err) {
+                    return { ok: false, note: String((err && err.message) || err).slice(0, 300) }
+                }
+                finally {
+                    setStatus({ reworking: null })
+                }
+            },
+            propose: async (d) => proposeDirection(d, round),
+        }
+        let ap = await arsi.applyDream({ doc: dr.doc, actions })
+        setState({ ...state, pendingReaudit: pending })
+        //做夢 agent 之操作稽核(與節點同一套禁區掃描): 結果記入做夢文件之 harness.trace; 觸及禁區者另列於輪次摘要供主代理處置
+        //  做夢 agent 所寫之程式檔內含禁區字樣者只列為待核對(fileNotes): 其自寫之稽核腳本以禁區字樣為搜尋目標(此類為常見之誤報), 工具呼叫之輸入仍照常列為問題
+        let dtr = scanTrace({ workDir: arsi.dreamWorkDir(round), logFile: path.join(arsi.dreamWorkDir(round), 'agent.log'), privateRoot: backtestCfg(st).privateRoot, root: FD_ROOT, writeRoots: [arsi.dreamWorkDir(round), path.join(FD_ROOT, 'sgud'), toolboxDir], fileHits: 'note' })
+        {
+            let dd = records.getDreamDoc(round)
+            dd.harness = { ...(dd.harness || {}), trace: { issues: dtr.issues, note: dtr.note, fileNotes: dtr.fileNotes } }
+            records.putDreamDoc(dd)
+        }
+        if (dtr.issues.length) {
+            log(`做夢 ${roundName(round)} 之操作觸及禁區 ${dtr.issues.length} 項: ${dtr.issues.join(';').slice(0, 400)}`)
+        }
+        let board = writeBoard()
+        //共同儲存「自適應挑選策略」區(規則 R-REC-25): 輪末重產 —— 本輪節點之成品(逐位複本)與迴圈重跑之回測期數字、審計結果入區, 供下一輪之節點與做夢查閱;
+        //  同輪之節點看不到彼此(輪末才產生); 保留期之正負號由主控之檢定另行補入(_holdout.json; 本模組只讀); 產生失敗不中斷輪次
+        try {
+            let ps = await buildPickStore(st)
+            lines.push(`共同儲存區:${ps.n} 個策略(本輪新增或更新 ${ps.copied} 個;尚無保留期正負號者 ${ps.n - ps.holdoutSigned} 個)→ ${rel(ps.dir)}/INDEX.md`)
+        }
+        catch (err) {
+            log(`共同儲存區產生失敗: ${String((err && err.message) || err).slice(0, 200)}`)
+        }
+        let after = mtimes()
+        let sgud = Object.fromEntries(sgudFiles.map((f) => [f, after[f] > before[f]]))
+        let a = ap.applied
+        lines.push(`代理式做夢(${dr.doc.agent.model};${dr.doc.agent.durationSec}s):審計 ${nodeIds.length} 節點 ⇒ 採納 ${a.accepted.length}、重做 ${a.rework.length}(成功 ${a.rework.filter((x) => x.ok).length})、刪除 ${a.deleted.length};方向 ${a.proposals.length} 條(入前緣 ${a.proposals.filter((x) => x.ok).length});做夢文件 ${rel(records.paths.dreamMd(round))}`)
+        lines.push(`專案文件更新:${sgudFiles.map((f) => `${f} ${sgud[f] ? '已更新' : '**未更新**'}`).join(';')}${dr.issues.length ? `;做夢文件之格式問題 ${dr.issues.length} 項:${dr.issues.slice(0, 3).join(';')}` : ''}`)
+        //專案指引文件之自動整理(規則 R-REC-17): 經驗檔、回饋檔逾上限即把較舊者原文搬到同夾之 <名>_<年月日>.md, 主檔留索引(只搬不刪; 於更新時間之核對之後才做)
+        //  上限取 settings.rsi.docLimits = { maxBytes, keepBytes, keepRows }(預設 30000 / 18000 / 14); settings.rsi.docLimits === false 關閉
+        if (st.rsi.docLimits !== false) {
+            let lim = st.rsi.docLimits || {}
+            try {
+                let a1 = archiveExperience({ fp: path.join(FD_ROOT, 'sgud', 'exp', 'experience.md'), maxBytes: lim.maxBytes, keepBytes: lim.keepBytes })
+                let a2 = archiveFeedback({ fp: path.join(FD_ROOT, 'sgud', 'feedback', 'feedback.md'), maxBytes: lim.maxBytes, keepRows: lim.keepRows })
+                let kb = (b) => (b / 1024).toFixed(1)
+                if (a1 || a2) {
+                    lines.push(`專案文件整理(逾上限者把較舊之內容原文搬出,主檔留索引):${[a1 ? `經驗檔 ${kb(a1.before)} → ${kb(a1.after)} KB(第 ${a1.from} ~ ${a1.to} 條 → sgud/exp/${a1.file})` : null, a2 ? `回饋檔 ${kb(a2.before)} → ${kb(a2.after)} KB(${a2.moved} 列 → sgud/feedback/${a2.file})` : null].filter(Boolean).join(';')}`)
+                }
+            }
+            catch (err) {
+                log(`專案文件整理失敗(不影響輪次): ${String((err && err.message) || err).slice(0, 200)}`)
+            }
+        }
+        //寫法守則(做夢自己維護; 規則 R-MON-3): 列兩檔之條目位元組數; 逾上限者標示(任務書只附上限以內之部分)
+        if (st.rsi.guides !== false) {
+            let gb = (g) => {
+                let all = Buffer.byteLength(guideText(FD_ROOT, { ...g, cap: 1e9 }), 'utf8'); return `${all} 位元組${all > g.cap ? `(**逾上限 ${g.cap},超出者未附入任務書**)` : ''}`
+            }
+            lines.push(`寫法守則(做夢維護;原文附於下一輪之任務書):做夢 ${gb(GUIDE.dream)}、節點 ${gb(GUIDE.node)}`)
+        }
+        lines.push(`做夢之操作稽核:${dtr.issues.length ? `**觸及禁區 ${dtr.issues.length} 項**(${dtr.issues.join(';').slice(0, 300)})` : `未觸及禁區${dtr.note ? `(${dtr.note})` : ''}`}${dtr.fileNotes && dtr.fileNotes.length ? `;所寫之程式檔內含禁區字樣 ${dtr.fileNotes.length} 處(待主代理核對是否只是搜尋目標):${dtr.fileNotes.join('、').slice(0, 200)}` : ''}`)
+        //改進項之分類筆數與前次方向之回顧(逐輪比較用: 各類筆數下降 = 該層趨於穩定; 方向之判定 = 做夢品質之量測)
+        let tally = dr.tally || { improvements: { total: 0 }, prevDirections: { total: 0 } }
+        {
+            let im = tally.improvements
+            let pd = tally.prevDirections
+            let missed = prevDirections.length - pd.total
+            lines.push(`改進項 ${im.total} 筆:${IMPROVE_KINDS.filter((k) => im[k]).map((k) => `${IMPROVE_LABELS[k]} ${im[k]}`).join('、') || '無'}${im.unclassified ? `、未分類 ${im.unclassified}` : ''};前次方向之回顧 ${pd.total} / ${prevDirections.length} 條${pd.total ? `(${DIR_VERDICTS.filter((k) => pd[k]).map((k) => `${DIR_LABELS[k]} ${pd[k]}`).join('、')})` : ''}${missed > 0 ? `;**${missed} 條未回顧**` : ''}`)
+        }
+        //擴建(共用工具; 由做夢統籌): 做夢之處置筆數與迴圈之機械檢查結果; 本輪之節點類型與下一輪方向之類型
+        {
+            let ex = tally.expansion || { total: 0 }
+            let tb = dr.toolbox
+            lines.push(`擴建(共用工具;做夢統籌)${ex.total} 項:${EXPAND_DECISIONS.filter((k) => ex[k]).map((k) => `${EXPAND_LABELS[k]} ${ex[k]}`).join('、') || '無'};節點自報可共用 ${tbInfo.shareable.length} 筆;共用工具區${tb ? ` 新增 ${tb.changed.added.length} 檔、修改 ${tb.changed.changed.length} 檔${tb.reverted.length ? `、**還原 ${tb.reverted.length} 檔**(${tb.reverted.map((r) => `${r.rel}:${r.why}`).join(';').slice(0, 300)})` : ''}${tb.issues.length ? `;**問題 ${tb.issues.length} 項**(${tb.issues.join(';').slice(0, 300)})` : ';機械檢查通過'}` : '未檢查'}`)
+            let nV = ctxNodes.filter((n) => n.type === 'verify').length
+            let dirs = ((dr.doc.guidance && dr.doc.guidance.directions) || []).filter((x) => x && Array.isArray(x.arms))
+            //配比(向外探勘 / 向內深掘): 向外 = 探索類、無起點, 且「含至少一個未試之臂(樹上尚無已執行之節點含此臂)」或「做夢自標押新家族(newFamily: true)」; 其餘為向內
+            //  後者之用意: 可選臂全數試過後(新臂一通過即由改掛之方向試), 只以未試之臂定義之向外恆為 0, 押新資訊源之從零探索不被計入
+            let tried = new Set(rsi.store.listIndex().filter((r) => r.status === 'executed').flatMap((r) => {
+                let n = rsi.store.getNode(r.id); return n && n.spec ? triedArmsOf(n) : []
+            }))
+            let nUntried = selectable.filter((a) => !tried.has(a.id)).length
+            let isOut = (x) => x.type !== 'verify' && !x.base && (x.newFamily === true || x.arms.some((a) => armById.has(a) && armById.get(a).selectable === true && !tried.has(a)))
+            let nOut = dirs.filter(isOut).length
+            //無向外之方向(規則 R-REC-26): 「每輪至少 1 條向外」之例外 —— 可選之臂皆已試過, 且做夢該輪以完整評估預先核對之向外候選
+            //  (synthesis.overview.outwardChecked.kinds)達 OUT_CHECK_MIN 種而皆無內容 ⇒ 另列為「向外 0(預先核對皆不成立; n 種)」, 不記為違反; 其餘之「向外 0」照舊標示
+            let nChecked = tally.overview && Number.isInteger(tally.overview.outwardChecked) ? tally.overview.outwardChecked : 0
+            let outNote = outwardNoteOf({ nOut, nDirs: dirs.length, nUntried, nChecked })
+            lines.push(`任務類型:本輪節點 探索 ${ctxNodes.length - nV}、驗證 ${nV};下一輪方向 探索 ${dirs.filter((x) => x.type !== 'verify').length}、驗證 ${dirs.filter((x) => x.type === 'verify').length};配比 向外 ${nOut}、向內 ${dirs.length - nOut}${outNote}`)
+            //整體研判(synthesis.overview; 規則 R-REC-14): 三個判定列入輪末摘要(逐輪比較); 未交者標示; 判定與配比之機械核對 ——
+            //  「過於集中」或「局部最佳點之風險高」而探索類之方向中押新家族者(newFamily: true)不到一半者標示(驗證類不計入; 不否決; 由主控看做夢是否言行一致)
+            //  以臂 / 層定義之「向外」擋不住「換一個臂、仍是同一家族」, 故此處以做夢自標之 newFamily 核對
+            let ov = tally.overview
+            if (tally.hasPlain !== true) {
+                lines.push('白話摘要:**未交**(`synthesis.plain`;給使用者之白話結論)')
+            }
+            if (!ov) {
+                lines.push('整體研判:**未交**(`synthesis.overview`;機制家族之歸類、搜尋之集中度、進度、局部最佳點之風險)')
+            }
+            else {
+                let lab = (v) => OVERVIEW_LABELS[v] || '(不在值域)'
+                let exps = dirs.filter((x) => x.type !== 'verify')
+                let nNew = exps.filter((x) => x.newFamily === true).length
+                let need = (ov.coverage === 'concentrated' || ov.localOptimum === 'high') && exps.length > 0 && nNew * 2 < exps.length
+                lines.push(`整體研判:機制家族 ${ov.nFamilies === null || ov.nFamilies === undefined ? '未歸類' : `${ov.nFamilies} 個`};搜尋之集中度 ${lab(ov.coverage)}、進度 ${lab(ov.progress)}、卡在局部最佳點之風險 ${lab(ov.localOptimum)};探索類方向 ${exps.length} 條中押新家族者 ${nNew} 條${need ? ';**研判與配比不一致**(判為過於集中或風險高,而押新家族之探索方向不到一半)' : ''}`)
+            }
+        }
+        //臂目錄之提案(規則 R-ARM-1): 做夢所提者記入提案帳(rsi.governance.propose); 節點所提而做夢未彙整者(做夢之提案其 sources 未含該節點)亦記入, 以免漏掉 —— 皆待主控審定
+        //  與帳上待審者同鍵者(類別 + 臂 + 層 + 名稱; 修訂另含修訂內容)由引擎補記「再提」; 形不合者(如新臂無名稱)引擎不收, 列於摘要
+        //  提案帳損壞 ⇒ 引擎拋錯(不以新帳覆寫): 本輪之其餘結果照留, 摘要標出(提案仍在做夢文件與節點文件)
+        try {
+            let g = rsi.governance
+            let fromDream = validProposals(dr.doc.guidance && dr.doc.guidance.armProposals)
+            let covered = new Set(fromDream.flatMap((p) => (Array.isArray(p.sources) ? p.sources : [])).map((s) => String(s).slice(0, 8)))
+            let r1 = g.propose({ round, from: 'dream', items: fromDream.map(proposalOf) })
+            let nUnmerged = 0
+            let invalid = r1.invalid.map((x) => `做夢[${x.index}] ${x.why}`)
+            for (let n of ctxNodes) {
+                if (n.armProposals.length && !covered.has(String(n.nodeId).slice(0, 8))) {
+                    let r2 = g.propose({ round, from: n.nodeId, items: n.armProposals.map((p) => proposalOf({ ...p, sources: [n.nodeId] })) })
+                    nUnmerged += r2.added.length
+                    invalid.push(...r2.invalid.map((x) => `節點 ${String(n.nodeId).slice(0, 8)}[${x.index}] ${x.why}`))
+                }
+            }
+            let nPend = g.pending().length
+            if (fromDream.length || nodeProposals.length || nPend) {
+                let ap = tally.armProposals || { total: 0 }
+                lines.push(`臂目錄之提案:做夢 ${fromDream.length} 筆${fromDream.length ? `(${ARM_KINDS.filter((k) => ap[k]).map((k) => `${ARM_LABELS[k]} ${ap[k]}`).join('、')}${r1.repeated.length ? `;其中 ${r1.repeated.length} 筆為帳上已有者之再提` : ''})` : ''}、節點 ${nodeProposals.length} 筆${nUnmerged ? `(做夢未彙整而另記 ${nUnmerged} 筆)` : ''};**待主控審 ${nPend} 筆**(${rel(rsi.paths.govProposalsMd)};通過者下一輪加入目錄)${invalid.length ? `;**形不合而未入帳 ${invalid.length} 筆**(${invalid.join(';').slice(0, 300)})` : ''}`)
+            }
+        }
+        catch (err) {
+            log(`臂目錄之提案未能入帳: ${String((err && err.message) || err).slice(0, 300)}`)
+            lines.push(`臂目錄之提案:**未能入帳**(${String((err && err.message) || err).split('\n')[0].slice(0, 200)});提案仍在本輪之做夢文件與節點文件`)
+        }
+        await arsi.roundEnd({ round, applied: a, sgud, board })
+        setStatus({ stage: 'round-end', sgud, applied: { accepted: a.accepted.length, rework: a.rework.length, deleted: a.deleted.length, proposals: a.proposals.filter((x) => x.ok).length } })
+        let bad = sgudFiles.filter((f) => !sgud[f])
+        return { lines, dream: { round, applied: a, sgud, docIssues: dr.issues, tally, nPrevDirections: prevDirections.length }, ...(bad.length ? { failed: true, errors: [`做夢未更新 ${bad.join('、')}`] } : {}) }
+    }
+
+    rsi = createRsi({
+        root: st.rsi.root,
+        domain,
+        budget: { ...(st.rsi.budget || {}), arms: run.nodesPerRound, novelty: run.nodesPerRound, workers: run.parallelNodes, maxGlobalWorkers: run.parallelNodes },
+        dream: { everyRound: st.rsi.mechanicalDream === true, targetLadder: 2 },
+        turning: { enabled: false },
+        //基底; 引擎組裝時套上狀態根之擴充(與上方之 catalog 同一份生效目錄); cfg.governance 未設 = 起跑不因待審之提案而擋(主控逐輪審定)
+        arms: { catalog: baseCatalog },
+        strictDomain: true,
+    })
+
+    //migrateDocs, 把舊版(arsi.node/1)之節點文件轉為 /2: 補 harness.summary / notes / fingerprint / raw 與 code.artifact(數字取自原文件, 不重算)
+    let migrateDocs = () => {
+        let k = 0
+        for (let d of records.listNodeDocs()) {
+            let h = d.harness
+            if (!h || (Array.isArray(h.summary) && h.summary.length)) {
+                continue
+            }
+            let m = (h.raw && h.raw.metrics) || h.metrics
+            if (!m || !m.op) {
+                continue
+            }
+            let train = scoreOf(m, { limits: st.eval.limits, score: st.score, layer: layerOfSpec(d.spec) })
+            h.summary = summaryOf(m, train)
+            h.notes = notesOf(m)
+            h.fingerprint = h.fingerprint || h.selHash || m.selHash
+            h.raw = h.raw || { metrics: m, selHash: m.selHash }
+            delete h.metrics
+            delete h.selHash
+            if (d.code && d.code.artifact === undefined && d.code.pick !== undefined) {
+                d.code.artifact = d.code.pick
+                delete d.code.pick
+            }
+            records.putNodeDoc(d)
+            k++
+        }
+        return k
+    }
+
+    //validatePending, 對樹上「訓練期階梯已達門檻、尚無回測期旗標」之節點補算旗標(啟用回測期旗標前已入樹者、或先前重放失敗者), 並重算分數、更新節點文件與看板
+    //  force: 已有旗標者亦重算(換全期帳本後用)
+    let validatePending = async ({ force = false } = {}) => {
+        let bt = makeBacktest({ st, FD_ROOT })
+        let out = []
+        if (!bt.ready()) {
+            return { ok: false, why: bt.cfg.enabled ? '全期帳本未建(node g_build.mjs --full)' : '回測期旗標未啟用', done: out }
+        }
+        for (let r of rsi.store.listIndex().filter((x) => x.status === 'executed')) {
+            let n = rsi.store.getNode(r.id)
+            if (!n || !n.raw || !n.raw.metrics) {
+                continue
+            }
+            let has = !!(n.raw.validation && n.raw.validation.flag)
+            let train = scoreOf(n.raw.metrics, { limits: st.eval.limits, score: st.score, layer: layerOfSpec(n.spec), evidence: { trust: n.evidence ? n.evidence.trust : null } })
+            if ((has && !force) || train.ladder < bt.cfg.minLadder || train.flags.vetoed) {
+                continue
+            }
+            let b = await bt.run({ nodeId: n.id, attempt: n.raw.attempt || 1, workDir: path.join(st.records.workDir, n.id) })
+            if (!b.flag) {
+                out.push({ nodeId: n.id, flag: null, error: b.error })
+                log(`補算回測期旗標 ${n.id.slice(0, 8)} 失敗: ${b.error}`)
+                continue
+            }
+            rsi.store.updateNode(n.id, (x) => {
+                x.raw.validation = { name: 'backtest', flag: b.flag }
+                x.score = domain.score(x.raw, x)
+            })
+            let d = records.getNodeDoc(n.id)
+            if (d && d.harness) {
+                d.harness.validation = { name: 'backtest', flag: b.flag, label: gradeLabel(b.flag), at: b.at, error: null }
+                d.harness.score = rsi.store.getNode(n.id).score
+                records.putNodeDoc(d)
+            }
+            out.push({ nodeId: n.id, flag: b.flag })
+            log(`補算回測期旗標 ${n.id.slice(0, 8)}(${n.spec.arms.join('+')}): ${b.flag}`)
+        }
+        //前緣內以「已被否決之節點」為起點之提案 ⇒ 結案(免得下一輪佔名額後才被前置閘擋下)
+        let isVetoed = (id) => {
+            let b = rsi.store.getNode(id)
+            return !!(b && b.score && b.score.flags && b.score.flags.vetoed)
+        }
+        let dead = rsi.store.listFrontier().filter((f) => f.status === 'proposed' && f.spec && f.spec.base && isVetoed(f.spec.base))
+        if (dead.length) {
+            rsi.store.markFrontier(dead.map((f) => f.specHash), 'rejectedByGate')
+            log(`前緣結案 ${dead.length} 條(起點已被否決): ${dead.map((f) => `${f.spec.arms.join('+')}←${String(f.spec.base).slice(0, 8)}`).join('、')}`)
+        }
+        writeBoard()
+        return { ok: true, done: out, frontierClosed: dead.length }
+    }
+
+    //reverifyAll, 評估器改版(數字會變而節點規格不變)後, 以現行評估器重跑樹上每個已執行節點之成品, 更新其數字、分數、回測期旗標與節點文件
+    //  agent 當時之自報與迴圈檢查照留(自報之數字是舊評估器所得, 與新數字不同屬預期); 於節點文件之補充列註明重跑之原因
+    //  keepFlags: true 時不重放回測期, 沿用各節點既有之旗標(評估器只改訓練期之輸出、回測期重放之結果不變時用; 無旗標之節點照常重放)
+    //  併行(settings.rsi.reverifyParallel; 預設 4、上限 8): 各節點之重跑互不相干(各自之工作夾; 評估為各自之子行程), 樹與紀錄之更新在單一行程內依序寫入;
+    //    全樹重放若逐一進行, 節點多時耗時甚久, 其間佔住單一執行之鎖 ⇒ 下一輪起不來
+    //  only(選配): 節點 id 或其前綴之陣列 —— 只重跑指名者(只增輸出之改動後, 補算少數節點之新欄用; 數字會變之改版仍須全樹重算, 不混用新舊數字)
+    let reverifyAll = async ({ why, keepFlags = false, only = null }) => {
+        let out = []
+        let pre = Array.isArray(only) ? only.map((s) => String(s).trim()).filter((s) => s.length >= 6) : null
+        let rows = rsi.store.listIndex().filter((x) => x.status === 'executed' && (!pre || pre.some((p) => x.id.startsWith(p))))
+        let one = async (r, order) => {
+            let n = rsi.store.getNode(r.id)
+            let wd = path.join(st.records.workDir, r.id)
+            if (!n || !n.raw || !fs.existsSync(path.join(wd, 'pick.mjs'))) {
+                return
+            }
+            let keep = null
+            let d0 = records.getNodeDoc(n.id)
+            if (keepFlags && n.raw.validation && typeof n.raw.validation.flag === 'string') {
+                keep = { flag: n.raw.validation.flag, at: (d0 && d0.harness && d0.harness.validation && d0.harness.validation.at) || null }
+            }
+            //評估紀錄只計至節點之 agent 結束之時刻: 其後寫入節點工作夾 .evals.log 之列是做夢或主控之評估
+            let evalsUntil = d0 && d0.agent && typeof d0.agent.endedAt === 'string' ? d0.agent.endedAt : null
+            let v = await verify({ nodeId: n.id, spec: n.spec, workDir: wd, attempt: n.raw.attempt || 1, keepValidation: keep, evalsUntil })
+            if (!v.ok) {
+                out.push({ order, nodeId: n.id, ok: false, error: v.error })
+                log(`重跑 ${n.id.slice(0, 8)} 失敗: ${String(v.error).slice(0, 200)}`)
+                return
+            }
+            let before = n.score ? n.score.S : null
+            rsi.store.updateNode(n.id, (x) => {
+                x.raw = { ...x.raw, ...v.raw, validation: v.validation ? { name: v.validation.name, flag: v.validation.flag } : null }
+                x.score = domain.score(x.raw, x)
+            })
+            let d = records.getNodeDoc(n.id)
+            if (d && d.harness) {
+                let note = `(${new Date().toISOString().slice(0, 10)} 以改版後之評估器重跑:${why};下列數字為重跑所得,agent 當時之自報為舊評估器之數字)`
+                d.harness = { ...d.harness, summary: v.summary, notes: [note, ...v.notes], fingerprint: v.fingerprint, raw: v.raw, validation: v.validation, score: rsi.store.getNode(n.id).score, evalJson: v.evalJson }
+                //重跑時新增之機械檢查項(交付當時尚無此檢查者)補入迴圈檢查; 其餘檢查項(操作掃描、自報比對)照留
+                let isExtFlag = (s) => String(s).startsWith(EXT_FLAG_HEAD)
+                let add = (v.issues || []).filter((s) => /^(固定側別|有 \d+ 個檔寫在工作夾之外|分數不穩|下單流量偏一側)/.test(String(s)) || isExtFlag(s))
+                if (d.harness.checks) {
+                    //「分數不穩」「下單流量偏一側」與擴充診斷之提示(規則 R-REC-21)隨每次重放之數字而變: 舊列先移除再補入本次所得者
+                    let old = (d.harness.checks.issues || []).filter((s) => !/^(分數不穩|下單流量偏一側)/.test(String(s)) && !isExtFlag(s))
+                    d.harness.checks = { ...d.harness.checks, issues: [...old, ...add.filter((s) => !old.includes(s))] }
+                }
+                records.putNodeDoc(d)
+            }
+            let sc = rsi.store.getNode(n.id).score
+            let before2 = n.score ? n.score.ladder : null
+            out.push({ order, nodeId: n.id, ok: true, S: sc.S, before, ladder: sc.ladder, ladderBefore: before2, flag: v.validation ? v.validation.flag : null })
+            log(`重跑 ${n.id.slice(0, 8)}(${n.spec.arms.join('+')}): S ${before} → ${sc.S};階梯 ${before2} → ${sc.ladder}${v.validation ? `;檢定旗標 ${v.validation.flag}` : ''}`)
+        }
+        //  第 2 個以後之工作者每取一個節點前先過資源閘(與迴圈同一個: 全機 CPU / 記憶體逾起始門檻即等); 第 1 個工作者不等 ⇒ 機器忙時退回逐一進行、有餘裕時才併行
+        //  (多個重放併行時, 全機 CPU 讀數可能逼近上限; 讀數含本機其他工作之負載)
+        let par = Math.max(1, Math.min(8, Number.isInteger(st.rsi.reverifyParallel) ? st.rsi.reverifyParallel : 4))
+        let next = 0
+        await Promise.all(Array.from({ length: Math.min(par, rows.length) }, async (_, w) => {
+            while (next < rows.length) {
+                if (w > 0) {
+                    try {
+                        await monitor.wait(`reverify 併行 #${w + 1}`)
+                    }
+                    catch (err) {}
+                    if (next >= rows.length) {
+                        break
+                    }
+                }
+                let i = next++
+                await one(rows[i], i)
+            }
+        }))
+        out.sort((a, b) => a.order - b.order)
+        writeBoard()
+        return out.map(({ order, ...x }) => x)
+    }
+
+    //extFill, 擴充診斷之補算(規則 R-REC-27): 共用工具區新增(或改寫)擴充診斷後, 既有節點要到下一次完整評估才有其值 ——
+    //  對樹上已執行、而 raw.metrics.ext 缺所指診斷之節點, 以現行評估器重放其成品(完整評估; 只載入所缺之診斷), 核對選集指紋與正本相同後,
+    //  **只把該診斷之輸出併入** raw.metrics.ext 與節點文件(看板值、提示、子集隨之生效); 不動數字、分數、階梯、旗標與其餘迴圈檢查
+    //  指紋不同者(評估器或成品已變)不併入並列出 —— 那是 reverify 之事
+    //  names(選配)= 要補之診斷名之陣列(預設 = 共用工具區 metrics/ 之全部檔); only(選配)= 節點 id 或其前綴之陣列; force = 已有者亦重算(診斷改寫後用)
+    //  nullDraws(選配; 正整數)= 重放時之虛無抽數(預設 = 設定值): 所補之診斷不使用虛無(只用 simulate)時, 主控可給 1 以省時間 —— 用到虛無之診斷不得縮減(其值會不同)
+    let extFill = async ({ names = null, only = null, force = false, nullDraws = null } = {}) => {
+        let all = []
+        try {
+            all = fs.readdirSync(path.join(toolboxDir, 'metrics')).filter((f) => /\.mjs$/i.test(f)).map((f) => f.replace(/\.mjs$/i, '')).sort()
+        }
+        catch (err) {}
+        let want = Array.isArray(names) && names.length ? names.map((s) => String(s).trim()).filter((s) => s.length > 0) : all
+        let unknown = want.filter((s) => !all.includes(s))
+        if (unknown.length) {
+            throw new Error(`共用工具區之 metrics/ 無此擴充診斷: ${unknown.join('、')}(現有: ${all.join('、') || '無'})`)
+        }
+        let pre = Array.isArray(only) ? only.map((s) => String(s).trim()).filter((s) => s.length >= 6) : null
+        let rows = rsi.store.listIndex().filter((x) => x.status === 'executed' && (!pre || pre.some((p) => x.id.startsWith(p))))
+        let out = []
+        let isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
+        let one = async (r, order) => {
+            let n = rsi.store.getNode(r.id)
+            let wd = path.join(st.records.workDir, r.id)
+            let fpPick = path.join(wd, 'pick.mjs')
+            if (!n || !n.raw || !isObj(n.raw.metrics) || !fs.existsSync(fpPick)) {
+                return
+            }
+            let ext0 = isObj(n.raw.metrics.ext) ? n.raw.metrics.ext : {}
+            let miss = want.filter((nm) => force || !isObj(ext0[nm]))
+            if (!miss.length) {
+                return
+            }
+            let fpOut = path.join(wd, 'harness_extfill.json')
+            try {
+                fs.rmSync(fpOut, { force: true })
+            }
+            catch (err) {}
+            let rr = await runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), '--pick', fpPick, '--mode', 'full', ...(Number.isInteger(nullDraws) && nullDraws > 0 ? ['--null', String(nullDraws)] : []), '--ext-only', miss.join(','), '--out', fpOut, '--no-log'], { cwd: FD_ROOT, timeoutMs: (st.eval.timeoutSec || 900) * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })
+            let o = readJson(fpOut)
+            try {
+                fs.rmSync(fpOut, { force: true })
+            }
+            catch (err) {}
+            if (rr.timeout || !o || o.ok !== true || !isObj(o.metrics)) {
+                out.push({ order, nodeId: n.id, ok: false, error: rr.timeout ? '逾時' : String((o && o.error) || `離開碼 ${rr.code}`).slice(0, 200) })
+                log(`補算 ${n.id.slice(0, 8)} 失敗: ${out[out.length - 1].error}`)
+                return
+            }
+            if (o.metrics.selHash !== n.raw.metrics.selHash) {
+                out.push({ order, nodeId: n.id, ok: false, error: `選集指紋與正本不同(${o.metrics.selHash} vs ${n.raw.metrics.selHash}):評估器或成品已變,未併入` })
+                log(`補算 ${n.id.slice(0, 8)}: ${out[out.length - 1].error}`)
+                return
+            }
+            let got = {}
+            for (let nm of miss) {
+                if (isObj(o.metrics.ext) && isObj(o.metrics.ext[nm])) {
+                    got[nm] = o.metrics.ext[nm]
+                }
+            }
+            let filled = Object.keys(got)
+            if (!filled.length) {
+                out.push({ order, nodeId: n.id, ok: false, error: `重放之輸出無所指之診斷(${miss.join('、')})` })
+                return
+            }
+            let merge = (m) => ({ ...m, ext: { ...(isObj(m.ext) ? m.ext : {}), ...got } })
+            //新補之診斷所帶之提示(flag)列入迴圈檢查; 同名之舊提示先移除
+            let surf = extSurfaceOf({ ext: got })
+            let addFlags = surf.flags.map(extFlagIssue)
+            let dropOld = (s) => !filled.some((nm) => String(s).startsWith(`${EXT_FLAG_HEAD}${nm})`))
+            rsi.store.updateNode(n.id, (x) => {
+                x.raw = { ...x.raw, metrics: merge(x.raw.metrics), ...(Array.isArray(x.raw.issues) ? { issues: [...x.raw.issues.filter(dropOld), ...addFlags] } : (addFlags.length ? { issues: addFlags } : {})) }
+            })
+            let d = records.getNodeDoc(n.id)
+            if (d && d.harness) {
+                let lineOf = (nm) => {
+                    let e = got[nm]; return `擴充診斷 ${nm}: ${e.error ? `未算(${e.error})` : (typeof e.text === 'string' ? e.text.slice(0, 600) : JSON.stringify(e).slice(0, 300))}`
+                }
+                let sum0 = Array.isArray(d.harness.summary) ? d.harness.summary.filter((s) => !filled.some((nm) => String(s).startsWith(`擴充診斷 ${nm}:`))) : null
+                d.harness = {
+                    ...d.harness,
+                    ...(sum0 ? { summary: [...sum0, ...filled.map(lineOf)] } : {}),
+                    ...(isObj(d.harness.raw) && isObj(d.harness.raw.metrics) ? { raw: { ...d.harness.raw, metrics: merge(d.harness.raw.metrics) } } : {}),
+                    notes: [...(Array.isArray(d.harness.notes) ? d.harness.notes : []), `(${new Date().toISOString().slice(0, 10)} 補算擴充診斷:${filled.join('、')};選集指紋與正本相同,其餘數字未動)`],
+                }
+                if (d.harness.checks && Array.isArray(d.harness.checks.issues)) {
+                    d.harness.checks = { ...d.harness.checks, issues: [...d.harness.checks.issues.filter(dropOld), ...addFlags] }
+                }
+                records.putNodeDoc(d)
+            }
+            out.push({ order, nodeId: n.id, ok: true, filled, board: surf.cells.map((c) => `${c.name} ${c.value}`).join('、') })
+            log(`補算 ${n.id.slice(0, 8)}: ${filled.join('、')}${surf.cells.length ? `(${surf.cells.map((c) => `${c.name} ${c.value}`).join('、')})` : ''}`)
+        }
+        let par = Math.max(1, Math.min(8, Number.isInteger(st.rsi.reverifyParallel) ? st.rsi.reverifyParallel : 4))
+        let next = 0
+        await Promise.all(Array.from({ length: Math.min(par, rows.length) }, async (_, w) => {
+            while (next < rows.length) {
+                if (w > 0) {
+                    try {
+                        await monitor.wait(`extfill 併行 #${w + 1}`)
+                    }
+                    catch (err) {}
+                    if (next >= rows.length) {
+                        break
+                    }
+                }
+                let i = next++
+                await one(rows[i], i)
+            }
+        }))
+        out.sort((a, b) => a.order - b.order)
+        writeBoard()
+        return { names: want, nNodes: rows.length, results: out.map(({ order, ...x }) => x) }
+    }
+
+    //rescanTraces, 操作掃描之規則改版後, 重掃各節點最近一次交付之操作紀錄, 以新結果取代節點文件與樹上之舊掃描項(其餘檢查項不動)
+    let rescanTraces = () => {
+        let isScan = (s) => /^(觸及禁區|寫到工作夾外|存取其他節點之工作夾|規劃於評估後才寫)/.test(String(s))
+        let k = 0
+        for (let d of records.listNodeDocs()) {
+            let wd = path.join(st.records.workDir, d.nodeId)
+            if (!d.harness || !d.harness.checks || !fs.existsSync(wd)) {
+                continue
+            }
+            let allowWork = [...(d.spec && d.spec.base ? [d.spec.base] : []), ...(((d.task && d.task.refs) || []).filter((r) => r.nodeId).map((r) => r.nodeId)), ...dirWorkIds(d.task && d.task.direction), ...dirNodeIds(d.task && d.task.direction)]
+            //「規劃於評估後才寫」只適用於任務書已有此要求之節點(任務書之「交付版先定再跑」「先寫規劃再評估」要求; 更早之節點無此要求, 重掃時不追溯)
+            let planRule = false
+            try {
+                planRule = /交付版先定再跑|先寫規劃再評估/.test(fs.readFileSync(path.join(wd, 'brief.md'), 'utf8'))
+            }
+            catch (err) {}
+            let tr = scanTrace({ workDir: wd, attempt: d.attempt || 1, privateRoot: backtestCfg(st).privateRoot, root: FD_ROOT, writeRoots: [wd], workRoot: st.records.workDir, allowWork, nodeRules: true, planRule })
+            let old = d.harness.checks.issues || []
+            let next = [...old.filter((s) => !isScan(s)), ...tr.issues]
+            if (JSON.stringify(old) === JSON.stringify(next)) {
+                continue
+            }
+            d.harness.checks.issues = next
+            records.putNodeDoc(d)
+            rsi.store.updateNode(d.nodeId, (x) => {
+                if (!x.raw) {
+                    return false
+                }
+                x.raw.issues = [...(x.raw.issues || []).filter((s) => !isScan(s)), ...tr.issues]
+            })
+            k++
+        }
+        //做夢文件之操作稽核亦重掃
+        for (let d of records.listDreamDocs()) {
+            let wd = arsi.dreamWorkDir(d.round)
+            if (!fs.existsSync(wd)) {
+                continue
+            }
+            let tr = scanTrace({ workDir: wd, logFile: path.join(wd, 'agent.log'), privateRoot: backtestCfg(st).privateRoot, root: FD_ROOT, writeRoots: [wd, path.join(FD_ROOT, 'sgud'), toolboxDir], fileHits: 'note' })
+            let next = { issues: tr.issues, note: tr.note, fileNotes: tr.fileNotes }
+            if (JSON.stringify((d.harness && d.harness.trace) || null) === JSON.stringify(next)) {
+                continue
+            }
+            d.harness = { ...(d.harness || {}), trace: next }
+            records.putDreamDoc(d)
+            k++
+        }
+        return k
+    }
+
+    //pendingDream / redream, 補做夢(規則 R-RUN-6): 某輪之節點已入樹而做夢未交付(額度用盡、派工失敗、行程中斷)者, 該輪之節點維持未審、下一輪也無新方向;
+    //  起跑時先以同一個輪末鉤子對該輪補做, 補成才起新的一輪(g_rsi.mjs 之 round 模式)
+    //  pendingDream() → null | { round, nodeIds }: 樹上最新一輪(有已執行之節點者)無做夢文件, 或其做夢文件無任何審計(未交付 dream.json)
+    //    只看最新一輪(更早之輪次若缺做夢, 其後已有做夢文件接續, 不回頭補); 做夢已交付而套用中斷者不在此列(未涵蓋)
+    //  redream(round) → 輪末鉤子之回傳({ lines, dream, failed, errors }); 做夢文件以同一輪次覆寫, 前一次之 dream.json 由 runDream 改名保留
+    let pendingDream = () => {
+        if (st.rsi.mechanicalDream === true) {
+            return null
+        }
+        let nodes = rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => rsi.store.getNode(r.id)).filter(Boolean)
+        let last = nodes.reduce((m, n) => Math.max(m, Number.isInteger(n.round) ? n.round : 0), 0)
+        if (last <= 0) {
+            return null
+        }
+        let dd = records.getDreamDoc(last)
+        if (dd && Array.isArray(dd.audits) && dd.audits.length > 0) {
+            return null
+        }
+        return { round: last, nodeIds: nodes.filter((n) => n.round === last).map((n) => n.id) }
+    }
+    let redream = async (round) => {
+        let nodes = rsi.store.listIndex().map((r) => rsi.store.getNode(r.id)).filter((n) => n && n.round === round)
+        return domain.hooks.afterRound({ round, nodes })
+    }
+
+    //rescanSideFlow, 「下單流量偏一側」之檢查(規則 R-REC-15)新增或改版後, 以各節點工作夾內既有之重放結果檔(harness_full.json / harness_train.json)補算, 不重新評估:
+    //  更新樹與節點文件之 raw.train.shortShare、迴圈檢查之該項、節點文件之補充列(以現行 notesOf 重產; 首列若為重跑註記則保留); 回有變動之節點數
+    let rescanSideFlow = () => {
+        let k = 0
+        for (let r of rsi.store.listIndex().filter((x) => x.status === 'executed')) {
+            let n = rsi.store.getNode(r.id)
+            let wd = path.join(st.records.workDir, r.id)
+            let hf = readJson(path.join(wd, 'harness_full.json'))
+            let ht = readJson(path.join(wd, 'harness_train.json'))
+            if (!n || !n.raw || !n.raw.metrics || !hf || !hf.metrics || !ht || !ht.metrics) {
+                continue
+            }
+            let bt = shortShareOf(hf.metrics)
+            let tr = shortShareOf(ht.metrics)
+            if (bt === null || tr === null) {
+                continue
+            }
+            let issue = sideFlowIssue(bt, tr, st.score && st.score.sideFlow)
+            let train = { ...(n.raw.train || { longRatio: ht.metrics.sel ? ht.metrics.sel.longRatio : null, tags: ((ht.metrics.sel && ht.metrics.sel.tags) || []).slice(0, 4) }), shortShare: tr }
+            let isFlow = (s) => /^下單流量偏一側/.test(String(s))
+            let d = records.getNodeDoc(r.id)
+            let old = (d && d.harness && d.harness.checks && d.harness.checks.issues) || []
+            let next = [...old.filter((s) => !isFlow(s)), ...(issue ? [issue] : [])]
+            let same = JSON.stringify(old) === JSON.stringify(next) && n.raw.train && n.raw.train.shortShare === tr
+            if (same) {
+                continue
+            }
+            rsi.store.updateNode(r.id, (x) => {
+                x.raw = { ...x.raw, train, issues: [...(x.raw.issues || []).filter((s) => !isFlow(s)), ...(issue ? [issue] : [])] }
+            })
+            if (d && d.harness) {
+                let head = Array.isArray(d.harness.notes) && /以改版後之評估器重跑/.test(String(d.harness.notes[0] || '')) ? [d.harness.notes[0]] : []
+                d.harness = { ...d.harness, raw: { ...(d.harness.raw || {}), train }, notes: [...head, ...notesOf(n.raw.metrics, n.raw.seedS, train, n.raw.replays)], ...(d.harness.checks ? { checks: { ...d.harness.checks, issues: next } } : {}) }
+                records.putNodeDoc(d)
+            }
+            k++
+        }
+        writeBoard()
+        return k
+    }
+
+    //proposeDirection, 做夢之一條方向入前緣(輪末由做夢之套用呼叫): 回 { ok, note, nodeId?, claimKey? }
+    //  驗證類方向之規格另帶主張鍵(規則 R-REC-24): 同一候選之不同主張之驗證(半庫、鄰格、換定義重複)可同臂同起點而各為一個節點;
+    //  主張相同者仍為同規格而略過; 探索類維持「臂 + 起點」。鍵隨回傳值記入做夢文件(harness.applied.proposals[].claimKey), 節點之來源方向依此對應
+    let proposeDirection = (d, round) => {
+        let ck = claimKeyOf(d)
+        let keyed = ck ? { claimKey: ck } : {}
+        try {
+            let spec = { arms: normArms(d.arms), base: d.base || null, ...(ck ? { claim: ck } : {}) }
+            validateSpec(spec)
+            if (spec.base) {
+                let b = rsi.store.getNode(spec.base)
+                if (!b || b.status !== 'executed') {
+                    return { ok: false, note: `起點 ${String(spec.base).slice(0, 8)} 不存在或未執行`, ...keyed }
+                }
+                if (b.score && b.score.flags && b.score.flags.vetoed) {
+                    return { ok: false, note: `起點 ${String(spec.base).slice(0, 8)} 已被否決(${(b.score.flags.why || []).slice(-1)[0] || ''}), 不得作為起點`, ...keyed }
+                }
+            }
+            let id = idOf(spec)
+            let ex = rsi.store.getNode(id)
+            if (ex && ['executed', 'planned', 'running', 'rejectedByGate'].includes(ex.status)) {
+                return { ok: false, note: `同規格之節點已存在(${id.slice(0, 8)} ${ex.status})`, nodeId: id, ...keyed }
+            }
+            let added = rsi.store.pushFrontier([{ spec, specHash: specHash(spec), kind: 'arm', reason: `做夢 ${roundName(round)}:${String(d.rationale || '').slice(0, 240)}`, origin: { topic: 'dream', operator: 'dream', round }, priority: 1 }])
+            //前緣內已有同規格而該條已結案(blocked: 改掛後之舊項、主控結案、重試用盡)且樹上無此節點 ⇒ 重開, 不當成重複:
+            //  做夢常把新機制暫掛於同一組寬臂(例: B15_newKey + C23_recent365), 上一輪改掛後留下之已結案項會使下一輪之同規格方向永遠入不了前緣
+            if (!(added > 0)) {
+                let h = specHash(spec)
+                let old = rsi.store.listFrontier().find((f) => f.specHash === h)
+                if (old && old.status === 'blocked') {
+                    rsi.store.markFrontier([h], 'proposed')
+                    return { ok: true, note: '已入前緣(重開先前已結案之同規格提案)', nodeId: id, ...keyed }
+                }
+            }
+            return { ok: added > 0, note: added > 0 ? '已入前緣' : '前緣已有同規格', nodeId: id, ...keyed }
+        }
+        catch (err) {
+            return { ok: false, note: String((err && err.message) || err).slice(0, 200), ...keyed }
+        }
+    }
+
+    //closeFrontier, 主代理把前緣內尚未執行之提案結案(例: 提案之依據已被其後之回測期旗標推翻); arms 為臂 id 陣列(須完全相同), base 省略 = 不限, claim(主張鍵)省略 = 不限
+    let closeFrontier = ({ arms, base, claim, why }) => {
+        let key = normArms(arms).join('+')
+        let hit = rsi.store.listFrontier().filter((f) => f.status === 'proposed' && f.spec && Array.isArray(f.spec.arms) && normArms(f.spec.arms).join('+') === key && (base === undefined || (f.spec.base || null) === (base || null)) && (claim === undefined || (f.spec.claim || null) === (claim || null)))
+        if (hit.length) {
+            rsi.store.markFrontier(hit.map((f) => f.specHash), 'blocked')
+            log(`前緣結案(主代理)${hit.length} 條: ${key}${base ? `←${String(base).slice(0, 8)}` : ''}: ${String(why || '').slice(0, 200)}`)
+        }
+        return hit.length
+    }
+
+    //rearmFrontier, 主控通過新臂(或修訂)後, 把前緣內尚未執行、「暫掛於既有臂」之方向改掛(規則 R-ARM-4):
+    //  做夢於同一輪既提新臂、又排了試該機制之方向時, 新臂尚未通過 ⇒ 方向只能先掛在既有之臂上; 通過後若不改掛, 該節點會記在暫掛之臂下,
+    //  新臂在看板仍為「未試」而由補位載體再試一次, 暫掛之臂則多一個其實不屬於它的節點
+    //  作法: 舊提案結案、以新之臂推入同理由同優先序之提案; 來源做夢文件之該條方向之 arms 改為新之臂(原臂記於 rearmedFrom, 另加迴圈註記) —— 任務書之來源方向依臂之集合比對
+    //  只改臂之歸屬, 不改方向之內容(依據、預期、類型、主張); 起點不變; 輪次進行中不得執行(由呼叫端把關)
+    //  claim(選配): 主張鍵(規則 R-REC-24); 同臂同起點有數條驗證時用以指明; 新規格承接原規格之主張鍵
+    let rearmFrontier = ({ arms, base, claim, to, why }) => {
+        let key = normArms(arms).join('+')
+        let hit = rsi.store.listFrontier().filter((f) => f.status === 'proposed' && f.spec && Array.isArray(f.spec.arms) && normArms(f.spec.arms).join('+') === key && (base === undefined || (f.spec.base || null) === (base || null)) && (claim === undefined || (f.spec.claim || null) === (claim || null)))
+        if (hit.length !== 1) {
+            let cks = hit.map((f) => f.spec.claim).filter(Boolean)
+            return { ok: false, why: hit.length ? `前緣內有 ${hit.length} 條同臂之提案,請另給 base${cks.length ? ` 或 claim(主張鍵: ${cks.join('、')})` : ''} 指明` : `前緣內無尚未執行之提案 ${key}` }
+        }
+        let f = hit[0]
+        let spec = { arms: normArms(to), base: f.spec.base || null, ...(f.spec.claim ? { claim: f.spec.claim } : {}) }
+        try {
+            validateSpec(spec)
+        }
+        catch (err) {
+            return { ok: false, why: String((err && err.message) || err) }
+        }
+        if (spec.arms.join('+') === key) {
+            return { ok: false, why: '新舊之臂相同' }
+        }
+        let id = idOf(spec)
+        let ex = rsi.store.getNode(id)
+        if (ex && ['executed', 'planned', 'running', 'rejectedByGate'].includes(ex.status)) {
+            return { ok: false, why: `同規格之節點已存在(${id.slice(0, 8)} ${ex.status})` }
+        }
+        if (rsi.store.listFrontier().some((x) => x.status === 'proposed' && x.specHash === specHash(spec))) {
+            return { ok: false, why: '前緣已有同規格之提案' }
+        }
+        //來源方向(最近一份含此臂集合、起點與主張鍵之做夢文件)
+        let src = directionOf(f.spec)
+        let dd = src ? records.getDreamDoc(src.round) : null
+        let dir = dd && dd.guidance && Array.isArray(dd.guidance.directions) ? dd.guidance.directions[src.index] || null : null
+        let added = rsi.store.pushFrontier([{ spec, specHash: specHash(spec), kind: f.kind || 'arm', reason: f.reason, origin: f.origin, priority: f.priority }])
+        if (!(added > 0)) {
+            return { ok: false, why: '新提案未能入前緣' }
+        }
+        rsi.store.markFrontier([f.specHash], 'blocked')
+        if (dir) {
+            dir.rearmedFrom = Array.isArray(dir.rearmedFrom) ? dir.rearmedFrom : dir.arms.slice()
+            dir.arms = spec.arms.slice()
+            dd.harness = { ...(dd.harness || {}), addendum: [...((dd.harness && dd.harness.addendum) || []), { at: new Date().toISOString(), text: `主控改掛方向之臂:${key} → ${spec.arms.join('+')}(${String(why || '').slice(0, 300)});方向之內容不變。` }] }
+            records.putDreamDoc(dd)
+        }
+        log(`前緣改掛(主控): ${key}${spec.base ? `←${String(spec.base).slice(0, 8)}` : ''} → ${spec.arms.join('+')}: ${String(why || '').slice(0, 200)}${dir ? `;已更新做夢 ${roundName(dd.round)} 之方向` : ';無來源方向(非做夢所提)'}`)
+        return { ok: true, nodeId: id, arms: spec.arms, round: dd && dir ? dd.round : null }
+    }
+
+    //annotateDream, 於做夢文件加「迴圈註記」(做夢完成後才發生、會影響其結論效力之事; 文件正文不改)
+    let annotateDream = (round, text) => {
+        let d = records.getDreamDoc(round)
+        if (!d) {
+            return false
+        }
+        d.harness = { ...(d.harness || {}), addendum: [...((d.harness && d.harness.addendum) || []), { at: new Date().toISOString(), text: String(text) }] }
+        records.putDreamDoc(d)
+        return true
+    }
+
+    //typeOf, 節點規格之任務類型(出自做夢方向者依該方向; 其餘為探索); 唯讀, 供乾跑與報表使用
+    let typeOf = (spec) => {
+        let d = directionOf(spec)
+        return d ? d.type : 'explore'
+    }
+
+    //setDirectionTypes, 主代理補記某輪做夢文件之方向之任務類型(/3 以前之做夢文件無此欄; 補記者標 typeBy: 'loop', 並加一則迴圈註記)
+    //  items: [{ index(自 1 起), type('explore' | 'verify'), claim(verify 時必填) }]; 任一筆不合即全部不寫, 回 { ok, why }
+    let setDirectionTypes = (round, items) => {
+        let d = records.getDreamDoc(round)
+        let ds = d && d.guidance && Array.isArray(d.guidance.directions) ? d.guidance.directions : null
+        if (!ds) {
+            return { ok: false, why: `${roundName(round)} 無做夢文件或無方向` }
+        }
+        for (let it of items) {
+            if (!Number.isInteger(it.index) || !ds[it.index - 1]) {
+                return { ok: false, why: `無第 ${it.index} 條方向` }
+            }
+            if (!TASK_TYPES.includes(it.type)) {
+                return { ok: false, why: `第 ${it.index} 條之 type 須為 ${TASK_TYPES.join(' / ')}` }
+            }
+            if (it.type === 'verify' && !(typeof it.claim === 'string' && it.claim.trim())) {
+                return { ok: false, why: `第 ${it.index} 條為 verify, 須附 claim` }
+            }
+        }
+        for (let it of items) {
+            let x = { ...ds[it.index - 1], type: it.type, typeBy: 'loop' }
+            if (it.type === 'verify') {
+                x.claim = it.claim.trim()
+            }
+            else {
+                delete x.claim
+            }
+            ds[it.index - 1] = x
+        }
+        d.harness = { ...(d.harness || {}), addendum: [...((d.harness && d.harness.addendum) || []), { at: new Date().toISOString(), text: `任務類型由迴圈之維護者補記(本文件完成時尚無此欄):${items.map((it) => `方向 ${it.index} = ${it.type === 'verify' ? `驗證(待驗之主張:${it.claim.trim()})` : '探索'}`).join(';')}。驗證類之節點不做變體搜尋,只做方向所定之版本與對照。` }] }
+        records.putDreamDoc(d)
+        return { ok: true }
+    }
+
+    return { st, rsi, arsi, records, toolbox, typeOf, setDirectionTypes, domain, catalog, selectable, run, monitor, idOf, taskFor, writeBoard, writeCatalogFile, writeSearchMap, validatePending, reverifyAll, extFill, rescanTraces, rescanSideFlow, pendingDream, redream, inactiveArmsOf, offDefArmsOf, migrateDocs, annotateDream, closeFrontier, rearmFrontier, proposeDirection, pickStore: () => buildPickStore(st), setStatus, getState, setState, log, envKey, layerOfSpec }
+}
+
+
+export { makeProject, outwardNoteOf, OUT_CHECK_MIN }
+export default makeProject

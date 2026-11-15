@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>eval/score.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">eval/score.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>//判讀: 評估器之原料 raw → 分數 S、階梯 ladder、旗標 flags、格 cell(品質多樣性用)
+//  **原料為評估期(= 回測期)之評估結果; 目標 = 回測期之等效年化更佳(穩定之正值)**
+//  S = 0.7 × 七相位平均等效年化 + 0.3 × 最差相位等效年化(操作績效 op; 相位穩健)
+//    注意: 策略庫之每隻策略皆以訓練期求得, 回測期內隨機挑之等效年化為負; S 為正且顯著高於同劑量虛無才算有內容
+//  階梯(序數 0 ~ 3; 依序須全過; flags.trainLadder 為同一值之舊欄名, 指「不含檢定旗標之階梯」):
+//    1 真偽: S ≥ ladder1.S 且同劑量虛無 p ≤ ladder1.nullP; 評估器另算了「同訊號量虛無」與「同活躍度虛無」(選集之每隻訊號數偏離全體隨機逾 10% 時)者, 兩者之 p 亦須 ≤ ladder1.nullP;
+//            另算了「同側同活躍度虛無」(組成對照; 選集之每隻訊號數或做多比例偏離全體隨機逾 10% 時)者, 其 p 亦須 ≤ ladder1.nullP(績效可由「方向 × 活躍度」之組成重現者不算有挑選內容)
+//    2 平原: 各新鮮度地平線之七相位平均皆 ≥ ladder2.freshMin 且最差相位 ≥ ladder2.worstPhaseMin
+//    3 可行: 月均單 ≤ ladder3.monthlyOrders 且最大同時持倉 ≤ ladder3.peakHold
+//  檢定旗標(evidence.backtest; 「回測期旗標」機制, 隨附之參考設定不啟用 —— settings.backtest.enabled = false(未設時 backtestCfg 視為啟用); 不啟用時 evidence 不帶此欄, 下述各列不作用):
+//    有旗標 ⇒ flags.backtest = 該等級, 階梯改為檢定等級: pass 4 | above 3 | mixed 2 | level 1(否決)| below 0(否決)
+//    未算   ⇒ flags.backtest = null, ladder = 上述階梯
+//  否決 flags.vetoed: 月均單或最大持倉超過硬上限、選集恆空、審計判不可信(evidence.trust === 'untrusted')、檢定旗標為 level / below / fail
+let OOS_LADDER = { pass: 4, above: 3, mixed: 2, level: 1, below: 0 }
+let OOS_WHY = {
+    pass: '回測期旗標 pass(樣本外通過)',
+    above: '回測期旗標 above(樣本外顯著高於組成相當之隨機挑,各分段與各亂數種子皆然;尚未達「七相位皆為正」)',
+    mixed: '回測期旗標 mixed(樣本外只在部分期間或部分亂數種子明顯高於組成相當之隨機挑)',
+    level: '回測期旗標 level(樣本外與組成相當之隨機挑無異)',
+    below: '回測期旗標 below(樣本外顯著低於組成相當之隨機挑)',
+    fail: '回測期旗標 fail(樣本外未達「七相位皆為正」)',
+}
+/**
+ * 判讀評估器之原料, 算出分數 S、階梯 ladder、旗標 flags 與格 cell
+ * S = 0.7 × 七相位平均等效年化 + 0.3 × 最差相位等效年化; 階梯與檢定旗標之判準見檔頭說明
+ * raw 無評估結果時回傳 S 0、ladder 0 且 flags.vetoed 為 true
+ *
+ * @param {Object} raw 輸入評估器之評估結果(可為帶 metrics 欄之物件, 或 metrics 本身)
+ * @param {Object} opt 輸入設定物件
+ * @param {Object} opt.limits 輸入硬上限物件{ monthlyOrders, peakHold }
+ * @param {Object} opt.score 輸入評分門檻物件{ ladder1: { S, nullP }, ladder2: { freshMin, worstPhaseMin }, ladder3: { monthlyOrders, peakHold }, freqBands: [b1, b2] }
+ * @param {String} [opt.layer=null] 輸入層名稱, 用於 cell 字串前綴, 預設null(以 ? 表示)
+ * @param {Object} [opt.evidence=null] 輸入證據物件(可含 trust、backtest、backtestOK), 預設null
+ * @returns {Object} 回傳 { S, ladder(0 ~ 3, 有檢定旗標時 0 ~ 4), flags: { vetoed, why, backtest, trainLadder }, cell(字串 層|low、mid、high 或 none), evaluator }
+ * @example
+ * let r = scoreOf(m, { limits: { monthlyOrders: 60, peakHold: 20 }, score, layer: 'L1' })
+ */
+let scoreOf = (raw, { limits, score, layer = null, evidence = null } = {}) => {
+    let m = raw &amp;&amp; raw.metrics ? raw.metrics : raw
+    let why = []
+    if (!m || !m.op) {
+        return { S: 0, ladder: 0, flags: { vetoed: true, why: ['無評估結果'], backtest: null, trainLadder: 0 }, cell: `${layer || '?'}|none`, evaluator: 1 }
+    }
+    let mean = m.op.eqYr.mean
+    let min = m.op.eqYr.min
+    let S = Math.round((0.7 * mean + 0.3 * min) * 100) / 100
+    let mo = m.op.monthlyOrders.mean
+    let pk = m.op.peakHold.max
+    //hard: 使階梯歸零之否決(成品本身不可用)
+    let hard = false
+    if (mo > limits.monthlyOrders) {
+        hard = true
+        why.push(`月均單 ${mo.toFixed(0)} > ${limits.monthlyOrders}`)
+    }
+    if (pk > limits.peakHold) {
+        hard = true
+        why.push(`最大同時持倉 ${pk} > ${limits.peakHold}`)
+    }
+    if (m.sel &amp;&amp; m.sel.sizeMax === 0) {
+        hard = true
+        why.push('選集恆空')
+    }
+    if (evidence &amp;&amp; evidence.trust === 'untrusted') {
+        hard = true
+        why.push('審計判不可信')
+    }
+    let backtest = evidence &amp;&amp; typeof evidence.backtest === 'string' &amp;&amp; (evidence.backtest in OOS_WHY) ? evidence.backtest : (evidence &amp;&amp; typeof evidence.backtestOK === 'boolean' ? (evidence.backtestOK ? 'pass' : 'fail') : null)
+    let trainLadder = 0
+    let volOk = !m.nullVol || m.nullVol.p &lt;= score.ladder1.nullP
+    //同活躍度虛無(有算時): 選集只是較安靜 / 較活躍而無其他內容者, 不算過階梯 1
+    let actOk = !m.nullAct || m.nullAct.p &lt;= score.ladder1.nullP
+    //同側同活躍度虛無(有算時 = 選集之方向或活躍度偏離全體隨機): 績效可由「方向 × 活躍度」之組成重現者(同組成之隨機替換一樣好), 不算過階梯 1
+    //  此虛無一律計算; 只在 triggered(選集之每隻訊號數或做多比例偏離全體隨機逾 10%)時列入階梯 1 —— 舊結果無 triggered 欄者(當時只在偏離時才算)視為 triggered
+    let sideReq = !!m.nullSideAct &amp;&amp; m.nullSideAct.triggered !== false
+    let sideOk = !sideReq || m.nullSideAct.p &lt;= score.ladder1.nullP
+    let l1 = S >= score.ladder1.S &amp;&amp; m.null &amp;&amp; m.null.p &lt;= score.ladder1.nullP &amp;&amp; volOk &amp;&amp; actOk &amp;&amp; sideOk
+    if (!l1) {
+        why.push(`階梯 1 未過: S ${S}(門檻 ${score.ladder1.S}), 虛無 p ${m.null ? m.null.p : '未算'}(門檻 ${score.ladder1.nullP})${m.nullVol ? `, 同訊號量虛無 p ${m.nullVol.p}` : ''}${m.nullAct ? `, 同活躍度虛無 p ${m.nullAct.p}` : ''}${sideReq ? `, 同側同活躍度虛無 p ${m.nullSideAct.p}(組成可重現 ${m.nullSideAct.share === null ? '—' : `${Math.round(m.nullSideAct.share * 100)}%`})` : ''}`)
+    }
+    if (l1 &amp;&amp; !hard) {
+        trainLadder = 1
+        let hs = Object.keys(m.fresh || {})
+        let freshOk = hs.length > 0 &amp;&amp; hs.every((H) => m.fresh[H].eqYr.mean >= score.ladder2.freshMin)
+        let l2 = freshOk &amp;&amp; min >= score.ladder2.worstPhaseMin
+        if (!l2) {
+            why.push(`階梯 2 未過: 新鮮度 ${hs.map((H) => `${H}d ${m.fresh[H].eqYr.mean.toFixed(1)}`).join(' / ')}(皆須 ≥ ${score.ladder2.freshMin}), 最差相位 ${min.toFixed(1)}(須 ≥ ${score.ladder2.worstPhaseMin})`)
+        }
+        if (l2) {
+            trainLadder = 2
+            let l3 = mo &lt;= score.ladder3.monthlyOrders &amp;&amp; pk &lt;= score.ladder3.peakHold
+            if (!l3) {
+                why.push(`階梯 3 未過: 月均單 ${mo.toFixed(0)}(須 ≤ ${score.ladder3.monthlyOrders}), 最大持倉 ${pk}(須 ≤ ${score.ladder3.peakHold})`)
+            }
+            if (l3) {
+                trainLadder = 3
+            }
+        }
+    }
+    let ladder = trainLadder
+    if (backtest) {
+        why.push(`${OOS_WHY[backtest]};訓練期階梯 ${trainLadder}`)
+        if (backtest in OOS_LADDER) {
+            ladder = hard ? 0 : OOS_LADDER[backtest]
+        }
+    }
+    let oosVeto = backtest === 'level' || backtest === 'below' || backtest === 'fail'
+    let [b1, b2] = score.freqBands
+    let band = mo &lt; b1 ? 'low' : (mo &lt; b2 ? 'mid' : 'high')
+    return { S, ladder, flags: { vetoed: hard || oosVeto, why, backtest, trainLadder }, cell: `${layer || '?'}|${band}`, evaluator: 1 }
+}
+
+
+export { scoreOf }
+export default scoreOf
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 14:42:16 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

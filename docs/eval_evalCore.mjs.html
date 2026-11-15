@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>eval/evalCore.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">eval/evalCore.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import crypto from 'crypto'
+
+
+//快速評估核心:「項目之事件帳本 + 於各決策時點只憑過去資訊挑子集(可另給逐訊號之執行規則)+ 往後視窗之結果彙整」
+//  通用於任何「項目(此處為策略)各有一串事件(此處為訂單: 進場棒、出場棒、每單位損益)」之領域; 與交易有關者只有名稱
+//  決策節奏: 每 cadenceDays 日決策一次; 起始相位 phase(日)各跑一遍取平均, 去除對齊運氣
+//  挑選函數 pick(ctx) → 序號陣列, 或 { ids, tag }(tag 為任意值, 原樣交給該決策視窗內每個訊號之 accept);
+//    另可帶 group(與 ids 等長之整數陣列, 0 ~ 3; 分帳: 各席所屬之子帳 ⇒ accept 收到 sig.group 與 book.openGroup[4]; 規則 R-EV-23)
+//  執行規則 accept(sig, book) → 布林(選配): 選集內策略之每個進場訊號依時間先後逐一詢問是否下單; 未提供 ⇒ 全收
+//    sig  = { sid, bar, day, dow(0 週日 … 6 週六), mode(1 做多 / -1 做空), k(決策序), tag }
+//    book = { open, openLong, openShort(現有持倉單數: 已下單而尚未出場), dayCount(當日已下單數), winCount(本決策視窗已下單數), nAccepted, pnlClosed(已出場單之累計損益) }
+//    accept 須為 (sig, book) 之純函數(評估器於操作績效、各新鮮度視窗、虛無各自獨立模擬, 各有自己的 book)
+//  操作績效 op(視窗 = 決策間隔, 首尾相接, book 連續): 等效年化 eqYr(%) = 已下單之總損益 ÷ 最大同時持倉單數 ÷ 年數 × 100(每單 1 單位)
+//    帳本期末仍未出場者: 損益 0、計入持倉至期末
+//  新鮮度 fresh[H]: 各決策之選集於其後 H 日內之訊號(每窗獨立之 book); eqYr_H = 各窗損益之平均 ÷ (H/365.25) ÷ 各窗最大同時持倉之最大值 × 100
+//  同劑量虛無 null: 同決策時點、同每次選集大小、同 tag 與同 accept, 選集改自全部項目均勻不放回隨機挑, 重複 draws 次 ⇒ op 等效年化(相位平均)之虛無分佈與 p 值
+//  無前視: 挑選函數只拿到 ctx, 其統計一律以決策棒 b 為界(出場棒 &lt; b 者才算已結); accept 只拿到訊號當下之資訊; 帳本陣列不外露
+/**
+ * 於已升冪排序之陣列 arr 的 [lo, hi) 區間內做二分搜尋, 回傳第一個「值 >= v」之位置
+ * 區間內皆 &lt; v 時回傳 hi
+ *
+ * @param {Array|TypedArray} arr 輸入已升冪排序之陣列或定型陣列
+ * @param {Integer} lo 輸入搜尋區間起點(含)
+ * @param {Integer} hi 輸入搜尋區間終點(不含)
+ * @param {Number} v 輸入要比較之值
+ * @returns {Integer} 回傳第一個值不小於 v 之位置, 範圍為 lo ~ hi
+ * @example
+ * let ind = lowerBound([1, 3, 3, 7], 0, 4, 3)
+ */
+let lowerBound = (arr, lo, hi, v) => {
+    while (lo &lt; hi) {
+        let m = (lo + hi) >>> 1
+        if (arr[m] &lt; v) {
+            lo = m + 1
+        }
+        else {
+            hi = m
+        }
+    }
+    return lo
+}
+
+/**
+ * 以種子建立可重現之偽亂數產生器(mulberry32)
+ * 同一種子產生之序列固定, 供評估器之虛無抽樣等需可重現亂數處使用
+ *
+ * @param {Integer} seed 輸入亂數種子, 內部以 seed >>> 0 轉為無號 32 位元整數
+ * @returns {Function} 回傳無參數函數, 每次呼叫回傳 [0, 1) 之亂數
+ * @example
+ * let rand = mulberry32(1)
+ * let r = rand()
+ */
+let mulberry32 = (seed) => {
+    let a = seed >>> 0
+    return () => {
+        a = (a + 0x6D2B79F5) >>> 0
+        let t = Math.imul(a ^ (a >>> 15), 1 | a)
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+}
+
+let statOf = (xs) => {
+    let n = xs.length
+    if (n === 0) {
+        return { mean: 0, min: 0, max: 0, sd: 0, byPhase: [] }
+    }
+    let mean = xs.reduce((s, v) => s + v, 0) / n
+    let sd = Math.sqrt(xs.reduce((s, v) => s + (v - mean) * (v - mean), 0) / n)
+    return { mean, min: Math.min(...xs), max: Math.max(...xs), sd, byPhase: xs }
+}
+
+let r4 = (x) => Math.round(x * 10000) / 10000
+
+
+/**
+ * 以訂單帳本建立快速評估器
+ * 評估器於各決策時點只憑決策棒以前之資訊呼叫挑選函數取得選集, 再彙整其後視窗之結果(操作績效、新鮮度、虛無檢定等); 詳細語義見檔頭說明
+ *
+ * @param {Object} L 輸入由 loadLedger 取得之帳本物件
+ * @param {Object} [cfg={}] 輸入設定物件,預設{}
+ * @param {Integer} [cfg.warmupDays=180] 輸入暖機日數,預設180
+ * @param {Integer} [cfg.cadenceDays=7] 輸入決策間隔日數,預設7
+ * @param {Integer} [cfg.tieSalt=0] 輸入同分次序之重放鹽值(整數),預設0(正本)
+ * @param {Object} [cfg.fitEnd] 輸入各策略求解窗終點之時間字串物件{ long, short }(無時區之時間字串),預設未給
+ * @param {Array} [cfg.phases=[0,1,2,3,4,5,6]] 輸入起始相位(日)陣列,evalPolicy未於opt指定時採用,預設[0,1,2,3,4,5,6]
+ * @param {Array} [cfg.horizons=[1,3,7,14,30]] 輸入新鮮度地平線(日)陣列,evalPolicy未於opt指定時採用,預設[1,3,7,14,30]
+ * @param {Integer} [cfg.nullDraws=64] 輸入虛無重複抽樣次數,evalPolicy未於opt指定時採用,預設64
+ * @param {Integer} [cfg.seed=1] 輸入亂數種子,evalPolicy未於opt指定時採用,預設1
+ * @returns {Object} 回傳評估器物件, 含方法: evalPolicy(評估一個挑選函數, 回傳完整評估結果), runPick(於一個相位依序呼叫挑選函數), opOf(操作績效), freshOf(新鮮度), nullOf(同劑量虛無), nullActOf(同活躍度虛無), nullSideActOf(同側同活躍度虛無), nullSideGeoOf(同側幾何分組虛無), sideGeoGroups(幾何分組), simWindows(視窗模擬), decisionBars(相位之決策棒), 以及屬性 meta(結構靜態欄)、timeOf(K棒序號轉時間字串)
+ * @example
+ * let L = loadLedger('./data/ledger/eval')
+ * let ev = makeEvaluator(L, { warmupDays: 60, cadenceDays: 7 })
+ * let { pick, accept } = await loadPick('./examples/pick_example.mjs')
+ * let m = ev.evalPolicy(pick, { accept, phases: [0, 3], horizons: [3, 7], nullDraws: 16, seed: 11 })
+ */
+let makeEvaluator = (L, cfg = {}) => {
+
+    let n = L.n
+    let nBars = L.nBars
+    let nFac = L.keyNames.length
+    let bpd = L.barsPerDay
+    let warmupDays = cfg.warmupDays === undefined ? 180 : cfg.warmupDays
+    let cadenceDays = cfg.cadenceDays === undefined ? 7 : cfg.cadenceDays
+    let warm = warmupDays * bpd
+    let cad = cadenceDays * bpd
+    let time0Ms = Date.parse(`${L.meta.time0}Z`)
+    let barMs = L.meta.barHours * 3600000
+    let dow0 = new Date(time0Ms).getUTCDay()
+    let timeOf = (b) => new Date(time0Ms + b * barMs).toISOString().slice(0, 19)
+
+    //meta, 交給挑選函數之靜態欄(複本; 帳本自身之陣列不外露)
+    //  只含結構屬性; ntAll 為訓練期之進場數, 屬「靜態、含決策日之後」之樣本內計數(要走勢前向之計數請用 ctx.stat)
+    //  帳本涵蓋訓練期以外之期間時(回測期重放), 由呼叫端給 L.ntStatic(只計訓練期), 使此欄不含訓練期以後之資訊
+    let ntAll = new Int32Array(n)
+    for (let s = 0; s &lt; n; s++) {
+        ntAll[s] = L.ntStatic ? L.ntStatic[s] : L.off[s + 1] - L.off[s]
+    }
+    //tie, 各策略固定之亂數(Uint32; 由序號經雜湊而得, 與策略之任何屬性無關): 排序同分時作次鍵用 —— 序號是策略檔之排序位置, 帶有資訊, 不宜當次鍵
+    //  cfg.tieSalt(選配; 整數; 預設 0 = 正本): 迴圈之重放用 —— 以另一組固定之同分次序重放(規則 R-EV-22)
+    //    主鍵大量同分之成品其入選者實際由 tie 決定(= 固定種子之隨機抽取), 只換 ctx.rand 之種子驗不到;
+    //    非 0 時對正本之 tie 再做一次雙射雜湊(值仍兩兩相異), ctx.meta.tie、同一進場棒之訊號先後、虛無之同值次序皆隨之; 正本之數字不受影響
+    let tieSalt = Number.isInteger(cfg.tieSalt) ? cfg.tieSalt : 0
+    let tie = new Uint32Array(n)
+    for (let s = 0; s &lt; n; s++) {
+        let x = Math.imul(s + 0x9E3779B9, 0x85EBCA6B)
+        x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35)
+        x = (x ^ (x >>> 16)) >>> 0
+        if (tieSalt !== 0) {
+            x = Math.imul(x ^ Math.imul(tieSalt, 0x9E3779B1), 0x85EBCA6B)
+            x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35)
+            x = (x ^ (x >>> 16)) >>> 0
+        }
+        tie[s] = x
+    }
+    //ordTieOf, 同一進場棒之訊號先後之另一組固定次序(擴充診斷之 simulate 之 opts.orderSalt 用; 規則 R-EV-32)
+    //  對現行之 tie 再做一次與 tieSalt 相同之雙射雜湊(值仍兩兩相異); salt 0 = 現行之 tie(成品本身)
+    //  於正本(tieSalt 0)之評估器上, salt k 之次序 = 以 tieSalt k 重放時之同棒訊號次序 —— 差別只在 ctx.meta.tie 不變、選集固定
+    //  只供 simWindows 之排序用: 不外露、不入 ctx.meta, 正本之任何數字不受影響
+    let ordTieCache = new Map()
+    let ordTieOf = (salt) => {
+        if (salt === 0) {
+            return tie
+        }
+        let t = ordTieCache.get(salt)
+        if (!t) {
+            t = new Uint32Array(n)
+            for (let s = 0; s &lt; n; s++) {
+                let x = Math.imul(tie[s] ^ Math.imul(salt, 0x9E3779B1), 0x85EBCA6B)
+                x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35)
+                t[s] = (x ^ (x >>> 16)) >>> 0
+            }
+            if (ordTieCache.size >= 16) {
+                ordTieCache.delete(ordTieCache.keys().next().value)
+            }
+            ordTieCache.set(salt, t)
+        }
+        return t
+    }
+    //fitEndBar, 各策略求解窗之終點棒(靜態; 由 cfg.fitEnd = { long, short }(無時區之時間字串)換算; 未給則為 -1): 此棒以後之訂單才是該策略沒見過之期間所產生
+    //  終點落在帳本之後者(例如訓練期帳本內之做空策略)其值 ≥ 帳本之 K 棒數, 表示帳本內尚無求解窗後之訂單
+    let fitEndBar = new Int32Array(n).fill(-1)
+    if (cfg.fitEnd &amp;&amp; typeof cfg.fitEnd === 'object') {
+        let barOfTime = (t) => (t ? Math.round((Date.parse(`${t}Z`) - time0Ms) / barMs) : -1)
+        let bl = barOfTime(cfg.fitEnd.long)
+        let bs = barOfTime(cfg.fitEnd.short)
+        for (let s = 0; s &lt; n; s++) {
+            fitEndBar[s] = L.mode[s] > 0 ? bl : bs
+        }
+    }
+    let meta = Object.freeze({
+        n,
+        barsPerDay: bpd,
+        fitEndBar,
+        mode: Int8Array.from(L.mode),
+        tp: Float32Array.from(L.tp),
+        sl: Float32Array.from(L.sl),
+        nKeys: Uint8Array.from(L.nKeys),
+        cls: Uint8Array.from(L.cls),
+        keyOff: Uint32Array.from(L.keyOff),
+        keyIdx: Uint16Array.from(L.keyIdx),
+        keyNames: Object.freeze(L.keyNames.slice()),
+        //進場規則之各條件(與 keyIdx 逐格對齊; 規則 R-EV-29): keySym(+1 = '>'、-1 = '&lt;')、keyTh(門檻)、keyOr(1 = or 條件); 舊帳本無此欄者為 null
+        keySym: L.keySym ? Int8Array.from(L.keySym) : null,
+        keyTh: L.keyTh ? Float64Array.from(L.keyTh) : null,
+        keyOr: L.keyOr ? Uint8Array.from(L.keyOr) : null,
+        ntAll,
+        tie,
+    })
+
+    //decisionBars, 相位 phase 之決策棒(其後 W 根之視窗須完整落在帳本內)
+    let decisionBars = (phase, W = cad) => {
+        let bs = []
+        for (let b = warm + phase * bpd; b + W &lt;= nBars; b += cad) {
+            bs.push(b)
+        }
+        return bs
+    }
+
+    //分帳(規則 R-EV-23): pick 可回傳 { ids, tag, group }, group 為與 ids 等長之整數陣列(0 ~ N_GROUP-1; 缺省全 0)——
+    //  各席所屬之子帳; accept 收到 sig.group(該訊號之策略所屬之子帳)與 book.openGroup(長度 N_GROUP 之陣列: 各子帳現有持倉單數), 可為各子帳各設持倉上限
+    //  group 不入 selHash、不影響未回傳 group 之成品; 虛無與組成對照之替換沿用被替換之席之 group(同劑量 / 同活躍度虛無依席次序對應)
+    //  grpOf: 選集陣列(物件)→ 其各席之 group(Uint8Array; 與選集同序); 只在有回傳非 0 之 group 時才登記
+    let N_GROUP = 4
+    let grpOf = new WeakMap()
+    //inheritGroups, 把成品該次選集 src 之分帳依席次序帶到替換後之選集 out(長度不同時循環取用); 無分帳則不動; 回 out
+    let inheritGroups = (src, out) => {
+        let g0 = src ? grpOf.get(src) : null
+        if (g0 &amp;&amp; g0.length &amp;&amp; out.length) {
+            let g = new Uint8Array(out.length)
+            for (let i = 0; i &lt; out.length; i++) {
+                g[i] = g0[i % g0.length]
+            }
+            grpOf.set(out, g)
+        }
+        return out
+    }
+    let normSel = (out) => {
+        if (out === null || out === undefined) {
+            throw new Error('pick 回傳 null / undefined(須回傳序號陣列或 { ids, tag })')
+        }
+        let tag = null
+        let ids = out
+        let group = null
+        if (!Array.isArray(out) &amp;&amp; !ArrayBuffer.isView(out) &amp;&amp; !(out instanceof Set) &amp;&amp; typeof out === 'object') {
+            ids = out.ids
+            tag = out.tag === undefined ? null : out.tag
+            group = out.group === undefined || out.group === null ? null : out.group
+            if (ids === null || ids === undefined) {
+                throw new Error('pick 回傳之物件缺 ids')
+            }
+        }
+        let arr = ids instanceof Set ? [...ids] : Array.from(ids)
+        let garr = null
+        if (group !== null) {
+            garr = Array.from(group)
+            if (garr.length !== arr.length) {
+                throw new Error(`pick 回傳之 group 須與 ids 等長(ids ${arr.length} 個、group ${garr.length} 個)`)
+            }
+        }
+        let seen = new Map()
+        for (let i = 0; i &lt; arr.length; i++) {
+            let v = arr[i]
+            if (!Number.isInteger(v) || v &lt; 0 || v >= n) {
+                throw new Error(`pick 回傳含不合法之序號: ${String(v).slice(0, 40)}(須為 0 ~ ${n - 1} 之整數)`)
+            }
+            let g = 0
+            if (garr) {
+                g = garr[i]
+                if (!Number.isInteger(g) || g &lt; 0 || g >= N_GROUP) {
+                    throw new Error(`pick 回傳之 group 含不合法之值: ${String(g).slice(0, 40)}(須為 0 ~ ${N_GROUP - 1} 之整數)`)
+                }
+            }
+            if (!seen.has(v)) {
+                seen.set(v, g)
+            }
+        }
+        let sel = Int32Array.from([...seen.keys()].sort((a, b) => a - b))
+        let grp = null
+        if (garr) {
+            grp = Uint8Array.from(sel, (s) => seen.get(s))
+            if (!grp.some((g) => g !== 0)) {
+                grp = null
+            }
+        }
+        if (grp) {
+            grpOf.set(sel, grp)
+        }
+        return { sel, tag, grp }
+    }
+
+    //runPick, 於一個相位依序呼叫挑選函數; 回各決策之選集與 tag
+    let runPick = (pickFn, phase, seed = 1) => {
+        let bars = decisionBars(phase)
+        let ce = Uint32Array.from(L.off.subarray(0, n)) //各項目「進場棒 >= b 之第一單」之位置
+        let cx = Uint32Array.from(L.xoff.subarray(0, n)) //各項目「出場棒 >= b 之第一筆已結單」之位置
+        let state = {}
+        let prev = new Int32Array(0)
+        let bufs = new Map()
+        let sels = []
+        let tags = []
+        for (let k = 0; k &lt; bars.length; k++) {
+            let b = bars[k]
+            for (let s = 0; s &lt; n; s++) {
+                let eh = L.off[s + 1]
+                let e = ce[s]
+                while (e &lt; eh &amp;&amp; L.ent[e] &lt; b) {
+                    e++
+                }
+                ce[s] = e
+                let xh = L.xoff[s + 1]
+                let x = cx[s]
+                while (x &lt; xh &amp;&amp; L.xExt[x] &lt; b) {
+                    x++
+                }
+                cx[s] = x
+            }
+            let done = new Set() //本決策已算過之 lookback
+            let stat = (days = 0) => {
+                let key = days > 0 &amp;&amp; Number.isFinite(days) ? Math.round(days) : 0
+                let B = bufs.get(key)
+                if (!B) {
+                    //緩衝重用: 回看日數逐次不同時(例如「自某固定日起」), 不為每個日數各留一組緩衝 —— 取用本次決策尚未用到之舊緩衝(其內容依合約只在當次 pick 內有效)
+                    for (let [k, v] of bufs) {
+                        if (!done.has(k)) {
+                            bufs.delete(k)
+                            B = v
+                            break
+                        }
+                    }
+                    if (!B) {
+                        B = { closed: new Int32Array(n), wins: new Int32Array(n), pnl: new Float64Array(n), entries: new Int32Array(n), open: new Int32Array(n), lastEntryAgo: new Int32Array(n) }
+                    }
+                    bufs.set(key, B)
+                }
+                if (done.has(key)) {
+                    return B
+                }
+                done.add(key)
+                let from = key > 0 ? b - key * bpd : -1
+                for (let s = 0; s &lt; n; s++) {
+                    let xlo = L.xoff[s]
+                    let x1 = cx[s]
+                    let x0 = from &lt;= 0 ? xlo : lowerBound(L.xExt, xlo, x1, from)
+                    B.closed[s] = x1 - x0
+                    B.pnl[s] = (x1 > xlo ? L.xPnlCum[x1 - 1] : 0) - (x0 > xlo ? L.xPnlCum[x0 - 1] : 0)
+                    B.wins[s] = (x1 > xlo ? L.xWinCum[x1 - 1] : 0) - (x0 > xlo ? L.xWinCum[x0 - 1] : 0)
+                    let elo = L.off[s]
+                    let e1 = ce[s]
+                    let e0 = from &lt;= 0 ? elo : lowerBound(L.ent, elo, e1, from)
+                    B.entries[s] = e1 - e0
+                    B.open[s] = (e1 - elo) - (x1 - xlo)
+                    B.lastEntryAgo[s] = e1 > elo ? b - 1 - L.ent[e1 - 1] : 1000000000
+                }
+                return B
+            }
+            let orders = (s) => {
+                if (!Number.isInteger(s) || s &lt; 0 || s >= n) {
+                    throw new Error(`ctx.orders: 序號不合法 ${s}`)
+                }
+                let rs = []
+                for (let j = L.off[s]; j &lt; ce[s]; j++) {
+                    let x = L.ext[j]
+                    let closed = x >= 0 &amp;&amp; x &lt; b
+                    rs.push({ ent: L.ent[j], ext: closed ? x : null, pnl: closed ? L.pnl[j] : null })
+                }
+                return rs
+            }
+            let entryDays = (s, days = 0) => {
+                if (!Number.isInteger(s) || s &lt; 0 || s >= n) {
+                    throw new Error(`ctx.entryDays: 序號不合法 ${s}`)
+                }
+                let from = days > 0 &amp;&amp; Number.isFinite(days) ? b - Math.round(days) * bpd : -1
+                let e0 = from &lt;= 0 ? L.off[s] : lowerBound(L.ent, L.off[s], ce[s], from)
+                let out = new Int32Array(ce[s] - e0)
+                for (let j = e0; j &lt; ce[s]; j++) {
+                    out[j - e0] = Math.floor(L.ent[j] / bpd)
+                }
+                return out
+            }
+            //entryBars, 策略 s 於決策棒以前、最近 days 日內各進場單之進場棒序號(Int32Array 之複本; 由舊至新; 與 entryDays 同序、同長; 規則 R-EV-30)
+            //  Math.floor(entryBars ÷ 每日棒數) = entryDays; 只含進場棒 &lt; 決策棒者(ce 為各策略於決策棒以前之進場數之游標)⇒ 無前視; days 省略或 0 = 全部歷史; 成本與 entryDays 同級
+            let entryBars = (s, days = 0) => {
+                if (!Number.isInteger(s) || s &lt; 0 || s >= n) {
+                    throw new Error(`ctx.entryBars: 序號不合法 ${s}`)
+                }
+                let from = days > 0 &amp;&amp; Number.isFinite(days) ? b - Math.round(days) * bpd : -1
+                let e0 = from &lt;= 0 ? L.off[s] : lowerBound(L.ent, L.off[s], ce[s], from)
+                return L.ent.slice(e0, ce[s])
+            }
+            //exitDays, 策略 s 於決策棒以前、最近 days 日內「已出場」之各單之出場日序號(Int32Array; 依出場時間由舊至新; 與 entryDays 對稱; 規則 R-EV-26)
+            //  只含出場棒 &lt; 決策棒者 ⇒ 無前視; days 省略或 0 = 全部歷史; 取自帳本內已依出場時間排序之每策略出場序列(成本與 entryDays 同級)
+            let exitDays = (s, days = 0) => {
+                if (!Number.isInteger(s) || s &lt; 0 || s >= n) {
+                    throw new Error(`ctx.exitDays: 序號不合法 ${s}`)
+                }
+                let from = days > 0 &amp;&amp; Number.isFinite(days) ? b - Math.round(days) * bpd : -1
+                let x0 = from &lt;= 0 ? L.xoff[s] : lowerBound(L.xExt, L.xoff[s], cx[s], from)
+                let out = new Int32Array(cx[s] - x0)
+                for (let j = x0; j &lt; cx[s]; j++) {
+                    out[j - x0] = Math.floor(L.xExt[j] / bpd)
+                }
+                return out
+            }
+            //exitBars, 策略 s 於決策棒以前、最近 days 日內「已出場」之各單之出場棒序號(Int32Array 之複本; 依出場時間由舊至新; 與 exitDays 同序、同長; 規則 R-EV-31)
+            //  Math.floor(exitBars ÷ 每日棒數) = exitDays; 只含出場棒 &lt; 決策棒者 ⇒ 無前視; days 省略或 0 = 全部歷史; 成本與 exitDays 同級; 與 entryBars 對稱
+            let exitBars = (s, days = 0) => {
+                if (!Number.isInteger(s) || s &lt; 0 || s >= n) {
+                    throw new Error(`ctx.exitBars: 序號不合法 ${s}`)
+                }
+                let from = days > 0 &amp;&amp; Number.isFinite(days) ? b - Math.round(days) * bpd : -1
+                let x0 = from &lt;= 0 ? L.xoff[s] : lowerBound(L.xExt, L.xoff[s], cx[s], from)
+                return Int32Array.from(L.xExt.subarray(x0, cx[s]))
+            }
+            //market, 標的於決策棒以前最近 nBack 根 K 線(不含決策棒; 各陣列為複本, 由舊至新)
+            let market = (nBack = 180) => {
+                if (!L.px) {
+                    throw new Error('ctx.market: 帳本無 K 線欄(請重建帳本)')
+                }
+                let m = Math.max(0, Math.min(Math.round(nBack), b))
+                let o = { open: new Float64Array(m), high: new Float64Array(m), low: new Float64Array(m), close: new Float64Array(m), volume: new Float64Array(m) }
+                for (let i = 0; i &lt; m; i++) {
+                    let p = (b - m + i) * 5
+                    o.open[i] = L.px[p]
+                    o.high[i] = L.px[p + 1]
+                    o.low[i] = L.px[p + 2]
+                    o.close[i] = L.px[p + 3]
+                    o.volume[i] = L.px[p + 4]
+                }
+                return o
+            }
+            //factor, 因子 ki(序同 ctx.meta.keyNames)於決策棒以前最近 nBack 根 K 棒之值(Float64Array 複本, 由舊至新; 不含決策棒; 缺值 NaN; 規則 R-EV-29)
+            //  慣例同 market: 只含棒序 &lt; 決策棒者 ⇒ 無前視; 即觸發進場所用之同一份序列(原值)
+            //  ⇒ 策略於某棒進場 ⇔ 其各條件(ctx.meta.keySym / keyTh / keyOr)於該棒皆有值, and 條件全成立, 且(無 or 條件, 或 or 條件至少一個成立)
+            let factor = (ki, nBack = 180) => {
+                if (!Number.isInteger(ki) || ki &lt; 0 || ki >= nFac) {
+                    throw new Error(`ctx.factor: 因子序號不合法 ${ki}`)
+                }
+                let F = L.fac
+                if (!F || F.length !== nFac * nBars) {
+                    throw new Error('ctx.factor: 帳本無因子序列欄(請重建帳本)')
+                }
+                let m = Number.isFinite(nBack) ? Math.max(0, Math.min(Math.round(nBack), b)) : 0
+                return F.slice(ki * nBars + b - m, ki * nBars + b)
+            }
+            let day = Math.floor(b / bpd)
+            let ctx = { n, meta, bar: b, day, dow: (dow0 + day) % 7, time: timeOf(b), k, phase, nDecisions: bars.length, cadenceDays, state, prev, rand: mulberry32(seed * 1000003 + phase * 9973 + k), stat, orders, entryDays, entryBars, exitDays, exitBars, market, factor }
+            let r = normSel(pickFn(ctx))
+            sels.push(r.sel)
+            tags.push(r.tag)
+            prev = r.sel
+        }
+        return { bars, sels, tags }
+    }
+
+    //simWindows, 逐訊號模擬: wins = [{ b, e, sel, tag, k }](依 b 升冪, 互不重疊); accept 為 null ⇒ 全收
+    //  回 { totalPnl, nSignals, nOrders, nClosed, nWin, nUnsettled, peak, hash }
+    let closeL = new Int32Array(nBars + 2)
+    let closeS = new Int32Array(nBars + 2)
+    let closeP = new Float64Array(nBars + 2)
+    let closeG = [0, 1, 2, 3].map(() => new Int32Array(nBars + 2))   //分帳: 各子帳於各棒出場之單數(只在選集有登記 group 時使用)
+    //  col(選配)= { strat: Int32Array(n), bar: Int32Array(nBars + 2) }: 給定時把每張已下單之單計入其策略與進場棒(下單集中度用; 不影響任何數字)
+    //    col 另帶 side(Float64Array(8): 做多之 [單數, 損益, 已結單數, 獲利單數] + 做空之同四項)與 tags(Map: tag 字串 → { orders, pnl })時, 另把每張單歸到其策略之方向與其決策視窗之 tag(損益歸因用)
+    //    col 再帶 grp(Float64Array(N_GROUP * 4): 各子帳之 [單數, 損益, 已結單數, 獲利單數])時, 另把每張單歸到其策略所屬之子帳(未分帳者皆歸子帳 0; 規則 R-EV-33)
+    //  ordKey(選配)= 同一進場棒之訊號先後所依之各策略次序(Uint32Array(n); 預設 = tie; 見 ordTieOf); 只影響逐訊號模擬之排序
+    let tagKeyOf = (t) => (t === null || t === undefined ? null : (typeof t === 'string' ? t : JSON.stringify(t)).slice(0, 40))
+    let simWindows = (wins, accept, col = null, ordKey = null) => {
+        if (wins.length === 0) {
+            return { totalPnl: 0, nSignals: 0, nOrders: 0, nClosed: 0, nWin: 0, nUnsettled: 0, peak: 0, hash: 0 }
+        }
+        let attr = col &amp;&amp; col.side &amp;&amp; col.tags
+            ? (s, w, j, g) => {
+                let o = L.mode[s] > 0 ? 0 : 4
+                let closed = L.ext[j] >= 0
+                let p = closed ? L.pnl[j] : 0
+                col.side[o]++
+                if (closed) {
+                    col.side[o + 1] += p
+                    col.side[o + 2]++
+                    if (p > 0) {
+                        col.side[o + 3]++
+                    }
+                }
+                if (col.grp) {
+                    let og = g * 4
+                    col.grp[og]++
+                    if (closed) {
+                        col.grp[og + 1] += p
+                        col.grp[og + 2]++
+                        if (p > 0) {
+                            col.grp[og + 3]++
+                        }
+                    }
+                }
+                let tk = tagKeyOf(wins[w].tag)
+                if (tk !== null) {
+                    let a = col.tags.get(tk)
+                    if (!a) {
+                        a = { orders: 0, pnl: 0 }
+                        col.tags.set(tk, a)
+                    }
+                    a.orders++
+                    a.pnl += p
+                }
+            }
+            : null
+        //候選訊號(進場棒, 序號, 單之位置, 視窗序)
+        let cj = []
+        let cw = []
+        let cs = col ? [] : null
+        //cg, 各候選訊號之子帳(只在全收而須依子帳歸因時收集; 逐訊號之路徑另有 gOf)
+        let cg = !accept &amp;&amp; attr &amp;&amp; col.grp ? [] : null
+        for (let w = 0; w &lt; wins.length; w++) {
+            let { b, e, sel } = wins[w]
+            let gsel = cg ? grpOf.get(sel) : null
+            for (let q = 0; q &lt; sel.length; q++) {
+                let s = sel[q]
+                let hi = L.off[s + 1]
+                for (let j = lowerBound(L.ent, L.off[s], hi, b); j &lt; hi &amp;&amp; L.ent[j] &lt; e; j++) {
+                    cj.push(j)
+                    cw.push(w)
+                    if (cs) {
+                        cs.push(s)
+                    }
+                    if (cg) {
+                        cg.push(gsel ? gsel[q] : 0)
+                    }
+                }
+            }
+        }
+        let nSig = cj.length
+        let totalPnl = 0
+        let nOrders = 0
+        let nClosed = 0
+        let nWin = 0
+        let nUnsettled = 0
+        let peak = 0
+        let hash = 2166136261
+        if (!accept) {
+            //全收: 以差分陣列求最大同時持倉(不必排序)
+            let lo = wins[0].b
+            let hiBar = nBars
+            closeL.fill(0, lo, hiBar + 1)
+            for (let i = 0; i &lt; nSig; i++) {
+                let j = cj[i]
+                nOrders++
+                closeL[L.ent[j]]++
+                if (col) {
+                    col.strat[cs[i]]++
+                    col.bar[L.ent[j]]++
+                    if (attr) {
+                        attr(cs[i], cw[i], j, cg ? cg[i] : 0)
+                    }
+                }
+                let x = L.ext[j]
+                if (x >= 0) {
+                    totalPnl += L.pnl[j]
+                    nClosed++
+                    if (L.pnl[j] > 0) {
+                        nWin++
+                    }
+                    closeL[x]--
+                }
+                else {
+                    nUnsettled++
+                }
+            }
+            let cur = 0
+            for (let i = lo; i &lt; hiBar; i++) {
+                cur += closeL[i]
+                if (cur > peak) {
+                    peak = cur
+                }
+            }
+            closeL.fill(0, lo, hiBar + 1)
+            return { totalPnl, nSignals: nSig, nOrders, nClosed, nWin, nUnsettled, peak, hash: nSig }
+        }
+        //逐訊號: 依(進場棒, 策略之固定亂數 tie)排序
+        let sidOf = new Int32Array(nSig)
+        let ord = new Uint32Array(nSig)
+        for (let i = 0; i &lt; nSig; i++) {
+            ord[i] = i
+        }
+        //分帳: 任一視窗之選集有登記 group 才啟用(未啟用時 book.openGroup[0] 恆等於 book.open, 其餘為 0; 既有成品之行為不變)
+        let hasGrp = false
+        for (let w = 0; w &lt; wins.length; w++) {
+            if (grpOf.has(wins[w].sel)) {
+                hasGrp = true
+                break
+            }
+        }
+        let gOf = hasGrp ? new Uint8Array(nSig) : null
+        //策略序號: 由單之位置反查(同一策略之單連續, cj 內同策略同視窗者相鄰)
+        {
+            let i = 0
+            for (let w = 0; w &lt; wins.length; w++) {
+                let { b, e, sel } = wins[w]
+                let gs = hasGrp ? grpOf.get(sel) : null
+                for (let q = 0; q &lt; sel.length; q++) {
+                    let s = sel[q]
+                    let hi = L.off[s + 1]
+                    for (let j = lowerBound(L.ent, L.off[s], hi, b); j &lt; hi &amp;&amp; L.ent[j] &lt; e; j++) {
+                        if (gs) {
+                            gOf[i] = gs[q]
+                        }
+                        sidOf[i++] = s
+                    }
+                }
+            }
+        }
+        //同一進場棒之多個訊號: 依各策略固定之亂數 tie 定先後(不用策略序號 —— 序號是策略檔之排序位置, 做多者恆在做空者之前, 持倉上限擋單時會使做多恆先得席位)
+        let arr = Array.from(ord)
+        let tk = ordKey || tie
+        arr.sort((a, b) => (L.ent[cj[a]] - L.ent[cj[b]]) || (tk[sidOf[a]] - tk[sidOf[b]]) || (a - b))
+        let lo = wins[0].b
+        closeL.fill(0, lo, nBars + 2)
+        closeS.fill(0, lo, nBars + 2)
+        closeP.fill(0, lo, nBars + 2)
+        if (hasGrp) {
+            for (let g = 0; g &lt; N_GROUP; g++) {
+                closeG[g].fill(0, lo, nBars + 2)
+            }
+        }
+        let book = { open: 0, openLong: 0, openShort: 0, openGroup: new Array(N_GROUP).fill(0), dayCount: 0, winCount: 0, nAccepted: 0, pnlClosed: 0 }
+        let sig = { sid: 0, bar: 0, day: 0, dow: 0, mode: 0, k: 0, tag: null, group: 0 }
+        let cur = lo - 1
+        let curDay = -1
+        let curWin = -1
+        for (let ii = 0; ii &lt; nSig; ii++) {
+            let i = arr[ii]
+            let j = cj[i]
+            let t = L.ent[j]
+            while (cur &lt; t) {
+                cur++
+                let a = closeL[cur]
+                let c = closeS[cur]
+                if (a || c) {
+                    book.openLong -= a
+                    book.openShort -= c
+                    book.open -= a + c
+                    book.pnlClosed += closeP[cur]
+                    if (hasGrp) {
+                        for (let g = 0; g &lt; N_GROUP; g++) {
+                            book.openGroup[g] -= closeG[g][cur]
+                        }
+                    }
+                    else {
+                        book.openGroup[0] = book.open
+                    }
+                }
+            }
+            let day = Math.floor(t / bpd)
+            if (day !== curDay) {
+                curDay = day
+                book.dayCount = 0
+            }
+            let w = cw[i]
+            if (w !== curWin) {
+                curWin = w
+                book.winCount = 0
+            }
+            let s = sidOf[i]
+            let md = L.mode[s]
+            sig.sid = s
+            sig.bar = t
+            sig.day = day
+            sig.dow = (dow0 + day) % 7
+            sig.mode = md
+            sig.k = wins[w].k
+            sig.tag = wins[w].tag
+            let gq = hasGrp ? gOf[i] : 0
+            sig.group = gq
+            if (accept(sig, book) !== true) {
+                continue
+            }
+            nOrders++
+            book.nAccepted++
+            book.dayCount++
+            book.winCount++
+            book.open++
+            book.openGroup[gq]++
+            if (md > 0) {
+                book.openLong++
+            }
+            else {
+                book.openShort++
+            }
+            if (book.open > peak) {
+                peak = book.open
+            }
+            if (col) {
+                col.strat[s]++
+                col.bar[t]++
+                if (attr) {
+                    attr(s, w, j, gq)
+                }
+            }
+            hash = Math.imul(hash ^ (j + 1), 16777619) >>> 0
+            let x = L.ext[j]
+            if (x >= 0) {
+                totalPnl += L.pnl[j]
+                nClosed++
+                if (L.pnl[j] > 0) {
+                    nWin++
+                }
+                if (md > 0) {
+                    closeL[x]++
+                }
+                else {
+                    closeS[x]++
+                }
+                if (hasGrp) {
+                    closeG[gq][x]++
+                }
+                closeP[x] += L.pnl[j]
+            }
+            else {
+                nUnsettled++
+            }
+        }
+        closeL.fill(0, lo, nBars + 2)
+        closeS.fill(0, lo, nBars + 2)
+        closeP.fill(0, lo, nBars + 2)
+        return { totalPnl, nSignals: nSig, nOrders, nClosed, nWin, nUnsettled, peak, hash }
+    }
+
+    //opOf, 操作績效(視窗 = 決策間隔, 首尾相接, book 連續)
+    //  opt(選配)= { k0, col, ordKey }: k0 為 bars[0] 之決策序(切片重放時使 accept 收到之 sig.k 與挑選函數之 ctx.k 一致; 預設 0); col、ordKey 見 simWindows
+    let opOf = (sels, bars, tags, accept, opt = null) => {
+        let k0 = opt &amp;&amp; Number.isInteger(opt.k0) ? opt.k0 : 0
+        let wins = bars.map((b, k) => ({ b, e: b + cad, sel: sels[k], tag: tags ? tags[k] : null, k: k + k0 }))
+        let r = simWindows(wins, accept, opt &amp;&amp; opt.col ? opt.col : null, opt &amp;&amp; opt.ordKey ? opt.ordKey : null)
+        let days = bars.length * cadenceDays
+        let years = days / 365.25
+        return {
+            eqYr: r.peak > 0 &amp;&amp; years > 0 ? r.totalPnl / r.peak / years * 100 : 0,
+            totalPnl: r.totalPnl,
+            nSignals: r.nSignals,
+            nOrders: r.nOrders,
+            nClosed: r.nClosed,
+            nUnsettled: r.nUnsettled,
+            winRate: r.nClosed > 0 ? r.nWin / r.nClosed : 0,
+            peakHold: r.peak,
+            monthlyOrders: days > 0 ? r.nOrders / (days / 30.4375) : 0,
+            nDecisions: bars.length,
+            hash: r.hash,
+        }
+    }
+
+    //groupRowsOf, 依子帳之損益歸因(規則 R-EV-33): acc = simWindows 之 col.grp(各相位累加), selsList = 各相位之逐決策選集, nP = 相位數
+    //  回 [{ group, seats, orders, pnl, winRate }]: seats = 該子帳每次決策之平均席數; orders / pnl / winRate 之定義同 bySide(各相位平均; 損益只計已結之單)
+    //  只列有席或有單之子帳; 未分帳者只有子帳 0 一列(= 全體)。各列之 orders 和 = 各相位平均之下單數、pnl 和 = op.pnl
+    let groupRowsOf = (acc, selsList, nP) => {
+        let seats = new Float64Array(N_GROUP)
+        let nd = 0
+        for (let sels of selsList) {
+            for (let sel of sels) {
+                nd++
+                let gs = grpOf.get(sel)
+                if (gs) {
+                    for (let q = 0; q &lt; sel.length; q++) {
+                        seats[gs[q]]++
+                    }
+                }
+                else {
+                    seats[0] += sel.length
+                }
+            }
+        }
+        let row = (g) => ({ group: g, seats: r4(nd > 0 ? seats[g] / nd : 0), orders: r4(acc[g * 4] / nP), pnl: r4(acc[g * 4 + 1] / nP), winRate: acc[g * 4 + 2] > 0 ? r4(acc[g * 4 + 3] / acc[g * 4 + 2]) : 0 })
+        let rows = []
+        for (let g = 0; g &lt; N_GROUP; g++) {
+            if (seats[g] > 0 || acc[g * 4] > 0) {
+                rows.push(row(g))
+            }
+        }
+        return rows.length ? rows : [row(0)]
+    }
+
+    //freshOf, 新鮮度(選集於其後 H 日內之訊號; 每窗獨立之 book)
+    //  k0(選配; 預設 0)= bars[0] 之決策序(切片評估時使 accept 收到之 sig.k 與挑選函數之 ctx.k 一致)
+    let freshOf = (sels, bars, tags, accept, H, k0 = 0) => {
+        let W = H * bpd
+        let sum = 0
+        let nw = 0
+        let nPos = 0
+        let maxPeak = 0
+        for (let k = 0; k &lt; bars.length; k++) {
+            let b = bars[k]
+            if (b + W > nBars) {
+                break
+            }
+            let r = simWindows([{ b, e: b + W, sel: sels[k], tag: tags ? tags[k] : null, k: k + k0 }], accept)
+            if (r.peak > maxPeak) {
+                maxPeak = r.peak
+            }
+            sum += r.totalPnl
+            nw++
+            if (r.totalPnl > 0) {
+                nPos++
+            }
+        }
+        return { eqYr: nw > 0 &amp;&amp; maxPeak > 0 ? (sum / nw) / (H / 365.25) / maxPeak * 100 : 0, posRate: nw > 0 ? nPos / nw : 0, nWindows: nw, peakHold: maxPeak }
+    }
+
+    let jaccard = (a, b) => {
+        if (a.length === 0 &amp;&amp; b.length === 0) {
+            return 1
+        }
+        let i = 0
+        let j = 0
+        let c = 0
+        while (i &lt; a.length &amp;&amp; j &lt; b.length) {
+            if (a[i] === b[j]) {
+                c++
+                i++
+                j++
+            }
+            else if (a[i] &lt; b[j]) {
+                i++
+            }
+            else {
+                j++
+            }
+        }
+        return c / (a.length + b.length - c)
+    }
+
+    //nullOf, 同劑量虛無: 同決策時點、同每次選集大小、同 tag 與 accept, 選集改均勻不放回隨機挑
+    //  回傳各抽之等效年化(相位平均)陣列; 陣列另帶 comp = { sigPerPick, longRatio }(各抽平均之選集組成, 供與成品之選集組成對照)
+    let nullOf = (runs, accept, draws, seed) => {
+        let stamp = new Int32Array(n)
+        let tick = 0
+        let vals = []
+        let nSig = 0
+        let nSlot = 0
+        let nLong = 0
+        for (let d = 0; d &lt; draws; d++) {
+            let rng = mulberry32(seed + (d + 1) * 7919)
+            let acc = 0
+            for (let r of runs) {
+                let rs = r.sels.map((sel) => {
+                    let k = sel.length
+                    let out = new Int32Array(k)
+                    tick++
+                    let m = 0
+                    while (m &lt; k) {
+                        let v = Math.floor(rng() * n)
+                        if (stamp[v] !== tick) {
+                            stamp[v] = tick
+                            out[m++] = v
+                            if (L.mode[v] > 0) {
+                                nLong++
+                            }
+                        }
+                    }
+                    nSlot += k
+                    return inheritGroups(sel.src || sel, out.sort())
+                })
+                let o = opOf(rs, r.bars, r.tags, accept, r.k0 ? { k0: r.k0 } : null)
+                acc += o.eqYr
+                nSig += o.nSignals
+            }
+            vals.push(acc / runs.length)
+        }
+        vals.comp = { sigPerPick: nSlot > 0 ? nSig / nSlot : 0, longRatio: nSlot > 0 ? nLong / nSlot : 0 }
+        return vals
+    }
+
+    //nullActOf, 同活躍度虛無: 同決策時點、同每次選集大小、同 tag 與 accept, 且**活躍度分層相同**之隨機挑
+    //  活躍度 = 該決策棒以前之累計進場數(走勢前向); 每次決策把全部項目依此值分為 nBins 層(分位; 同值者同層),
+    //  成品該次之選集在各層各有幾隻, 隨機選集即自各層各抽同樣隻數(不放回)
+    //  —— 「同訊號量虛無」以較少(或較多)隻之一般項目匹配總訊號量, 不匹配每隻之活躍度; 項目之活躍度本身與其樣本內績效相關時
+    //     (例如進場少者須獲利才會被保留), 只是挑得較安靜 / 較活躍就會有超額, 本虛無把這一層扣掉
+    //  回傳各抽之等效年化(相位平均)陣列, 另帶 comp = { sigPerPick }
+    let nullActOf = (runs, accept, draws, seed, nBins = 10) => {
+        let maxCnt = 0
+        for (let s = 0; s &lt; n; s++) {
+            let c = L.off[s + 1] - L.off[s]
+            if (c > maxCnt) {
+                maxCnt = c
+            }
+        }
+        let hist = new Int32Array(maxCnt + 2)
+        let binOfCnt = new Uint8Array(maxCnt + 2)
+        let acc = new Float64Array(draws)
+        let nSig = 0
+        let nSlot = 0
+        for (let ri = 0; ri &lt; runs.length; ri++) {
+            let r = runs[ri]
+            let nd = r.bars.length
+            //各決策之分層: ord(依層排列之序號)、bs(各層於 ord 內之起點)、cd(成品於各層之隻數)
+            let ce = Uint32Array.from(L.off.subarray(0, n))
+            let ords = new Array(nd)
+            let bss = new Array(nd)
+            let cds = new Array(nd)
+            let binOf = new Uint8Array(n)
+            for (let k = 0; k &lt; nd; k++) {
+                let b = r.bars[k]
+                hist.fill(0)
+                for (let s = 0; s &lt; n; s++) {
+                    let eh = L.off[s + 1]
+                    let e = ce[s]
+                    while (e &lt; eh &amp;&amp; L.ent[e] &lt; b) {
+                        e++
+                    }
+                    ce[s] = e
+                    hist[e - L.off[s]]++
+                }
+                let cum = 0
+                for (let c = 0; c &lt;= maxCnt; c++) {
+                    binOfCnt[c] = Math.min(nBins - 1, Math.floor(cum / n * nBins))
+                    cum += hist[c]
+                }
+                let bs = new Int32Array(nBins + 1)
+                for (let s = 0; s &lt; n; s++) {
+                    let bi = binOfCnt[ce[s] - L.off[s]]
+                    binOf[s] = bi
+                    bs[bi + 1]++
+                }
+                for (let i = 0; i &lt; nBins; i++) {
+                    bs[i + 1] += bs[i]
+                }
+                let pos = Int32Array.from(bs.subarray(0, nBins))
+                let ord = new Int32Array(n)
+                for (let s = 0; s &lt; n; s++) {
+                    ord[pos[binOf[s]]++] = s
+                }
+                let cd = new Int32Array(nBins)
+                let sel = r.sels[k]
+                for (let i = 0; i &lt; sel.length; i++) {
+                    cd[binOf[sel[i]]]++
+                }
+                ords[k] = ord
+                bss[k] = bs
+                cds[k] = cd
+            }
+            for (let d = 0; d &lt; draws; d++) {
+                let rng = mulberry32(seed + (d + 1) * 7919 + ri * 104723)
+                let rs = new Array(nd)
+                for (let k = 0; k &lt; nd; k++) {
+                    let ord = ords[k]
+                    let bs = bss[k]
+                    let cd = cds[k]
+                    let out = new Int32Array(r.sels[k].length)
+                    let m = 0
+                    for (let bi = 0; bi &lt; nBins; bi++) {
+                        let lo = bs[bi]
+                        let len = bs[bi + 1] - lo
+                        //層內部分洗牌(就地; 洗後仍是同一層之全部成員, 下一抽照用)
+                        for (let i = 0; i &lt; cd[bi]; i++) {
+                            let j = i + Math.floor(rng() * (len - i))
+                            let v = ord[lo + j]
+                            ord[lo + j] = ord[lo + i]
+                            ord[lo + i] = v
+                            out[m++] = v
+                        }
+                    }
+                    nSlot += m
+                    rs[k] = inheritGroups(r.sels[k], out.sort())
+                }
+                let o = opOf(rs, r.bars, r.tags, accept, r.k0 ? { k0: r.k0 } : null)
+                acc[d] += o.eqYr
+                nSig += o.nSignals
+            }
+        }
+        let vals = Array.from(acc, (v) => v / runs.length)
+        vals.comp = { sigPerPick: nSlot > 0 ? nSig / nSlot : 0 }
+        return vals
+    }
+
+    //nullSideActOf, 同側同活躍度虛無(組成對照): 同決策時點、同 tag 與 accept, 把成品該次選集之**每一隻**換成「同方向、活躍度名次相鄰」之隨機一隻
+    //  活躍度 = 該決策棒以前之累計進場數(走勢前向); 各側(做多 / 做空)內依此值排名(同值依各策略固定之亂數 tie), 自該隻名次 ± half 名內均勻抽一隻(同一選集內不重複)
+    //  —— 同活躍度虛無不分方向且只分 nBins 層(最高層很寬): 選集之方向或活躍度偏離全體隨機時, 「組成」(方向 × 活躍度)本身之績效會被算成內容;
+    //     本虛無之隨機選集與成品同方向比例、活躍度逐隻相近, 成品超出它之部分才是「同組成內挑得比隨機好」
+    //  回傳各抽之等效年化(相位平均)陣列, 另帶 comp = { sigPerPick }
+    let tieRank = null
+    let tieInv = null
+    //nullGroupActOf, 配對隨機替換之通用版: 把選集之每一隻換成「同組、組內活躍度名次 ± half 名內」之隨機一隻
+    //  grp(Int32Array(n); 靜態之組別 0 ~ nGrp-1); 活躍度 = 決策棒以前之累計進場數(同值依 tie)
+    //  回傳各抽之等效年化(相位平均)陣列, 另帶 comp = { sigPerPick } 與 thirds = 各三等分段之各抽平均(各相位之決策數皆 ≥ 6 時才有; 分段同 evalPolicy 之 op.thirds)
+    //  actDays(選配; 預設 0): > 0 時活躍度改為「決策棒以前最近 actDays 日之進場數」(0 = 累計)
+    let nullGroupActOf = (runs, accept, draws, seed, half, grp, nGrp, actDays = 0) => {
+        let actBars = Number.isFinite(actDays) &amp;&amp; actDays > 0 ? Math.round(actDays) * bpd : 0
+        if (!tieRank) {
+            let idx = Array.from({ length: n }, (_, i) => i).sort((a, b) => (tie[a] - tie[b]) || (a - b))
+            tieInv = Int32Array.from(idx)
+            tieRank = new Int32Array(n)
+            for (let i = 0; i &lt; n; i++) {
+                tieRank[idx[i]] = i
+            }
+        }
+        //各組於排序後陣列內之起點(組別為排序鍵之最高位 ⇒ 同組者相連; 組之隻數為靜態)
+        let gStart = new Int32Array(nGrp + 1)
+        let maxCnt = 0
+        for (let s = 0; s &lt; n; s++) {
+            gStart[grp[s] + 1]++
+            let c = L.off[s + 1] - L.off[s]
+            if (c > maxCnt) {
+                maxCnt = c
+            }
+        }
+        for (let g = 0; g &lt; nGrp; g++) {
+            gStart[g + 1] += gStart[g]
+        }
+        let span = maxCnt + 1
+        let keys = new Float64Array(n)
+        let pos = new Int32Array(n)
+        let stamp = new Int32Array(n)
+        let tick = 0
+        let acc = new Float64Array(draws)
+        let wantThirds = runs.every((r) => r.bars.length >= 6)
+        let accT = [new Float64Array(draws), new Float64Array(draws), new Float64Array(draws)]
+        let nSig = 0
+        let nSlot = 0
+        for (let ri = 0; ri &lt; runs.length; ri++) {
+            let r = runs[ri]
+            let nd = r.bars.length
+            let ce = Uint32Array.from(L.off.subarray(0, n))
+            let ords = new Array(nd)
+            let selPos = new Array(nd)
+            for (let k = 0; k &lt; nd; k++) {
+                let b = r.bars[k]
+                for (let s = 0; s &lt; n; s++) {
+                    let eh = L.off[s + 1]
+                    let e = ce[s]
+                    while (e &lt; eh &amp;&amp; L.ent[e] &lt; b) {
+                        e++
+                    }
+                    ce[s] = e
+                    let cnt = actBars > 0 ? e - lowerBound(L.ent, L.off[s], e, b - actBars) : e - L.off[s]
+                    keys[s] = (grp[s] * span + cnt) * n + tieRank[s]
+                }
+                keys.sort()
+                let ord = new Int32Array(n)
+                for (let i = 0; i &lt; n; i++) {
+                    let s = tieInv[keys[i] - Math.floor(keys[i] / n) * n]
+                    ord[i] = s
+                    pos[s] = i
+                }
+                ords[k] = ord
+                selPos[k] = Int32Array.from(r.sels[k], (s) => pos[s])
+            }
+            for (let d = 0; d &lt; draws; d++) {
+                let rng = mulberry32(seed + (d + 1) * 7919 + ri * 104723)
+                let rs = new Array(nd)
+                for (let k = 0; k &lt; nd; k++) {
+                    let sel = r.sels[k]
+                    let out = new Int32Array(sel.length)
+                    let bk0 = grpOf.get(sel) || null   //分帳: 成品該次各席之子帳(替換者沿用被替換之席之子帳)
+                    let bk = bk0 ? new Uint8Array(sel.length) : null
+                    let m = 0
+                    tick++
+                    let ord = ords[k]
+                    for (let i = 0; i &lt; sel.length; i++) {
+                        let g = grp[sel[i]]
+                        let p = selPos[k][i]
+                        let lo = Math.max(gStart[g], p - half)
+                        let hi = Math.min(gStart[g + 1] - 1, p + half)
+                        let v = ord[lo + Math.floor(rng() * (hi - lo + 1))]
+                        for (let t = 0; t &lt; 16 &amp;&amp; stamp[v] === tick; t++) {
+                            v = ord[lo + Math.floor(rng() * (hi - lo + 1))]
+                        }
+                        if (stamp[v] === tick) {
+                            //鄰域內多數已被取用: 依序找第一個未用者; 全部用盡則此席從缺
+                            v = -1
+                            for (let q = lo; q &lt;= hi; q++) {
+                                if (stamp[ord[q]] !== tick) {
+                                    v = ord[q]
+                                    break
+                                }
+                            }
+                            if (v &lt; 0) {
+                                continue
+                            }
+                        }
+                        stamp[v] = tick
+                        if (bk) {
+                            bk[m] = bk0[i]
+                        }
+                        out[m++] = v
+                    }
+                    nSlot += m
+                    if (bk) {
+                        //連同子帳一起依序號排序
+                        let idx = Array.from({ length: m }, (_, i) => i).sort((a, b) => out[a] - out[b])
+                        let s2 = Int32Array.from(idx, (i) => out[i])
+                        grpOf.set(s2, Uint8Array.from(idx, (i) => bk[i]))
+                        rs[k] = s2
+                    }
+                    else {
+                        rs[k] = out.slice(0, m).sort()
+                    }
+                }
+                let o = opOf(rs, r.bars, r.tags, accept, r.k0 ? { k0: r.k0 } : null)
+                acc[d] += o.eqYr
+                nSig += o.nSignals
+                if (wantThirds) {
+                    for (let g3 = 0; g3 &lt; 3; g3++) {
+                        let a = Math.floor(nd * g3 / 3)
+                        let z = Math.floor(nd * (g3 + 1) / 3)
+                        accT[g3][d] += opOf(rs.slice(a, z), r.bars.slice(a, z), r.tags.slice(a, z), accept, { k0: (r.k0 || 0) + a }).eqYr
+                    }
+                }
+            }
+        }
+        let vals = Array.from(acc, (v) => v / runs.length)
+        vals.comp = { sigPerPick: nSlot > 0 ? nSig / nSlot : 0 }
+        vals.thirds = wantThirds ? accT.map((x) => x.reduce((s, v) => s + v, 0) / Math.max(1, draws) / runs.length) : null
+        return vals
+    }
+
+    //nullSideActOf, 組 = 方向(做多 0 / 做空 1)
+    let sideGrp = null
+    let nullSideActOf = (runs, accept, draws, seed, half = 50) => {
+        if (!sideGrp) {
+            sideGrp = new Int32Array(n)
+            for (let s = 0; s &lt; n; s++) {
+                sideGrp[s] = L.mode[s] > 0 ? 0 : 1
+            }
+        }
+        return nullGroupActOf(runs, accept, draws, seed, half, sideGrp, 2)
+    }
+
+    //sideGeoGroups, 組 = 方向 × 該側內依止盈升冪之 nTp 等分 × 該側內依止損升冪之 nSl 等分(同值依 tie; 兩個等分各自獨立劃分); 回 { grp, nGroups }
+    //nullSideGeoOf, 同側同幾何同活躍度虛無(幾何對照): 選集之止盈 / 止損比全體寬或窄時, 只匹配方向 × 活躍度之替換排除不了「只是挑到某種幾何」
+    let geoCache = new Map()
+    let sideGeoGroups = (nTp = 3, nSl = 3) => {
+        let ck = `${nTp}x${nSl}`
+        if (geoCache.has(ck)) {
+            return geoCache.get(ck)
+        }
+        let tq = new Int32Array(n)
+        let sq = new Int32Array(n)
+        let sides = [[], []]
+        for (let s = 0; s &lt; n; s++) {
+            sides[L.mode[s] > 0 ? 0 : 1].push(s)
+        }
+        for (let side of sides) {
+            let m = side.length
+            side.sort((a, b) => (meta.tp[a] - meta.tp[b]) || (tie[a] - tie[b]))
+            for (let i = 0; i &lt; m; i++) {
+                tq[side[i]] = Math.min(nTp - 1, Math.floor((i * nTp) / m))
+            }
+            side.sort((a, b) => (meta.sl[a] - meta.sl[b]) || (tie[a] - tie[b]))
+            for (let i = 0; i &lt; m; i++) {
+                sq[side[i]] = Math.min(nSl - 1, Math.floor((i * nSl) / m))
+            }
+        }
+        let grp = new Int32Array(n)
+        for (let s = 0; s &lt; n; s++) {
+            grp[s] = ((L.mode[s] > 0 ? 0 : 1) * nTp + tq[s]) * nSl + sq[s]
+        }
+        let out = { grp, nGroups: 2 * nTp * nSl }
+        geoCache.set(ck, out)
+        return out
+    }
+    let nullSideGeoOf = (runs, accept, draws, seed, half = 50, nTp = 3, nSl = 3) => {
+        let g = sideGeoGroups(nTp, nSl)
+        return nullGroupActOf(runs, accept, draws, seed, half, g.grp, g.nGroups)
+    }
+
+    //ordersOf, 下單集中度(一個相位): 由 col(見 simWindows)彙整後歸零
+    //  strats 實際下單之不同策略數、combos 其不同因子組合數、barTop1Share 下單最多之前 1% 進場棒(以該相位之全部 K 棒數計)占全部下單之比例、perBarMax 單一進場棒之最多下單數
+    let comboOf = null
+    let nCombo = 0
+    let ordersOf = (col, bars) => {
+        if (!comboOf) {
+            comboOf = new Int32Array(n)
+            let ids = new Map()
+            for (let s = 0; s &lt; n; s++) {
+                let key = Array.from(L.keyIdx.subarray(L.keyOff[s], L.keyOff[s + 1])).sort((a, b) => a - b).join(',')
+                let id = ids.get(key)
+                if (id === undefined) {
+                    id = ids.size
+                    ids.set(key, id)
+                }
+                comboOf[s] = id
+            }
+            nCombo = ids.size
+        }
+        let seen = new Uint8Array(nCombo)
+        let strats = 0
+        let combos = 0
+        let nOrd = 0
+        for (let s = 0; s &lt; n; s++) {
+            if (col.strat[s] > 0) {
+                strats++
+                nOrd += col.strat[s]
+                if (!seen[comboOf[s]]) {
+                    seen[comboOf[s]] = 1
+                    combos++
+                }
+            }
+        }
+        col.strat.fill(0)
+        let cnts = []
+        let lo = bars.length ? bars[0] : 0
+        let hi = bars.length ? Math.min(nBars + 1, bars[bars.length - 1] + cad) : 0
+        for (let b = lo; b &lt; hi; b++) {
+            if (col.bar[b] > 0) {
+                cnts.push(col.bar[b])
+            }
+        }
+        col.bar.fill(0, lo, hi + 1)
+        cnts.sort((a, b) => b - a)
+        let top = Math.max(1, Math.ceil((hi - lo) * 0.01))
+        let sTop = 0
+        for (let i = 0; i &lt; Math.min(top, cnts.length); i++) {
+            sTop += cnts[i]
+        }
+        return { strats, combos, barTop1Share: nOrd > 0 ? sTop / nOrd : 0, perBarMax: cnts.length ? cnts[0] : 0 }
+    }
+
+    //compOf, 選集組成(各決策之選集合計): 每隻被選策略每個決策視窗之訊號數、做多比例、平均因子數、平均止盈 / 止損
+    let compOf = (runs, ops) => {
+        let nSlot = 0
+        let nLong = 0
+        let sKeys = 0
+        let sTp = 0
+        let sSl = 0
+        for (let r of runs) {
+            for (let sel of r.sels) {
+                nSlot += sel.length
+                for (let i = 0; i &lt; sel.length; i++) {
+                    let s = sel[i]
+                    if (L.mode[s] > 0) {
+                        nLong++
+                    }
+                    sKeys += L.nKeys[s]
+                    sTp += L.tp[s]
+                    sSl += L.sl[s]
+                }
+            }
+        }
+        let nSig = ops.reduce((a, o) => a + o.nSignals, 0)
+        let d = (x) => (nSlot > 0 ? r4(x / nSlot) : 0)
+        return { sigPerPick: d(nSig), longRatio: d(nLong), nKeysMean: d(sKeys), tpMean: d(sTp), slMean: d(sSl) }
+    }
+
+    //sizeDistOf, 各決策之選集大小之分佈與 tag 之決策比例(席次型 / 關側型機制之作用頻率可直接核對, 不必由平均值反推)
+    //  sizeDist { p10, p50, p90 }、emptyRate(空選集之決策比例)、
+    //  tags [{ tag(字串化, 至多 40 字), share }](依比例由高至低, **全部列出**; 逾 TAG_MAX(64)種者其餘併為末筆 { tag: '(其餘 N 種)', share, rest: true }; 全無 tag 則為空陣列)、
+    //  tagKinds(相異 tag 之種數; 有 tag 才給)、
+    //  tagStats { n, mean, p10, p50, p90 }(只在**全部** tag 皆為有限數值(數字, 或可解析為數字之字串)時給; 以決策為單位: n = 帶 tag 之決策數; 數值 tag 作診斷量時不必由所列之比例反推)
+    //  只增輸出: 不影響選集、selHash 與任何績效數字
+    let TAG_MAX = 64
+    let sizeDistOf = (runs, sizes) => {
+        let s = sizes.slice().sort((a, b) => a - b)
+        let q = (p) => (s.length ? s[Math.min(s.length - 1, Math.floor(p * s.length))] : 0)
+        let cnt = new Map()
+        let nTag = 0
+        let nums = []
+        let allNum = true
+        for (let r of runs) {
+            for (let t of r.tags || []) {
+                if (t === null || t === undefined) {
+                    continue
+                }
+                let k = (typeof t === 'string' ? t : JSON.stringify(t)).slice(0, 40)
+                cnt.set(k, (cnt.get(k) || 0) + 1)
+                nTag++
+                if (allNum) {
+                    let v = typeof t === 'number' ? t : (typeof t === 'string' &amp;&amp; t.trim() !== '' ? Number(t) : NaN)
+                    if (Number.isFinite(v)) {
+                        nums.push(v)
+                    }
+                    else {
+                        allNum = false
+                    }
+                }
+            }
+        }
+        let nDec = Math.max(1, sizes.length)
+        let sorted = [...cnt.entries()].sort((a, b) => b[1] - a[1])
+        let tags = sorted.slice(0, TAG_MAX).map(([tag, c]) => ({ tag, share: r4(c / nDec) }))
+        if (sorted.length > TAG_MAX) {
+            let rest = sorted.slice(TAG_MAX)
+            tags.push({ tag: `(其餘 ${rest.length} 種)`, share: r4(rest.reduce((a, [, c]) => a + c, 0) / nDec), rest: true })
+        }
+        let out = { sizeDist: { p10: q(0.1), p50: q(0.5), p90: q(0.9) }, emptyRate: r4(sizes.filter((v) => v === 0).length / nDec), tags: nTag ? tags : [] }
+        if (nTag) {
+            out.tagKinds = sorted.length
+            if (allNum &amp;&amp; nums.length) {
+                let a = nums.slice().sort((x, y) => x - y)
+                let qa = (p) => r4(a[Math.min(a.length - 1, Math.floor(p * a.length))])
+                out.tagStats = { n: a.length, mean: r4(a.reduce((x, y) => x + y, 0) / a.length), p10: qa(0.1), p50: qa(0.5), p90: qa(0.9) }
+            }
+        }
+        return out
+    }
+
+    //evalPolicy, 評估一個挑選函數(與選配之 accept); opt: { accept, phases, horizons, nullDraws, seed, onRuns, fromBar, toBar }
+    //  onRuns(runs)(選配): 取得各相位之逐決策選集 [{ phase, bars, sels, tags, k0 }](唯讀; 供呼叫端另算診斷, 例如與參考模組之重疊率; 不影響任何數字)
+    //  fromBar / toBar(選配; **評估期間**): 挑選函數仍自帳本起點(暖機後之第一個決策)連續執行到帳本終點(ctx.state / ctx.prev 延續),
+    //    但只有決策棒落在 [fromBar, toBar) 者計入績效、新鮮度、虛無與選集統計(持倉簿自 fromBar 起為空); 未給 = 全部決策
+    //    切片帶 k0(其第一個決策於整段之決策序): accept 收到之 sig.k 與挑選函數之 ctx.k 一致
+    let PRE_N = 26
+    let evalPolicy = (pickFn, opt = {}) => {
+        let t0 = Date.now()
+        let accept = typeof opt.accept === 'function' ? opt.accept : null
+        let phases = opt.phases || cfg.phases || [0, 1, 2, 3, 4, 5, 6]
+        let horizons = opt.horizons || cfg.horizons || [1, 3, 7, 14, 30]
+        let nullDraws = opt.nullDraws === undefined ? (cfg.nullDraws === undefined ? 64 : cfg.nullDraws) : opt.nullDraws
+        let seed = opt.seed === undefined ? (cfg.seed === undefined ? 1 : cfg.seed) : opt.seed
+        let fromBar = Number.isInteger(opt.fromBar) ? opt.fromBar : null
+        let toBar = Number.isInteger(opt.toBar) ? opt.toBar : null
+        let runs = phases.map((ph) => ({ phase: ph, ...runPick(pickFn, ph, seed), k0: 0 }))
+        if (fromBar !== null || toBar !== null) {
+            runs = runs.map((r) => {
+                let a = fromBar === null ? 0 : r.bars.findIndex((b) => b >= fromBar)
+                if (a &lt; 0) {
+                    a = r.bars.length
+                }
+                let z = toBar === null ? r.bars.length : r.bars.findIndex((b) => b >= toBar)
+                if (z &lt; 0) {
+                    z = r.bars.length
+                }
+                z = Math.max(a, z)
+                //pre: 評估期間以前最近 PRE_N 次決策之選集(只供擴充診斷之「較早之選集挪到較晚用」之延後型對照; 規則 R-EV-25); 不入任何既有數字
+                let p0 = Math.max(0, a - PRE_N)
+                return { phase: r.phase, bars: r.bars.slice(a, z), sels: r.sels.slice(a, z), tags: r.tags.slice(a, z), k0: a, pre: { bars: r.bars.slice(p0, a), sels: r.sels.slice(p0, a), tags: r.tags.slice(p0, a) } }
+            })
+            if (runs.every((r) => r.bars.length === 0)) {
+                throw new Error('評估期間內沒有任何決策(帳本未涵蓋該期間?)')
+            }
+        }
+        let tPick = Date.now()
+        if (typeof opt.onRuns === 'function') {
+            opt.onRuns(runs)
+        }
+        //操作績效; 同時收集下單集中度(各相位分別彙整後取平均; 不影響任何既有數字)
+        let col = { strat: new Int32Array(n), bar: new Int32Array(nBars + 2), side: new Float64Array(8), tags: new Map(), grp: new Float64Array(N_GROUP * 4) }
+        let ords = []
+        let ops = runs.map((r) => {
+            let o = opOf(r.sels, r.bars, r.tags, accept, { col, k0: r.k0 })
+            ords.push(ordersOf(col, r.bars))
+            return o
+        })
+        let fresh = {}
+        for (let H of horizons) {
+            let fs2 = runs.map((r) => freshOf(r.sels, r.bars, r.tags, accept, H, r.k0))
+            fresh[H] = { eqYr: statOf(fs2.map((f) => f.eqYr)), posRate: r4(fs2.reduce((s, f) => s + f.posRate, 0) / fs2.length), nWindows: fs2.map((f) => f.nWindows), peakHold: Math.max(...fs2.map((f) => f.peakHold)) }
+        }
+        let sizes = runs.flatMap((r) => r.sels.map((s) => s.length))
+        let jac = []
+        for (let r of runs) {
+            for (let k = 1; k &lt; r.sels.length; k++) {
+                jac.push(jaccard(r.sels[k - 1], r.sels[k]))
+            }
+        }
+        let h = crypto.createHash('sha1')
+        for (let i = 0; i &lt; runs.length; i++) {
+            let r = runs[i]
+            h.update(`|p${r.phase}|o${ops[i].hash}|`)
+            for (let sel of r.sels) {
+                h.update(`${sel.length}:`)
+                h.update(Buffer.from(sel.buffer, sel.byteOffset, sel.byteLength))
+            }
+        }
+        let obs = ops.reduce((s, o) => s + o.eqYr, 0) / ops.length
+        let nul = null
+        let tNull0 = Date.now()
+        if (nullDraws > 0) {
+            let vals = nullOf(runs, accept, nullDraws, seed)
+            let ge = vals.filter((v) => v >= obs).length
+            let st = statOf(vals)
+            let sorted = vals.slice().sort((a, b) => a - b)
+            nul = { draws: nullDraws, mean: r4(st.mean), sd: r4(st.sd), p95: r4(sorted[Math.min(sorted.length - 1, Math.floor(0.95 * sorted.length))]), max: r4(st.max), p: r4((1 + ge) / (1 + nullDraws)), z: st.sd > 0 ? r4((obs - st.mean) / st.sd) : 0, excess: r4(obs - st.mean), sigPerPick: r4(vals.comp.sigPerPick), longRatio: r4(vals.comp.longRatio) }
+        }
+        //同訊號量虛無: 同劑量虛無只匹配選集之隻數; 選集之「每隻訊號數」偏離全體隨機逾 10% 時, 另以「隻數 × 訊號數之比」之隨機選集(訊號量相當)再算一組
+        //  —— 訓練期之等效年化隨訊號量急升(席位未滿時多單即多損益), 不匹配訊號量會把「較活躍」誤當成挑選之內容
+        let nulVol = null
+        //同活躍度虛無(與同訊號量虛無同一觸發條件): 隨機選集之活躍度分層與成品相同(見 nullActOf)
+        //  —— 同訊號量虛無之隨機選集是「隻數不同之一般項目」; 成品若只是挑得較安靜 / 較活躍, 其超額會留在同訊號量之比較內, 由本列扣除
+        let nulAct = null
+        if (nul &amp;&amp; nul.sigPerPick > 0) {
+            let selSig = ops.reduce((a, o) => a + o.nSignals, 0) / Math.max(1, sizes.reduce((a, v) => a + v, 0))
+            let ratio = selSig / nul.sigPerPick
+            if (Math.abs(ratio - 1) > 0.1) {
+                let runs2 = runs.map((r) => ({ ...r, sels: r.sels.map((sel) => ({ length: Math.min(n, Math.max(sel.length > 0 ? 1 : 0, Math.round(sel.length * ratio))), src: sel })) }))
+                let v2 = nullOf(runs2, accept, nullDraws, seed + 104729)
+                let s2 = statOf(v2)
+                let ge2 = v2.filter((v) => v >= obs).length
+                nulVol = { draws: nullDraws, ratio: r4(ratio), sizeMean: r4(runs2.reduce((a, r) => a + r.sels.reduce((b, x) => b + x.length, 0), 0) / Math.max(1, sizes.length)), mean: r4(s2.mean), sd: r4(s2.sd), p: r4((1 + ge2) / (1 + nullDraws)), z: s2.sd > 0 ? r4((obs - s2.mean) / s2.sd) : 0, excess: r4(obs - s2.mean), sigPerPick: r4(v2.comp.sigPerPick) }
+                let nBins = cfg.actBins === undefined ? 10 : cfg.actBins
+                let v3 = nullActOf(runs, accept, nullDraws, seed + 1299709, nBins)
+                let s3 = statOf(v3)
+                let ge3 = v3.filter((v) => v >= obs).length
+                nulAct = { draws: nullDraws, bins: nBins, mean: r4(s3.mean), sd: r4(s3.sd), p: r4((1 + ge3) / (1 + nullDraws)), z: s3.sd > 0 ? r4((obs - s3.mean) / s3.sd) : 0, excess: r4(obs - s3.mean), sigPerPick: r4(v3.comp.sigPerPick) }
+            }
+        }
+        //同側同活躍度虛無(組成對照; 見 nullSideActOf)與同側同幾何同活躍度虛無(幾何對照; 見 nullSideGeoOf): 有算虛無時一律計算
+        //  triggered: 選集之每隻訊號數或做多比例偏離全體隨機逾 10%(階梯 1 只在 triggered 時要求組成對照之 p; 幾何對照只增輸出、不入階梯)
+        //  —— 方向、活躍度或幾何偏離時, 「組成」本身之績效會留在同劑量 / 同活躍度之超額內; 成品超出這兩列之部分才是同組成內之挑選內容
+        //  —— 全體之每隻訊號數相近不等於逐隻之活躍度相近(例: 選集之均值與全體隨機相近, 其逐隻配對之替換版卻可明顯更活躍), 故不再只在偏離時才算
+        //  thirdsMean: 各三等分段(同 op.thirds)內該虛無之均 —— 成品之超額是否只集中於某一段
+        let nulSide = null
+        let nulGeo = null
+        if (nul &amp;&amp; nul.sigPerPick > 0) {
+            let nSlotSel = Math.max(1, sizes.reduce((a, v) => a + v, 0))
+            let selSig = ops.reduce((a, o) => a + o.nSignals, 0) / nSlotSel
+            let selLong = runs.reduce((a, r) => a + r.sels.reduce((b, sel) => { let c = 0; for (let i = 0; i &lt; sel.length; i++) { if (L.mode[sel[i]] > 0) { c++ } } return b + c }, 0), 0) / nSlotSel
+            let devSig = Math.abs(selSig / nul.sigPerPick - 1) > 0.1
+            let devLong = nul.longRatio > 0 &amp;&amp; Math.abs(selLong / nul.longRatio - 1) > 0.1
+            let half = cfg.sideActHalf === undefined ? 50 : cfg.sideActHalf
+            //share: 組成可重現之比例 = 該虛無之均 ÷ 成品之等效年化(成品為正時才有意義, 否則為 null; 虛無之均為負 = 組成是逆風, 記 0)
+            let pack = (v) => {
+                let s = statOf(v)
+                let ge = v.filter((x) => x >= obs).length
+                return { draws: nullDraws, half, mean: r4(s.mean), sd: r4(s.sd), p: r4((1 + ge) / (1 + nullDraws)), z: s.sd > 0 ? r4((obs - s.mean) / s.sd) : 0, excess: r4(obs - s.mean), sigPerPick: r4(v.comp.sigPerPick), share: obs > 0 ? r4(Math.max(0, s.mean) / obs) : null, ...(v.thirds ? { thirdsMean: v.thirds.map(r4) } : {}) }
+            }
+            nulSide = { ...pack(nullSideActOf(runs, accept, nullDraws, seed + 2750159, half)), triggered: devSig || devLong }
+            let nTp = cfg.geoTp === undefined ? 3 : cfg.geoTp
+            let nSl = cfg.geoSl === undefined ? 3 : cfg.geoSl
+            nulGeo = { ...pack(nullSideGeoOf(runs, accept, nullDraws, seed + 6700417, half, nTp, nSl)), nTp, nSl }
+        }
+        //評估期間三等分(依決策序; 各段自空倉起算、各自計等效年化): 績效是否集中於某一段; 有算虛無時另給各段之隨機挑(至多 16 抽)之均
+        let thirds = []
+        if (runs.every((r) => r.bars.length >= 6)) {
+            for (let g = 0; g &lt; 3; g++) {
+                let parts = runs.map((r) => {
+                    let nd = r.bars.length
+                    let a = Math.floor(nd * g / 3)
+                    let z = Math.floor(nd * (g + 1) / 3)
+                    return { phase: r.phase, bars: r.bars.slice(a, z), sels: r.sels.slice(a, z), tags: r.tags.slice(a, z), k0: r.k0 + a }
+                })
+                let sg = statOf(parts.map((r) => opOf(r.sels, r.bars, r.tags, accept, { k0: r.k0 }).eqYr))
+                let seg = { from: timeOf(Math.min(...parts.map((r) => r.bars[0]))), to: timeOf(Math.max(...parts.map((r) => r.bars[r.bars.length - 1] + cad))), eqYr: { mean: r4(sg.mean), min: r4(sg.min), max: r4(sg.max) } }
+                if (nullDraws > 0) {
+                    seg.nullMean = r4(statOf(nullOf(parts, accept, Math.min(16, nullDraws), seed + 15485863 + g)).mean)
+                }
+                thirds.push(seg)
+            }
+        }
+        //擴充診斷(opt.ext = [{ name, fn }]; 由呼叫端自共用工具區之 metrics/ 載入; 規則 R-EV-21): 每個 fn(api) 回一個可序列化之物件(建議含 text: 一行說明)
+        //  api 全為唯讀之複本與函數 —— 擴充診斷拿不到帳本、也改不了 S、階梯、selHash 與任何既有欄; 單一診斷拋錯或輸出過大只記 error, 不影響評估
+        //    n、meta、nullDraws、phases[{ phase, bars, sels, tags }](成品之逐決策選集之複本)、obs{ mean, byPhase, thirds }
+        //    simulate(selsByPhase, tagsByPhase?, opts?) → { mean, byPhase, thirds, bySide, byGroup }: 以成品之執行規則重放另一組選集(各相位之決策數須與成品相同)
+        //      opts.orderSalt(選配; 整數; 規則 R-EV-32): 只換「同一進場棒之多個訊號之先後」之次序(見 ordTieOf); 0 或未給 = 成品本身之次序
+        //        選集、ctx.meta.tie 與執行規則皆不變 —— 量「持倉上限擋單時誰先得席位」對績效之影響(下單率低之成品其 S 之雜訊帶寬); 無執行規則(全收)者不受影響
+        //      byGroup[{ group, seats, orders, pnl, winRate }]: 該次重放依子帳之席數、下單數與損益(定義同 metrics.op.byGroup; 規則 R-EV-33)
+        //      opts.accept(選配; 規則 R-EV-28): 以傳入之 (sig, book) => 布林 取代成品之執行規則重放 —— 依持倉簿狀態之執行規則(E 層)
+        //        其「同選集、換執行規則」之配對(中性、同比例隨機放行之安慰劑)可寫成擴充診斷; 未給 = 成品之執行規則(行為不變)
+        //      bySide{ long, short }{ orders, pnl, winRate }: 該次重放之兩側下單數與損益(各相位平均; 同 metrics.op.bySide 之定義)
+        //    replaceNull({ grp?, nGroups?, actDays?, half?, draws? }) → { draws, mean, sd, p, z, excess, thirdsMean }: 配對隨機替換(組預設 = 方向; 活躍度預設 = 累計進場數, actDays > 0 改為近期)
+        //    sideGroups()、geoGroups(nTp, nSl) → { grp, nGroups }; summarize(vals) → 同上之統計; rand(k) → 亂數產生器(與成品、既有虛無之亂數互不相干)
+        let ext = null
+        if (Array.isArray(opt.ext) &amp;&amp; opt.ext.length) {
+            ext = {}
+            let obsThirds = thirds.map((g) => g.eqYr.mean)
+            let summarize = (v) => {
+                let s = statOf(Array.from(v))
+                let ge = Array.from(v).filter((x) => x >= obs).length
+                return { draws: v.length, mean: r4(s.mean), sd: r4(s.sd), p: r4((1 + ge) / (1 + v.length)), z: s.sd > 0 ? r4((obs - s.mean) / s.sd) : 0, excess: r4(obs - s.mean), ...(v.thirds ? { thirdsMean: v.thirds.map(r4) } : {}) }
+            }
+            let simScratch = null
+            let simulate = (selsByPhase, tagsByPhase = null, sOpt = null) => {
+                if (!Array.isArray(selsByPhase) || selsByPhase.length !== runs.length) {
+                    throw new Error('simulate: 須給與成品相同相位數之選集陣列')
+                }
+                let acc = accept
+                if (sOpt !== null &amp;&amp; sOpt !== undefined &amp;&amp; sOpt.accept !== undefined &amp;&amp; sOpt.accept !== null) {
+                    if (typeof sOpt.accept !== 'function') {
+                        throw new Error('simulate: opts.accept 須為函數 (sig, book) => 布林')
+                    }
+                    acc = sOpt.accept
+                }
+                let ordKey = null
+                if (sOpt !== null &amp;&amp; sOpt !== undefined &amp;&amp; sOpt.orderSalt !== undefined &amp;&amp; sOpt.orderSalt !== null) {
+                    if (!Number.isInteger(sOpt.orderSalt)) {
+                        throw new Error('simulate: opts.orderSalt 須為整數(0 = 成品本身之次序)')
+                    }
+                    ordKey = sOpt.orderSalt === 0 ? null : ordTieOf(sOpt.orderSalt)
+                }
+                //兩側與子帳歸因: strat / bar 為 simWindows 計數用之暫存(內容不取用), side / grp 於本次重放之各相位累加
+                if (!simScratch) {
+                    simScratch = { strat: new Int32Array(n), bar: new Int32Array(nBars + 2) }
+                }
+                let sc = { strat: simScratch.strat, bar: simScratch.bar, side: new Float64Array(8), tags: new Map(), grp: new Float64Array(N_GROUP * 4) }
+                let ssAll = []
+                let os = runs.map((r, i) => {
+                    if (!Array.isArray(selsByPhase[i]) || selsByPhase[i].length !== r.bars.length) {
+                        throw new Error('simulate: 各相位之決策數須與成品相同')
+                    }
+                    //分帳: 元素為 { ids, group } 者**一律照用其 group(含全為 0 = 全部歸子帳 0)**; 未給 group 者才依席次序沿用成品同一決策之分帳(成品未分帳則無)
+                    //  (規則 R-EV-27: 原以「group 全為 0 ⇒ 視為未給」而改套成品之分帳 ⇒ 只留子帳 0 之席單獨重放時, 各席被依席次序套上成品之分帳、上限錯用, 寫不成逐帳歸因之擴充診斷)
+                    let explicitGroup = (x) => x !== null &amp;&amp; typeof x === 'object' &amp;&amp; !Array.isArray(x) &amp;&amp; !ArrayBuffer.isView(x) &amp;&amp; !(x instanceof Set) &amp;&amp; x.group !== undefined &amp;&amp; x.group !== null
+                    let ss = selsByPhase[i].map((x, k) => { let o = normSel(x); return o.grp || explicitGroup(x) ? o.sel : inheritGroups(r.sels[k], o.sel) })
+                    let tg = tagsByPhase &amp;&amp; Array.isArray(tagsByPhase[i]) ? tagsByPhase[i] : r.tags
+                    let nd = r.bars.length
+                    let t3 = nd >= 6 ? [0, 1, 2].map((g) => { let a = Math.floor(nd * g / 3); let z = Math.floor(nd * (g + 1) / 3); return opOf(ss.slice(a, z), r.bars.slice(a, z), tg.slice(a, z), acc, { k0: r.k0 + a, ordKey }).eqYr }) : null
+                    ssAll.push(ss)
+                    return { eqYr: opOf(ss, r.bars, tg, acc, { k0: r.k0, col: sc, ordKey }).eqYr, t3 }
+                })
+                let byPhase = os.map((o) => o.eqYr)
+                let nP = Math.max(1, os.length)
+                let sideOf = (o) => ({ orders: r4(sc.side[o] / nP), pnl: r4(sc.side[o + 1] / nP), winRate: sc.side[o + 2] > 0 ? r4(sc.side[o + 3] / sc.side[o + 2]) : 0 })
+                return { mean: byPhase.reduce((a, v) => a + v, 0) / byPhase.length, byPhase, thirds: os.every((o) => o.t3) ? [0, 1, 2].map((g) => os.reduce((a, o) => a + o.t3[g], 0) / os.length) : null, bySide: { long: sideOf(0), short: sideOf(4) }, byGroup: groupRowsOf(sc.grp, ssAll, nP) }
+            }
+            let api = Object.freeze({
+                n,
+                meta,
+                nullDraws,
+                phases: Object.freeze(runs.map((r) => Object.freeze({ phase: r.phase, bars: Array.from(r.bars), sels: r.sels.map((s) => Int32Array.from(s)), tags: r.tags.slice(), groups: r.sels.map((s) => { let g = grpOf.get(s); return g ? Uint8Array.from(g) : null }),
+                    //pre: 同一相位於評估期間以前最近 26 次決策之選集(由舊至新; 唯讀複本); 只可用於「較早之選集挪到較晚用」之延後型對照(不得反向使用: 那是前視)
+                    pre: Object.freeze(r.pre ? { bars: Array.from(r.pre.bars), sels: r.pre.sels.map((s) => Int32Array.from(s)), tags: r.pre.tags.slice(), groups: r.pre.sels.map((s) => { let g = grpOf.get(s); return g ? Uint8Array.from(g) : null }) } : { bars: [], sels: [], tags: [], groups: [] }) }))),
+                obs: Object.freeze({ mean: obs, byPhase: ops.map((o) => o.eqYr), thirds: obsThirds }),
+                simulate,
+                summarize,
+                replaceNull: (o = {}) => {
+                    let g = o.grp ? { grp: Int32Array.from(o.grp), nGroups: o.nGroups } : { grp: (nullSideActOf([], null, 0, 0), sideGrp), nGroups: 2 }
+                    if (g.grp.length !== n || !Number.isInteger(g.nGroups) || g.nGroups &lt; 1 || g.grp.some((x) => x &lt; 0 || x >= g.nGroups)) {
+                        throw new Error('replaceNull: grp 須為長度 n、值在 0 ~ nGroups-1 之陣列')
+                    }
+                    let d = Number.isInteger(o.draws) &amp;&amp; o.draws > 0 ? Math.min(o.draws, 64) : Math.max(1, Math.min(64, nullDraws || 16))
+                    return summarize(nullGroupActOf(runs, accept, d, seed + 49979687, Number.isInteger(o.half) &amp;&amp; o.half >= 0 ? o.half : 50, g.grp, g.nGroups, o.actDays || 0))
+                },
+                sideGroups: () => {
+                    nullSideActOf([], null, 0, 0)
+                    return { grp: Int32Array.from(sideGrp), nGroups: 2 }
+                },
+                geoGroups: (nTp = 3, nSl = 3) => {
+                    let g = sideGeoGroups(nTp, nSl)
+                    return { grp: Int32Array.from(g.grp), nGroups: g.nGroups }
+                },
+                rand: (k = 0) => mulberry32(seed + 32452843 + (Number.isInteger(k) ? k : 0) * 7919),
+            })
+            for (let x of opt.ext) {
+                let te = Date.now()
+                try {
+                    let out = x.fn(api)
+                    let js = JSON.stringify(out === undefined ? null : out)
+                    if (js.length > 20000) {
+                        throw new Error(`輸出 ${js.length} 字元,超過上限 20000`)
+                    }
+                    let o2 = JSON.parse(js)
+                    ext[x.name] = o2 &amp;&amp; typeof o2 === 'object' &amp;&amp; !Array.isArray(o2) ? { ...o2, ms: Date.now() - te } : { value: o2, ms: Date.now() - te }
+                }
+                catch (err) {
+                    ext[x.name] = { error: String((err &amp;&amp; err.message) || err).split('\n')[0].slice(0, 300), ms: Date.now() - te }
+                }
+            }
+        }
+        let tEnd = Date.now()
+        let rr = (o) => ({ mean: r4(o.mean), min: r4(o.min), max: r4(o.max), sd: r4(o.sd), byPhase: o.byPhase.map(r4) })
+        let freshOut = {}
+        for (let H of horizons) {
+            freshOut[H] = { eqYr: rr(fresh[H].eqYr), posRate: fresh[H].posRate, peakHold: fresh[H].peakHold, nWindows: fresh[H].nWindows }
+        }
+        let nSig = ops.reduce((s, o) => s + o.nSignals, 0)
+        let nOrd = ops.reduce((s, o) => s + o.nOrders, 0)
+        //損益歸因(各相位平均; 只增輸出): 依策略之方向(bySide)、所屬之子帳(byGroup)與其決策視窗之 tag(tagPerf); 兩側之 pnl 和 = 各子帳之 pnl 和 = 各 tag 之 pnl 和(每個決策皆有 tag 時)= op.pnl
+        let nPh = Math.max(1, ops.length)
+        let sideOut = (o) => ({ orders: r4(col.side[o] / nPh), pnl: r4(col.side[o + 1] / nPh), winRate: col.side[o + 2] > 0 ? r4(col.side[o + 3] / col.side[o + 2]) : 0 })
+        let tagDec = new Map()
+        for (let r of runs) {
+            for (let t of r.tags || []) {
+                let tk = tagKeyOf(t)
+                if (tk !== null) {
+                    tagDec.set(tk, (tagDec.get(tk) || 0) + 1)
+                }
+            }
+        }
+        let tagPerf = [...tagDec].sort((a, b) => b[1] - a[1]).map(([tag, c]) => {
+            let a = col.tags.get(tag) || { orders: 0, pnl: 0 }
+            return { tag, decisions: r4(c / nPh), orders: r4(a.orders / nPh), pnl: r4(a.pnl / nPh), pnlPerOrder: a.orders > 0 ? r4(a.pnl / a.orders) : 0 }
+        })
+        if (tagPerf.length > TAG_MAX) {
+            let rest = tagPerf.slice(TAG_MAX)
+            let ro = rest.reduce((s, x) => s + x.orders, 0)
+            let rp = rest.reduce((s, x) => s + x.pnl, 0)
+            tagPerf = [...tagPerf.slice(0, TAG_MAX), { tag: `(其餘 ${rest.length} 種)`, decisions: r4(rest.reduce((s, x) => s + x.decisions, 0)), orders: r4(ro), pnl: r4(rp), pnlPerOrder: ro > 0 ? r4(rp / ro) : 0, rest: true }]
+        }
+        return {
+            version: 2,
+            ledgerKey: L.meta.key,
+            period: { time0: L.meta.time0, endTime: L.meta.endTime, firstDecision: timeOf(warm), warmupDays, cadenceDays, evalFrom: fromBar === null ? null : timeOf(fromBar), evalTo: toBar === null ? null : timeOf(toBar), firstEvalDecision: runs.length &amp;&amp; runs[0].bars.length ? timeOf(runs[0].bars[0]) : null },
+            phases,
+            horizons,
+            hasAccept: !!accept,
+            op: {
+                eqYr: rr(statOf(ops.map((o) => o.eqYr))),
+                monthlyOrders: rr(statOf(ops.map((o) => o.monthlyOrders))),
+                peakHold: rr(statOf(ops.map((o) => o.peakHold))),
+                winRate: r4(ops.reduce((s, o) => s + o.winRate, 0) / ops.length),
+                acceptRate: nSig > 0 ? r4(nOrd / nSig) : 0,
+                nSignals: ops.map((o) => o.nSignals),
+                nOrders: ops.map((o) => o.nOrders),
+                nUnsettled: ops.map((o) => o.nUnsettled),
+                nDecisions: ops.map((o) => o.nDecisions),
+                pnl: r4(ops.reduce((s, o) => s + o.totalPnl, 0) / nPh),
+                bySide: { long: sideOut(0), short: sideOut(4) },
+                byGroup: groupRowsOf(col.grp, runs.map((r) => r.sels), nPh),
+                thirds,
+            },
+            fresh: freshOut,
+            sel: {
+                sizeMean: r4(sizes.reduce((s, v) => s + v, 0) / Math.max(1, sizes.length)),
+                sizeMin: sizes.length ? Math.min(...sizes) : 0,
+                sizeMax: sizes.length ? Math.max(...sizes) : 0,
+                nEmpty: sizes.filter((v) => v === 0).length,
+                turnoverJaccard: jac.length ? r4(jac.reduce((s, v) => s + v, 0) / jac.length) : 1,
+                ...sizeDistOf(runs, sizes),
+                ...compOf(runs, ops),
+                orders: {
+                    strats: r4(ords.reduce((s, o) => s + o.strats, 0) / Math.max(1, ords.length)),
+                    combos: r4(ords.reduce((s, o) => s + o.combos, 0) / Math.max(1, ords.length)),
+                    barTop1Share: r4(ords.reduce((s, o) => s + o.barTop1Share, 0) / Math.max(1, ords.length)),
+                    perBarMax: ords.length ? Math.max(...ords.map((o) => o.perBarMax)) : 0,
+                },
+                ...(tagPerf.length ? { tagPerf } : {}),
+            },
+            null: nul,
+            nullVol: nulVol,
+            nullAct: nulAct,
+            nullSideAct: nulSide,
+            nullSideGeo: nulGeo,
+            ...(ext ? { ext } : {}),
+            selHash: h.digest('hex').slice(0, 20),
+            ms: { pick: tPick - t0, metrics: tNull0 - tPick, null: tEnd - tNull0, total: tEnd - t0 },
+        }
+    }
+
+    return { evalPolicy, runPick, opOf, freshOf, nullOf, nullActOf, nullSideActOf, nullSideGeoOf, sideGeoGroups, simWindows, decisionBars, meta, timeOf }
+}
+
+
+export { makeEvaluator, lowerBound, mulberry32 }
+export default makeEvaluator
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 14:42:16 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

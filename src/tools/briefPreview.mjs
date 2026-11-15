@@ -1,0 +1,34 @@
+import fs from 'fs'
+import path from 'path'
+import { getSettings } from '../cfg.mjs'
+import { makeProject } from '../domain/domain.mjs'
+import { makeTexts } from '../domain/texts.mjs'
+
+//預覽下一輪之節點任務書大小(處理要點 §7: 節點任務書逾 15 KB 即整併): 以前緣內「無起點」之提案產生任務書, 列總位元組數與各節之位元組數
+//  node tools/briefPreview.mjs [--out <資料夾>]      --out: 另把任務書寫到該資料夾(請給 tmp/ 下之路徑)
+//  只處理無起點者: 有起點之任務會建立工作夾並複製起點之成品(那是派工時才該發生之事)
+let st = getSettings()
+let P = makeProject(st, {})
+P.rsi.init()
+let texts = makeTexts({ st, FD_ROOT: st.FD_ROOT })
+let iOut = process.argv.indexOf('--out')
+let outDir = iOut > 0 && process.argv[iOut + 1] ? path.resolve(process.argv[iOut + 1]) : null
+let fr = P.rsi.store.listFrontier().filter((f) => f.status === 'proposed')
+console.log(`前緣(proposed)${fr.length} 條;門檻 15,000 位元組`)
+for (let f of fr) {
+    let spec = f.spec
+    let id = P.idOf(spec)
+    if (spec.base) {
+        console.log(`${id.slice(0, 10)} ${spec.arms.join('+')} ←${String(spec.base).slice(0, 8)}: 有起點,略過`)
+        continue
+    }
+    let task = P.taskFor(spec)
+    let s = texts.nodeBrief({ workDir: path.join(st.records.workDir, id), task, round: 0, nodeId: id, attempt: 1 })
+    let parts = s.split(/\n(?=##+ )/).map((p) => `${p.split('\n')[0].replace(/^#+\s*/, '').slice(0, 14)} ${Buffer.byteLength(p, 'utf8')}`)
+    let n = Buffer.byteLength(s, 'utf8')
+    console.log(`${id.slice(0, 10)} ${spec.arms.join('+')}: ${n} 位元組${n > 15000 ? ' **逾門檻**' : ''} | ${parts.join(';')}`)
+    if (outDir) {
+        fs.mkdirSync(outDir, { recursive: true })
+        fs.writeFileSync(path.join(outDir, `brief_${id.slice(0, 8)}.md`), s, 'utf8')
+    }
+}

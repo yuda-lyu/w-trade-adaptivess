@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>arsi/dispatchers.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">arsi/dispatchers.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import fs from 'fs'
+import path from 'path'
+import { createRequire } from 'module'
+
+
+//派工器之預設實作: 以 w-dispatch-ai(裝在全域技能根, 不在專案安裝)呼叫各家 CLI; 模型由專案設定 agents.&lt;role> 指定(可含 fallback 鏈)
+//  makeDispatch({ agents, skillsRoot, envFile, cwd }) → async (role, { prompt, tag, logFile }) → { ok, error, stdout, agent: { kind, model, variant|effort } }
+//  agents.&lt;role> = { kind: 'opencode', id: 'ocgo:opencode-go/&lt;模型>' 或 'oc:opencode/&lt;模型>', variant, timeoutMin, fallback: [同形] }
+//                 或 { kind: 'claude', model, effort, timeoutMin }
+//  金鑰自 envFile 讀(readEnvFile, 不進 process.env), 只傳給該次子程序, 不落任何檔
+//  opencode: 權限放開(edit / write / bash 皆 allow; 節點須寫檔與跑評估), 不帶 --auto(專案夾外之存取維持被拒)
+//  claude  : 沿用本機之訂閱登入; 未另限工具(工作區為自有專案)
+/**
+ * 建立派工函數(以 w-dispatch-ai 呼叫各家 CLI;模型由 agents.&lt;role> 指定,可含 fallback 鏈)
+ *
+ * 金鑰自 envFile 讀取,只傳給該次子程序。回傳之函數依序嘗試 agents[role] 與其 fallback,首個成功者即回傳。
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {Object} opt.agents 輸入各角色設定,agents.&lt;role> 為 { kind: 'opencode', id, variant, timeoutMin, fallback } 或 { kind: 'claude', model, effort, timeoutMin }
+ * @param {String} opt.skillsRoot 輸入 w-dispatch-ai 所在之技能根路徑(其 node_modules 內須有 w-dispatch-ai)
+ * @param {String} [opt.envFile] 輸入金鑰環境檔路徑
+ * @param {String} [opt.cwd] 輸入子程序工作路徑
+ * @returns {Function} 回傳 async (role, { prompt, tag, logFile }) → { ok, error, agent, ... } 之派工函數;該 role 未設定時回傳 ok 為 false
+ * @example
+ * let dispatch = makeDispatch({ agents, skillsRoot: './skills', envFile: './.env', cwd: './work' })
+ * let r = await dispatch('node', { prompt, tag: 'r001_node', logFile: './work/agent.log' })
+ */
+let makeDispatch = ({ agents, skillsRoot, envFile, cwd }) => {
+    let wda = createRequire(import.meta.url)(path.join(skillsRoot, 'node_modules', 'w-dispatch-ai'))
+    let env = envFile &amp;&amp; fs.existsSync(envFile) ? wda.readEnvFile(envFile) : {}
+    let keysOf = (name) => String(env[name] || '').split(/[,;]/).map((s) => s.trim()).filter(Boolean)
+
+    let runOpencode = async (cfg, { prompt, logFile }) => {
+        let entry = wda.providers.find((p) => p.id === cfg.id)
+        if (!entry) {
+            return { ok: false, error: `派工條目 ${cfg.id} 不在 w-dispatch-ai 之條目表` }
+        }
+        let opts = {
+            model: entry.model,
+            extraArgs: cfg.variant ? ['--variant', cfg.variant] : (entry.extraArgs || []),
+            //experimental.continue_loop_on_deny(規則 R-RUN-7): opencode 於「ask 被自動拒絕」(例: 寫檔路徑打錯而落在專案夾外)後預設結束整個工作階段(離開碼 0);
+            //  設為 true 則只把錯誤交回模型, 模型可改正續做; 權限規則不變(專案夾外仍寫不出)。
+            //  不以 permission.external_directory: 'deny' 代替: 使用者規則接在預設之後且比對取最後一筆, 會蓋過預設放行之工具輸出截斷檔夾與暫存夾(opencode 1.19.5)
+            config: { permission: { edit: 'allow', write: 'allow', bash: 'allow' }, experimental: { continue_loop_on_deny: true } },
+            cwd,
+            timeoutMs: (cfg.timeoutMin || 120) * 60000,
+            validate: 'nonempty',
+            detectTruncation: entry.detectTruncation === true,
+            onStdout: (chunk) => {
+                try {
+                    fs.appendFileSync(logFile, chunk)
+                }
+                catch (err) {}
+            },
+        }
+        if (entry.provider === 'opencode-go') {
+            let keys = keysOf(entry.envVar || 'OPENCODE_GO_KEYS')
+            if (keys.length === 0) {
+                return { ok: false, error: `${entry.envVar || 'OPENCODE_GO_KEYS'} 未提供(${envFile})` }
+            }
+            //用量守門: 任一視窗 ≥ 95% 或被限流 ⇒ 不派(由 fallback 接手)
+            let key = null
+            for (let k of keys) {
+                let u = await wda.opencodeGoUsage({ key: k })
+                let ws = u &amp;&amp; u.ok &amp;&amp; u.usage ? Object.values(u.usage) : []
+                let hot = ws.some((w) => typeof w.percent === 'number' &amp;&amp; w.percent >= 95) || (u &amp;&amp; u.limited === true)
+                if (!hot) {
+                    key = k
+                    break
+                }
+            }
+            if (!key) {
+                return { ok: false, error: 'OpenCode Go 用量已達 95% 或被限流, 不派' }
+            }
+            opts.provider = 'opencode-go'
+            opts.key = key
+        }
+        else {
+            opts.useStoredAuth = false
+        }
+        let r = await wda.dispatchOpencode(prompt, opts)
+        return { ok: r.ok === true, error: r.ok ? null : `${r.errorType || ''} ${r.error || ''}`.trim(), stdout: r.stdout || '', durationMs: r.durationMs }
+    }
+
+    let runClaude = async (cfg, { prompt, logFile }) => {
+        let r = await wda.dispatchClaude(prompt, {
+            model: cfg.model,
+            //--strict-mcp-config: 不帶入帳號之外部連接器工具(只需讀寫專案檔與跑指令)
+            //--output-format stream-json --verbose: 輸出逐步事件(含每次工具呼叫之輸入), 落於 logFile 供事後稽核其操作; cfg.trace === false 時只輸出最終文字
+            extraArgs: ['--strict-mcp-config', '--effort', cfg.effort || 'xhigh', ...(cfg.trace === false ? [] : ['--output-format', 'stream-json', '--verbose'])],
+            cwd,
+            timeoutMs: (cfg.timeoutMin || 240) * 60000,
+            validate: 'nonempty',
+            onStdout: (chunk) => {
+                try {
+                    fs.appendFileSync(logFile, chunk)
+                }
+                catch (err) {}
+            },
+        })
+        return { ok: r.ok === true, error: r.ok ? null : `${r.errorType || ''} ${r.error || ''}`.trim(), stdout: r.stdout || '', durationMs: r.durationMs }
+    }
+
+    return async (role, o) => {
+        let cfg = agents[role]
+        if (!cfg) {
+            return { ok: false, error: `settings.agents.${role} 未設定`, agent: {} }
+        }
+        let chain = [cfg, ...(cfg.fallback || [])]
+        let errs = []
+        for (let c of chain) {
+            let c2 = { timeoutMin: cfg.timeoutMin, ...c }
+            let info = c2.kind === 'claude' ? { kind: 'claude', model: c2.model, effort: c2.effort || 'xhigh' } : { kind: 'opencode', model: c2.id, variant: c2.variant || null }
+            let r
+            try {
+                fs.mkdirSync(path.dirname(o.logFile), { recursive: true })
+                fs.appendFileSync(o.logFile, `\n===== ${new Date().toISOString()} dispatch ${role} ${info.model} tag ${o.tag} =====\n`)
+                r = c2.kind === 'claude' ? await runClaude(c2, o) : await runOpencode(c2, o)
+            }
+            catch (err) {
+                r = { ok: false, error: `派工例外: ${String((err &amp;&amp; err.message) || err)}` }
+            }
+            if (r.ok) {
+                return { ...r, agent: info, tried: errs }
+            }
+            errs.push({ model: info.model, error: String(r.error || '').slice(0, 300) })
+        }
+        return { ok: false, error: errs.map((e) => `${e.model}: ${e.error}`).join(' | '), agent: chain[0].kind === 'claude' ? { kind: 'claude', model: chain[0].model, effort: chain[0].effort } : { kind: 'opencode', model: chain[0].id, variant: chain[0].variant }, tried: errs }
+    }
+}
+
+
+//checkQuota, 起跑前之額度查詢(無人值守用; 規則 R-RUN-5): 各角色所用之訂閱其用量是否已達上限
+//  checkQuota({ agents, skillsRoot, envFile, maxPercent = 95 }) → { ok, why, rows: [{ role, kind, model, windows: [{ label, percent, resetAt }], blocked, note }] }
+//    claude  : 以 w-dispatch-ai 之 getQuotaClaude 讀本機登入態之用量(唯讀、不耗額度); 帶 scope 之視窗(某模型專屬)只在角色之 model 含該 scope 時計入
+//    opencode-go: 以 opencodeGoUsage 查各金鑰; 全部金鑰皆有任一視窗達上限或被限流才算擋下(有 fallback 者只記 note, 不擋 —— 派工時會自動改用 fallback)
+//  查詢本身失敗(斷線、未登入)不擋(fail-open; 記 note): 守門是為了不白跑, 不是另一個會卡住排程之故障點
+//  回傳內容不含金鑰、帳號與電子郵件
+/**
+ * 起跑前查詢各角色所用訂閱之額度(唯讀;查詢本身失敗不擋,僅記 note)
+ *
+ * 回傳內容不含金鑰、帳號與電子郵件。
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {Object} opt.agents 輸入各角色設定(同 makeDispatch)
+ * @param {String} opt.skillsRoot 輸入 w-dispatch-ai 所在之技能根路徑
+ * @param {String} [opt.envFile] 輸入金鑰環境檔路徑
+ * @param {Number} [opt.maxPercent=95] 輸入用量上限百分比,任一視窗達此值即視為擋下,預設95
+ * @returns {Promise&lt;Object>} 回傳 Promise,resolve 為 { ok, why, rows },rows 每列為 { role, kind, model, windows: [{ label, percent, resetAt }], blocked, note }
+ * @example
+ * let q = await checkQuota({ agents, skillsRoot: './skills', envFile: './.env' })
+ * console.log(q.ok)
+ */
+let checkQuota = async ({ agents, skillsRoot, envFile, maxPercent = 95 }) => {
+    let wda = createRequire(import.meta.url)(path.join(skillsRoot, 'node_modules', 'w-dispatch-ai'))
+    let env = envFile &amp;&amp; fs.existsSync(envFile) ? wda.readEnvFile(envFile) : {}
+    let keysOf = (name) => String(env[name] || '').split(/[,;]/).map((s) => s.trim()).filter(Boolean)
+    let norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    let rows = []
+    for (let role of Object.keys(agents || {})) {
+        let cfg = agents[role]
+        if (!cfg || typeof cfg !== 'object') {
+            continue
+        }
+        let row = { role, kind: cfg.kind, model: cfg.kind === 'claude' ? cfg.model : cfg.id, windows: [], blocked: false, note: null }
+        try {
+            if (cfg.kind === 'claude') {
+                let q = await wda.getQuotaClaude()
+                if (!q || q.ok !== true || !Array.isArray(q.windows)) {
+                    row.note = '用量查詢失敗(不擋)'
+                }
+                else {
+                    for (let w of q.windows) {
+                        if (w.scope &amp;&amp; !norm(cfg.model).includes(norm(w.scope))) {
+                            continue
+                        }
+                        row.windows.push({ label: w.label, percent: w.usedPercent, resetAt: w.resetAt || null })
+                    }
+                    row.blocked = row.windows.some((w) => typeof w.percent === 'number' &amp;&amp; w.percent >= maxPercent)
+                }
+            }
+            else if (cfg.kind === 'opencode') {
+                let entry = wda.providers.find((p) => p.id === cfg.id)
+                if (entry &amp;&amp; entry.provider === 'opencode-go') {
+                    let keys = keysOf(entry.envVar || 'OPENCODE_GO_KEYS')
+                    let hotAll = keys.length > 0
+                    for (let k of keys) {
+                        let u = await wda.opencodeGoUsage({ key: k })
+                        let ws = u &amp;&amp; u.ok &amp;&amp; u.usage ? Object.entries(u.usage).map(([label, w]) => ({ label, percent: w &amp;&amp; typeof w.percent === 'number' ? w.percent : null, resetAt: (w &amp;&amp; w.resetAt) || null })) : []
+                        let hot = ws.some((w) => typeof w.percent === 'number' &amp;&amp; w.percent >= maxPercent) || (u &amp;&amp; u.limited === true)
+                        if (!hot) {
+                            hotAll = false
+                        }
+                        if (row.windows.length === 0 || !hot) {
+                            row.windows = ws
+                        }
+                    }
+                    if (keys.length === 0) {
+                        row.note = '未提供金鑰'
+                    }
+                    else if (hotAll) {
+                        if (Array.isArray(cfg.fallback) &amp;&amp; cfg.fallback.length) {
+                            row.note = '用量已達起跑門檻; 派工時改用 fallback(不擋)'
+                        }
+                        else {
+                            row.blocked = true
+                        }
+                    }
+                }
+            }
+        }
+        catch (err) {
+            row.note = `用量查詢失敗(不擋): ${String((err &amp;&amp; err.message) || err).slice(0, 120)}`
+        }
+        rows.push(row)
+    }
+    let bad = rows.filter((r) => r.blocked)
+    return { ok: bad.length === 0, why: bad.length ? bad.map((r) => `${r.role}(${r.model})之用量 ${r.windows.filter((w) => typeof w.percent === 'number' &amp;&amp; w.percent >= maxPercent).map((w) => `${w.label} ${w.percent}%`).join('、')} ≥ ${maxPercent}%`).join(';') : null, rows }
+}
+
+
+export { makeDispatch, checkQuota }
+export default makeDispatch
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 14:42:16 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

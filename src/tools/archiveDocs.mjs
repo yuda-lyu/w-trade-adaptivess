@@ -1,0 +1,13 @@
+import path from 'path'
+import { getSettings } from '../cfg.mjs'
+import { archiveExperience, archiveFeedback } from '../domain/archiveDocs.mjs'
+
+//手動執行專案指引文件之自動整理(規則 R-REC-17; 迴圈於每輪末亦會自動做): 經驗檔、回饋檔逾上限即把較舊之內容原文搬到同夾之 <名>_<年月日>.md, 主檔留索引
+//  node tools/archiveDocs.mjs        上限取 settings.rsi.docLimits(預設 maxBytes 30000、keepBytes 18000、keepRows 14)
+let st = getSettings()
+let lim = (st.rsi && st.rsi.docLimits) || {}
+let kb = (b) => (b / 1024).toFixed(1)
+let a1 = archiveExperience({ fp: path.join(st.FD_ROOT, 'sgud', 'exp', 'experience.md'), maxBytes: lim.maxBytes, keepBytes: lim.keepBytes })
+let a2 = archiveFeedback({ fp: path.join(st.FD_ROOT, 'sgud', 'feedback', 'feedback.md'), maxBytes: lim.maxBytes, keepRows: lim.keepRows })
+console.log(a1 ? `經驗檔 ${kb(a1.before)} → ${kb(a1.after)} KB:第 ${a1.from} ~ ${a1.to} 條(${a1.moved} 條)→ sgud/exp/${a1.file}` : '經驗檔: 未逾上限或無可搬')
+console.log(a2 ? `回饋檔 ${kb(a2.before)} → ${kb(a2.after)} KB:${a2.moved} 列 → sgud/feedback/${a2.file}` : '回饋檔: 未逾上限或無可搬')

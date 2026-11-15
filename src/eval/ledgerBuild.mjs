@@ -1,0 +1,333 @@
+import fs from 'fs'
+import path from 'path'
+import crypto from 'crypto'
+import genKLinesTpSl from 'w-trade-backtest/src/genKLinesTpSl.mjs'
+import settleOrderPnl from 'w-trade-backtest/src/settleOrderPnl.mjs'
+
+
+//訂單帳本之建置: 把策略庫之每隻策略於 [數據起點, endTime) 之逐張訂單(進場棒、出場棒、每單位損益)一次算出並存成緊湊二進位
+//  觸發與結算語義 = w-trade-backtest 之 buildStrategyFastSession / runStrategy(每根 K 棒全部條件成立即以 Close 進場一單;
+//    出場為其後先觸之止盈或止損線, 同根同觸先判止損; 期末仍未觸者為未結: ext = -1, pnl = 0)
+//  K 線於 endTime 截斷(不含)⇒ 帳本不含 endTime 之後之任何資訊(訓練期帳本即不含回測期 / 保留期)
+//  每單位損益 = settleOrderPnl(mode, 1, 進場價, 出場價, rFee)(含進出兩次手續費)
+//  靜態欄只收結構屬性(方向、tp、sl、因子數、因子、各條件之比較方向與門檻、求解時之成交數與其級距);不收樣本內績效欄(年化、勝率等)以免訓練期評估被樣本內擬合值污染
+//  帳本鍵(meta.key)只由訂單內容決定: 加靜態欄 / 因子序列欄不改鍵(既有之評估結果仍對得上)
+/**
+ * 帳本格式版本號, 併入帳本鍵(meta.key)之雜湊與 meta.version
+ *
+ * @type {Number}
+ */
+let LEDGER_VERSION = 1
+
+let clsOf = (k) => k.indexOf('index_') === 0 ? 1 : (k.indexOf('_vbs_') >= 0 ? 2 : 0) //0 一般類、1 指數類、2 成交量類
+
+let grow = (Ctor, cap) => {
+    let a = new Ctor(cap)
+    let n = 0
+    return {
+        push: (v) => {
+            if (n >= a.length) {
+                let b = new Ctor(a.length * 2)
+                b.set(a)
+                a = b
+            }
+            a[n++] = v
+        },
+        size: () => n,
+        done: () => a.subarray(0, n),
+    }
+}
+
+let writeBin = (fp, ta) => fs.writeFileSync(fp, Buffer.from(ta.buffer, ta.byteOffset, ta.byteLength))
+
+
+/**
+ * 建置訂單帳本: 把策略庫每隻策略於 [數據起點, endTime) 之逐張訂單一次算出並存成緊湊二進位
+ * K 線於 endTime 截斷(不含); 語義與輸出欄見檔頭說明
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {String} opt.libraryRoot 輸入策略庫根資料夾路徑(其下需有 ohlc、param、strategies 子資料夾)
+ * @param {String} opt.keyOhlc 輸入K線檔鍵名(讀取 libraryRoot/ohlc/<keyOhlc>.json)
+ * @param {String} opt.endTime 輸入截止時間字串(無時區, 不含)
+ * @param {String} opt.outDir 輸入帳本輸出資料夾路徑
+ * @param {Number} [opt.barHours=4] 輸入每根K棒小時數,預設4
+ * @param {Integer} [opt.limit=0] 輸入只取前幾隻策略(0為全部),預設0
+ * @param {Function} [opt.log=console.log] 輸入記錄函數,預設console.log
+ * @returns {Promise<Object>} 回傳Promise,resolve為帳本 meta 物件(含 version、key、endTime、time0、nBars、nStrategies、nOrders、nUnsettled、keyNames 等)
+ * @example
+ * let meta = await buildLedger({ libraryRoot: './data/library', keyOhlc: 'BTCUSDT_4h', endTime: '2024-01-01T00:00:00', outDir: './data/ledger/eval' })
+ */
+let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, limit = 0, log = console.log }) => {
+
+    let t0 = Date.now()
+
+    //ohlc(於 endTime 截斷)
+    let arrAll = JSON.parse(fs.readFileSync(path.join(libraryRoot, 'ohlc', `${keyOhlc}.json`), 'utf8'))
+    let arrOhlc = arrAll.filter((r) => r.time < endTime)
+    let n = arrOhlc.length
+    if (n < 100) {
+        throw new Error(`K 線過少(${n}); endTime ${endTime}`)
+    }
+    let barMs = barHours * 3600000
+    let time0 = arrOhlc[0].time
+    for (let i = 1; i < n; i++) {
+        if (Date.parse(`${arrOhlc[i].time}Z`) - Date.parse(`${arrOhlc[i - 1].time}Z`) !== barMs) {
+            throw new Error(`K 線不連續: ${arrOhlc[i - 1].time} → ${arrOhlc[i].time}`)
+        }
+    }
+    let C = new Float64Array(n)
+    let kpTimeInd = new Map()
+    for (let i = 0; i < n; i++) {
+        C[i] = arrOhlc[i].Close
+        kpTimeInd.set(arrOhlc[i].time, i)
+    }
+    log(`ohlc ${keyOhlc}: ${n} 根, ${time0} ~ ${arrOhlc[n - 1].time}(endTime ${endTime} 不含)`)
+
+    //因子序列對位(缺值 NaN)
+    let fdParam = path.join(libraryRoot, 'param')
+    let keyNames = fs.readdirSync(fdParam).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)).sort()
+    let keyIdxOf = new Map(keyNames.map((k, i) => [k, i]))
+    let aligned = new Array(keyNames.length)
+    for (let i = 0; i < keyNames.length; i++) {
+        let arr = JSON.parse(fs.readFileSync(path.join(fdParam, `${keyNames[i]}.json`), 'utf8'))
+        let a = new Float64Array(n).fill(NaN)
+        for (let v of arr) {
+            let ind = kpTimeInd.get(v.time)
+            if (ind !== undefined) {
+                a[ind] = v.param
+            }
+        }
+        aligned[i] = a
+    }
+    log(`因子序列 ${keyNames.length} 個已對位(${((Date.now() - t0) / 1000).toFixed(1)}s)`)
+
+    //first-touch 表(每 方向 × tp × sl 一份)
+    let kpFt = new Map()
+    let ftOf = (mode, tp, sl) => {
+        let k = `${mode}_${tp}_${sl}`
+        let ft = kpFt.get(k)
+        if (!ft) {
+            ft = genKLinesTpSl(arrOhlc, { tp, sl, mode })
+            kpFt.set(k, ft)
+        }
+        return ft
+    }
+
+    //策略
+    let fdSt = path.join(libraryRoot, 'strategies')
+    let files = fs.readdirSync(fdSt).filter((f) => f.endsWith('.json')).sort()
+    if (limit > 0) {
+        files = files.slice(0, limit)
+    }
+    let ns = files.length
+    let off = new Uint32Array(ns + 1)
+    let ent = grow(Int32Array, 1 << 22)
+    let ext = grow(Int32Array, 1 << 22)
+    let pnl = grow(Float32Array, 1 << 22)
+    let mode = new Int8Array(ns)
+    let tp = new Float32Array(ns)
+    let sl = new Float32Array(ns)
+    let nKeys = new Uint8Array(ns)
+    let lv = new Int32Array(ns)
+    let fitNt = new Int32Array(ns)
+    let cls = new Uint8Array(ns * 3)
+    let keyOff = new Uint32Array(ns + 1)
+    let keyIdx = grow(Uint16Array, 1 << 19)
+    //進場規則之各條件(與 keyIdx 逐格對齊; 規則 R-EV-29): 比較方向(+1 = '>'、-1 = '<')、門檻(原值, 不降精度)、是否為 or 條件
+    let keySym = grow(Int8Array, 1 << 19)
+    let keyTh = grow(Float64Array, 1 << 19)
+    let keyOr = grow(Uint8Array, 1 << 19)
+    let rule = { nConds: 0, nGt: 0, nLt: 0, nOr: 0, nSymOther: 0 } //nSymOther: 比較符號非 '>' / '<' 者(觸發時一律當 '<', 與既有語義相同; 應為 0)
+    let nUnsettled = 0
+    let chk = { n: 0, same: 0, diffs: [] } //與策略檔所存求解窗成交數之一致性(求解窗終點於帳本範圍內者)
+    for (let si = 0; si < ns; si++) {
+        let s = JSON.parse(fs.readFileSync(path.join(fdSt, files[si]), 'utf8'))
+        let md = s.mode
+        if (md !== 'long' && md !== 'short') {
+            throw new Error(`${files[si]}: mode ${md}`)
+        }
+        let st = s.settings || {}
+        let rtp = st.rTakeProfit
+        let rsl = st.rStopLoss
+        let fee = typeof st.rFee === 'number' ? st.rFee : 0.0005
+        let conds = s.conds || []
+        if (conds.length === 0) {
+            throw new Error(`${files[si]}: 無 conds`)
+        }
+        let cs = conds.map((c) => {
+            let ki = keyIdxOf.get(c.key)
+            if (ki === undefined) {
+                throw new Error(`${files[si]}: 因子 ${c.key} 不在 param`)
+            }
+            let sym = c.sym === undefined ? '>' : c.sym
+            let opr = c.opr === 'or' ? 'or' : 'and'
+            if (sym !== '>' && sym !== '<') {
+                rule.nSymOther++
+            }
+            return { ki, arr: aligned[ki], gt: sym === '>', th: c.th === undefined ? 0 : c.th, isOr: opr === 'or' }
+        })
+        let ft = ftOf(md, rtp, rsl)
+        let win = ft.win
+        let hold = ft.hold
+        off[si] = ent.size()
+        for (let i = 0; i < n; i++) {
+            let bSkip = false
+            let okAnd = true
+            let hasOr = false
+            let okOr = false
+            for (let c of cs) {
+                let y = c.arr[i]
+                if (Number.isNaN(y)) {
+                    bSkip = true
+                    break
+                }
+                let b = c.gt ? y > c.th : y < c.th
+                if (c.isOr) {
+                    hasOr = true
+                    okOr = okOr || b
+                }
+                else {
+                    okAnd = okAnd && b
+                }
+            }
+            if (bSkip || !okAnd || (hasOr && !okOr)) {
+                continue
+            }
+            let c0 = C[i]
+            let w = win[i]
+            ent.push(i)
+            if (w >= 0) {
+                let priceEnd
+                if (w === 1) {
+                    priceEnd = md === 'long' ? (1 + rtp) * c0 : (1 - rtp) * c0
+                }
+                else {
+                    priceEnd = md === 'long' ? (1 - rsl) * c0 : (1 + rsl) * c0
+                }
+                ext.push(i + hold[i])
+                pnl.push(settleOrderPnl(md, 1, c0, priceEnd, fee))
+            }
+            else {
+                ext.push(-1)
+                pnl.push(0)
+                nUnsettled++
+            }
+        }
+        mode[si] = md === 'long' ? 1 : -1
+        tp[si] = rtp
+        sl[si] = rsl
+        nKeys[si] = cs.length
+        lv[si] = Number(s.levelNumTrade) || 0
+        fitNt[si] = Number(s.numTrade) || 0
+        keyOff[si] = keyIdx.size()
+        for (let c of cs) {
+            keyIdx.push(c.ki)
+            keySym.push(c.gt ? 1 : -1)
+            keyTh.push(c.th)
+            keyOr.push(c.isOr ? 1 : 0)
+            rule.nConds++
+            rule[c.gt ? 'nGt' : 'nLt']++
+            rule.nOr += c.isOr ? 1 : 0
+            cls[si * 3 + clsOf(keyNames[c.ki])]++
+        }
+        //一致性: 策略檔之 summary.numTrade 為求解窗 [timeOhlcStart, timeOhlcEnd] 內之進場數; 帳本同窗之進場數應相同
+        let tEnd = s.summary && s.summary.timeOhlcEnd
+        let iEnd = tEnd ? kpTimeInd.get(tEnd) : undefined
+        if (iEnd !== undefined && typeof s.numTrade === 'number') {
+            let e = ent.done()
+            let cnt = 0
+            for (let j = off[si]; j < e.length; j++) {
+                if (e[j] <= iEnd) {
+                    cnt++
+                }
+            }
+            chk.n++
+            if (cnt === s.numTrade) {
+                chk.same++
+            }
+            else if (chk.diffs.length < 10) {
+                chk.diffs.push({ f: files[si], ledger: cnt, file: s.numTrade })
+            }
+        }
+        if ((si + 1) % 10000 === 0) {
+            log(`  策略 ${si + 1}/${ns}, 訂單 ${ent.size()}(${((Date.now() - t0) / 1000).toFixed(0)}s)`)
+        }
+    }
+    off[ns] = ent.size()
+    keyOff[ns] = keyIdx.size()
+
+    //寫出
+    fs.mkdirSync(outDir, { recursive: true })
+    let E = ent.done()
+    let X = ext.done()
+    let Pn = pnl.done()
+    writeBin(path.join(outDir, 'off.u32'), off)
+    writeBin(path.join(outDir, 'ent.i32'), E)
+    writeBin(path.join(outDir, 'ext.i32'), X)
+    writeBin(path.join(outDir, 'pnl.f32'), Pn)
+    writeBin(path.join(outDir, 'mode.i8'), mode)
+    writeBin(path.join(outDir, 'tp.f32'), tp)
+    writeBin(path.join(outDir, 'sl.f32'), sl)
+    writeBin(path.join(outDir, 'nKeys.u8'), nKeys)
+    writeBin(path.join(outDir, 'lv.i32'), lv)
+    writeBin(path.join(outDir, 'fitNt.i32'), fitNt)
+    writeBin(path.join(outDir, 'cls.u8'), cls)
+    writeBin(path.join(outDir, 'keyOff.u32'), keyOff)
+    writeBin(path.join(outDir, 'keyIdx.u16'), keyIdx.done())
+    writeBin(path.join(outDir, 'keySym.i8'), keySym.done())
+    writeBin(path.join(outDir, 'keyTh.f64'), keyTh.done())
+    writeBin(path.join(outDir, 'keyOr.u8'), keyOr.done())
+    //因子序列欄(規則 R-EV-29; 供挑選函數以 ctx.factor 取決策棒以前之值): 列 = 因子(序同 keyNames)、行 = K 棒, fac[ki * nBars + i]; 缺值 NaN
+    //  即觸發進場所用之同一份序列(已於 endTime 截斷), 原值不降精度 ⇒ 以三個條件欄與本欄重算之進場 = 帳本之進場
+    let fac = new Float64Array(keyNames.length * n)
+    for (let i = 0; i < keyNames.length; i++) {
+        fac.set(aligned[i], i * n)
+    }
+    writeBin(path.join(outDir, 'fac.f64'), fac)
+    if (rule.nSymOther > 0) {
+        log(`注意: 比較符號非 '>' / '<' 之條件 ${rule.nSymOther} 個(觸發與 keySym 皆當 '<')`)
+    }
+    //標的之 K 線欄(開高低收量; 供挑選函數以 ctx.market 取決策棒以前之市況)
+    let px = new Float64Array(n * 5)
+    for (let i = 0; i < n; i++) {
+        let r = arrOhlc[i]
+        px[i * 5] = r.Open
+        px[i * 5 + 1] = r.High
+        px[i * 5 + 2] = r.Low
+        px[i * 5 + 3] = r.Close
+        px[i * 5 + 4] = Number(r.Volumn) || 0
+    }
+    writeBin(path.join(outDir, 'px.f64'), px)
+    fs.writeFileSync(path.join(outDir, 'ids.json'), JSON.stringify(files), 'utf8')
+    let h = crypto.createHash('sha1')
+    h.update(`${LEDGER_VERSION}|${endTime}|${time0}|${n}|${ns}|${E.length}|`)
+    h.update(files.join(','))
+    h.update(Buffer.from(E.buffer, E.byteOffset, E.byteLength))
+    let key = h.digest('hex').slice(0, 16)
+    let meta = {
+        version: LEDGER_VERSION,
+        key,
+        builtAt: new Date().toISOString(),
+        libraryRoot,
+        keyOhlc,
+        endTime,
+        time0,
+        barHours,
+        nBars: n,
+        nStrategies: ns,
+        nOrders: E.length,
+        nUnsettled,
+        nFirstTouch: kpFt.size,
+        check: { compared: chk.n, same: chk.same, diffs: chk.diffs },
+        rule,
+        keyNames,
+        buildSec: Number(((Date.now() - t0) / 1000).toFixed(1)),
+    }
+    fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify(meta, null, 1), 'utf8')
+    log(`帳本完成: 策略 ${ns}, 訂單 ${E.length}(未結 ${nUnsettled}), first-touch 表 ${kpFt.size}, 一致性 ${chk.same}/${chk.n}, 鍵 ${key}, ${meta.buildSec}s → ${outDir}`)
+    return meta
+}
+
+
+export { buildLedger, LEDGER_VERSION }
+export default buildLedger

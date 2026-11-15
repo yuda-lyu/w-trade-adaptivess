@@ -1,0 +1,118 @@
+import fs from 'fs'
+import path from 'path'
+
+
+//訂單帳本之載入: 讀 ledgerBuild 產出之二進位欄, 並建「依出場棒排序」之輔助欄(供「某時點以前已結之單」之統計以二分搜尋取得)
+//  回傳 L: { meta, n(策略數), nBars, off/ent/ext/pnl(依進場棒升冪之逐單欄), xoff/xExt/xPnlCum/xWinCum(依出場棒升冪之已結單欄; Cum 為策略內前綴和), 靜態欄, fac(因子序列欄; 用到才讀) }
+let readBin = (fp, Ctor) => {
+    let b = fs.readFileSync(fp)
+    let ab = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)
+    return new Ctor(ab)
+}
+
+/**
+ * 載入訂單帳本資料夾(由 buildLedger 產出之 meta.json 與二進位欄), 並建立依出場棒排序之已結單欄
+ * 因子序列欄 fac 為延遲讀取(首次存取 L.fac 才載入; 無檔者為 null)
+ *
+ * @param {String} dir 輸入帳本資料夾路徑
+ * @returns {Object} 回傳帳本物件L, 含 dir、meta、n(策略數)、nBars、barsPerDay、逐單欄(off、ent、ext、pnl)、靜態欄(mode、tp、sl、nKeys、lv、fitNt、cls、keyOff、keyIdx、keyNames、px、keySym、keyTh、keyOr; px、keySym、keyTh、keyOr 於無檔時為 null)、依出場棒升冪之已結單欄(xoff、xExt、xPnlCum、xWinCum)與延遲讀取之 fac
+ * @example
+ * let L = loadLedger('./data/ledger/eval')
+ */
+let loadLedger = (dir) => {
+    let meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'))
+    let L = {
+        dir,
+        meta,
+        n: meta.nStrategies,
+        nBars: meta.nBars,
+        barsPerDay: Math.round(24 / meta.barHours),
+        off: readBin(path.join(dir, 'off.u32'), Uint32Array),
+        ent: readBin(path.join(dir, 'ent.i32'), Int32Array),
+        ext: readBin(path.join(dir, 'ext.i32'), Int32Array),
+        pnl: readBin(path.join(dir, 'pnl.f32'), Float32Array),
+        mode: readBin(path.join(dir, 'mode.i8'), Int8Array),
+        tp: readBin(path.join(dir, 'tp.f32'), Float32Array),
+        sl: readBin(path.join(dir, 'sl.f32'), Float32Array),
+        nKeys: readBin(path.join(dir, 'nKeys.u8'), Uint8Array),
+        lv: readBin(path.join(dir, 'lv.i32'), Int32Array),
+        fitNt: readBin(path.join(dir, 'fitNt.i32'), Int32Array),
+        cls: readBin(path.join(dir, 'cls.u8'), Uint8Array),
+        keyOff: readBin(path.join(dir, 'keyOff.u32'), Uint32Array),
+        keyIdx: readBin(path.join(dir, 'keyIdx.u16'), Uint16Array),
+        keyNames: meta.keyNames,
+        px: fs.existsSync(path.join(dir, 'px.f64')) ? readBin(path.join(dir, 'px.f64'), Float64Array) : null,
+        //進場規則之各條件(與 keyIdx 逐格對齊; 規則 R-EV-29); 舊帳本無此三欄者為 null
+        keySym: fs.existsSync(path.join(dir, 'keySym.i8')) ? readBin(path.join(dir, 'keySym.i8'), Int8Array) : null,
+        keyTh: fs.existsSync(path.join(dir, 'keyTh.f64')) ? readBin(path.join(dir, 'keyTh.f64'), Float64Array) : null,
+        keyOr: fs.existsSync(path.join(dir, 'keyOr.u8')) ? readBin(path.join(dir, 'keyOr.u8'), Uint8Array) : null,
+    }
+    //fac, 因子序列欄(fac[ki * nBars + i]; 約 60 MB): 用到才讀 —— 未呼叫 ctx.factor 之評估不付載入之時間與記憶體; 舊帳本無此欄者為 null
+    let fpFac = path.join(dir, 'fac.f64')
+    let fac
+    Object.defineProperty(L, 'fac', {
+        enumerable: false,
+        configurable: true,
+        get: () => {
+            if (fac === undefined) {
+                fac = fs.existsSync(fpFac) ? readBin(fpFac, Float64Array) : null
+            }
+            return fac
+        },
+    })
+    //依出場棒排序之已結單欄
+    let n = L.n
+    let xoff = new Uint32Array(n + 1)
+    let nClosed = 0
+    for (let j = 0; j < L.ext.length; j++) {
+        if (L.ext[j] >= 0) {
+            nClosed++
+        }
+    }
+    let xExt = new Int32Array(nClosed)
+    let xPnlCum = new Float64Array(nClosed)
+    let xWinCum = new Int32Array(nClosed)
+    let p = 0
+    let tmp = []
+    for (let s = 0; s < n; s++) {
+        xoff[s] = p
+        tmp.length = 0
+        for (let j = L.off[s]; j < L.off[s + 1]; j++) {
+            if (L.ext[j] >= 0) {
+                tmp.push(j)
+            }
+        }
+        tmp.sort((a, b) => L.ext[a] - L.ext[b] || a - b)
+        let cp = 0
+        let cw = 0
+        for (let j of tmp) {
+            cp += L.pnl[j]
+            cw += L.pnl[j] > 0 ? 1 : 0
+            xExt[p] = L.ext[j]
+            xPnlCum[p] = cp
+            xWinCum[p] = cw
+            p++
+        }
+    }
+    xoff[n] = p
+    L.xoff = xoff
+    L.xExt = xExt
+    L.xPnlCum = xPnlCum
+    L.xWinCum = xWinCum
+    return L
+}
+
+//ids, 策略序號 → 策略檔名(需要時才讀)
+/**
+ * 讀取帳本資料夾內之 ids.json, 取得策略序號對應之策略檔名陣列
+ *
+ * @param {String} dir 輸入帳本資料夾路徑
+ * @returns {Array} 回傳策略檔名陣列, 以策略序號為索引
+ * @example
+ * let ids = loadIds('./data/ledger/eval')
+ */
+let loadIds = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'ids.json'), 'utf8'))
+
+
+export { loadLedger, loadIds }
+export default loadLedger
