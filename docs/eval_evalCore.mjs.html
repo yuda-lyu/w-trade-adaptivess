@@ -485,7 +485,7 @@ let makeEvaluator = (L, cfg = {}) => {
     let closeL = new Int32Array(nBars + 2)
     let closeS = new Int32Array(nBars + 2)
     let closeP = new Float64Array(nBars + 2)
-    let closeG = [0, 1, 2, 3].map(() => new Int32Array(nBars + 2))   //分帳: 各子帳於各棒出場之單數(只在選集有登記 group 時使用)
+    let closeG = [0, 1, 2, 3].map(() => new Int32Array(nBars + 2)) //分帳: 各子帳於各棒出場之單數(只在選集有登記 group 時使用)
     //  col(選配)= { strat: Int32Array(n), bar: Int32Array(nBars + 2) }: 給定時把每張已下單之單計入其策略與進場棒(下單集中度用; 不影響任何數字)
     //    col 另帶 side(Float64Array(8): 做多之 [單數, 損益, 已結單數, 獲利單數] + 做空之同四項)與 tags(Map: tag 字串 → { orders, pnl })時, 另把每張單歸到其策略之方向與其決策視窗之 tag(損益歸因用)
     //    col 再帶 grp(Float64Array(N_GROUP * 4): 各子帳之 [單數, 損益, 已結單數, 獲利單數])時, 另把每張單歸到其策略所屬之子帳(未分帳者皆歸子帳 0; 規則 R-EV-33)
@@ -1074,7 +1074,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 for (let k = 0; k &lt; nd; k++) {
                     let sel = r.sels[k]
                     let out = new Int32Array(sel.length)
-                    let bk0 = grpOf.get(sel) || null   //分帳: 成品該次各席之子帳(替換者沿用被替換之席之子帳)
+                    let bk0 = grpOf.get(sel) || null //分帳: 成品該次各席之子帳(替換者沿用被替換之席之子帳)
                     let bk = bk0 ? new Uint8Array(sel.length) : null
                     let m = 0
                     tick++
@@ -1427,7 +1427,13 @@ let makeEvaluator = (L, cfg = {}) => {
         if (nul &amp;&amp; nul.sigPerPick > 0) {
             let nSlotSel = Math.max(1, sizes.reduce((a, v) => a + v, 0))
             let selSig = ops.reduce((a, o) => a + o.nSignals, 0) / nSlotSel
-            let selLong = runs.reduce((a, r) => a + r.sels.reduce((b, sel) => { let c = 0; for (let i = 0; i &lt; sel.length; i++) { if (L.mode[sel[i]] > 0) { c++ } } return b + c }, 0), 0) / nSlotSel
+            let selLong = runs.reduce((a, r) => a + r.sels.reduce((b, sel) => {
+                let c = 0; for (let i = 0; i &lt; sel.length; i++) {
+                    if (L.mode[sel[i]] > 0) {
+                        c++
+                    }
+                } return b + c
+            }, 0), 0) / nSlotSel
             let devSig = Math.abs(selSig / nul.sigPerPick - 1) > 0.1
             let devLong = nul.longRatio > 0 &amp;&amp; Math.abs(selLong / nul.longRatio - 1) > 0.1
             let half = cfg.sideActHalf === undefined ? 50 : cfg.sideActHalf
@@ -1513,10 +1519,16 @@ let makeEvaluator = (L, cfg = {}) => {
                     //分帳: 元素為 { ids, group } 者**一律照用其 group(含全為 0 = 全部歸子帳 0)**; 未給 group 者才依席次序沿用成品同一決策之分帳(成品未分帳則無)
                     //  (規則 R-EV-27: 原以「group 全為 0 ⇒ 視為未給」而改套成品之分帳 ⇒ 只留子帳 0 之席單獨重放時, 各席被依席次序套上成品之分帳、上限錯用, 寫不成逐帳歸因之擴充診斷)
                     let explicitGroup = (x) => x !== null &amp;&amp; typeof x === 'object' &amp;&amp; !Array.isArray(x) &amp;&amp; !ArrayBuffer.isView(x) &amp;&amp; !(x instanceof Set) &amp;&amp; x.group !== undefined &amp;&amp; x.group !== null
-                    let ss = selsByPhase[i].map((x, k) => { let o = normSel(x); return o.grp || explicitGroup(x) ? o.sel : inheritGroups(r.sels[k], o.sel) })
+                    let ss = selsByPhase[i].map((x, k) => {
+                        let o = normSel(x); return o.grp || explicitGroup(x) ? o.sel : inheritGroups(r.sels[k], o.sel)
+                    })
                     let tg = tagsByPhase &amp;&amp; Array.isArray(tagsByPhase[i]) ? tagsByPhase[i] : r.tags
                     let nd = r.bars.length
-                    let t3 = nd >= 6 ? [0, 1, 2].map((g) => { let a = Math.floor(nd * g / 3); let z = Math.floor(nd * (g + 1) / 3); return opOf(ss.slice(a, z), r.bars.slice(a, z), tg.slice(a, z), acc, { k0: r.k0 + a, ordKey }).eqYr }) : null
+                    let t3 = nd >= 6
+                        ? [0, 1, 2].map((g) => {
+                            let a = Math.floor(nd * g / 3); let z = Math.floor(nd * (g + 1) / 3); return opOf(ss.slice(a, z), r.bars.slice(a, z), tg.slice(a, z), acc, { k0: r.k0 + a, ordKey }).eqYr
+                        })
+                        : null
                     ssAll.push(ss)
                     return { eqYr: opOf(ss, r.bars, tg, acc, { k0: r.k0, col: sc, ordKey }).eqYr, t3 }
                 })
@@ -1529,9 +1541,26 @@ let makeEvaluator = (L, cfg = {}) => {
                 n,
                 meta,
                 nullDraws,
-                phases: Object.freeze(runs.map((r) => Object.freeze({ phase: r.phase, bars: Array.from(r.bars), sels: r.sels.map((s) => Int32Array.from(s)), tags: r.tags.slice(), groups: r.sels.map((s) => { let g = grpOf.get(s); return g ? Uint8Array.from(g) : null }),
+                phases: Object.freeze(runs.map((r) => Object.freeze({
+                    phase: r.phase,
+                    bars: Array.from(r.bars),
+                    sels: r.sels.map((s) => Int32Array.from(s)),
+                    tags: r.tags.slice(),
+                    groups: r.sels.map((s) => {
+                        let g = grpOf.get(s); return g ? Uint8Array.from(g) : null
+                    }),
                     //pre: 同一相位於評估期間以前最近 26 次決策之選集(由舊至新; 唯讀複本); 只可用於「較早之選集挪到較晚用」之延後型對照(不得反向使用: 那是前視)
-                    pre: Object.freeze(r.pre ? { bars: Array.from(r.pre.bars), sels: r.pre.sels.map((s) => Int32Array.from(s)), tags: r.pre.tags.slice(), groups: r.pre.sels.map((s) => { let g = grpOf.get(s); return g ? Uint8Array.from(g) : null }) } : { bars: [], sels: [], tags: [], groups: [] }) }))),
+                    pre: Object.freeze(r.pre
+                        ? {
+                            bars: Array.from(r.pre.bars),
+                            sels: r.pre.sels.map((s) => Int32Array.from(s)),
+                            tags: r.pre.tags.slice(),
+                            groups: r.pre.sels.map((s) => {
+                                let g = grpOf.get(s); return g ? Uint8Array.from(g) : null
+                            })
+                        }
+                        : { bars: [], sels: [], tags: [], groups: [] })
+                }))),
                 obs: Object.freeze({ mean: obs, byPhase: ops.map((o) => o.eqYr), thirds: obsThirds }),
                 simulate,
                 summarize,
@@ -1669,7 +1698,7 @@ export default makeEvaluator
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 14:42:16 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 15:49:29 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>

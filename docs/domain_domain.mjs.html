@@ -348,7 +348,14 @@ let makeProject = (st = getSettings(), inject = {}) => {
         return out
     }
     //refsOf: 任務書列為參考之節點(其工作夾可讀)與來源方向內提到之工作夾、指名之節點; 於驗證時呼叫(同輪內與派工時之參考相同)
-    let verify = makeVerify({ st, FD_ROOT, layerOfSpec, refsOf: (spec) => { let t = taskFor(spec); return [...t.refs.filter((r) => r.nodeId).map((r) => r.nodeId), ...dirWorkIds(t.direction), ...dirNodeIds(t.direction)] } })
+    let verify = makeVerify({
+        st,
+        FD_ROOT,
+        layerOfSpec,
+        refsOf: (spec) => {
+            let t = taskFor(spec); return [...t.refs.filter((r) => r.nodeId).map((r) => r.nodeId), ...dirWorkIds(t.direction), ...dirNodeIds(t.direction)]
+        }
+    })
     let dispatch = typeof inject.dispatch === 'function' ? inject.dispatch : makeDispatch({ agents: st.agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, cwd: FD_ROOT })
     let rsi = null
 
@@ -415,7 +422,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //  主張鍵(規則 R-REC-24): 驗證類方向入前緣時所帶之鍵記於該文件之 harness.applied.proposals(與 guidance.directions 逐條對齊)之 claimKey;
     //  對應 = 臂之集合、起點、主張鍵三者皆相同(規格無 claim ⇔ 該方向入前緣時無鍵: 探索類、與本規則之前之文件)⇒ 同臂同起點而主張不同之驗證各對到自己之方向
     //  回傳另含 index(該方向於文件內之位置)與 claimKey(無則 null)
-    let claimKeyAt = (d, k) => { let ap = d &amp;&amp; d.harness &amp;&amp; d.harness.applied &amp;&amp; Array.isArray(d.harness.applied.proposals) ? d.harness.applied.proposals : []; return ap[k] &amp;&amp; typeof ap[k].claimKey === 'string' ? ap[k].claimKey : null }
+    let claimKeyAt = (d, k) => {
+        let ap = d &amp;&amp; d.harness &amp;&amp; d.harness.applied &amp;&amp; Array.isArray(d.harness.applied.proposals) ? d.harness.applied.proposals : []; return ap[k] &amp;&amp; typeof ap[k].claimKey === 'string' ? ap[k].claimKey : null
+    }
     let directionOf = (spec) => {
         for (let d of records.listDreamDocs().slice().reverse()) {
             let dirs = (d.guidance &amp;&amp; d.guidance.directions) || []
@@ -444,7 +453,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let variant = null
         try {
             let plan = readJson(path.join(st.rsi.root, 'rounds', roundName(round), 'plan.json'), null)
-            let items = ((plan &amp;&amp; plan.items) || []).filter((x) => x &amp;&amp; x.id &amp;&amp; x.spec).map((x) => { let d = directionOf(x.spec); return { id: x.id, type: d ? d.type : 'explore' } })
+            let items = ((plan &amp;&amp; plan.items) || []).filter((x) => x &amp;&amp; x.id &amp;&amp; x.spec).map((x) => {
+                let d = directionOf(x.spec); return { id: x.id, type: d ? d.type : 'explore' }
+            })
             if (items.some((x) => x.id === id)) {
                 variant = assignTrial(tr.id, round, items).get(id) || null
             }
@@ -591,7 +602,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let L = []
         L.push('# 臂看板(自動產生;每輪末更新)')
         L.push('')
-        L.push(`樹上已執行節點 ${nodes.length} 個;階梯分佈 ${JSON.stringify(nodes.reduce((o, n) => { let k = n.score ? n.score.ladder : '?'; o[k] = (o[k] || 0) + 1; return o }, {}))}。臂之機制說明見 \`arms/catalog.json\`。`)
+        L.push(`樹上已執行節點 ${nodes.length} 個;階梯分佈 ${JSON.stringify(nodes.reduce((o, n) => {
+            let k = n.score ? n.score.ladder : '?'; o[k] = (o[k] || 0) + 1; return o
+        }, {}))}。臂之機制說明見 \`arms/catalog.json\`。`)
         L.push('')
         let vetoedOf = (n) => !!(n.score &amp;&amp; n.score.flags &amp;&amp; n.score.flags.vetoed)
         let descOf = (n) => {
@@ -638,11 +651,15 @@ let makeProject = (st = getSettings(), inject = {}) => {
             if (!m || !n.score || rp.length === 0) {
                 return '—'
             }
-            let mean = (xs) => { let v = xs.filter((x) => typeof x === 'number'); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : '—' }
+            let mean = (xs) => {
+                let v = xs.filter((x) => typeof x === 'number'); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : '—'
+            }
             let r0 = m.ext &amp;&amp; m.ext.nullRecentAct &amp;&amp; m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null
             return `${mean([n.score.S, ...rp.map((x) => x.S)])};${mean([m.nullSideAct ? m.nullSideAct.excess : null, ...rp.map((x) => x.comp)])} / ${mean([r0, ...rp.map((x) => x.recent)])}`
         }
-        let sorted = nodes.slice().sort((a, b) => { let ra = rank(a); let rb = rank(b); return (ra[0] - rb[0]) || (ra[1] - rb[1]) })
+        let sorted = nodes.slice().sort((a, b) => {
+            let ra = rank(a); let rb = rank(b); return (ra[0] - rb[0]) || (ra[1] - rb[1])
+        })
         let f1 = (x) => (typeof x === 'number' ? x.toFixed(1) : '')
         for (let n of sorted) {
             let m = n.raw &amp;&amp; n.raw.metrics
@@ -700,7 +717,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
         //ncOf, 擴充診斷自述「此成品之組成對照不是挑選內容之量」者(規則 R-REC-22): 不計入「有內容」與量尺之「挑選內容」, 譜系另註理由
         //  (例: 執行規則非中性且本身帶來大增益之成品, 其組成對照共用該規則 ⇒ 超額含執行層之增益; 判準由診斷自述, 迴圈不寫死哪一個診斷)
         let ncOf = (n) => extSurfaceOf(n.raw &amp;&amp; n.raw.metrics).notContent
-        let hasContent = (n) => { let c = compOf(n); return !!c &amp;&amp; typeof c.excess === 'number' &amp;&amp; c.excess > 0 &amp;&amp; typeof c.p === 'number' &amp;&amp; c.p &lt;= pMax &amp;&amp; !(typeof c.share === 'number' &amp;&amp; c.share >= 0.8) &amp;&amp; ncOf(n).length === 0 }
+        let hasContent = (n) => {
+            let c = compOf(n); return !!c &amp;&amp; typeof c.excess === 'number' &amp;&amp; c.excess > 0 &amp;&amp; typeof c.p === 'number' &amp;&amp; c.p &lt;= pMax &amp;&amp; !(typeof c.share === 'number' &amp;&amp; c.share >= 0.8) &amp;&amp; ncOf(n).length === 0
+        }
         let trustOf = (n) => (n.evidence &amp;&amp; n.evidence.trust) || null
         let vetoedOf = (n) => !!(n.score &amp;&amp; n.score.flags &amp;&amp; n.score.flags.vetoed)
         let sOf = (n) => (n.score &amp;&amp; typeof n.score.S === 'number' ? n.score.S : null)
@@ -709,7 +728,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let layersOf = (n) => [...new Set(n.spec.arms.map((a) => (armById.get(a) || {}).layer || '?'))]
         //activeLayersOf, 節點於交付版作用中之臂所屬之層(規則 R-REC-20): 各層「有內容者」與其最高 S 只計此層有作用中之臂者
         let activeLayersOf = (n) => [...new Set(activeArmsOf(n).map((a) => (armById.get(a) || {}).layer || '?'))]
-        let typeOfNode = (n) => { let d = records.getNodeDoc(n.id); return (d &amp;&amp; d.task &amp;&amp; d.task.type) || 'explore' }
+        let typeOfNode = (n) => {
+            let d = records.getNodeDoc(n.id); return (d &amp;&amp; d.task &amp;&amp; d.task.type) || 'explore'
+        }
         let rounds = [...new Set(nodes.map((n) => n.round))].filter((r) => Number.isInteger(r)).sort((a, b) => a - b)
         let byId = new Map(nodes.map((n) => [n.id, n]))
         let dreams = new Map(records.listDreamDocs().map((d) => [d.round, d]))
@@ -723,7 +744,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 return null
             }
             let rp = Array.isArray(n.raw.replays) ? n.raw.replays : []
-            let active =!!(m.sel &amp;&amp; m.null &amp;&amp; typeof m.sel.sigPerPick === 'number' &amp;&amp; typeof m.null.sigPerPick === 'number' &amp;&amp; m.null.sigPerPick > 0 &amp;&amp; m.sel.sigPerPick >= 2 * m.null.sigPerPick)
+            let active = !!(m.sel &amp;&amp; m.null &amp;&amp; typeof m.sel.sigPerPick === 'number' &amp;&amp; typeof m.null.sigPerPick === 'number' &amp;&amp; m.null.sigPerPick > 0 &amp;&amp; m.sel.sigPerPick >= 2 * m.null.sigPerPick)
             let r0 = m.ext &amp;&amp; m.ext.nullRecentAct &amp;&amp; m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null
             let useRecent = active &amp;&amp; typeof r0 === 'number'
             let xs = [useRecent ? r0 : (m.nullSideAct ? m.nullSideAct.excess : null), ...rp.map((x) => (useRecent ? x.recent : x.comp))].filter((v) => typeof v === 'number')
@@ -794,7 +815,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 L.push(`**量尺之子集**(擴充診斷自述;與上表之量尺**並列、不取代**):「有內容且可信」之 ${cand.length} 個節點中,屬於各子集者之最高者 ——`)
                 L.push('')
                 for (let g of [...groups.values()].sort((a, b) => a.name.localeCompare(b.name) || a.label.localeCompare(b.label))) {
-                    let nHas = cand.filter((n) => { let e = n.raw &amp;&amp; n.raw.metrics &amp;&amp; n.raw.metrics.ext &amp;&amp; n.raw.metrics.ext[g.name]; return !!e &amp;&amp; typeof e === 'object' &amp;&amp; !e.error }).length
+                    let nHas = cand.filter((n) => {
+                        let e = n.raw &amp;&amp; n.raw.metrics &amp;&amp; n.raw.metrics.ext &amp;&amp; n.raw.metrics.ext[g.name]; return !!e &amp;&amp; typeof e === 'object' &amp;&amp; !e.error
+                    }).length
                     let top = best(g.ns)
                     let topC = g.ns.map((n) => ({ n, c: contentOf(n) })).filter((x) => x.c).sort((a, b) => b.c.v - a.c.v)[0]
                     let ct = top ? contentOf(top) : null
@@ -825,7 +848,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
         //機制家族: 取最近一份有歸類之做夢文件(synthesis.overview.families); 節點 id 以完整或前綴比對
         let famDoc = records.listDreamDocs().filter((d) => d.synthesis &amp;&amp; d.synthesis.overview &amp;&amp; Array.isArray(d.synthesis.overview.families) &amp;&amp; d.synthesis.overview.families.length).sort((a, b) => b.round - a.round)[0] || null
         let fams = famDoc ? famDoc.synthesis.overview.families : []
-        let famOf = (n) => { let f = fams.find((x) => (x.nodes || []).some((id) => typeof id === 'string' &amp;&amp; id.length >= 8 &amp;&amp; n.id.startsWith(id))); return f ? f.name : null }
+        let famOf = (n) => {
+            let f = fams.find((x) => (x.nodes || []).some((id) => typeof id === 'string' &amp;&amp; id.length >= 8 &amp;&amp; n.id.startsWith(id))); return f ? f.name : null
+        }
         //成品用到之 ctx 介面(靜態掃描 pick.mjs; 略去通用者): 資訊源之機械線索, 供家族歸類
         let generic = new Set(['n', 'bar', 'k', 'day', 'state', 'meta.n', 'meta.tie', 'meta.barsPerDay'])
         let ctxUse = (n) => {
@@ -883,7 +908,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let contentRoots = [...new Set(contentNodes.map((n) => rootOf(n).id))]
         L.push(`- 最近 2 輪(${last2.map(roundName).join('、') || '—'})之 ${recent.length} 個節點,含各層者之比例:${layerIds.map((ly) => `${ly} ${pct(recent.filter((n) => layersOf(n).includes(ly)).length, recent.length)}`).join('、')};其中有起點者 ${pct(recent.filter((n) => n.spec.base).length, recent.length)}。`)
         if (fams.length) {
-            let rows = fams.map((f) => { let ms = nodes.filter((n) => famOf(n) === f.name); return `${f.name} ${ms.length} 個(有內容 ${ms.filter((n) => contentNodes.includes(n)).length})` })
+            let rows = fams.map((f) => {
+                let ms = nodes.filter((n) => famOf(n) === f.name); return `${f.name} ${ms.length} 個(有內容 ${ms.filter((n) => contentNodes.includes(n)).length})`
+            })
             let none = nodes.filter((n) => !famOf(n))
             L.push(`- **機制家族**(做夢 ${roundName(famDoc.round)} 之歸類):${rows.join(';')}${none.length ? `;未歸類 ${none.length} 個(${none.map((n) => `\`${n.id.slice(0, 8)}\``).join('、')})` : ''}。有內容之 ${contentNodes.length} 個節點分屬 ${new Set(contentNodes.map((n) => famOf(n) || `未歸類:${n.id}`)).size} 個家族。`)
         }
@@ -895,7 +922,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
         L.push(`- 已試之可選臂 ${selectable.filter((a) => tried.has(a.id)).length} / ${selectable.length};完全未試之層:${layerIds.filter((ly) => selectable.filter((a) => a.layer === ly).every((a) => !tried.has(a.id))).join('、') || '無'}。`)
         let props = rsi.store.listFrontier().filter((f) => f &amp;&amp; f.status === 'proposed' &amp;&amp; f.spec &amp;&amp; Array.isArray(f.spec.arms))
         if (props.length) {
-            let newFam = (n) => { let d = directionOf(n.spec); return !!d &amp;&amp; d.type !== 'verify' &amp;&amp; d.newFamily === true }
+            let newFam = (n) => {
+                let d = directionOf(n.spec); return !!d &amp;&amp; d.type !== 'verify' &amp;&amp; d.newFamily === true
+            }
             let out = props.filter((n) => !n.spec.base &amp;&amp; (n.spec.arms.some((a) => !tried.has(a)) || newFam(n)))
             L.push(`- 前緣(尚未執行之提案)${props.length} 條:向內 ${props.length - out.length}、向外 ${out.length}(${props.map((n) => `${n.spec.arms.join('+')}${n.spec.base ? `←${String(n.spec.base).slice(0, 8)}` : ''}`).join(';')})。`)
         }
@@ -947,7 +976,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let state = getState()
         let executed = (nodes || []).filter((n) => n.status === 'executed')
         let failed = (nodes || []).filter((n) => n.status !== 'executed').map((n) => ({ nodeId: n.id, arms: n.spec.arms, error: String((n.notes &amp;&amp; (n.notes.error || n.notes.why)) || '').split('\n')[0].slice(0, 160) }))
-        let reaudit = (state.pendingReaudit || []).filter((id) => { let n = rsi.store.getNode(id); return n &amp;&amp; n.status === 'executed' &amp;&amp; !executed.some((e) => e.id === id) })
+        let reaudit = (state.pendingReaudit || []).filter((id) => {
+            let n = rsi.store.getNode(id); return n &amp;&amp; n.status === 'executed' &amp;&amp; !executed.some((e) => e.id === id)
+        })
         let nodeIds = [...executed.map((n) => n.id), ...reaudit]
         if (nodeIds.length === 0) {
             lines.push('代理式做夢:本輪無可審計之節點,略過')
@@ -1115,7 +1146,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
         }
         //寫法守則(做夢自己維護; 規則 R-MON-3): 列兩檔之條目位元組數; 逾上限者標示(任務書只附上限以內之部分)
         if (st.rsi.guides !== false) {
-            let gb = (g) => { let all = Buffer.byteLength(guideText(FD_ROOT, { ...g, cap: 1e9 }), 'utf8'); return `${all} 位元組${all > g.cap ? `(**逾上限 ${g.cap},超出者未附入任務書**)` : ''}` }
+            let gb = (g) => {
+                let all = Buffer.byteLength(guideText(FD_ROOT, { ...g, cap: 1e9 }), 'utf8'); return `${all} 位元組${all > g.cap ? `(**逾上限 ${g.cap},超出者未附入任務書**)` : ''}`
+            }
             lines.push(`寫法守則(做夢維護;原文附於下一輪之任務書):做夢 ${gb(GUIDE.dream)}、節點 ${gb(GUIDE.node)}`)
         }
         lines.push(`做夢之操作稽核:${dtr.issues.length ? `**觸及禁區 ${dtr.issues.length} 項**(${dtr.issues.join(';').slice(0, 300)})` : `未觸及禁區${dtr.note ? `(${dtr.note})` : ''}`}${dtr.fileNotes &amp;&amp; dtr.fileNotes.length ? `;所寫之程式檔內含禁區字樣 ${dtr.fileNotes.length} 處(待主代理核對是否只是搜尋目標):${dtr.fileNotes.join('、').slice(0, 200)}` : ''}`)
@@ -1136,7 +1169,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let dirs = ((dr.doc.guidance &amp;&amp; dr.doc.guidance.directions) || []).filter((x) => x &amp;&amp; Array.isArray(x.arms))
             //配比(向外探勘 / 向內深掘): 向外 = 探索類、無起點, 且「含至少一個未試之臂(樹上尚無已執行之節點含此臂)」或「做夢自標押新家族(newFamily: true)」; 其餘為向內
             //  後者之用意: 可選臂全數試過後(新臂一通過即由改掛之方向試), 只以未試之臂定義之向外恆為 0, 押新資訊源之從零探索不被計入
-            let tried = new Set(rsi.store.listIndex().filter((r) => r.status === 'executed').flatMap((r) => { let n = rsi.store.getNode(r.id); return n &amp;&amp; n.spec ? triedArmsOf(n) : [] }))
+            let tried = new Set(rsi.store.listIndex().filter((r) => r.status === 'executed').flatMap((r) => {
+                let n = rsi.store.getNode(r.id); return n &amp;&amp; n.spec ? triedArmsOf(n) : []
+            }))
             let nUntried = selectable.filter((a) => !tried.has(a.id)).length
             let isOut = (x) => x.type !== 'verify' &amp;&amp; !x.base &amp;&amp; (x.newFamily === true || x.arms.some((a) => armById.has(a) &amp;&amp; armById.get(a).selectable === true &amp;&amp; !tried.has(a)))
             let nOut = dirs.filter(isOut).length
@@ -1212,7 +1247,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let k = 0
         for (let d of records.listNodeDocs()) {
             let h = d.harness
-            if (!h || Array.isArray(h.summary) &amp;&amp; h.summary.length) {
+            if (!h || (Array.isArray(h.summary) &amp;&amp; h.summary.length)) {
                 continue
             }
             let m = (h.raw &amp;&amp; h.raw.metrics) || h.metrics
@@ -1439,7 +1474,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
             })
             let d = records.getNodeDoc(n.id)
             if (d &amp;&amp; d.harness) {
-                let lineOf = (nm) => { let e = got[nm]; return `擴充診斷 ${nm}: ${e.error ? `未算(${e.error})` : (typeof e.text === 'string' ? e.text.slice(0, 600) : JSON.stringify(e).slice(0, 300))}` }
+                let lineOf = (nm) => {
+                    let e = got[nm]; return `擴充診斷 ${nm}: ${e.error ? `未算(${e.error})` : (typeof e.text === 'string' ? e.text.slice(0, 600) : JSON.stringify(e).slice(0, 300))}`
+                }
                 let sum0 = Array.isArray(d.harness.summary) ? d.harness.summary.filter((s) => !filled.some((nm) => String(s).startsWith(`擴充診斷 ${nm}:`))) : null
                 d.harness = {
                     ...d.harness,
@@ -1767,7 +1804,7 @@ export default makeProject
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 14:42:16 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 15 2026 15:49:29 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>
