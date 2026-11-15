@@ -35,7 +35,7 @@ let setup = (t, o = {}) => {
             else if (o.dreamJson) {
                 fs.writeFileSync(path.join(wd, 'dream.json'), JSON.stringify(o.dreamJson))
             }
-            return { ok: true, agent: { kind: 'fake', model: `fake-${role}` } }
+            return o.dispatchResult || { ok: true, agent: { kind: 'fake', model: `fake-${role}` } }
         },
         verify: async (a) => {
             calls.verify.push(a)
@@ -90,6 +90,52 @@ describe('arsi:節點(派工 → 迴圈重跑 → 節點文件)', function () {
         let d = setup(t, { nodeJson: null })
         let r4 = await d.arsi.runNode({ nodeId: 'n4', spec: {}, round: 1, task: {} })
         assert(r4.raw.issues.some((x) => /未交付 node\.json/.test(x)))
+    })
+
+    it('額度用盡而未完成(派工結果 quota: true)⇒ 不重跑驗證、不把工作夾內之半成品當成交付;節點文件記 failed、呼叫 onNodeDone、拋錯(錯誤物件帶 quota 與 doc)', async () => {
+        //R-RUN-8(Gitea #156): 替身之派工照樣在工作夾留下成品檔與文件(= 半成品), 但回 quota: true ⇒ verify 不得被呼叫
+        let { arsi, records, calls } = setup(t, { dispatchResult: { ok: false, quota: true, error: 'm: 額度用盡', agent: { kind: 'fake', model: 'fake-node' } } })
+        await assert.rejects(() => arsi.runNode({ nodeId: 'n1', spec: { arms: ['A'] }, round: 1, task: {} }), (e) => /額度用盡而未完成/.test(e.message) && e.quota === true && e.doc.status === 'failed' && e.doc.nodeId === 'n1')
+        assert.equal(calls.verify.length, 0, '不重跑驗證')
+        let d = records.getNodeDoc('n1')
+        assert.deepEqual([d.status, d.attempt, d.harness.ok, d.agent.ok, d.results, d.conclusion, d.plan, d.code], ['failed', 1, false, false, null, null, null, null])
+        assert(/額度用盡/.test(d.harness.error) && /額度用盡/.test(d.agent.error), '節點文件寫明因額度而未完成')
+        assert.equal(d.harness.score, null)
+        assert.deepEqual(calls.hooks, ['node:n1'], 'onNodeDone 照常呼叫')
+        //其他原因之派工失敗(無 quota)⇒ 既有行為: 照常重跑驗證(逾時之半成品亦由驗證判定)
+        let b = setup(t, { dispatchResult: { ok: false, error: 'timeout TIMEOUT after 7200s', agent: { kind: 'fake', model: 'fake-node' } } })
+        let r2 = await b.arsi.runNode({ nodeId: 'n2', spec: {}, round: 1, task: {} })
+        assert.deepEqual([b.calls.verify.length, r2.doc.status, r2.doc.agent.ok], [1, 'verified', false])
+        //quota 不為 true(缺、false)者一律不算
+        for (let q of [undefined, false, 'true', 1]) {
+            let c = setup(t, { dispatchResult: { ok: false, ...(q === undefined ? {} : { quota: q }), error: 'x', agent: { kind: 'fake', model: 'fake-node' } } })
+            await c.arsi.runNode({ nodeId: 'n3', spec: {}, round: 1, task: {} })
+            assert.equal(c.calls.verify.length, 1, `quota = ${String(q)}`)
+        }
+    })
+
+    it('重做之派工因額度而未完成 ⇒ 節點文件之次數加一並留歷史、記 failed;不動前次已移入 attempt 夾之交付物', async () => {
+        let a = setup(t)
+        await a.arsi.runNode({ nodeId: 'n1', spec: {}, round: 1, task: {} })
+        let d1 = a.records.getNodeDoc('n1')
+        d1.audit = { round: 1, trust: 'partial', action: 'rework' }
+        a.records.putNodeDoc(d1)
+        //同一份紀錄與工作夾上, 改以回 quota 之派工器重做
+        let arsi2 = createArsi({
+            records: a.records,
+            workDir: path.join(t.dir, 'work'),
+            artifactFiles: ['x.mjs'],
+            dispatch: async () => ({ ok: false, quota: true, error: '額度', agent: { kind: 'fake', model: 'fake-node' } }),
+            verify: async () => {
+                throw new Error('不得呼叫')
+            },
+            texts: { nodeBrief: () => 'b', nodePrompt: () => 'p', nodeTemplate: () => ({ t: 1 }), dreamBrief: () => 'd', dreamPrompt: () => 'p', dreamTemplate: () => ({ t: 1 }) },
+            hooks: {},
+        })
+        await assert.rejects(() => arsi2.runNode({ nodeId: 'n1', spec: {}, round: 1, task: {}, rework: '請補對照' }), (e) => e.quota === true && e.doc.attempt === 2)
+        let d = a.records.getNodeDoc('n1')
+        assert.deepEqual([d.status, d.attempt, d.history.length, d.history[0].attempt], ['failed', 2, 1, 1])
+        assert(fs.existsSync(path.join(t.dir, 'work', 'n1', 'attempt1', 'x.mjs')), '前次之成品檔留在 attempt1')
     })
 
     it('成品無法評估 ⇒ 節點文件記 failed 並拋錯(錯誤物件附文件)', async () => {

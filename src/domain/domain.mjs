@@ -333,7 +333,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let t = taskFor(spec); return [...t.refs.filter((r) => r.nodeId).map((r) => r.nodeId), ...dirWorkIds(t.direction), ...dirNodeIds(t.direction)]
         }
     })
-    let dispatch = typeof inject.dispatch === 'function' ? inject.dispatch : makeDispatch({ agents: st.agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, cwd: FD_ROOT })
+    //maxPercent: 訂閱之用量守門之門檻, 與起跑前之額度檢查同一個設定(settings.rsi.preflight.quotaMaxPercent; 未設取 95; 規則 R-RUN-8); 各角色另可設 agents.<role>.quotaMaxPercent(優先)
+    let dispatch = typeof inject.dispatch === 'function' ? inject.dispatch : makeDispatch({ agents: st.agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, cwd: FD_ROOT, maxPercent: st.rsi && st.rsi.preflight ? st.rsi.preflight.quotaMaxPercent : undefined })
     let rsi = null
 
     let domain = {

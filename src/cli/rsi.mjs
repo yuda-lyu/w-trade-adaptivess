@@ -128,7 +128,8 @@ else if (mode === 'round') {
         //  查詢失敗不擋; --force 亦解除; 用量之快照記入事件檔(不含金鑰與帳號), 供事後估每輪之耗用
         if (!why && pre.quota !== false) {
             try {
-                quota = await checkQuota(quotaArgs())
+                //probe: 主模型達門檻而有備援時實際試一次備援(免費池用盡即擋下; 規則 R-RUN-8)—— 只在起跑前與連跑時之守門做, 輪末之用量快照不做
+                quota = await checkQuota({ ...quotaArgs(), probe: true })
                 console.log(`額度: ${quota.rows.map((r) => `${r.role} ${r.windows.map((w) => `${w.label} ${w.percent === null ? '—' : `${w.percent}%`}`).join(' / ') || '—'}${r.note ? `(${r.note})` : ''}`).join(';')}`)
                 if (!quota.ok && argOf('force', false) !== true) {
                     why = ['quota', `${quota.why};額度重置後自動恢復,或加 --force 起跑一次`]
@@ -140,7 +141,8 @@ else if (mode === 'round') {
         }
         if (why) {
             console.log(`本次不啟動: ${why[1]}`)
-            ev({ event: 'skipped', reason: why[0], detail: why[1] })
+            //retryAt: 因額度而不啟動時, 達門檻之視窗全部重置之時刻(查得到才有)—— 監看端據以決定何時再起
+            ev({ event: 'skipped', reason: why[0], detail: why[1], ...(why[0] === 'quota' && quota && quota.retryAt ? { retryAt: quota.retryAt } : {}) })
             process.exit(3)
         }
     }
@@ -331,7 +333,7 @@ else if (mode === 'round') {
             //連跑多輪時, 第 2 輪起每輪開始前再查一次額度(規則 R-RUN-5; --force 只解除起跑時之自檢; 查詢失敗不擋)
             if (index > 0 && pre.quota !== false) {
                 try {
-                    let q = await checkQuota(quotaArgs())
+                    let q = await checkQuota({ ...quotaArgs(), probe: true })
                     if (!q.ok) {
                         return `額度已達起跑門檻(${q.why})`
                     }

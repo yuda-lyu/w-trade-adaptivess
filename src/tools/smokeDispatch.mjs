@@ -11,7 +11,7 @@ agents.node.timeoutMin = 4
 agents.node.fallback = []
 agents.dream.timeoutMin = 4
 agents.dream.effort = 'low'
-let dispatch = makeDispatch({ agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, cwd: FD_ROOT })
+let dispatch = makeDispatch({ agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, cwd: FD_ROOT, maxPercent: st.rsi && st.rsi.preflight ? st.rsi.preflight.quotaMaxPercent : undefined })
 let dir = P('tmp', 'smoke')
 fs.rmSync(dir, { recursive: true, force: true })
 fs.mkdirSync(dir, { recursive: true })
