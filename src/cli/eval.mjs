@@ -1,11 +1,12 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
-import { getSettings, argOf, writeJson } from '../cfg.mjs'
+import { getSettings, argOf } from '../cfg.mjs'
 import { loadLedger } from '../eval/ledger.mjs'
 import { makeEvaluator, lowerBound } from '../eval/evalCore.mjs'
 import { pathToFileURL } from 'url'
 import { loadPick, scanSnippet } from '../eval/pickLoader.mjs'
+import { P as PI, pushOwn, safeJson, assertIntrinsics, isIntegrityError, adoptError } from '../eval/intrinsics.mjs'
 import { scoreOf } from '../eval/score.mjs'
 import { createResourceMonitor } from '../arsi/resources.mjs'
 
@@ -23,7 +24,10 @@ import { createResourceMonitor } from '../arsi/resources.mjs'
 //    --ref: 另以參考模組之 pick 於同相位、同亂數種子逐決策執行(各有自己的 ctx.state / ctx.rand, 與本模組互不影響),
 //           輸出兩者選集之重疊率(交集 ÷ 本模組之選集大小)依決策段(各相位最前 10% / 中段 / 最後 10% 之決策)之分佈;
 //           只增輸出(結果檔之 refOverlap), 既有數字與 selHash 不變; 可給多個(逗號分隔): refOverlap = 第一個, 另有 refOverlaps = 全部依序
-//  離開碼: 0 完成 / 2 挑選模組不存在或未過靜態檢查 / 3 挑選函數執行錯誤
+//  離開碼: 0 完成 / 2 挑選模組不存在或未過靜態檢查 / 3 挑選函數執行錯誤(含內建物件被改: ERROR EVAL_INTEGRITY)
+//  內建物件之完整性(規則 R-EV-35 ②): 挑選模組、擴充診斷模組、參考模組各於載入後比對; 讀帳本前與輸出前(最後一個 await 之後)再比對 ——
+//    模組可排入延後執行之程式(微任務), 於其後之 await 期間才改內建物件; 評估本身為同步, 執行中不會插入
+//    被改 ⇒ 評估失敗(離開碼 3; 有 --out 者寫 { ok: false, code: 'EVAL_INTEGRITY', where, items }), 結果檔與評估紀錄以擷取之 JSON.stringify 寫出
 let st = getSettings()
 let fpPick = argOf('pick', '')
 if (!fpPick || fpPick === true) {
@@ -62,15 +66,51 @@ let logEval = (o) => {
         if (relToWork.startsWith('..') || path.isAbsolute(relToWork)) {
             return
         }
-        fs.appendFileSync(path.join(dir, '.evals.log'), JSON.stringify({ at: new Date().toISOString(), pick: path.basename(String(fpPick)), mode, ...(periodArg !== 'backtest' ? { period: periodArg } : {}), h: pickHash, ...(waitedSec > 0 ? { waitedSec } : {}), ...o }) + '\n')
+        fs.appendFileSync(path.join(dir, '.evals.log'), safeJson({ at: new Date().toISOString(), pick: path.basename(String(fpPick)), mode, ...(periodArg !== 'backtest' ? { period: periodArg } : {}), h: pickHash, ...(waitedSec > 0 ? { waitedSec } : {}), ...o }) + '\n')
     }
     catch (err) {}
+}
+//writeJson, 寫結果檔(格式同 cfg.mjs 之 writeJson: 縮排 2、UTF-8); 以載入時擷取之 JSON.stringify 序列化(規則 R-EV-35 ②)
+let writeJson = (fp, obj) => {
+    fs.mkdirSync(path.dirname(fp), { recursive: true })
+    fs.writeFileSync(fp, PI.JSONStringify(obj, null, 2), 'utf8')
+}
+//failIntegrity, 內建物件被改(err 為 intrinsics 之完整性錯誤): 評估失敗, 離開碼 3(--ext-test 時印 EXT_FAIL、離開碼 4)
+//  結果檔以擷取之 JSON.stringify 寫出(此時內建物件已被改; 見上方之 writeJson)
+//  此時內建物件已被改: 輸出用擷取之 console.log, 結果檔與評估紀錄以 safeJson 序列化(不經原型上之 toJSON)
+let failIntegrity = (err, extTestName = null) => {
+    if (extTestName) {
+        PI.ConsoleLog(`EXT_FAIL ${extTestName}: ${err.message}`)
+        process.exit(4)
+    }
+    PI.ConsoleLog(`ERROR ${err.message}`)
+    if (fpOut && fpOut !== true) {
+        try {
+            fs.mkdirSync(path.dirname(path.resolve(fpOut)), { recursive: true })
+            fs.writeFileSync(path.resolve(fpOut), safeJson({ ok: false, error: err.message, code: 'EVAL_INTEGRITY', where: err.where, items: err.items }, true), 'utf8')
+        }
+        catch (e) {}
+    }
+    logEval({ ok: false, code: 'EVAL_INTEGRITY' })
+    process.exit(3)
+}
+//checkOrFail, 比對內建物件; 被改即 failIntegrity
+let checkOrFail = (where, extTestName = null) => {
+    try {
+        assertIntrinsics(where)
+    }
+    catch (err) {
+        failIntegrity(err, extTestName)
+    }
 }
 let pk
 try {
     pk = await loadPick(fpPick)
 }
 catch (err) {
+    if (isIntegrityError(err)) {
+        failIntegrity(err)
+    }
     console.log(`ERROR ${err.code || ''} ${err.message}`)
     if (fpOut && fpOut !== true) {
         writeJson(path.resolve(fpOut), { ok: false, error: err.message, code: err.code || null, issues: err.issues || [] })
@@ -109,6 +149,8 @@ if (st.resources && process.env.ARSI_HARNESS !== '1') {
 let harnessEnv = process.env.ARSI_HARNESS === '1'
 let ledgerDir = harnessEnv && process.env.ARSI_LEDGER_DIR ? path.resolve(process.env.ARSI_LEDGER_DIR) : st.eval.ledgerDir
 let evalFrom = harnessEnv && process.env.ARSI_EVAL_FROM ? process.env.ARSI_EVAL_FROM : st.periods.backtest.start
+//讀帳本前比對內建物件(挑選模組已載入; 其延後執行之程式可能於上方之 await 期間才執行): 讀帳本與建評估器為同步, 其間不會再執行模組之程式
+checkOrFail('before-ledger')
 let L = loadLedger(ledgerDir)
 //評估期間: 帳本涵蓋訓練期 + 回測期; 預設只計回測期內之決策, --period train 只計訓練期內之決策(診斷)
 let barMs = L.meta.barHours * 3600000
@@ -176,18 +218,35 @@ let loadExt = async (fp) => {
     if (bad.length) {
         throw new Error(`不合限制: ${bad.join('、')}`)
     }
-    let mod = await import(`${pathToFileURL(abs).href}?v=${fs.statSync(abs).mtimeMs}`)
-    if (typeof mod.default !== 'function') {
+    //內建物件之完整性(規則 R-EV-35 ②; 比照挑選模組之 loadPick): 匯入(頂層程式已執行)後比對; 匯入失敗者其錯誤改以評估器自建之錯誤轉拋
+    let mod
+    try {
+        mod = await import(`${pathToFileURL(abs).href}?v=${fs.statSync(abs).mtimeMs}`)
+    }
+    catch (err) {
+        let e2 = adoptError(err)
+        assertIntrinsics('ext-load')
+        throw e2
+    }
+    let fn = mod.default
+    assertIntrinsics('ext-load')
+    if (typeof fn !== 'function') {
         throw new Error('須 export default 一個函數')
     }
-    return { name: path.basename(abs).replace(/\.mjs$/i, ''), fn: mod.default }
+    return { name: path.basename(abs).replace(/\.mjs$/i, ''), fn }
 }
 if (typeof extTest === 'string' && extTest) {
     opt = { phases: [0, 3], horizons: [st.eval.cadenceDays], nullDraws: 8 }
     try {
-        extList.push(await loadExt(extTest))
+        //await 恢復後先比對(其間模組之延後程式可能已改), 再以 pushOwn 收集
+        let ex = await loadExt(extTest)
+        assertIntrinsics('ext-load')
+        pushOwn(extList, ex)
     }
     catch (err) {
+        if (isIntegrityError(err)) {
+            failIntegrity(err, path.basename(extTest))
+        }
         console.log(`EXT_FAIL ${path.basename(extTest)}: ${String((err && err.message) || err).split('\n')[0]}`)
         process.exit(4)
     }
@@ -207,9 +266,15 @@ else if (mode === 'full' && opt.nullDraws > 0 && periodArg === 'backtest') {
     }
     for (let f of fs2) {
         try {
-            extList.push(await loadExt(path.join(fdExt, f)))
+            let ex = await loadExt(path.join(fdExt, f))
+            assertIntrinsics('ext-load')
+            pushOwn(extList, ex)
         }
         catch (err) {
+            //內建物件被改: 不是單一診斷之載入失敗, 整次評估失敗
+            if (isIntegrityError(err)) {
+                failIntegrity(err)
+            }
             extLoadErrors.push({ name: f.replace(/\.mjs$/i, ''), error: String((err && err.message) || err).split('\n')[0].slice(0, 300) })
         }
     }
@@ -246,6 +311,11 @@ try {
     }
 }
 catch (err) {
+    if (isIntegrityError(err)) {
+        failIntegrity(err, typeof extTest === 'string' && extTest && String(err.where).startsWith('ext') ? extList[0].name : null)
+    }
+    //寫錯誤結果前再比對一次(驗證拋錯之訊息組字可能執行模組之 toString)
+    checkOrFail('pick')
     console.log(`ERROR PICK_RUN ${String((err && err.stack) || err).split('\n').slice(0, 6).join('\n')}`)
     if (fpOut && fpOut !== true) {
         writeJson(path.resolve(fpOut), { ok: false, error: String((err && err.message) || err), code: 'PICK_RUN' })
@@ -260,6 +330,8 @@ let overlapOf = async (refPath) => {
     let r4 = (x) => Math.round(x * 10000) / 10000
     try {
         let rk = await loadPick(refPath)
+        //await 恢復後先比對, 才走訪本模組之選集(runsMain)
+        assertIntrinsics('ref-load')
         //兩個已排序之序號陣列之交集大小
         let inter = (A, B) => {
             let i = 0
@@ -316,15 +388,23 @@ let overlapOf = async (refPath) => {
         return { ref: path.resolve(refPath), refBytes: rk.bytes, refDesc: rk.meta && rk.meta.desc ? String(rk.meta.desc).slice(0, 160) : null, refSizeMean: r4(refSizes.reduce((t, v) => t + v, 0) / Math.max(1, refSizes.length)), all: dist(all), head: dist(seg.head), mid: dist(seg.mid), tail: dist(seg.tail), ofRefMean: ofRef.length ? r4(ofRef.reduce((t, v) => t + v, 0) / ofRef.length) : null }
     }
     catch (err) {
+        //內建物件被改(參考模組違約): 不只是參考模組無法執行 —— 其後之輸出段已不可信, 整次評估失敗
+        if (isIntegrityError(err)) {
+            failIntegrity(err)
+        }
         return { ref: path.resolve(refPath), error: String((err && err.message) || err).split('\n')[0].slice(0, 300) }
     }
 }
 let refOverlaps = []
 if (hasRef && runsMain) {
     for (let rp of refList) {
-        refOverlaps.push(await overlapOf(rp))
+        let ro = await overlapOf(rp)
+        checkOrFail('ref')
+        pushOwn(refOverlaps, ro)
     }
 }
+//輸出前(最後一個 await 之後)比對內建物件: 其後之輸出段為同步, 不會再執行模組之程式
+checkOrFail('output')
 let refOverlap = refOverlaps.length ? refOverlaps[0] : null
 let periodInfo = periodArg === 'train'
     ? { name: 'train', label: '訓練期(診斷;樣本內,不計入判讀)', start: st.periods.train.start, end: st.periods.train.end }

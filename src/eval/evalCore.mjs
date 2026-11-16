@@ -1,10 +1,13 @@
 import crypto from 'crypto'
+import { P, copyRange, copyAll, pushOwn, assertIntrinsics, violationMark, violationSince, isIntegrityError, integrityError, adoptError, snapData, handOut, isMutableSnap, isBrand } from './intrinsics.mjs'
+
+const { ObjectFreeze, ObjectSeal, ReflectApply, ArrayFrom, ArrayIsArray, ArrayPrototypeJoin, ArrayBufferIsView, NumberCtor, NumberIsInteger, NumberIsFinite, MathFloor, MathRound, MathMax, MathMin, MathImul, StringCtor, JSONStringify, StructuredClone, ErrorCtor, MapPrototypeGet, MapPrototypeSet, MapPrototypeHas, MapPrototypeDelete, MapPrototypeKeys, MapIteratorNext, SetPrototypeGetSize, TypedArrayFrom, TypedArrayPrototypeGetLength, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
 
 
 //快速評估核心:「項目之事件帳本 + 於各決策時點只憑過去資訊挑子集(可另給逐訊號之執行規則)+ 往後視窗之結果彙整」
 //  通用於任何「項目(此處為策略)各有一串事件(此處為訂單: 進場棒、出場棒、每單位損益)」之領域; 與交易有關者只有名稱
 //  決策節奏: 每 cadenceDays 日決策一次; 起始相位 phase(日)各跑一遍取平均, 去除對齊運氣
-//  挑選函數 pick(ctx) → 序號陣列, 或 { ids, tag }(tag 為任意值, 原樣交給該決策視窗內每個訊號之 accept);
+//  挑選函數 pick(ctx) → 序號陣列, 或 { ids, tag }(tag 為可結構化複製之資料, 於回傳時取快照並凍結, 交給該決策視窗內每個訊號之 accept; 規則 R-EV-35);
 //    另可帶 group(與 ids 等長之整數陣列, 0 ~ 3; 分帳: 各席所屬之子帳 ⇒ accept 收到 sig.group 與 book.openGroup[4]; 規則 R-EV-23)
 //  執行規則 accept(sig, book) → 布林(選配): 選集內策略之每個進場訊號依時間先後逐一詢問是否下單; 未提供 ⇒ 全收
 //    sig  = { sid, bar, day, dow(0 週日 … 6 週六), mode(1 做多 / -1 做空), k(決策序), tag }
@@ -15,6 +18,13 @@ import crypto from 'crypto'
 //  新鮮度 fresh[H]: 各決策之選集於其後 H 日內之訊號(每窗獨立之 book); eqYr_H = 各窗損益之平均 ÷ (H/365.25) ÷ 各窗最大同時持倉之最大值 × 100
 //  同劑量虛無 null: 同決策時點、同每次選集大小、同 tag 與同 accept, 選集改自全部項目均勻不放回隨機挑, 重複 draws 次 ⇒ op 等效年化(相位平均)之虛無分佈與 p 值
 //  無前視: 挑選函數只拿到 ctx, 其統計一律以決策棒 b 為界(出場棒 < b 者才算已結); accept 只拿到訊號當下之資訊; 帳本陣列不外露
+//  評估器之狀態不受模組之寫入影響(規則 R-EV-35; 挑選模組、擴充診斷模組與評估器同在一個 realm):
+//    ① 資料不共用: 交給模組之物件一律為複本或凍結物件 —— ctx.meta(每次 runPick 另給一份; 評估器排序用之 tie、幾何分組用之 tp / sl 不外露)、
+//       ctx.prev(前一選集之複本)、ctx.stat 之回傳物件(凍結; 其陣列為每次決策重寫之暫存)、tag(pick 回傳時以結構化複製取快照並凍結)、
+//       accept 之 sig / book(封裝之交出物件, 每次呼叫前以評估器自己之計數重寫; 持倉峰值等只依評估器之計數)、擴充診斷之 api(每個診斷另給一份)
+//    ② 內建物件之完整性: ctx 之各函數與逐訊號模擬只用 ./intrinsics.mjs 於載入時擷取之參照(複製帳本之區段用 copyRange);
+//       每次呼叫 pick 後、每批 accept 呼叫(一次逐訊號模擬)後、每個擴充診斷呼叫後與其 api 函數之入口比對受保護之內建物件, 不一致即拋 code 為 EVAL_INTEGRITY 之錯誤
+//    模組之回傳值與參數先只以擷取之參照讀成評估器自有之資料(此段可能執行模組之存取子), 比對通過後才以一般寫法處理
 /**
  * 於已升冪排序之陣列 arr 的 [lo, hi) 區間內做二分搜尋, 回傳第一個「值 >= v」之位置
  * 區間內皆 < v 時回傳 hi
@@ -54,8 +64,8 @@ let mulberry32 = (seed) => {
     let a = seed >>> 0
     return () => {
         a = (a + 0x6D2B79F5) >>> 0
-        let t = Math.imul(a ^ (a >>> 15), 1 | a)
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+        let t = MathImul(a ^ (a >>> 15), 1 | a)
+        t = (t + MathImul(t ^ (t >>> 7), 61 | t)) ^ t
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296
     }
 }
@@ -100,7 +110,8 @@ let makeEvaluator = (L, cfg = {}) => {
     let nBars = L.nBars
     let nFac = L.keyNames.length
     //外部序列(規則 R-EV-34; 選配): 名稱 → 序號; 帳本未建入者(含舊帳本)為空
-    let serNames = Array.isArray(L.seriesNames) ? L.seriesNames : []
+    //  名稱為評估器自己之凍結複本(不與帳本物件共用; ctx.series 之錯誤訊息只讀它)
+    let serNames = Object.freeze(Array.isArray(L.seriesNames) ? L.seriesNames.slice() : [])
     let serIdx = new Map(serNames.map((k, i) => [k, i]))
     let bpd = L.barsPerDay
     let warmupDays = cfg.warmupDays === undefined ? 180 : cfg.warmupDays
@@ -192,6 +203,28 @@ let makeEvaluator = (L, cfg = {}) => {
         ntAll,
         tie,
     })
+    //metaFor, 交給挑選函數(每次 runPick 一份)與擴充診斷(每個診斷一份)之靜態欄: 各定型陣列之複本(規則 R-EV-35 ①)
+    //  定型陣列無法凍結: 共用同一份時, 模組改得到評估器排序用之 tie(同一進場棒之訊號先後、虛無之同值次序), 並可經由它把資料帶到其他相位、參考模組與擴充診斷
+    //  評估器自身只用 tie(內部)與帳本之欄, 不讀交出之複本; 鍵與順序同 meta(ev.meta 為給呼叫端之正本, 不交給模組)
+    let metaFor = () => ObjectFreeze({
+        n,
+        barsPerDay: bpd,
+        fitEndBar: copyAll(Int32ArrayCtor, fitEndBar),
+        mode: copyAll(Int8ArrayCtor, meta.mode),
+        tp: copyAll(Float32ArrayCtor, meta.tp),
+        sl: copyAll(Float32ArrayCtor, meta.sl),
+        nKeys: copyAll(Uint8ArrayCtor, meta.nKeys),
+        cls: copyAll(Uint8ArrayCtor, meta.cls),
+        keyOff: copyAll(Uint32ArrayCtor, meta.keyOff),
+        keyIdx: copyAll(Uint16ArrayCtor, meta.keyIdx),
+        keyNames: meta.keyNames,
+        keySym: copyAll(Int8ArrayCtor, meta.keySym),
+        keyTh: copyAll(Float64ArrayCtor, meta.keyTh),
+        keyOr: copyAll(Uint8ArrayCtor, meta.keyOr),
+        seriesNames: meta.seriesNames,
+        ntAll: copyAll(Int32ArrayCtor, ntAll),
+        tie: copyAll(Uint32ArrayCtor, tie),
+    })
 
     //decisionBars, 相位 phase 之決策棒(其後 W 根之視窗須完整落在帳本內)
     let decisionBars = (phase, W = cad) => {
@@ -220,40 +253,66 @@ let makeEvaluator = (L, cfg = {}) => {
         }
         return out
     }
-    let normSel = (out) => {
+    //snapTag, tag 之快照(規則 R-EV-35 ①; 合約 §1: tag 只收可結構化複製之資料, 於 pick 回傳時取快照): 結構化複製並深度凍結
+    //  挑選函數回傳後再改它所保留之物件, 不影響已記錄之 tag(否則可於較晚之決策把較晚之資訊寫進較早之決策之 tag, 交給較早之視窗之 accept)
+    let snapTag = (t) => {
+        try {
+            if (typeof t === 'symbol') {
+                throw new ErrorCtor('符號')
+            }
+            return snapData(t)
+        }
+        catch (err) {
+            throw new ErrorCtor(`pick 回傳之 tag 須為可結構化複製之資料(數值、字串、物件、陣列等; 不得含函數、符號、共享記憶體): ${StringCtor((err && typeof err.message === 'string' && err.message) || '無法複製').slice(0, 120)}`)
+        }
+    }
+    //pickOutOf, 收下 pick(或擴充診斷 simulate 之元素)之回傳值 —— 第一段: 只讀取並複製成評估器自有之資料(只用擷取之參照; 此段可能執行模組之存取子與迭代器)
+    //  回 { arr(序號之陣列), garr(group 之陣列或 null), tag(快照), explicitGroup(物件形式且明給 group) }; 第二段 normSel 於比對內建物件之後才執行
+    //  Set 以內部欄位辨識(不經 instanceof); ids / group 經 Array.from(與原寫法之 [...Set] 相同之迭代次序)
+    let pickOutOf = (out) => {
         if (out === null || out === undefined) {
-            throw new Error('pick 回傳 null / undefined(須回傳序號陣列或 { ids, tag })')
+            throw new ErrorCtor('pick 回傳 null / undefined(須回傳序號陣列或 { ids, tag })')
         }
         let tag = null
         let ids = out
         let group = null
-        if (!Array.isArray(out) && !ArrayBuffer.isView(out) && !(out instanceof Set) && typeof out === 'object') {
+        if (!ArrayIsArray(out) && !ArrayBufferIsView(out) && !isBrand(SetPrototypeGetSize, out) && typeof out === 'object') {
             ids = out.ids
-            tag = out.tag === undefined ? null : out.tag
-            group = out.group === undefined || out.group === null ? null : out.group
+            let t = out.tag
+            tag = t === undefined ? null : t
+            let g = out.group
+            group = g === undefined || g === null ? null : g
             if (ids === null || ids === undefined) {
-                throw new Error('pick 回傳之物件缺 ids')
+                throw new ErrorCtor('pick 回傳之物件缺 ids')
             }
         }
-        let arr = ids instanceof Set ? [...ids] : Array.from(ids)
-        let garr = null
-        if (group !== null) {
-            garr = Array.from(group)
+        let arr = ArrayFrom(ids)
+        let garr = group === null ? null : ArrayFrom(group)
+        return { arr, garr, tag: snapTag(tag), explicitGroup: group !== null }
+    }
+    //normSel, 第二段: 驗證並正規化(已比對內建物件之後; 輸入為 pickOutOf 之回傳)
+    let normSel = (px) => {
+        let arr = px.arr
+        let garr = px.garr
+        let tag = px.tag
+        if (garr !== null) {
             if (garr.length !== arr.length) {
                 throw new Error(`pick 回傳之 group 須與 ids 等長(ids ${arr.length} 個、group ${garr.length} 個)`)
             }
         }
+        //descOf, 錯誤訊息用之值之描述: 物件不轉字串(不執行模組之 toString; 此段已在比對內建物件之後)
+        let descOf = (v) => (v !== null && (typeof v === 'object' || typeof v === 'function') ? '(物件)' : String(v).slice(0, 40))
         let seen = new Map()
         for (let i = 0; i < arr.length; i++) {
             let v = arr[i]
             if (!Number.isInteger(v) || v < 0 || v >= n) {
-                throw new Error(`pick 回傳含不合法之序號: ${String(v).slice(0, 40)}(須為 0 ~ ${n - 1} 之整數)`)
+                throw new Error(`pick 回傳含不合法之序號: ${descOf(v)}(須為 0 ~ ${n - 1} 之整數)`)
             }
             let g = 0
             if (garr) {
                 g = garr[i]
                 if (!Number.isInteger(g) || g < 0 || g >= N_GROUP) {
-                    throw new Error(`pick 回傳之 group 含不合法之值: ${String(g).slice(0, 40)}(須為 0 ~ ${N_GROUP - 1} 之整數)`)
+                    throw new Error(`pick 回傳之 group 含不合法之值: ${descOf(g)}(須為 0 ~ ${N_GROUP - 1} 之整數)`)
                 }
             }
             if (!seen.has(v)) {
@@ -274,13 +333,21 @@ let makeEvaluator = (L, cfg = {}) => {
         return { sel, tag, grp }
     }
 
-    //runPick, 於一個相位依序呼叫挑選函數; 回各決策之選集與 tag
+    //runPick, 於一個相位依序呼叫挑選函數; 回各決策之選集與 tag(tag 為快照)
+    //  內建物件之完整性(規則 R-EV-35 ②): 入口與每次呼叫 pick 之後比對(呼叫前可能已有模組之頂層程式或延後執行之程式改過); ctx 之各函數於 pick 執行期間被呼叫, 只用擷取之參照
+    //  pick 拋出之值以 adoptError 收下(改以評估器自建之錯誤轉拋, 訊息與堆疊之文字不變), 比對通過才轉拋
+    //  ctx 之各函數只在該次 pick 呼叫內有效(alive): 其閉包共用各策略之游標(ce / cx), 呼叫結束後再呼叫(保留於模組層變數, 於其後之相位或 accept 內呼叫)
+    //    會以較晚之游標回傳較晚之單 ⇒ 呼叫結束即失效、再呼叫拋錯
+    //  偵測之黏著: 模組攔下評估器於其執行期間拋出之完整性錯誤(例: 延遲讀取帳本欄前之比對)並改回者, 以 violationSince 判該次評估仍失敗
     let runPick = (pickFn, phase, seed = 1) => {
+        assertIntrinsics('pick')
+        let mk = violationMark()
         let bars = decisionBars(phase)
-        let ce = Uint32Array.from(L.off.subarray(0, n)) //各項目「進場棒 >= b 之第一單」之位置
-        let cx = Uint32Array.from(L.xoff.subarray(0, n)) //各項目「出場棒 >= b 之第一筆已結單」之位置
+        let ce = copyRange(Uint32ArrayCtor, L.off, 0, n) //各項目「進場棒 >= b 之第一單」之位置
+        let cx = copyRange(Uint32ArrayCtor, L.xoff, 0, n) //各項目「出場棒 >= b 之第一筆已結單」之位置
         let state = {}
         let prev = new Int32Array(0)
+        let ctxMeta = metaFor()
         let bufs = new Map()
         let sels = []
         let tags = []
@@ -300,28 +367,42 @@ let makeEvaluator = (L, cfg = {}) => {
                 }
                 cx[s] = x
             }
-            let done = new Set() //本決策已算過之 lookback
+            //ctx 之各函數(stat、orders、entryDays、entryBars、exitDays、exitBars、market、factor、series、rand): 於 pick 執行期間被呼叫 ⇒ 只用擷取之參照(規則 R-EV-35 ②)
+            //  (Map 之讀寫、陣列之 push / join、定型陣列之建構與長度、複製帳本之區段皆經 ./intrinsics.mjs; 不經可被改寫之原型或全域綁定)
+            let done = new Map() //本決策已算過之 lookback
+            let alive = true
+            let deadErr = () => new ErrorCtor('ctx 之函數只在該次 pick 呼叫內有效(不得保留 ctx 於其後呼叫)')
             let stat = (days = 0) => {
-                let key = days > 0 && Number.isFinite(days) ? Math.round(days) : 0
-                let B = bufs.get(key)
+                if (!alive) {
+                    throw deadErr()
+                }
+                let key = days > 0 && NumberIsFinite(days) ? MathRound(days) : 0
+                let B = MapPrototypeGet(bufs, key)
                 if (!B) {
                     //緩衝重用: 回看日數逐次不同時(例如「自某固定日起」), 不為每個日數各留一組緩衝 —— 取用本次決策尚未用到之舊緩衝(其內容依合約只在當次 pick 內有效)
-                    for (let [k, v] of bufs) {
-                        if (!done.has(k)) {
-                            bufs.delete(k)
-                            B = v
+                    let it = MapPrototypeKeys(bufs)
+                    for (let x = MapIteratorNext(it); !x.done; x = MapIteratorNext(it)) {
+                        if (!MapPrototypeHas(done, x.value)) {
+                            B = MapPrototypeGet(bufs, x.value)
+                            MapPrototypeDelete(bufs, x.value)
                             break
                         }
                     }
                     if (!B) {
-                        B = { closed: new Int32Array(n), wins: new Int32Array(n), pnl: new Float64Array(n), entries: new Int32Array(n), open: new Int32Array(n), lastEntryAgo: new Int32Array(n) }
+                        //回傳物件凍結(各欄不可換成他物; 陣列內容為每次決策重寫之暫存)
+                        B = ObjectFreeze({ closed: new Int32ArrayCtor(n), wins: new Int32ArrayCtor(n), pnl: new Float64ArrayCtor(n), entries: new Int32ArrayCtor(n), open: new Int32ArrayCtor(n), lastEntryAgo: new Int32ArrayCtor(n) })
                     }
-                    bufs.set(key, B)
+                    MapPrototypeSet(bufs, key, B)
                 }
-                if (done.has(key)) {
+                if (MapPrototypeHas(done, key)) {
                     return B
                 }
-                done.add(key)
+                //重用前核對: 模組可轉移(structuredClone 之 transfer)交出之陣列之緩衝使其分離(長度歸 0, 其後寫入無效)⇒ 有任一欄長度不符即另建一組
+                if (TypedArrayPrototypeGetLength(B.closed) !== n || TypedArrayPrototypeGetLength(B.wins) !== n || TypedArrayPrototypeGetLength(B.pnl) !== n || TypedArrayPrototypeGetLength(B.entries) !== n || TypedArrayPrototypeGetLength(B.open) !== n || TypedArrayPrototypeGetLength(B.lastEntryAgo) !== n) {
+                    B = ObjectFreeze({ closed: new Int32ArrayCtor(n), wins: new Int32ArrayCtor(n), pnl: new Float64ArrayCtor(n), entries: new Int32ArrayCtor(n), open: new Int32ArrayCtor(n), lastEntryAgo: new Int32ArrayCtor(n) })
+                    MapPrototypeSet(bufs, key, B)
+                }
+                MapPrototypeSet(done, key, true)
                 let from = key > 0 ? b - key * bpd : -1
                 for (let s = 0; s < n; s++) {
                     let xlo = L.xoff[s]
@@ -340,70 +421,89 @@ let makeEvaluator = (L, cfg = {}) => {
                 return B
             }
             let orders = (s) => {
-                if (!Number.isInteger(s) || s < 0 || s >= n) {
-                    throw new Error(`ctx.orders: 序號不合法 ${s}`)
+                if (!alive) {
+                    throw deadErr()
+                }
+                if (!NumberIsInteger(s) || s < 0 || s >= n) {
+                    throw new ErrorCtor(`ctx.orders: 序號不合法 ${s}`)
                 }
                 let rs = []
                 for (let j = L.off[s]; j < ce[s]; j++) {
                     let x = L.ext[j]
                     let closed = x >= 0 && x < b
-                    rs.push({ ent: L.ent[j], ext: closed ? x : null, pnl: closed ? L.pnl[j] : null })
+                    pushOwn(rs, { ent: L.ent[j], ext: closed ? x : null, pnl: closed ? L.pnl[j] : null })
                 }
                 return rs
             }
             let entryDays = (s, days = 0) => {
-                if (!Number.isInteger(s) || s < 0 || s >= n) {
-                    throw new Error(`ctx.entryDays: 序號不合法 ${s}`)
+                if (!alive) {
+                    throw deadErr()
                 }
-                let from = days > 0 && Number.isFinite(days) ? b - Math.round(days) * bpd : -1
+                if (!NumberIsInteger(s) || s < 0 || s >= n) {
+                    throw new ErrorCtor(`ctx.entryDays: 序號不合法 ${s}`)
+                }
+                let from = days > 0 && NumberIsFinite(days) ? b - MathRound(days) * bpd : -1
                 let e0 = from <= 0 ? L.off[s] : lowerBound(L.ent, L.off[s], ce[s], from)
-                let out = new Int32Array(ce[s] - e0)
+                let out = new Int32ArrayCtor(ce[s] - e0)
                 for (let j = e0; j < ce[s]; j++) {
-                    out[j - e0] = Math.floor(L.ent[j] / bpd)
+                    out[j - e0] = MathFloor(L.ent[j] / bpd)
                 }
                 return out
             }
             //entryBars, 策略 s 於決策棒以前、最近 days 日內各進場單之進場棒序號(Int32Array 之複本; 由舊至新; 與 entryDays 同序、同長; 規則 R-EV-30)
             //  Math.floor(entryBars ÷ 每日棒數) = entryDays; 只含進場棒 < 決策棒者(ce 為各策略於決策棒以前之進場數之游標)⇒ 無前視; days 省略或 0 = 全部歷史; 成本與 entryDays 同級
+            //  複本以 copyRange(擷取之建構子與 set; 不經 slice: 被換掉之 slice 之 this 即帳本之欄)
             let entryBars = (s, days = 0) => {
-                if (!Number.isInteger(s) || s < 0 || s >= n) {
-                    throw new Error(`ctx.entryBars: 序號不合法 ${s}`)
+                if (!alive) {
+                    throw deadErr()
                 }
-                let from = days > 0 && Number.isFinite(days) ? b - Math.round(days) * bpd : -1
+                if (!NumberIsInteger(s) || s < 0 || s >= n) {
+                    throw new ErrorCtor(`ctx.entryBars: 序號不合法 ${s}`)
+                }
+                let from = days > 0 && NumberIsFinite(days) ? b - MathRound(days) * bpd : -1
                 let e0 = from <= 0 ? L.off[s] : lowerBound(L.ent, L.off[s], ce[s], from)
-                return L.ent.slice(e0, ce[s])
+                return copyRange(Int32ArrayCtor, L.ent, e0, ce[s])
             }
             //exitDays, 策略 s 於決策棒以前、最近 days 日內「已出場」之各單之出場日序號(Int32Array; 依出場時間由舊至新; 與 entryDays 對稱; 規則 R-EV-26)
             //  只含出場棒 < 決策棒者 ⇒ 無前視; days 省略或 0 = 全部歷史; 取自帳本內已依出場時間排序之每策略出場序列(成本與 entryDays 同級)
             let exitDays = (s, days = 0) => {
-                if (!Number.isInteger(s) || s < 0 || s >= n) {
-                    throw new Error(`ctx.exitDays: 序號不合法 ${s}`)
+                if (!alive) {
+                    throw deadErr()
                 }
-                let from = days > 0 && Number.isFinite(days) ? b - Math.round(days) * bpd : -1
+                if (!NumberIsInteger(s) || s < 0 || s >= n) {
+                    throw new ErrorCtor(`ctx.exitDays: 序號不合法 ${s}`)
+                }
+                let from = days > 0 && NumberIsFinite(days) ? b - MathRound(days) * bpd : -1
                 let x0 = from <= 0 ? L.xoff[s] : lowerBound(L.xExt, L.xoff[s], cx[s], from)
-                let out = new Int32Array(cx[s] - x0)
+                let out = new Int32ArrayCtor(cx[s] - x0)
                 for (let j = x0; j < cx[s]; j++) {
-                    out[j - x0] = Math.floor(L.xExt[j] / bpd)
+                    out[j - x0] = MathFloor(L.xExt[j] / bpd)
                 }
                 return out
             }
             //exitBars, 策略 s 於決策棒以前、最近 days 日內「已出場」之各單之出場棒序號(Int32Array 之複本; 依出場時間由舊至新; 與 exitDays 同序、同長; 規則 R-EV-31)
             //  Math.floor(exitBars ÷ 每日棒數) = exitDays; 只含出場棒 < 決策棒者 ⇒ 無前視; days 省略或 0 = 全部歷史; 成本與 exitDays 同級; 與 entryBars 對稱
             let exitBars = (s, days = 0) => {
-                if (!Number.isInteger(s) || s < 0 || s >= n) {
-                    throw new Error(`ctx.exitBars: 序號不合法 ${s}`)
+                if (!alive) {
+                    throw deadErr()
                 }
-                let from = days > 0 && Number.isFinite(days) ? b - Math.round(days) * bpd : -1
+                if (!NumberIsInteger(s) || s < 0 || s >= n) {
+                    throw new ErrorCtor(`ctx.exitBars: 序號不合法 ${s}`)
+                }
+                let from = days > 0 && NumberIsFinite(days) ? b - MathRound(days) * bpd : -1
                 let x0 = from <= 0 ? L.xoff[s] : lowerBound(L.xExt, L.xoff[s], cx[s], from)
-                return Int32Array.from(L.xExt.subarray(x0, cx[s]))
+                return copyRange(Int32ArrayCtor, L.xExt, x0, cx[s])
             }
             //market, 標的於決策棒以前最近 nBack 根 K 線(不含決策棒; 各陣列為複本, 由舊至新)
             let market = (nBack = 180) => {
-                if (!L.px) {
-                    throw new Error('ctx.market: 帳本無 K 線欄(請重建帳本)')
+                if (!alive) {
+                    throw deadErr()
                 }
-                let m = Math.max(0, Math.min(Math.round(nBack), b))
-                let o = { open: new Float64Array(m), high: new Float64Array(m), low: new Float64Array(m), close: new Float64Array(m), volume: new Float64Array(m) }
+                if (!L.px) {
+                    throw new ErrorCtor('ctx.market: 帳本無 K 線欄(請重建帳本)')
+                }
+                let m = MathMax(0, MathMin(MathRound(nBack), b))
+                let o = { open: new Float64ArrayCtor(m), high: new Float64ArrayCtor(m), low: new Float64ArrayCtor(m), close: new Float64ArrayCtor(m), volume: new Float64ArrayCtor(m) }
                 for (let i = 0; i < m; i++) {
                     let p = (b - m + i) * 5
                     o.open[i] = L.px[p]
@@ -418,35 +518,67 @@ let makeEvaluator = (L, cfg = {}) => {
             //  慣例同 market: 只含棒序 < 決策棒者 ⇒ 無前視; 即觸發進場所用之同一份序列(原值)
             //  ⇒ 策略於某棒進場 ⇔ 其各條件(ctx.meta.keySym / keyTh / keyOr)於該棒皆有值, and 條件全成立, 且(無 or 條件, 或 or 條件至少一個成立)
             let factor = (ki, nBack = 180) => {
-                if (!Number.isInteger(ki) || ki < 0 || ki >= nFac) {
-                    throw new Error(`ctx.factor: 因子序號不合法 ${ki}`)
+                if (!alive) {
+                    throw deadErr()
+                }
+                if (!NumberIsInteger(ki) || ki < 0 || ki >= nFac) {
+                    throw new ErrorCtor(`ctx.factor: 因子序號不合法 ${ki}`)
                 }
                 let F = L.fac
-                if (!F || F.length !== nFac * nBars) {
-                    throw new Error('ctx.factor: 帳本無因子序列欄(請重建帳本)')
+                if (!F || TypedArrayPrototypeGetLength(F) !== nFac * nBars) {
+                    throw new ErrorCtor('ctx.factor: 帳本無因子序列欄(請重建帳本)')
                 }
-                let m = Number.isFinite(nBack) ? Math.max(0, Math.min(Math.round(nBack), b)) : 0
-                return F.slice(ki * nBars + b - m, ki * nBars + b)
+                let m = NumberIsFinite(nBack) ? MathMax(0, MathMin(MathRound(nBack), b)) : 0
+                return copyRange(Float64ArrayCtor, F, ki * nBars + b - m, ki * nBars + b)
             }
             //series, 外部序列 name(ctx.meta.seriesNames 之一)於決策棒以前最近 nBack 根 K 棒之值(Float64Array 複本, 由舊至新; 不含決策棒; 缺值 NaN; 規則 R-EV-34)
             //  慣例同 factor: 只含棒序 < 決策棒者(slice 之終點 = 決策棒之起點, 不含) ⇒ 無前視; 序列於建帳本時以棒之開盤時間對位並於帳本終點截斷(src/eval/ledgerBuild.mjs),
             //  其值視為「於該棒收盤時已得知」(與因子、K 線同一約定)——量在該棒收盤後才得知者, 使用端須自行把它標在其後之棒(合約 §3)
             //  帳本未建入任何外部序列、或名稱不在其內 ⇒ 拋錯(訊息列出可用之名稱)
             let series = (name, nBack = 180) => {
-                let si = serIdx.get(name)
+                if (!alive) {
+                    throw deadErr()
+                }
+                let si = MapPrototypeGet(serIdx, name)
                 if (si === undefined) {
-                    throw new Error(`ctx.series: 無此序列 ${typeof name === 'string' ? JSON.stringify(name) : String(name)}(可用: ${serNames.length ? serNames.join('、') : '無;帳本未建入外部序列'})`)
+                    throw new ErrorCtor(`ctx.series: 無此序列 ${typeof name === 'string' ? JSONStringify(name) : StringCtor(name)}(可用: ${serNames.length ? ArrayPrototypeJoin(serNames, '、') : '無;帳本未建入外部序列'})`)
                 }
                 let S = L.ser
-                if (!S || S.length !== serNames.length * nBars) {
-                    throw new Error('ctx.series: 帳本之外部序列欄與名稱不符(請重建帳本)')
+                if (!S || TypedArrayPrototypeGetLength(S) !== serNames.length * nBars) {
+                    throw new ErrorCtor('ctx.series: 帳本之外部序列欄與名稱不符(請重建帳本)')
                 }
-                let m = Number.isFinite(nBack) ? Math.max(0, Math.min(Math.round(nBack), b)) : 0
-                return S.slice(si * nBars + b - m, si * nBars + b)
+                let m = NumberIsFinite(nBack) ? MathMax(0, MathMin(MathRound(nBack), b)) : 0
+                return copyRange(Float64ArrayCtor, S, si * nBars + b - m, si * nBars + b)
             }
-            let day = Math.floor(b / bpd)
-            let ctx = { n, meta, bar: b, day, dow: (dow0 + day) % 7, time: timeOf(b), k, phase, nDecisions: bars.length, cadenceDays, state, prev, rand: mulberry32(seed * 1000003 + phase * 9973 + k), stat, orders, entryDays, entryBars, exitDays, exitBars, market, factor, series }
-            let r = normSel(pickFn(ctx))
+            let day = MathFloor(b / bpd)
+            //ctx.prev: 前一選集之複本(規則 R-EV-35 ①; 原為評估器所記錄之選集本身, 改它即改了已記錄之選集)
+            let rng = mulberry32(seed * 1000003 + phase * 9973 + k)
+            let rand = () => {
+                if (!alive) {
+                    throw deadErr()
+                }
+                return rng()
+            }
+            let ctx = { n, meta: ctxMeta, bar: b, day, dow: (dow0 + day) % 7, time: timeOf(b), k, phase, nDecisions: bars.length, cadenceDays, state, prev: copyAll(Int32ArrayCtor, prev), rand, stat, orders, entryDays, entryBars, exitDays, exitBars, market, factor, series }
+            let px
+            try {
+                let raw = pickFn(ctx)
+                //pick 返回即失效(其後讀回傳值之存取子 / 迭代器時, ctx 之函數已不可用)
+                alive = false
+                px = pickOutOf(raw)
+            }
+            catch (err) {
+                alive = false
+                let e2 = adoptError(err)
+                assertIntrinsics('pick')
+                throw violationSince(mk) || e2
+            }
+            assertIntrinsics('pick')
+            let vio = violationSince(mk)
+            if (vio) {
+                throw vio
+            }
+            let r = normSel(px)
             sels.push(r.sel)
             tags.push(r.tag)
             prev = r.sel
@@ -465,9 +597,60 @@ let makeEvaluator = (L, cfg = {}) => {
     //    col 再帶 grp(Float64Array(N_GROUP * 4): 各子帳之 [單數, 損益, 已結單數, 獲利單數])時, 另把每張單歸到其策略所屬之子帳(未分帳者皆歸子帳 0; 規則 R-EV-33)
     //  ordKey(選配)= 同一進場棒之訊號先後所依之各策略次序(Uint32Array(n); 預設 = tie; 見 ordTieOf); 只影響逐訊號模擬之排序
     let tagKeyOf = (t) => (t === null || t === undefined ? null : (typeof t === 'string' ? t : JSON.stringify(t)).slice(0, 40))
+    //inSim, 逐訊號模擬(有 accept 者)進行中: 不得重入 —— 模擬共用 closeL / closeS / closeP 等暫存, 擴充診斷之執行規則內再呼叫 simulate / replaceNull 會改到外層模擬之計數
+    let inSim = false
     let simWindows = (wins, accept, col = null, ordKey = null) => {
+        if (inSim) {
+            throw new ErrorCtor('逐訊號模擬不得於執行規則(accept)之內再呼叫(simulate / replaceNull 之重入)')
+        }
         if (wins.length === 0) {
             return { totalPnl: 0, nSignals: 0, nOrders: 0, nClosed: 0, nWin: 0, nUnsettled: 0, peak: 0, hash: 0 }
+        }
+        //tag 之歸因(col.tags): 各視窗之 tag 字串先於迴圈外對到槽位, 迴圈內只累加定型陣列(逐訊號之迴圈內不呼叫 Map / JSON 等可被改寫之方法; 規則 R-EV-35 ②)
+        //  槽位之初值 = col.tags 內既有之累計, 迴圈後寫回 ⇒ 加總之先後與原寫法(逐單 a.pnl += p)相同, 數字逐位不變
+        let tagSlot = null
+        let tagKeys = null
+        let tagO = null
+        let tagP = null
+        if (col && col.side && col.tags) {
+            tagSlot = new Int32Array(wins.length).fill(-1)
+            tagKeys = []
+            let slotOf = new Map()
+            for (let w = 0; w < wins.length; w++) {
+                let tk = tagKeyOf(wins[w].tag)
+                if (tk !== null) {
+                    let q = slotOf.get(tk)
+                    if (q === undefined) {
+                        q = tagKeys.length
+                        slotOf.set(tk, q)
+                        tagKeys.push(tk)
+                    }
+                    tagSlot[w] = q
+                }
+            }
+            tagO = new Float64Array(tagKeys.length)
+            tagP = new Float64Array(tagKeys.length)
+            for (let q = 0; q < tagKeys.length; q++) {
+                let a = col.tags.get(tagKeys[q])
+                if (a) {
+                    tagO[q] = a.orders
+                    tagP[q] = a.pnl
+                }
+            }
+        }
+        let tagFlush = () => {
+            if (tagKeys) {
+                for (let q = 0; q < tagKeys.length; q++) {
+                    let a = col.tags.get(tagKeys[q])
+                    if (a) {
+                        a.orders = tagO[q]
+                        a.pnl = tagP[q]
+                    }
+                    else if (tagO[q] > 0) {
+                        col.tags.set(tagKeys[q], { orders: tagO[q], pnl: tagP[q] })
+                    }
+                }
+            }
         }
         let attr = col && col.side && col.tags
             ? (s, w, j, g) => {
@@ -493,15 +676,10 @@ let makeEvaluator = (L, cfg = {}) => {
                         }
                     }
                 }
-                let tk = tagKeyOf(wins[w].tag)
-                if (tk !== null) {
-                    let a = col.tags.get(tk)
-                    if (!a) {
-                        a = { orders: 0, pnl: 0 }
-                        col.tags.set(tk, a)
-                    }
-                    a.orders++
-                    a.pnl += p
+                let q = tagSlot[w]
+                if (q >= 0) {
+                    tagO[q]++
+                    tagP[q] += p
                 }
             }
             : null
@@ -574,6 +752,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 }
             }
             closeL.fill(0, lo, hiBar + 1)
+            tagFlush()
             return { totalPnl, nSignals: nSig, nOrders, nClosed, nWin, nUnsettled, peak, hash: nSig }
         }
         //逐訊號: 依(進場棒, 策略之固定亂數 tie)排序
@@ -622,103 +801,157 @@ let makeEvaluator = (L, cfg = {}) => {
                 closeG[g].fill(0, lo, nBars + 2)
             }
         }
-        let book = { open: 0, openLong: 0, openShort: 0, openGroup: new Array(N_GROUP).fill(0), dayCount: 0, winCount: 0, nAccepted: 0, pnlClosed: 0 }
-        let sig = { sid: 0, bar: 0, day: 0, dow: 0, mode: 0, k: 0, tag: null, group: 0 }
+        //持倉簿與訊號(規則 R-EV-35 ①): 評估器以自己之計數(open … pnlClosed、og)模擬, 持倉峰值只依它;
+        //  交給 accept 之 book / sig 為封裝(seal)之交出物件, 每次呼叫前以計數重寫 —— accept 改它們不影響模擬(原寫法 book 即計數本身, 改 book.open 即改了峰值)
+        //  逐訊號之迴圈內只用擷取之參照與定型陣列(accept 為模組之程式, 兩次呼叫之間評估器不呼叫可被改寫之方法); 迴圈結束(或 accept 拋錯)時比對內建物件
+        let open = 0
+        let openLong = 0
+        let openShort = 0
+        let dayCount = 0
+        let winCount = 0
+        let nAccepted = 0
+        let pnlClosed = 0
+        let og = new Int32ArrayCtor(N_GROUP)
+        let bookG = ObjectSeal([0, 0, 0, 0])
+        let book = ObjectSeal({ open: 0, openLong: 0, openShort: 0, openGroup: bookG, dayCount: 0, winCount: 0, nAccepted: 0, pnlClosed: 0 })
+        let sig = ObjectSeal({ sid: 0, bar: 0, day: 0, dow: 0, mode: 0, k: 0, tag: null, group: 0 })
+        let curTag = null
+        let curMut = false
         let cur = lo - 1
         let curDay = -1
         let curWin = -1
-        for (let ii = 0; ii < nSig; ii++) {
-            let i = arr[ii]
-            let j = cj[i]
-            let t = L.ent[j]
-            while (cur < t) {
-                cur++
-                let a = closeL[cur]
-                let c = closeS[cur]
-                if (a || c) {
-                    book.openLong -= a
-                    book.openShort -= c
-                    book.open -= a + c
-                    book.pnlClosed += closeP[cur]
-                    if (hasGrp) {
-                        for (let g = 0; g < N_GROUP; g++) {
-                            book.openGroup[g] -= closeG[g][cur]
+        let mk = violationMark()
+        inSim = true
+        try {
+            for (let ii = 0; ii < nSig; ii++) {
+                let i = arr[ii]
+                let j = cj[i]
+                let t = L.ent[j]
+                while (cur < t) {
+                    cur++
+                    let a = closeL[cur]
+                    let c = closeS[cur]
+                    if (a || c) {
+                        openLong -= a
+                        openShort -= c
+                        open -= a + c
+                        pnlClosed += closeP[cur]
+                        if (hasGrp) {
+                            for (let g = 0; g < N_GROUP; g++) {
+                                og[g] -= closeG[g][cur]
+                            }
+                        }
+                        else {
+                            og[0] = open
                         }
                     }
-                    else {
-                        book.openGroup[0] = book.open
-                    }
                 }
-            }
-            let day = Math.floor(t / bpd)
-            if (day !== curDay) {
-                curDay = day
-                book.dayCount = 0
-            }
-            let w = cw[i]
-            if (w !== curWin) {
-                curWin = w
-                book.winCount = 0
-            }
-            let s = sidOf[i]
-            let md = L.mode[s]
-            sig.sid = s
-            sig.bar = t
-            sig.day = day
-            sig.dow = (dow0 + day) % 7
-            sig.mode = md
-            sig.k = wins[w].k
-            sig.tag = wins[w].tag
-            let gq = hasGrp ? gOf[i] : 0
-            sig.group = gq
-            if (accept(sig, book) !== true) {
-                continue
-            }
-            nOrders++
-            book.nAccepted++
-            book.dayCount++
-            book.winCount++
-            book.open++
-            book.openGroup[gq]++
-            if (md > 0) {
-                book.openLong++
-            }
-            else {
-                book.openShort++
-            }
-            if (book.open > peak) {
-                peak = book.open
-            }
-            if (col) {
-                col.strat[s]++
-                col.bar[t]++
-                if (attr) {
-                    attr(s, w, j, gq)
+                let day = MathFloor(t / bpd)
+                if (day !== curDay) {
+                    curDay = day
+                    dayCount = 0
                 }
-            }
-            hash = Math.imul(hash ^ (j + 1), 16777619) >>> 0
-            let x = L.ext[j]
-            if (x >= 0) {
-                totalPnl += L.pnl[j]
-                nClosed++
-                if (L.pnl[j] > 0) {
-                    nWin++
+                let w = cw[i]
+                if (w !== curWin) {
+                    curWin = w
+                    winCount = 0
+                    curTag = wins[w].tag
+                    curMut = isMutableSnap(curTag)
                 }
+                let s = sidOf[i]
+                let md = L.mode[s]
+                let gq = hasGrp ? gOf[i] : 0
+                //交出之 sig / book: 以評估器之計數重寫; 寫不進(accept 把它們凍結或設為不可寫)⇒ 判違約, 該次評估失敗(EVAL_INTEGRITY)
+                //  tag: 凍結之快照照交; 可變者(Map、Set、Date、RegExp、定型陣列等)每次呼叫另給複本(同一視窗之各訊號互不相通)
+                try {
+                    sig.sid = s
+                    sig.bar = t
+                    sig.day = day
+                    sig.dow = (dow0 + day) % 7
+                    sig.mode = md
+                    sig.k = wins[w].k
+                    sig.tag = curMut ? StructuredClone(curTag) : curTag
+                    sig.group = gq
+                    book.open = open
+                    book.openLong = openLong
+                    book.openShort = openShort
+                    bookG[0] = og[0]
+                    bookG[1] = og[1]
+                    bookG[2] = og[2]
+                    bookG[3] = og[3]
+                    book.openGroup = bookG
+                    book.dayCount = dayCount
+                    book.winCount = winCount
+                    book.nAccepted = nAccepted
+                    book.pnlClosed = pnlClosed
+                }
+                catch (err) {
+                    throw integrityError('accept', ['accept 收到之 sig / book 被設為不可寫(合約 §4:不得改寫交出之物件)'])
+                }
+                if (accept(sig, book) !== true) {
+                    continue
+                }
+                nOrders++
+                nAccepted++
+                dayCount++
+                winCount++
+                open++
+                og[gq]++
                 if (md > 0) {
-                    closeL[x]++
+                    openLong++
                 }
                 else {
-                    closeS[x]++
+                    openShort++
                 }
-                if (hasGrp) {
-                    closeG[gq][x]++
+                if (open > peak) {
+                    peak = open
                 }
-                closeP[x] += L.pnl[j]
-            }
-            else {
-                nUnsettled++
+                if (col) {
+                    col.strat[s]++
+                    col.bar[t]++
+                    if (attr) {
+                        attr(s, w, j, gq)
+                    }
+                }
+                hash = MathImul(hash ^ (j + 1), 16777619) >>> 0
+                let x = L.ext[j]
+                if (x >= 0) {
+                    totalPnl += L.pnl[j]
+                    nClosed++
+                    if (L.pnl[j] > 0) {
+                        nWin++
+                    }
+                    if (md > 0) {
+                        closeL[x]++
+                    }
+                    else {
+                        closeS[x]++
+                    }
+                    if (hasGrp) {
+                        closeG[gq][x]++
+                    }
+                    closeP[x] += L.pnl[j]
+                }
+                else {
+                    nUnsettled++
+                }
             }
         }
+        catch (err) {
+            inSim = false
+            let e2 = adoptError(err)
+            assertIntrinsics('accept')
+            throw violationSince(mk) || e2
+        }
+        inSim = false
+        if (nSig > 0) {
+            assertIntrinsics('accept')
+            let vio = violationSince(mk)
+            if (vio) {
+                throw vio
+            }
+        }
+        tagFlush()
         closeL.fill(0, lo, nBars + 2)
         closeS.fill(0, lo, nBars + 2)
         closeP.fill(0, lo, nBars + 2)
@@ -1139,11 +1372,12 @@ let makeEvaluator = (L, cfg = {}) => {
         }
         for (let side of sides) {
             let m = side.length
-            side.sort((a, b) => (meta.tp[a] - meta.tp[b]) || (tie[a] - tie[b]))
+            //止盈 / 止損取帳本之欄(與 meta.tp / meta.sl 同值; 評估器內部不讀交出或給呼叫端之 meta)
+            side.sort((a, b) => (L.tp[a] - L.tp[b]) || (tie[a] - tie[b]))
             for (let i = 0; i < m; i++) {
                 tq[side[i]] = Math.min(nTp - 1, Math.floor((i * nTp) / m))
             }
-            side.sort((a, b) => (meta.sl[a] - meta.sl[b]) || (tie[a] - tie[b]))
+            side.sort((a, b) => (L.sl[a] - L.sl[b]) || (tie[a] - tie[b]))
             for (let i = 0; i < m; i++) {
                 sq[side[i]] = Math.min(nSl - 1, Math.floor((i * nSl) / m))
             }
@@ -1297,7 +1531,10 @@ let makeEvaluator = (L, cfg = {}) => {
     //    但只有決策棒落在 [fromBar, toBar) 者計入績效、新鮮度、虛無與選集統計(持倉簿自 fromBar 起為空); 未給 = 全部決策
     //    切片帶 k0(其第一個決策於整段之決策序): accept 收到之 sig.k 與挑選函數之 ctx.k 一致
     let PRE_N = 26
+    //  onRuns 為呼叫端(可信之程式, 例: 命令列之 --ref)之回調, 收到評估器所用之 runs 本身; 不得把它交給挑選模組或擴充診斷模組(其內不比對內建物件)
     let evalPolicy = (pickFn, opt = {}) => {
+        //入口比對(規則 R-EV-35 ②): 其下之一般寫法(phases.map 等)須在比對之後才執行 —— 呼叫前之 await 期間模組之延後程式可能已改內建物件
+        assertIntrinsics('pick')
         let t0 = Date.now()
         let accept = typeof opt.accept === 'function' ? opt.accept : null
         let phases = opt.phases || cfg.phases || [0, 1, 2, 3, 4, 5, 6]
@@ -1456,30 +1693,85 @@ let makeEvaluator = (L, cfg = {}) => {
         if (Array.isArray(opt.ext) && opt.ext.length) {
             ext = {}
             let obsThirds = thirds.map((g) => g.eqYr.mean)
-            let summarize = (v) => {
-                let s = statOf(Array.from(v))
-                let ge = Array.from(v).filter((x) => x >= obs).length
-                return { draws: v.length, mean: r4(s.mean), sd: r4(s.sd), p: r4((1 + ge) / (1 + v.length)), z: s.sd > 0 ? r4((obs - s.mean) / s.sd) : 0, excess: r4(obs - s.mean), ...(v.thirds ? { thirdsMean: v.thirds.map(r4) } : {}) }
+            //內建物件之完整性(規則 R-EV-35 ②): 擴充診斷之程式於 fn(api) 期間執行, 並可呼叫 api 之函數
+            //  ⇒ api 之各函數先只以擷取之參照把參數讀成評估器自有之資料, 再比對(guardExt), 通過才以一般寫法計算; 每個診斷呼叫後亦比對
+            //  一經偵測即記於 tripped: 診斷攔下錯誤而回傳者, 該次評估仍失敗(不因其攔錯或改回而放行)
+            let tripped = null
+            let guardExt = (where) => {
+                if (tripped) {
+                    throw tripped
+                }
+                try {
+                    assertIntrinsics(where)
+                }
+                catch (err) {
+                    tripped = err
+                    throw err
+                }
             }
+            //apiFn, 包裝 api 之函數: 其內(含以 accept 重放之逐訊號模擬)偵測到之完整性錯誤一律記於 tripped
+            let apiFn = (fn) => (...args) => {
+                try {
+                    return ReflectApply(fn, undefined, args)
+                }
+                catch (err) {
+                    if (isIntegrityError(err) && !tripped) {
+                        tripped = err
+                    }
+                    throw err
+                }
+            }
+            //prim, 參數之原始值(物件以 Number() 取值; 此段可能執行模組之 valueOf, 故只在讀取參數之段使用)
+            let prim = (v) => (v !== null && (typeof v === 'object' || typeof v === 'function') ? NumberCtor(v) : v)
+            let summarizeOf = (v, th) => {
+                let s = statOf(v)
+                let ge = v.filter((x) => x >= obs).length
+                return { draws: v.length, mean: r4(s.mean), sd: r4(s.sd), p: r4((1 + ge) / (1 + v.length)), z: s.sd > 0 ? r4((obs - s.mean) / s.sd) : 0, excess: r4(obs - s.mean), ...(th ? { thirdsMean: th.map(r4) } : {}) }
+            }
+            let summarize = apiFn((v) => {
+                let a = ArrayFrom(v, prim)
+                let th0 = v.thirds
+                let th = th0 ? ArrayFrom(th0, prim) : null
+                guardExt('ext')
+                return summarizeOf(a, th)
+            })
             let simScratch = null
-            let simulate = (selsByPhase, tagsByPhase = null, sOpt = null) => {
-                if (!Array.isArray(selsByPhase) || selsByPhase.length !== runs.length) {
-                    throw new Error('simulate: 須給與成品相同相位數之選集陣列')
+            let simulate = apiFn((selsByPhase, tagsByPhase = null, sOpt = null) => {
+                //第一段: 讀參數(只用擷取之參照); 檢查之先後與錯誤訊息同原寫法
+                if (!ArrayIsArray(selsByPhase) || selsByPhase.length !== runs.length) {
+                    throw new ErrorCtor('simulate: 須給與成品相同相位數之選集陣列')
                 }
                 let acc = accept
-                if (sOpt !== null && sOpt !== undefined && sOpt.accept !== undefined && sOpt.accept !== null) {
-                    if (typeof sOpt.accept !== 'function') {
-                        throw new Error('simulate: opts.accept 須為函數 (sig, book) => 布林')
+                let oAccept = sOpt !== null && sOpt !== undefined ? sOpt.accept : undefined
+                if (oAccept !== undefined && oAccept !== null) {
+                    if (typeof oAccept !== 'function') {
+                        throw new ErrorCtor('simulate: opts.accept 須為函數 (sig, book) => 布林')
                     }
-                    acc = sOpt.accept
+                    acc = oAccept
                 }
-                let ordKey = null
-                if (sOpt !== null && sOpt !== undefined && sOpt.orderSalt !== undefined && sOpt.orderSalt !== null) {
-                    if (!Number.isInteger(sOpt.orderSalt)) {
-                        throw new Error('simulate: opts.orderSalt 須為整數(0 = 成品本身之次序)')
+                let oSalt = sOpt !== null && sOpt !== undefined ? sOpt.orderSalt : undefined
+                let salt = null
+                if (oSalt !== undefined && oSalt !== null) {
+                    if (!NumberIsInteger(oSalt)) {
+                        throw new ErrorCtor('simulate: opts.orderSalt 須為整數(0 = 成品本身之次序)')
                     }
-                    ordKey = sOpt.orderSalt === 0 ? null : ordTieOf(sOpt.orderSalt)
+                    salt = oSalt
                 }
+                let pxsAll = []
+                let tgsAll = []
+                for (let i = 0; i < runs.length; i++) {
+                    let ph = selsByPhase[i]
+                    if (!ArrayIsArray(ph) || ph.length !== runs[i].bars.length) {
+                        throw new ErrorCtor('simulate: 各相位之決策數須與成品相同')
+                    }
+                    //內部陣列以 pushOwn 定義自有元素(push 之 [[Set]] 會觸發原型上同名索引之 setter)
+                    pushOwn(pxsAll, ArrayFrom(ph, (x) => pickOutOf(x)))
+                    let tp = tagsByPhase ? tagsByPhase[i] : undefined
+                    pushOwn(tgsAll, tagsByPhase && ArrayIsArray(tp) ? ArrayFrom(tp, (t) => snapTag(t)) : null)
+                }
+                guardExt('ext')
+                //第二段: 已比對內建物件
+                let ordKey = salt === null || salt === 0 ? null : ordTieOf(salt)
                 //兩側與子帳歸因: strat / bar 為 simWindows 計數用之暫存(內容不取用), side / grp 於本次重放之各相位累加
                 if (!simScratch) {
                     simScratch = { strat: new Int32Array(n), bar: new Int32Array(nBars + 2) }
@@ -1487,16 +1779,12 @@ let makeEvaluator = (L, cfg = {}) => {
                 let sc = { strat: simScratch.strat, bar: simScratch.bar, side: new Float64Array(8), tags: new Map(), grp: new Float64Array(N_GROUP * 4) }
                 let ssAll = []
                 let os = runs.map((r, i) => {
-                    if (!Array.isArray(selsByPhase[i]) || selsByPhase[i].length !== r.bars.length) {
-                        throw new Error('simulate: 各相位之決策數須與成品相同')
-                    }
                     //分帳: 元素為 { ids, group } 者**一律照用其 group(含全為 0 = 全部歸子帳 0)**; 未給 group 者才依席次序沿用成品同一決策之分帳(成品未分帳則無)
                     //  (規則 R-EV-27: 原以「group 全為 0 ⇒ 視為未給」而改套成品之分帳 ⇒ 只留子帳 0 之席單獨重放時, 各席被依席次序套上成品之分帳、上限錯用, 寫不成逐帳歸因之擴充診斷)
-                    let explicitGroup = (x) => x !== null && typeof x === 'object' && !Array.isArray(x) && !ArrayBuffer.isView(x) && !(x instanceof Set) && x.group !== undefined && x.group !== null
-                    let ss = selsByPhase[i].map((x, k) => {
-                        let o = normSel(x); return o.grp || explicitGroup(x) ? o.sel : inheritGroups(r.sels[k], o.sel)
+                    let ss = pxsAll[i].map((px, k) => {
+                        let o = normSel(px); return o.grp || px.explicitGroup ? o.sel : inheritGroups(r.sels[k], o.sel)
                     })
-                    let tg = tagsByPhase && Array.isArray(tagsByPhase[i]) ? tagsByPhase[i] : r.tags
+                    let tg = tgsAll[i] || r.tags
                     let nd = r.bars.length
                     let t3 = nd >= 6
                         ? [0, 1, 2].map((g) => {
@@ -1510,16 +1798,47 @@ let makeEvaluator = (L, cfg = {}) => {
                 let nP = Math.max(1, os.length)
                 let sideOf = (o) => ({ orders: r4(sc.side[o] / nP), pnl: r4(sc.side[o + 1] / nP), winRate: sc.side[o + 2] > 0 ? r4(sc.side[o + 3] / sc.side[o + 2]) : 0 })
                 return { mean: byPhase.reduce((a, v) => a + v, 0) / byPhase.length, byPhase, thirds: os.every((o) => o.t3) ? [0, 1, 2].map((g) => os.reduce((a, o) => a + o.t3[g], 0) / os.length) : null, bySide: { long: sideOf(0), short: sideOf(4) }, byGroup: groupRowsOf(sc.grp, ssAll, nP) }
-            }
-            let api = Object.freeze({
+            })
+            let replaceNull = apiFn((o = {}) => {
+                //第一段: 讀參數(各欄只讀一次; 其後之判斷皆先以 Number.isInteger / isFinite 篩選, 不對物件取值)
+                let oGrp = o.grp
+                let grp = oGrp ? TypedArrayFrom(Int32ArrayCtor, oGrp) : null
+                let nGroups = oGrp ? o.nGroups : 2
+                let oDraws = o.draws
+                let oHalf = o.half
+                let oAct = o.actDays
+                guardExt('ext')
+                let g = grp ? { grp, nGroups } : { grp: (nullSideActOf([], null, 0, 0), sideGrp), nGroups: 2 }
+                if (g.grp.length !== n || !Number.isInteger(g.nGroups) || g.nGroups < 1 || g.grp.some((x) => x < 0 || x >= g.nGroups)) {
+                    throw new Error('replaceNull: grp 須為長度 n、值在 0 ~ nGroups-1 之陣列')
+                }
+                let d = Number.isInteger(oDraws) && oDraws > 0 ? Math.min(oDraws, 64) : Math.max(1, Math.min(64, nullDraws || 16))
+                let v = nullGroupActOf(runs, accept, d, seed + 49979687, Number.isInteger(oHalf) && oHalf >= 0 ? oHalf : 50, g.grp, g.nGroups, oAct || 0)
+                return summarizeOf(Array.from(v), v.thirds)
+            })
+            let sideGroups = apiFn(() => {
+                guardExt('ext')
+                nullSideActOf([], null, 0, 0)
+                return { grp: Int32Array.from(sideGrp), nGroups: 2 }
+            })
+            let geoGroups = apiFn((nTp = 3, nSl = 3) => {
+                let a = prim(nTp)
+                let z = prim(nSl)
+                guardExt('ext')
+                let g = sideGeoGroups(a, z)
+                return { grp: Int32Array.from(g.grp), nGroups: g.nGroups }
+            })
+            let rand = (k = 0) => mulberry32(seed + 32452843 + (NumberIsInteger(k) ? k : 0) * 7919)
+            //apiOf, 每個擴充診斷各給一份 api(規則 R-EV-35 ①: meta 與各相位之選集 / tag 皆為該診斷自己之複本; 一個診斷改它, 不影響其他診斷)
+            let apiOf = () => Object.freeze({
                 n,
-                meta,
+                meta: metaFor(),
                 nullDraws,
                 phases: Object.freeze(runs.map((r) => Object.freeze({
                     phase: r.phase,
                     bars: Array.from(r.bars),
                     sels: r.sels.map((s) => Int32Array.from(s)),
-                    tags: r.tags.slice(),
+                    tags: r.tags.map(handOut),
                     groups: r.sels.map((s) => {
                         let g = grpOf.get(s); return g ? Uint8Array.from(g) : null
                     }),
@@ -1528,39 +1847,52 @@ let makeEvaluator = (L, cfg = {}) => {
                         ? {
                             bars: Array.from(r.pre.bars),
                             sels: r.pre.sels.map((s) => Int32Array.from(s)),
-                            tags: r.pre.tags.slice(),
+                            tags: r.pre.tags.map(handOut),
                             groups: r.pre.sels.map((s) => {
                                 let g = grpOf.get(s); return g ? Uint8Array.from(g) : null
                             })
                         }
                         : { bars: [], sels: [], tags: [], groups: [] })
                 }))),
-                obs: Object.freeze({ mean: obs, byPhase: ops.map((o) => o.eqYr), thirds: obsThirds }),
+                obs: Object.freeze({ mean: obs, byPhase: ops.map((o) => o.eqYr), thirds: obsThirds.slice() }),
                 simulate,
                 summarize,
-                replaceNull: (o = {}) => {
-                    let g = o.grp ? { grp: Int32Array.from(o.grp), nGroups: o.nGroups } : { grp: (nullSideActOf([], null, 0, 0), sideGrp), nGroups: 2 }
-                    if (g.grp.length !== n || !Number.isInteger(g.nGroups) || g.nGroups < 1 || g.grp.some((x) => x < 0 || x >= g.nGroups)) {
-                        throw new Error('replaceNull: grp 須為長度 n、值在 0 ~ nGroups-1 之陣列')
-                    }
-                    let d = Number.isInteger(o.draws) && o.draws > 0 ? Math.min(o.draws, 64) : Math.max(1, Math.min(64, nullDraws || 16))
-                    return summarize(nullGroupActOf(runs, accept, d, seed + 49979687, Number.isInteger(o.half) && o.half >= 0 ? o.half : 50, g.grp, g.nGroups, o.actDays || 0))
-                },
-                sideGroups: () => {
-                    nullSideActOf([], null, 0, 0)
-                    return { grp: Int32Array.from(sideGrp), nGroups: 2 }
-                },
-                geoGroups: (nTp = 3, nSl = 3) => {
-                    let g = sideGeoGroups(nTp, nSl)
-                    return { grp: Int32Array.from(g.grp), nGroups: g.nGroups }
-                },
-                rand: (k = 0) => mulberry32(seed + 32452843 + (Number.isInteger(k) ? k : 0) * 7919),
+                replaceNull,
+                sideGroups,
+                geoGroups,
+                rand,
             })
             for (let x of opt.ext) {
                 let te = Date.now()
+                let api = apiOf()
+                let mkE = violationMark()
+                //第一段: 呼叫診斷並序列化其輸出(序列化可能執行模組之 toJSON / 存取子; 只用擷取之參照)
+                let js
+                let errText = null
                 try {
                     let out = x.fn(api)
-                    let js = JSON.stringify(out === undefined ? null : out)
+                    js = JSONStringify(out === undefined ? null : out)
+                }
+                catch (err) {
+                    try {
+                        errText = StringCtor((err && err.message) || err)
+                    }
+                    catch (err2) {
+                        errText = '(無法讀取之錯誤)'
+                    }
+                }
+                guardExt('ext')
+                let vioE = violationSince(mkE)
+                if (vioE) {
+                    tripped = vioE
+                    throw vioE
+                }
+                //第二段: 已比對內建物件
+                if (errText !== null) {
+                    ext[x.name] = { error: errText.split('\n')[0].slice(0, 300), ms: Date.now() - te }
+                    continue
+                }
+                try {
                     if (js.length > 20000) {
                         throw new Error(`輸出 ${js.length} 字元,超過上限 20000`)
                     }
@@ -1652,7 +1984,12 @@ let makeEvaluator = (L, cfg = {}) => {
         }
     }
 
-    return { evalPolicy, runPick, opOf, freshOf, nullOf, nullActOf, nullSideActOf, nullSideGeoOf, sideGeoGroups, simWindows, decisionBars, meta, timeOf }
+    //交給呼叫端之各方法: 入口先比對內建物件(呼叫端可能在 await 之後直接呼叫, 其間模組之延後程式可能已改); 評估器內部之呼叫不經此包裝(不重複比對)
+    let entry = (fn) => (...args) => {
+        assertIntrinsics('api')
+        return ReflectApply(fn, undefined, args)
+    }
+    return { evalPolicy, runPick, opOf: entry(opOf), freshOf: entry(freshOf), nullOf: entry(nullOf), nullActOf: entry(nullActOf), nullSideActOf: entry(nullSideActOf), nullSideGeoOf: entry(nullSideGeoOf), sideGeoGroups: entry(sideGeoGroups), simWindows: entry(simWindows), decisionBars: entry(decisionBars), meta, timeOf: entry(timeOf) }
 }
 
 

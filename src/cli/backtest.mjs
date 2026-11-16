@@ -1,9 +1,10 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings, argOf, writeJson } from '../cfg.mjs'
+import { getSettings, argOf } from '../cfg.mjs'
 import { loadLedger } from '../eval/ledger.mjs'
 import { makeEvaluator, lowerBound, mulberry32 } from '../eval/evalCore.mjs'
 import { loadPick } from '../eval/pickLoader.mjs'
+import { P as PI, assertIntrinsics, isIntegrityError } from '../eval/intrinsics.mjs'
 import { backtestCfg } from '../domain/backtestCfg.mjs'
 import { gradeOf } from '../domain/backtestGrade.mjs'
 
@@ -36,14 +37,25 @@ if (!fpPick || fpPick === true || !name || name === 'true') {
     console.log('用法: node g_backtest.mjs --pick <挑選模組.mjs> --name <結果檔名> [--dir <結果夾>] [--show]')
     process.exit(2)
 }
+//內建物件之完整性(規則 R-EV-35 ②; 同 src/cli/eval.mjs): 載入挑選模組後、讀帳本前、輸出前比對; 被改 ⇒ ERROR EVAL_INTEGRITY、離開碼 3
+let checkOrExit = (where) => {
+    try {
+        assertIntrinsics(where)
+    }
+    catch (err) {
+        PI.ConsoleLog(`ERROR ${err.message}`)
+        process.exit(3)
+    }
+}
 let pk
 try {
     pk = await loadPick(fpPick)
 }
 catch (err) {
     console.log(`ERROR ${err.code || ''} ${err.message}`)
-    process.exit(2)
+    process.exit(isIntegrityError(err) ? 3 : 2)
 }
+checkOrExit('before-ledger')
 let L = loadLedger(bt.ledgerDir)
 let barMs = L.meta.barHours * 3600000
 let time0Ms = Date.parse(`${L.meta.time0}Z`)
@@ -102,7 +114,8 @@ try {
     }
 }
 catch (err) {
-    console.log(`ERROR PICK_RUN ${String((err && err.stack) || err).split('\n').slice(0, 6).join('\n')}`)
+    checkOrExit('pick')
+    console.log(`ERROR ${isIntegrityError(err) ? '' : 'PICK_RUN '}${String((err && err.stack) || err).split('\n').slice(0, 6).join('\n')}`)
     process.exit(3)
 }
 let { runs, ops, eq, mean, min } = reps[0]
@@ -257,8 +270,10 @@ let out = {
     grade: bt.grade,
     replicas: reps.map((r) => ({ seed: r.seed, ok: r.ok, mean: r2(r.mean), min: r2(r.min), byPhase: r.eq.map(r2), nOrders: r.nOrders, aboveRef: ref ? r.mean > ref.mean : null })),
 }
+checkOrExit('output')
 fs.mkdirSync(bt.resultDir, { recursive: true })
-writeJson(path.join(bt.resultDir, `${name}.json`), out)
+//結果檔: 格式同 cfg.mjs 之 writeJson(縮排 2、UTF-8), 以擷取之 JSON.stringify 序列化
+fs.writeFileSync(path.join(bt.resultDir, `${name}.json`), PI.JSONStringify(out, null, 2), 'utf8')
 if (show) {
     console.log(`回測期 ${out.period.start} ~ ${out.period.end}(首次決策 ${out.period.firstDecision};各相位決策 ${out.op.nDecisions.join('/')} 次)`)
     console.log(`等效年化 均 ${out.op.eqYr.mean}% 最差相位 ${out.op.eqYr.min}% 最佳 ${out.op.eqYr.max}% | 各相位 ${out.op.eqYr.byPhase.join(' / ')} | 月均單 ${out.op.monthlyOrders} | 最大同時持倉 ${out.op.peakHold} | 勝率 ${(out.op.winRate * 100).toFixed(1)}%`)

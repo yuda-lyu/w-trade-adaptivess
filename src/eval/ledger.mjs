@@ -1,14 +1,18 @@
 import fs from 'fs'
 import path from 'path'
+import { P, bytesAs, assertIntrinsics } from './intrinsics.mjs'
+
+const { Float64ArrayCtor } = P
 
 
 //訂單帳本之載入: 讀 ledgerBuild 產出之二進位欄, 並建「依出場棒排序」之輔助欄(供「某時點以前已結之單」之統計以二分搜尋取得)
 //  回傳 L: { meta, n(策略數), nBars, off/ent/ext/pnl(依進場棒升冪之逐單欄), xoff/xExt/xPnlCum/xWinCum(依出場棒升冪之已結單欄; Cum 為策略內前綴和), 靜態欄, fac(因子序列欄; 用到才讀), seriesNames / ser(外部序列之名稱與欄; 欄用到才讀) }
-let readBin = (fp, Ctor) => {
-    let b = fs.readFileSync(fp)
-    let ab = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)
-    return new Ctor(ab)
-}
+//readBin, 讀檔為定型陣列(規則 R-EV-35 ②): fac / ser 為延遲讀取, 首次讀取發生於挑選函數呼叫 ctx.factor / ctx.series 之期間
+//  ⇒ 只用載入時擷取之參照(bytesAs: 擷取之建構子與 set; 不經 ArrayBuffer.prototype.slice 與其 species 建構子); 延遲讀取之兩欄傳入擷取之建構子(不以全域名稱取用)
+//  且延遲讀取之前先比對內建物件(lazyCheck): Node 之 fs.readFileSync 本身會經可被改寫之 %TypedArray%.prototype.byteLength 與 Buffer.allocUnsafe 取得讀入用之緩衝區,
+//  被改時拒讀(拋 EVAL_INTEGRITY; 未讀入, 下次取用再試)—— 讀檔為同步, 比對通過後至讀完之間不會執行模組之程式
+//  其餘各欄於 loadLedger 呼叫當下讀入(命令列於讀帳本前先比對內建物件; 見 src/cli/eval.mjs)
+let readBin = (fp, Ctor) => bytesAs(fs.readFileSync(fp), Ctor)
 
 /**
  * 載入訂單帳本資料夾(由 buildLedger 產出之 meta.json 與二進位欄), 並建立依出場棒排序之已結單欄
@@ -20,6 +24,8 @@ let readBin = (fp, Ctor) => {
  * let L = loadLedger('./data/ledger/eval')
  */
 let loadLedger = (dir) => {
+    //入口比對(規則 R-EV-35 ②): 讀帳本之一般寫法(JSON.parse、push、sort、length 等)須在比對之後; 呼叫端之前可能已載入模組
+    assertIntrinsics('ledger-load')
     let meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'))
     let L = {
         dir,
@@ -55,7 +61,8 @@ let loadLedger = (dir) => {
         configurable: true,
         get: () => {
             if (fac === undefined) {
-                fac = fs.existsSync(fpFac) ? readBin(fpFac, Float64Array) : null
+                assertIntrinsics('ledger-read')
+                fac = fs.existsSync(fpFac) ? readBin(fpFac, Float64ArrayCtor) : null
             }
             return fac
         },
@@ -73,12 +80,13 @@ let loadLedger = (dir) => {
         configurable: true,
         get: () => {
             if (ser === undefined) {
+                assertIntrinsics('ledger-read')
                 if (fs.existsSync(fpSer)) {
                     let sz = fs.statSync(fpSer).size
                     if (sz % 8 !== 0) {
                         throw new Error(`帳本之外部序列欄 ser.f64 之位元組數(${sz})非 8 之倍數(請重建帳本): ${fpSer}`)
                     }
-                    ser = readBin(fpSer, Float64Array)
+                    ser = readBin(fpSer, Float64ArrayCtor)
                 }
                 else {
                     ser = null
@@ -138,7 +146,10 @@ let loadLedger = (dir) => {
  * @example
  * let ids = loadIds('./data/ledger/eval')
  */
-let loadIds = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'ids.json'), 'utf8'))
+let loadIds = (dir) => {
+    assertIntrinsics('ledger-load')
+    return JSON.parse(fs.readFileSync(path.join(dir, 'ids.json'), 'utf8'))
+}
 
 
 export { loadLedger, loadIds }

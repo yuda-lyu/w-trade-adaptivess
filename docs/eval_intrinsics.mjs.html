@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>eval/intrinsics.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#MUTABLE_SNAPS">MUTABLE_SNAPS</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#VIOL">VIOL</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#adoptError">adoptError</a></li><li><a href="global.html#alignSeries">alignSeries</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#bytesAs">bytesAs</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkIntrinsics">checkIntrinsics</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#copyAll">copyAll</a></li><li><a href="global.html#copyRange">copyRange</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#handOut">handOut</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#integrityError">integrityError</a></li><li><a href="global.html#isIntegrityError">isIntegrityError</a></li><li><a href="global.html#isMutableSnap">isMutableSnap</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#safeJson">safeJson</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#violationMark">violationMark</a></li><li><a href="global.html#violationSince">violationSince</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">eval/intrinsics.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>//評估器之內建物件之完整性(規則 R-EV-35 ②)
+//  挑選模組與擴充診斷模組與評估器同在一個 realm: 它們改得到內建物件(原型之方法、全域之建構子)。評估器若經可被改寫之方法處理帳本或自身之狀態,
+//  被改寫之方法即可拿到帳本陣列本身(例: %TypedArray%.prototype.slice 被換掉 ⇒ 呼叫它之 this 就是帳本之欄)或改動評估器之狀態。對策兩層:
+//  ① 擷取: 評估器用到之內建方法於本模組載入時(任何挑選模組與擴充診斷模組載入以前)擷取, 評估器只用擷取之參照(不經原型查找);
+//     複製帳本之區段一律以 copyRange(以擷取之建構子與 set 複製位元組, 不經 slice / subarray / from, 亦不經 species 建構子)
+//  ② 比對: 本模組載入時記下「受保護之內建物件清單」(PROTECTED_ROOTS 之全部自有屬性之描述、原型、可擴充性, 與 GLOBAL_NAMES 之全域綁定之描述),
+//     checkIntrinsics() 逐項比對; assertIntrinsics(where) 不一致即拋 code 為 EVAL_INTEGRITY 之錯誤(items 列出被改之項目)
+//  比對之時點由呼叫端決定(evalCore: 每次 pick 呼叫後、每批 accept 呼叫〔一次逐訊號模擬〕後、每個擴充診斷呼叫後與其 api 函數之入口;
+//  pickLoader / 命令列: 載入模組後、讀帳本前、輸出前); 不凍結任何內建物件(不影響同一行程之其他程式)
+//  限制(皆寫入合約與 sgud): 只比對所列之物件; 模組於兩次比對之間改而又改回者偵測不到(其間評估器只用擷取之參照, 不受影響);
+//  不擋檔案 / 行程介面(靜態檢查之範圍, 非本模組)
+
+
+//uncurryThis, 把方法轉為「第一個參數為 this」之函數(呼叫時不再查原型; 同 Node.js 內部之 primordials 作法)
+const FunctionPrototype = Function.prototype
+const uncurryThis = FunctionPrototype.bind.bind(FunctionPrototype.call)
+
+const GLOBAL = globalThis
+const ObjectIs = Object.is
+const ObjectFreeze = Object.freeze
+const ObjectSeal = Object.seal
+const ObjectHasOwn = Object.hasOwn
+const ReflectApply = Reflect.apply
+const ReflectGet = Reflect.get
+const ReflectOwnKeys = Reflect.ownKeys
+const ReflectGetOwnPropertyDescriptor = Reflect.getOwnPropertyDescriptor
+const ReflectGetPrototypeOf = Reflect.getPrototypeOf
+const ReflectIsExtensible = Reflect.isExtensible
+const ReflectDefineProperty = Reflect.defineProperty
+const ArrayCtor = Array
+const ArrayFrom = Array.from
+const ArrayIsArray = Array.isArray
+const ArrayPrototypePush = uncurryThis(Array.prototype.push)
+const ArrayPrototypeJoin = uncurryThis(Array.prototype.join)
+const ArrayBufferIsView = ArrayBuffer.isView
+const NumberCtor = Number
+const NumberIsInteger = Number.isInteger
+const NumberIsFinite = Number.isFinite
+const MathFloor = Math.floor
+const MathRound = Math.round
+const MathMax = Math.max
+const MathMin = Math.min
+const MathImul = Math.imul
+const StringCtor = String
+const JSONStringify = JSON.stringify
+const JSONParse = JSON.parse
+const StructuredClone = globalThis.structuredClone
+const ConsoleLog = globalThis.console.log //Node 之全域 console 之方法已綁定其實例, 可單獨呼叫
+const ErrorCtor = Error
+const MapCtor = Map
+const MapPrototypeGet = uncurryThis(Map.prototype.get)
+const MapPrototypeSet = uncurryThis(Map.prototype.set)
+const MapPrototypeHas = uncurryThis(Map.prototype.has)
+const MapPrototypeDelete = uncurryThis(Map.prototype.delete)
+const MapPrototypeKeys = uncurryThis(Map.prototype.keys)
+const MapPrototypeValues = uncurryThis(Map.prototype.values)
+const MapPrototypeGetSize = uncurryThis(ReflectGetOwnPropertyDescriptor(Map.prototype, 'size').get)
+const MapIteratorNext = uncurryThis(ReflectGetPrototypeOf(new Map().keys()).next)
+const SetPrototypeValues = uncurryThis(Set.prototype.values)
+const SetIteratorNext = uncurryThis(ReflectGetPrototypeOf(new Set().values()).next)
+const SetPrototypeGetSize = uncurryThis(ReflectGetOwnPropertyDescriptor(Set.prototype, 'size').get)
+const WeakSetCtor = WeakSet
+const WeakSetPrototypeHas = uncurryThis(WeakSet.prototype.has)
+const WeakSetPrototypeAdd = uncurryThis(WeakSet.prototype.add)
+const SymbolPrototypeToString = uncurryThis(Symbol.prototype.toString)
+const ArrayBufferPrototypeGetByteLength = uncurryThis(ReflectGetOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength').get)
+const SharedArrayBufferPrototypeGetByteLength = typeof SharedArrayBuffer === 'function' ? uncurryThis(ReflectGetOwnPropertyDescriptor(SharedArrayBuffer.prototype, 'byteLength').get) : null
+const DataViewPrototypeGetBuffer = uncurryThis(ReflectGetOwnPropertyDescriptor(DataView.prototype, 'buffer').get)
+const TypedArray = ReflectGetPrototypeOf(Int8Array)
+const TypedArrayPrototype = TypedArray.prototype
+const TypedArrayFrom = uncurryThis(TypedArray.from)
+const TypedArrayPrototypeSet = uncurryThis(TypedArrayPrototype.set)
+const TypedArrayPrototypeGetLength = uncurryThis(ReflectGetOwnPropertyDescriptor(TypedArrayPrototype, 'length').get)
+const TypedArrayPrototypeGetBuffer = uncurryThis(ReflectGetOwnPropertyDescriptor(TypedArrayPrototype, 'buffer').get)
+const TypedArrayPrototypeGetByteOffset = uncurryThis(ReflectGetOwnPropertyDescriptor(TypedArrayPrototype, 'byteOffset').get)
+const TypedArrayPrototypeGetByteLength = uncurryThis(ReflectGetOwnPropertyDescriptor(TypedArrayPrototype, 'byteLength').get)
+const Int8ArrayCtor = Int8Array
+const Uint8ArrayCtor = Uint8Array
+const Uint16ArrayCtor = Uint16Array
+const Int32ArrayCtor = Int32Array
+const Uint32ArrayCtor = Uint32Array
+const Float32ArrayCtor = Float32Array
+const Float64ArrayCtor = Float64Array
+
+//各定型陣列建構子之每元素位元組數(BYTES_PER_ELEMENT 為不可寫、不可設定之屬性, 載入時讀一次)
+const BPE = new MapCtor()
+for (const C of [Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array]) {
+    MapPrototypeSet(BPE, C, C.BYTES_PER_ELEMENT)
+}
+
+/**
+ * 複製定型陣列 src 之 [a, z) 區段為 Ctor 之新陣列(只用擷取之參照: 以建構子於 src 之緩衝建視圖再以 set 複製位元組; 不經 slice / subarray / from 與 species 建構子)
+ * Ctor 須與 src 同型(位元組逐一複製; NaN 之位元與原值相同); 區段超出 src 者拋錯(呼叫端之區段一律已夾在範圍內, 拋錯代表程式錯誤)
+ *
+ * @param {Function} Ctor 輸入定型陣列建構子(須為 BPE 所列之一, 且與 src 同型)
+ * @param {TypedArray} src 輸入來源定型陣列
+ * @param {Integer} a 輸入起點(含)
+ * @param {Integer} z 輸入終點(不含)
+ * @returns {TypedArray} 回傳新陣列(長度 max(0, z - a))
+ * @example
+ * let out = copyRange(Int32Array, Int32Array.from([1, 2, 3]), 1, 3)
+ */
+let copyRange = (Ctor, src, a, z) => {
+    let len = z - a
+    if (!(len > 0)) {
+        return new Ctor(0)
+    }
+    let bpe = MapPrototypeGet(BPE, Ctor)
+    if (bpe === undefined || a &lt; 0 || z > TypedArrayPrototypeGetLength(src) || !NumberIsInteger(a) || !NumberIsInteger(z)) {
+        throw new ErrorCtor(`copyRange: 區段不合法 ${a} ~ ${z}`)
+    }
+    let out = new Ctor(len)
+    TypedArrayPrototypeSet(out, new Ctor(TypedArrayPrototypeGetBuffer(src), TypedArrayPrototypeGetByteOffset(src) + a * bpe, len))
+    return out
+}
+
+/**
+ * 複製整個定型陣列(copyRange 之全段; null 照回 null)
+ *
+ * @param {Function} Ctor 輸入定型陣列建構子(與 src 同型)
+ * @param {TypedArray|null} src 輸入來源定型陣列
+ * @returns {TypedArray|null} 回傳新陣列
+ * @example
+ * let out = copyAll(Float64Array, new Float64Array(3))
+ */
+let copyAll = (Ctor, src) => (src === null || src === undefined ? null : copyRange(Ctor, src, 0, TypedArrayPrototypeGetLength(src)))
+
+/**
+ * 複製 Buffer(或任一 Uint8Array)之位元組為獨立之 ArrayBuffer 後以 Ctor 檢視(帳本檔之讀入用; 只用擷取之參照, 不經 ArrayBuffer.prototype.slice 與其 species 建構子)
+ *
+ * @param {Uint8Array} b 輸入位元組
+ * @param {Function} Ctor 輸入定型陣列建構子
+ * @returns {TypedArray} 回傳 Ctor 之陣列(長度 = 位元組數 ÷ 每元素位元組數)
+ * @example
+ * let a = bytesAs(Buffer.from([0, 0, 128, 63]), Float32Array)
+ */
+let bytesAs = (b, Ctor) => {
+    let n = TypedArrayPrototypeGetByteLength(b)
+    let u = new Uint8ArrayCtor(n)
+    TypedArrayPrototypeSet(u, new Uint8ArrayCtor(TypedArrayPrototypeGetBuffer(b), TypedArrayPrototypeGetByteOffset(b), n))
+    return new Ctor(TypedArrayPrototypeGetBuffer(u))
+}
+
+
+//受保護之內建物件清單: [標示, 物件]; 比對其全部自有屬性(含符號鍵)之描述(值 / 存取子之識別、可寫、可列舉、可設定)、原型與可擴充性
+//  涵蓋評估器(含 ctx 之各函數、ext 之 api、逐訊號模擬)與命令列輸出用到之內建物件; 不含 Error 之靜態屬性(stackTraceLimit 等常被工具正當地改)
+const ITER_PROTO_ARRAY = ReflectGetPrototypeOf([][Symbol.iterator]())
+const ITER_PROTO = ReflectGetPrototypeOf(ITER_PROTO_ARRAY)
+const ITER_PROTO_MAP = ReflectGetPrototypeOf(new Map()[Symbol.iterator]())
+const ITER_PROTO_SET = ReflectGetPrototypeOf(new Set()[Symbol.iterator]())
+const TYPED_CTORS = [Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array]
+if (typeof globalThis.Float16Array === 'function') {
+    TYPED_CTORS.push(globalThis.Float16Array)
+}
+const PROTECTED_ROOTS = [
+    ['Object', Object], ['Object.prototype', Object.prototype],
+    ['Function', Function], ['Function.prototype', Function.prototype],
+    ['Array', Array], ['Array.prototype', Array.prototype], ['%ArrayIteratorPrototype%', ITER_PROTO_ARRAY], ['%IteratorPrototype%', ITER_PROTO],
+    ['%TypedArray%', TypedArray], ['%TypedArray%.prototype', TypedArrayPrototype],
+    ...TYPED_CTORS.flatMap((C) => [[C.name, C], [`${C.name}.prototype`, C.prototype]]),
+    ['ArrayBuffer', ArrayBuffer], ['ArrayBuffer.prototype', ArrayBuffer.prototype],
+    ['Number', Number], ['Number.prototype', Number.prototype],
+    ['String', String], ['String.prototype', String.prototype],
+    ['Symbol', Symbol], ['Symbol.prototype', Symbol.prototype],
+    ['Math', Math], ['JSON', JSON], ['Reflect', Reflect],
+    ['Map', Map], ['Map.prototype', Map.prototype], ['%MapIteratorPrototype%', ITER_PROTO_MAP],
+    ['Set', Set], ['Set.prototype', Set.prototype], ['%SetIteratorPrototype%', ITER_PROTO_SET],
+    ['WeakMap.prototype', WeakMap.prototype], ['WeakSet.prototype', WeakSet.prototype],
+    ['Date', Date], ['Date.prototype', Date.prototype],
+    ['Error.prototype', Error.prototype],
+    //tag 之快照可含之型別之原型(JSON.stringify 於比對之後讀其 toJSON; 見 snapData 之型別白名單)
+    ['Boolean', Boolean], ['Boolean.prototype', Boolean.prototype], ['BigInt', BigInt], ['BigInt.prototype', BigInt.prototype],
+    ['RegExp', RegExp], ['RegExp.prototype', RegExp.prototype], ['DataView', DataView], ['DataView.prototype', DataView.prototype],
+    ...[EvalError, RangeError, ReferenceError, SyntaxError, TypeError, URIError].map((C) => [`${C.name}.prototype`, C.prototype]),
+    //Buffer 與其原型: Node 之 fs.readFileSync 以 Buffer.allocUnsafe 建緩衝、fs.readSync 讀 buffer.byteLength(經 Buffer.prototype 查找)—— 延遲讀取帳本欄前之比對須涵蓋
+    ...(typeof globalThis.Buffer === 'function' ? [['Buffer', globalThis.Buffer], ['Buffer.prototype', globalThis.Buffer.prototype]] : []),
+    //console: 命令列以 console.log 輸出結果與旗標(保留期檢定之末行 BACKTEST_FLAG 由迴圈讀取)
+    ['console', globalThis.console],
+]
+//全域綁定(globalThis 上之同名屬性): 被換掉 ⇒ 以名稱取用之程式(評估器以外之輸出段等)會呼叫到模組之函數
+const GLOBAL_NAMES = ['Object', 'Function', 'Array', 'Number', 'String', 'Boolean', 'BigInt', 'Symbol', 'Math', 'JSON', 'Reflect', 'Map', 'Set', 'WeakMap', 'WeakSet', 'Date', 'RegExp', 'Error', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'ArrayBuffer', 'SharedArrayBuffer', 'DataView', ...TYPED_CTORS.map((C) => C.name), 'structuredClone', 'Buffer', 'console', 'isFinite', 'isNaN', 'parseInt', 'parseFloat']
+
+//SNAP_KIND, tag 之快照可含之物件型別(依結構化複製後之原型; 皆在受保護清單內): 'freeze' = 凍結即不可變; 'mutable' = 有可變之內部狀態(凍結擋不住), 每次交出另給複本
+//  其他原型(例: Blob 等宿主物件)不收 —— 其原型不在受保護清單, 比對之後之序列化會執行到其上之 toJSON
+const SNAP_KIND = new MapCtor()
+for (const p of [Object.prototype, Array.prototype, Boolean.prototype, Number.prototype, String.prototype, BigInt.prototype, Error.prototype, EvalError.prototype, RangeError.prototype, ReferenceError.prototype, SyntaxError.prototype, TypeError.prototype, URIError.prototype]) {
+    MapPrototypeSet(SNAP_KIND, p, 'freeze')
+}
+for (const p of [Map.prototype, Set.prototype, Date.prototype, RegExp.prototype, ArrayBuffer.prototype, DataView.prototype, ...TYPED_CTORS.map((C) => C.prototype)]) {
+    MapPrototypeSet(SNAP_KIND, p, 'mutable')
+}
+
+let descKey = (d) => {
+    if (d === undefined) {
+        return null
+    }
+    let acc = ObjectHasOwn(d, 'get')
+    return { acc, value: acc ? undefined : d.value, get: acc ? d.get : undefined, set: acc ? d.set : undefined, flags: (acc ? 8 : (d.writable ? 1 : 0)) | (d.enumerable ? 2 : 0) | (d.configurable ? 4 : 0) }
+}
+let keyName = (k) => (typeof k === 'symbol' ? `[${SymbolPrototypeToString(k)}]` : k)
+//pushOwn, 於陣列尾端定義自有之元素(不經 push 之 [[Set]]: 原型上同名之存取子〔例: Array.prototype 之 '0' 之 setter〕不被觸發); 比對與建錯誤時用
+let pushOwn = (arr, v) => {
+    ReflectDefineProperty(arr, arr.length, { __proto__: null, value: v, writable: true, enumerable: true, configurable: true })
+}
+
+//sameAsDesc, 快照之描述 x 與現行之屬性描述 d(Reflect.getOwnPropertyDescriptor 之回傳)是否相同(不另建物件; 快速路徑用)
+let sameAsDesc = (x, d) => {
+    if (d === undefined || x === null) {
+        return false
+    }
+    let acc = ObjectHasOwn(d, 'get')
+    if (acc !== x.acc || ((acc ? 8 : (d.writable ? 1 : 0)) | (d.enumerable ? 2 : 0) | (d.configurable ? 4 : 0)) !== x.flags) {
+        return false
+    }
+    return acc ? (d.get === x.get &amp;&amp; d.set === x.set) : ObjectIs(d.value, x.value)
+}
+
+//SNAP, 載入時之快照: 各根之 { label, obj, proto, ext, keys: Map(鍵 → 描述), order(鍵之順序), descs(與 order 對齊之描述), n }; 全域綁定之 Map(名稱 → 描述)
+//  比對之快速路徑: Reflect.ownKeys 之順序固定(整數鍵、字串鍵依加入序、符號鍵依加入序), 未被改者逐位與 order 相同 ⇒ 依序比描述即可; 不同才走以鍵查表之慢速路徑
+const SNAP = []
+for (const [label, obj] of PROTECTED_ROOTS) {
+    let keys = new MapCtor()
+    let ks = ReflectOwnKeys(obj)
+    let descs = []
+    for (let i = 0; i &lt; ks.length; i++) {
+        let d = descKey(ReflectGetOwnPropertyDescriptor(obj, ks[i]))
+        MapPrototypeSet(keys, ks[i], d)
+        ArrayPrototypePush(descs, d)
+    }
+    ArrayPrototypePush(SNAP, { label, obj, proto: ReflectGetPrototypeOf(obj), ext: ReflectIsExtensible(obj), keys, order: ks, descs, n: ks.length })
+}
+const SNAP_GLOBAL = new MapCtor()
+for (const name of GLOBAL_NAMES) {
+    ReflectGet(GLOBAL, name) //存取一次: 延遲定義之全域綁定先定型再記錄
+    MapPrototypeSet(SNAP_GLOBAL, name, descKey(ReflectGetOwnPropertyDescriptor(GLOBAL, name)))
+}
+const N_ITEMS = SNAP.reduce((a, r) => a + r.n + 2, 0) + GLOBAL_NAMES.length
+
+/**
+ * 比對受保護之內建物件清單與載入時之快照
+ * 只用擷取之參照(比對本身不經可被改寫之方法; 讀描述不觸發存取子)
+ *
+ * @returns {Array} 回傳被改之項目字串陣列(例: '%TypedArray%.prototype.slice'、'Array.prototype.foo(新增)'、'globalThis.Math'); 空陣列代表一致
+ * @example
+ * let items = checkIntrinsics()
+ */
+let checkIntrinsics = () => {
+    let bad = []
+    for (let i = 0; i &lt; SNAP.length; i++) {
+        let r = SNAP[i]
+        let obj = r.obj
+        if (ReflectGetPrototypeOf(obj) !== r.proto) {
+            pushOwn(bad, `${r.label}(原型)`)
+        }
+        if (ReflectIsExtensible(obj) !== r.ext) {
+            pushOwn(bad, `${r.label}(可擴充性)`)
+        }
+        let ks = ReflectOwnKeys(obj)
+        if (ks.length === r.n) {
+            let ok = true
+            let order = r.order
+            let descs = r.descs
+            for (let j = 0; j &lt; ks.length; j++) {
+                if (ks[j] !== order[j] || !sameAsDesc(descs[j], ReflectGetOwnPropertyDescriptor(obj, ks[j]))) {
+                    ok = false
+                    break
+                }
+            }
+            if (ok) {
+                continue
+            }
+        }
+        let seen = 0
+        for (let j = 0; j &lt; ks.length; j++) {
+            let k = ks[j]
+            if (!MapPrototypeHas(r.keys, k)) {
+                pushOwn(bad, `${r.label}.${keyName(k)}(新增)`)
+                continue
+            }
+            seen++
+            if (!sameAsDesc(MapPrototypeGet(r.keys, k), ReflectGetOwnPropertyDescriptor(obj, k))) {
+                pushOwn(bad, `${r.label}.${keyName(k)}`)
+            }
+        }
+        if (seen !== r.n) {
+            let it = MapPrototypeKeys(r.keys)
+            for (let x = MapIteratorNext(it); !x.done; x = MapIteratorNext(it)) {
+                if (ReflectGetOwnPropertyDescriptor(obj, x.value) === undefined) {
+                    pushOwn(bad, `${r.label}.${keyName(x.value)}(刪除)`)
+                }
+            }
+        }
+    }
+    let it = MapPrototypeKeys(SNAP_GLOBAL)
+    for (let x = MapIteratorNext(it); !x.done; x = MapIteratorNext(it)) {
+        let d0 = MapPrototypeGet(SNAP_GLOBAL, x.value)
+        let d1 = ReflectGetOwnPropertyDescriptor(GLOBAL, x.value)
+        if (d0 === null ? d1 !== undefined : !sameAsDesc(d0, d1)) {
+            pushOwn(bad, `globalThis.${x.value}`)
+        }
+    }
+    return bad
+}
+
+//INTEGRITY_ERRORS, 本模組所建之完整性錯誤(以 WeakSet 辨識; 模組自行拋出之同 code 物件不算)
+const INTEGRITY_ERRORS = new WeakSetCtor()
+
+//defineData, 以無原型之描述物件定義自有資料屬性(不觸發原型上之存取子)
+let defineData = (o, k, v) => {
+    ReflectDefineProperty(o, k, { __proto__: null, value: v, writable: true, enumerable: k !== 'stack' &amp;&amp; k !== 'message' &amp;&amp; k !== 'name', configurable: true })
+}
+
+/**
+ * 建立完整性錯誤(code 為 EVAL_INTEGRITY; where = 偵測之時點; items = 被改之項目)
+ * 錯誤之 message、stack 皆為自有之資料屬性(讀取時不經 Error.prepareStackTrace)
+ *
+ * @param {String} where 輸入偵測之時點(例: 'pick'、'accept'、'ext'、'pick-load')
+ * @param {Array} items 輸入被改之項目字串陣列
+ * @returns {Error} 回傳錯誤物件
+ * @example
+ * let e = integrityError('pick', ['Math.floor'])
+ */
+let integrityError = (where, items) => {
+    //只用擷取之參照(此時內建物件已被改): 逐一複製, 不用 slice / 展開 / Array.from(後兩者經可被改寫之迭代器)
+    let all = []
+    let shown = []
+    for (let i = 0; i &lt; items.length; i++) {
+        pushOwn(all, StringCtor(items[i]))
+        if (i &lt; 12) {
+            pushOwn(shown, StringCtor(items[i]))
+        }
+    }
+    if (items.length > 12) {
+        pushOwn(shown, `…等 ${items.length} 項`)
+    }
+    let msg = `EVAL_INTEGRITY 評估器之內建物件被改(於 ${where}; 違反合約:不得改寫內建物件): ${ArrayPrototypeJoin(shown, '、')}`
+    let e = new ErrorCtor(msg)
+    defineData(e, 'stack', `Error: ${msg}`)
+    defineData(e, 'code', 'EVAL_INTEGRITY')
+    defineData(e, 'where', where)
+    defineData(e, 'items', ObjectFreeze(all))
+    //凍結: 模組攔下此錯誤後改不了其 code / where / items / message(黏著偵測其後轉拋之即同一物件)
+    ObjectFreeze(e)
+    WeakSetPrototypeAdd(INTEGRITY_ERRORS, e)
+    return e
+}
+
+/**
+ * 比對受保護之內建物件; 不一致即拋完整性錯誤(code 為 EVAL_INTEGRITY)
+ *
+ * @param {String} where 輸入時點標示(寫入錯誤之 where 與訊息)
+ * @returns {undefined} 一致時無回傳
+ * @example
+ * assertIntrinsics('pick-load')
+ */
+//VIOL, 本行程內偵測到之次數與最後一次之錯誤: 呼叫端記下呼叫模組前之 violationMark(), 呼叫後以 violationSince(mark) 查其間有無偵測
+//  (模組攔下評估器於其執行期間拋出之完整性錯誤〔例: 延遲讀取前之比對〕並改回者, 該次評估仍失敗)
+const VIOL = { seq: 0, last: null }
+let assertIntrinsics = (where) => {
+    let bad = checkIntrinsics()
+    if (bad.length) {
+        let e = integrityError(where, bad)
+        VIOL.seq++
+        VIOL.last = e
+        throw e
+    }
+}
+
+/**
+ * 記下目前之偵測次數(與 violationSince 成對使用)
+ *
+ * @returns {Integer} 回傳目前之偵測次數
+ * @example
+ * let mk = violationMark()
+ */
+let violationMark = () => VIOL.seq
+
+/**
+ * mark 以後有無偵測到被改(含被模組攔下者)
+ *
+ * @param {Integer} mark 輸入 violationMark 之回傳值
+ * @returns {Error|null} 回傳其間最後一次之完整性錯誤, 無則 null
+ * @example
+ * let e = violationSince(mk)
+ */
+let violationSince = (mark) => (VIOL.seq !== mark ? VIOL.last : null)
+
+/**
+ * 是否為本模組所建之完整性錯誤(以 WeakSet 辨識, 不看 code 字串)
+ *
+ * @param {*} e 輸入任意值
+ * @returns {Boolean} 回傳是否為完整性錯誤
+ * @example
+ * let b = isIntegrityError(err)
+ */
+let isIntegrityError = (e) => e !== null &amp;&amp; (typeof e === 'object' || typeof e === 'function') &amp;&amp; WeakSetPrototypeHas(INTEGRITY_ERRORS, e)
+
+/**
+ * 收下模組拋出之值: 只取其名稱、訊息、堆疊與 code 之字串(可能經模組之存取子), 改以評估器自建之錯誤物件轉拋
+ * 呼叫端之後讀錯誤之欄位不再執行模組之程式; name / message / stack / code 與原值相同(堆疊非字串者以 String(原值) 代之)
+ *
+ * @param {*} e 輸入模組拋出之值
+ * @returns {Error} 回傳評估器自建之錯誤物件(本模組之完整性錯誤原樣回傳)
+ * @example
+ * let e2 = adoptError(new TypeError('x'))
+ */
+let adoptError = (e) => {
+    if (isIntegrityError(e)) {
+        return e
+    }
+    let name = 'Error'
+    let message = ''
+    let stack = null
+    let code
+    if (e !== null &amp;&amp; (typeof e === 'object' || typeof e === 'function')) {
+        try {
+            let v = e.name
+            name = typeof v === 'string' ? v : name
+            v = e.message
+            message = typeof v === 'string' ? v : (v === undefined ? '' : StringCtor(v))
+            v = e.stack
+            stack = typeof v === 'string' ? v : null
+            v = e.code
+            code = typeof v === 'string' || typeof v === 'number' ? v : undefined
+        }
+        catch (err) {
+            message = message || '(無法讀取之錯誤)'
+        }
+        if (!message &amp;&amp; stack === null) {
+            try {
+                message = StringCtor(e)
+            }
+            catch (err) {
+                message = '(無法讀取之錯誤)'
+            }
+        }
+    }
+    else {
+        message = typeof e === 'symbol' ? SymbolPrototypeToString(e) : StringCtor(e)
+        stack = message
+    }
+    let x = new ErrorCtor(message)
+    defineData(x, 'name', name)
+    defineData(x, 'stack', stack === null ? `${name}: ${message}` : stack)
+    if (code !== undefined) {
+        defineData(x, 'code', code)
+    }
+    return x
+}
+
+/**
+ * 取資料之快照(挑選函數回傳之 tag 等): 以結構化複製取得獨立之複本並深度凍結
+ * 原始值照回; 含函數、符號等無法結構化複製者拋錯; 含共享記憶體(SharedArrayBuffer)者拋錯(複本仍與原值共用記憶體); 型別限 SNAP_KIND 所列(其他宿主物件拋錯)
+ * 複本內有凍結擋不住之內部狀態者(定型陣列、ArrayBuffer、DataView、Map、Set、Date、RegExp)記為「可變」: 交出時以 handOut 每次另給複本
+ *
+ * @param {*} v 輸入任意值
+ * @returns {*} 回傳凍結之複本(原始值照回)
+ * @example
+ * let t = snapData({ side: 'long', n: [1, 2] })
+ */
+const MUTABLE_SNAPS = new WeakSetCtor()
+let isBrand = (fn, x) => {
+    try {
+        fn(x)
+        return true
+    }
+    catch (err) {
+        return false
+    }
+}
+let snapData = (v) => {
+    if (v === null || (typeof v !== 'object' &amp;&amp; typeof v !== 'function')) {
+        return v
+    }
+    let c = StructuredClone(v)
+    let mutable = false
+    let seen = new WeakSetCtor()
+    let walk = (o) => {
+        if (o === null || typeof o !== 'object' || WeakSetPrototypeHas(seen, o)) {
+            return
+        }
+        WeakSetPrototypeAdd(seen, o)
+        //型別白名單(SNAP_KIND): 依結構化複製後之原型(複本之原型皆為本 realm 之內建原型)
+        let pr = ReflectGetPrototypeOf(o)
+        let kind = pr === null ? 'freeze' : MapPrototypeGet(SNAP_KIND, pr)
+        if (kind === undefined) {
+            throw new ErrorCtor('含不支援之型別(只收數值、字串、布林、物件、陣列、Map、Set、Date、RegExp、定型陣列、ArrayBuffer、DataView 與錯誤物件)')
+        }
+        if (kind === 'mutable') {
+            mutable = true
+        }
+        let buf = null
+        if (ArrayBufferIsView(o)) {
+            buf = isBrand(TypedArrayPrototypeGetLength, o) ? TypedArrayPrototypeGetBuffer(o) : DataViewPrototypeGetBuffer(o)
+        }
+        else if (isBrand(ArrayBufferPrototypeGetByteLength, o)) {
+            buf = o
+        }
+        if (SharedArrayBufferPrototypeGetByteLength &amp;&amp; (isBrand(SharedArrayBufferPrototypeGetByteLength, o) || (buf !== null &amp;&amp; isBrand(SharedArrayBufferPrototypeGetByteLength, buf)))) {
+            throw new ErrorCtor('含共享記憶體(SharedArrayBuffer)之資料不能取快照')
+        }
+        //Map / Set 之內容不是自有屬性: 逐一走訪其鍵與值(其中之共享記憶體同樣拒收)
+        if (isBrand(MapPrototypeGetSize, o)) {
+            let it = MapPrototypeKeys(o)
+            for (let x = MapIteratorNext(it); !x.done; x = MapIteratorNext(it)) {
+                walk(x.value)
+            }
+            it = MapPrototypeValues(o)
+            for (let x = MapIteratorNext(it); !x.done; x = MapIteratorNext(it)) {
+                walk(x.value)
+            }
+        }
+        else if (isBrand(SetPrototypeGetSize, o)) {
+            let it = SetPrototypeValues(o)
+            for (let x = SetIteratorNext(it); !x.done; x = SetIteratorNext(it)) {
+                walk(x.value)
+            }
+        }
+        let ks = ReflectOwnKeys(o)
+        for (let i = 0; i &lt; ks.length; i++) {
+            let d = ReflectGetOwnPropertyDescriptor(o, ks[i])
+            if (d &amp;&amp; ObjectHasOwn(d, 'value')) {
+                walk(d.value)
+            }
+        }
+        if (kind === 'freeze') {
+            ObjectFreeze(o)
+        }
+    }
+    walk(c)
+    if (mutable) {
+        WeakSetPrototypeAdd(MUTABLE_SNAPS, c)
+    }
+    return c
+}
+
+/**
+ * 交出快照: 凍結之快照照交; 記為可變者(見 snapData)另給一份複本
+ *
+ * @param {*} v 輸入 snapData 之回傳值
+ * @returns {*} 回傳可交給模組之值
+ * @example
+ * let t = handOut(snapData({ a: 1 }))
+ */
+let handOut = (v) => (v !== null &amp;&amp; typeof v === 'object' &amp;&amp; WeakSetPrototypeHas(MUTABLE_SNAPS, v) ? StructuredClone(v) : v)
+
+/**
+ * 序列化為 JSON 文字而不經原型上之 toJSON(內建物件可能已被改時寫結果檔與紀錄用)
+ * 只走訪自有、可列舉之資料屬性(陣列之索引、物件之字串鍵);原始值以擷取之 JSON.stringify(原始值不查 toJSON)
+ * 輸出與 JSON.stringify(v) / JSON.stringify(v, null, 2) 對一般資料(物件、陣列、字串、數值、布林、null)相同;值為 undefined 之物件欄略過、陣列元素為 null
+ *
+ * @param {*} v 輸入資料
+ * @param {Boolean} [pretty=false] 輸入是否縮排 2 格,預設false
+ * @returns {String} 回傳 JSON 文字
+ * @example
+ * let s = safeJson({ ok: false, items: ['a'] }, true)
+ */
+let safeJson = (v, pretty = false, ind = '') => {
+    if (v === null || typeof v !== 'object') {
+        let s = typeof v === 'function' || typeof v === 'symbol' ? undefined : JSONStringify(v)
+        return s === undefined ? 'null' : s
+    }
+    let inner = pretty ? `${ind}  ` : ''
+    let parts = []
+    if (ArrayIsArray(v)) {
+        for (let i = 0; i &lt; v.length; i++) {
+            let d = ReflectGetOwnPropertyDescriptor(v, i)
+            pushOwn(parts, inner + safeJson(d &amp;&amp; ObjectHasOwn(d, 'value') ? d.value : null, pretty, inner))
+        }
+        return parts.length ? (pretty ? `[\n${ArrayPrototypeJoin(parts, ',\n')}\n${ind}]` : `[${ArrayPrototypeJoin(parts, ',')}]`) : '[]'
+    }
+    let ks = ReflectOwnKeys(v)
+    for (let i = 0; i &lt; ks.length; i++) {
+        let k = ks[i]
+        let d = typeof k === 'string' ? ReflectGetOwnPropertyDescriptor(v, k) : undefined
+        if (!d || !d.enumerable || !ObjectHasOwn(d, 'value') || d.value === undefined || typeof d.value === 'function' || typeof d.value === 'symbol') {
+            continue
+        }
+        pushOwn(parts, `${inner}${JSONStringify(k)}:${pretty ? ' ' : ''}${safeJson(d.value, pretty, inner)}`)
+    }
+    return parts.length ? (pretty ? `{\n${ArrayPrototypeJoin(parts, ',\n')}\n${ind}}` : `{${ArrayPrototypeJoin(parts, ',')}}`) : '{}'
+}
+
+/**
+ * 是否為記為「可變」之快照(見 snapData; 逐訊號之迴圈於視窗切換時判斷一次, 可變者每次交出另給複本)
+ *
+ * @param {*} v 輸入 snapData 之回傳值
+ * @returns {Boolean} 回傳是否可變
+ * @example
+ * let b = isMutableSnap(snapData(new Map()))
+ */
+let isMutableSnap = (v) => v !== null &amp;&amp; typeof v === 'object' &amp;&amp; WeakSetPrototypeHas(MUTABLE_SNAPS, v)
+
+
+//P, 評估器所用之擷取參照(凍結)
+const P = ObjectFreeze({
+    ObjectFreeze,
+    ObjectSeal,
+    ObjectHasOwn,
+    ReflectApply,
+    ArrayCtor,
+    ArrayFrom,
+    ArrayIsArray,
+    ArrayPrototypePush,
+    ArrayPrototypeJoin,
+    ArrayBufferIsView,
+    NumberCtor,
+    NumberIsInteger,
+    NumberIsFinite,
+    MathFloor,
+    MathRound,
+    MathMax,
+    MathMin,
+    MathImul,
+    StringCtor,
+    JSONStringify,
+    JSONParse,
+    StructuredClone,
+    ConsoleLog,
+    ErrorCtor,
+    MapPrototypeGet,
+    MapPrototypeSet,
+    MapPrototypeHas,
+    MapPrototypeDelete,
+    MapPrototypeKeys,
+    MapIteratorNext,
+    SetPrototypeGetSize,
+    TypedArrayFrom,
+    TypedArrayPrototypeGetLength,
+    Int8ArrayCtor,
+    Uint8ArrayCtor,
+    Uint16ArrayCtor,
+    Int32ArrayCtor,
+    Uint32ArrayCtor,
+    Float32ArrayCtor,
+    Float64ArrayCtor,
+})
+
+export { P, copyRange, copyAll, bytesAs, pushOwn, safeJson, checkIntrinsics, assertIntrinsics, violationMark, violationSince, isIntegrityError, integrityError, adoptError, snapData, handOut, isMutableSnap, isBrand, N_ITEMS, PROTECTED_ROOTS, GLOBAL_NAMES }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Mon Nov 16 2026 10:49:15 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

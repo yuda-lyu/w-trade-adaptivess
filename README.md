@@ -117,6 +117,11 @@ node node_modules/w-trade-adaptivess/src/tools/initProject.mjs --root .
 - 挑選模組之形狀、`ctx` 之每個介面(`stat`、`orders`、`entryDays` / `entryBars`、`exitDays` / `exitBars`、`market`、`factor`、`series`、`meta`、`state`、`rand`)、`accept(sig, book)`、分帳、輸出之讀法與擴充診斷之寫法,全部寫在合約 `contract/pick-contract.md`(專案內為 `docs/pick-contract.md`).
 - 判讀:`S = 0.7 × 七相位平均 + 0.3 × 最差相位`;階梯 1 ~ 3 與否決見 `src/eval/score.mjs` 檔頭.
 - 擴充診斷:共用工具區 `metrics/*.mjs` 每次完整評估自動載入;可自帶看板值(`board`)、提示(`flag`)、「不計為挑選內容」(`notContent`)與量尺之子集(`subset`).
+- 評估器之狀態不受模組之寫入影響(挑選模組、擴充診斷模組與評估器同在一個 JavaScript realm;合約 §1):
+  - 資料不共用:交給模組之物件一律為複本或凍結 / 封裝之物件(`ctx.meta` 每次執行一份、`ctx.prev` 為複本、`accept` 之 `sig` / `book` 每次呼叫前重寫、擴充診斷之 `api` 每個診斷一份);`tag` 只收可結構化複製之資料,於 `pick` 回傳時取快照並凍結;`ctx` 之函數只在該次 `pick` 呼叫內有效.
+  - 內建物件之完整性:評估器只用載入時擷取之內建方法(`src/eval/intrinsics.mjs`);載入模組後、評估器各方法與 `loadLedger` 之入口、每次 `pick` 後、每批 `accept` 後、每個擴充診斷後、讀帳本前與輸出前比對受保護之內建物件,被改即評估失敗(錯誤 code `EVAL_INTEGRITY`,列出被改之項目;`g_eval.mjs` 印 `ERROR EVAL_INTEGRITY …`、離開碼 3,`--ext-test` 印 `EXT_FAIL`、離開碼 4).
+  - 仍只靠合約與審計者:模組層變數跨相位 / 跨模擬保存、檔案與行程介面之取用(靜態檢查為字樣層級之防呆)、受保護清單以外之內建物件;不另隔離 realm.
+  - 成本:每次比對約 80 µs(約 1000 個屬性描述);一次完整評估約一萬次比對(每批 `accept` 呼叫一次);合成帳本之實測耗時增加約兩成至三成,大半在逐訊號迴圈之交出物件重寫與擷取函數之呼叫,比對本身約占 1 ~ 2%(見 `sgud/state/state.md`).
 
 ## 4. 迴圈
 
@@ -141,6 +146,7 @@ npm test
 | 測試檔 | 案例數 | 範圍 |
 |---|---|---|
 | `unit-evalCore.test.mjs` | 30 | 評估核心:無前視、執行規則、各虛無、歸因、擴充診斷之介面 |
+| `unit-evalIntegrity.test.mjs` | 34 | 評估器之狀態不受模組之寫入影響:交出之物件為複本或凍結(改寫 `ctx.prev` / `ctx.meta` / `book` / `tag` 結果不變)、內建物件被改即 `EVAL_INTEGRITY`(挑選函數、`accept`、擴充診斷、模組頂層與延後執行之程式、延遲讀取帳本欄)、ctx 之各函數與逐訊號模擬不經可被改寫之方法;含命令列之載入處 |
 | `unit-guard.test.mjs` | 31 | 架構邊界(含子行程隱藏視窗之守門與其自驗);agent 操作紀錄之掃描與禁區 |
 | `unit-run.test.mjs` | 18 | 執行規模、資源閘、單一執行之鎖、事件檔 |
 | `unit-records.test.mjs` | 16 | 節點文件與做夢文件之規格、檢核、渲染 |
