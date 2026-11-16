@@ -261,8 +261,6 @@ describe('共同儲存區:挑選模組載入時改了內建物件(EVAL_INTEGRITY
         let seen = []
         let tick = () => new Promise((resolve) => setImmediate(resolve))
         let outcomes = []
-        let t0 = Date.now()
-        let nth = 0
         try {
             fs.writeFileSync = (...a) => {
                 if (spying) {
@@ -281,9 +279,7 @@ describe('共同儲存區:挑選模組載入時改了內建物件(EVAL_INTEGRITY
                     fs.rmSync(dir, { recursive: true, force: true })
                     seen.length = 0
                     fs.writeFileSync(fpOf(target), `Promise.resolve()${'.then(() => 0)'.repeat(k)}.then(() => { Math.trunc = Math.floor })\n${clean(`延後 ${k}`)}`, 'utf8')
-                    //匯入以「路徑 + 修改時間」為鍵快取: 每次給不同之修改時間, 使模組之頂層程式每次重新執行
-                    let tm = new Date(t0 + (++nth) * 2000)
-                    fs.utimesSync(fpOf(target), tm, tm)
+                    //匯入以「路徑 + 原始碼之內容雜湊」為鍵快取(規則 R-EV-39): 每個目標與每個延後數 k 之內容皆不同(含 k), 模組之頂層程式每次重新執行
                     let err = null
                     spying = true
                     try {
@@ -383,7 +379,7 @@ describe('共同儲存區:挑選模組載入時改了內建物件(EVAL_INTEGRITY
         }
     })
 
-    it('第二段複製之交付版 = 載入前讀入之那一份, 第二段不再讀來源檔(第一段全部載入後來源檔被改動 ⇒ 複本與 info.json 仍為載入時之版本;載入器自行讀檔與以修改時間為快取鍵之匯入不在此保證內)', async () => {
+    it('第二段複製之交付版 = 載入前讀入之那一份, 第二段不再讀來源檔(第一段全部載入後來源檔被改動 ⇒ 複本與 info.json 仍為載入時之版本;載入器自行讀檔後匯入,讀檔與匯入之間來源檔被改動者不在此保證內)', async () => {
         let dir = path.join(st.rsi.root, 'picks')
         let rf = fs.readFileSync
         let mk = fs.mkdirSync

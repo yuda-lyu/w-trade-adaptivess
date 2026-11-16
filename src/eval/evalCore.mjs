@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import iseint from 'wsemi/src/iseint.mjs'
 import { P, copyRange, copyAll, pushOwn, assertIntrinsics, violationMark, violationSince, isIntegrityError, integrityError, adoptError, snapData, handOut, isMutableSnap, isBrand } from './intrinsics.mjs'
+import { tieBaseOf, isSrcIdx } from './ledger.mjs'
 
 const { ObjectFreeze, ObjectSeal, ObjectHasOwn, ReflectApply, ArrayFrom, ArrayIsArray, ArrayPrototypeJoin, ArrayBufferIsView, NumberCtor, NumberIsInteger, NumberIsFinite, MathFloor, MathRound, MathMax, MathMin, MathImul, StringCtor, JSONStringify, StructuredClone, ErrorCtor, MapPrototypeGet, MapPrototypeSet, MapPrototypeHas, MapPrototypeDelete, MapPrototypeKeys, MapIteratorNext, SetPrototypeGetSize, TypedArrayFrom, TypedArrayPrototypeGetLength, TypedArrayPrototypeGetToStringTag, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
 
@@ -216,12 +217,19 @@ let makeEvaluator = (L, cfg = {}) => {
     //  cfg.tieSalt(選配; 整數; 預設 0 = 正本): 迴圈之重放用 —— 以另一組固定之同分次序重放(規則 R-EV-22)
     //    主鍵大量同分之成品其入選者實際由 tie 決定(= 固定種子之隨機抽取), 只換 ctx.rand 之種子驗不到;
     //    非 0 時對正本之 tie 再做一次雙射雜湊(值仍兩兩相異), ctx.meta.tie、同一進場棒之訊號先後、虛無之同值次序皆隨之; 正本之數字不受影響
-    let tieSalt = Number.isInteger(cfg.tieSalt) ? cfg.tieSalt : 0
+    //  L.srcIdx(選配; 規則 R-EV-40; 半庫帳本 memberLedger 所帶): 各策略於全庫之序號 —— 有給時以之(而非半庫內之序號)產生 tie,
+    //    使半庫內各策略之 tie(ctx.meta.tie、同一進場棒之訊號先後、虛無之同值次序)與其於全庫時相同; 未給(一般之帳本)⇒ 以序號產生, 行為不變
+    //    型別以內部槽判定(同 L.ntStatic; isSrcIdx); 給而不合(非 Int32Array、長度非 L.n、含負值)即拒絕建評估器; tie 之雜湊式在 ledger.mjs 之 tieBaseOf(單一來源)
+    //    cfg.tieSalt 先讀(其存取子可執行呼叫端之程式): 檢查 srcIdx 與使用它之間不再讀取呼叫端之物件, 檢查之值即使用之值
+    let tieSaltArg = cfg.tieSalt //只讀一次(存取子可先後回傳不同之值: 檢查之值即使用之值)
+    let tieSalt = Number.isInteger(tieSaltArg) ? tieSaltArg : 0
+    let srcIdx = L.srcIdx === undefined || L.srcIdx === null ? null : L.srcIdx
+    if (srcIdx !== null && !isSrcIdx(srcIdx, n)) {
+        throw new ErrorCtor('invalid L.srcIdx: must be an Int32Array of length L.n with non-negative values (index of each strategy in the full library; see memberLedger)')
+    }
     let tie = new Uint32Array(n)
     for (let s = 0; s < n; s++) {
-        let x = Math.imul(s + 0x9E3779B9, 0x85EBCA6B)
-        x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35)
-        x = (x ^ (x >>> 16)) >>> 0
+        let x = tieBaseOf(srcIdx === null ? s : srcIdx[s])
         if (tieSalt !== 0) {
             x = Math.imul(x ^ Math.imul(tieSalt, 0x9E3779B1), 0x85EBCA6B)
             x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35)

@@ -1,8 +1,9 @@
 import fs from 'fs'
 import path from 'path'
+import iseint from 'wsemi/src/iseint.mjs'
 import { P, bytesAs, assertIntrinsics } from './intrinsics.mjs'
 
-const { Float64ArrayCtor, TypedArrayPrototypeGetLength } = P
+const { ObjectFreeze, NumberCtor, NumberIsInteger, MathImul, ErrorCtor, TypedArrayPrototypeGetLength, TypedArrayPrototypeGetToStringTag, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
 
 
 //訂單帳本之載入: 讀 ledgerBuild 產出之二進位欄, 並建「依出場棒排序」之輔助欄(供「某時點以前已結之單」之統計以二分搜尋取得)
@@ -109,7 +110,13 @@ let loadLedger = (dir) => {
             return ser
         },
     })
-    //依出場棒排序之已結單欄
+    setExitCols(L)
+    return L
+}
+
+//setExitCols, 由逐單欄(off / ext / pnl)建「依出場棒排序」之已結單欄(xoff / xExt / xPnlCum / xWinCum; Cum 為策略內前綴和)並掛於 L
+//  loadLedger 與 memberLedger(半庫帳本; 規則 R-EV-40)共用同一份寫法; 兩者皆於入口比對內建物件之後同步執行(其間不執行模組之程式)
+let setExitCols = (L) => {
     let n = L.n
     let xoff = new Uint32Array(n + 1)
     let nClosed = 0
@@ -148,7 +155,217 @@ let loadLedger = (dir) => {
     L.xExt = xExt
     L.xPnlCum = xPnlCum
     L.xWinCum = xWinCum
-    return L
+}
+
+/**
+ * 各策略固定之亂數(同分次鍵之基底): 由「策略於全庫之序號」經雜湊而得之無號 32 位元整數, 與策略之任何屬性無關(規則 R-EV-40)
+ * 評估器之 ctx.meta.tie(同分次序為正本時)即此值; 半庫帳本(memberLedger)之策略沿用其於全庫之序號(L.srcIdx), 故其值不因重新編號而變
+ * 單一來源: 評估器(makeEvaluator)與半庫之切法(memberLedger)皆經此函數, 其值一變, 既有成品之同分次序與選集皆變
+ *
+ * @param {Integer} idx 輸入策略於全庫之序號(0 以上之整數)
+ * @returns {Integer} 回傳無號 32 位元整數
+ * @example
+ * let t = tieBaseOf(0)
+ */
+let tieBaseOf = (idx) => {
+    let x = MathImul(idx + 0x9E3779B9, 0x85EBCA6B)
+    x = MathImul(x ^ (x >>> 13), 0xC2B2AE35)
+    return (x ^ (x >>> 16)) >>> 0
+}
+
+//memberOf, 策略是否屬於某一半(成員重抽; 規則 R-EV-40): 以其同分次鍵之基底與鹽之雜湊切半 ——
+//  ((Math.imul(tie ^ salt, 2654435761) >>> 0) / 4294967296) < 0.5 者為甲半(half 0), 其餘為乙半(half 1); 換鹽 = 換一種切法
+let memberOf = (tieBase, salt, half) => (((MathImul(tieBase ^ salt, 2654435761) >>> 0) / 4294967296) < 0.5) === (half === 0)
+
+/**
+ * 半庫帳本之 srcIdx(各策略於全庫之序號)是否合格: 型別以內部槽判定為 Int32Array(不看原型鏈; 同 L.ntStatic)、長度 n、全為 0 以上
+ * 評估器(makeEvaluator)與半庫帳本(memberLedger)共用
+ *
+ * @param {*} srcIdx 輸入待檢查之值
+ * @param {Integer} n 輸入策略數(L.n)
+ * @returns {Boolean} 回傳是否合格
+ * @example
+ * let ok = isSrcIdx(new Int32Array(3), 3)
+ */
+let isSrcIdx = (srcIdx, n) => {
+    if (TypedArrayPrototypeGetToStringTag(srcIdx) !== 'Int32Array' || TypedArrayPrototypeGetLength(srcIdx) !== n) {
+        return false
+    }
+    for (let s = 0; s < n; s++) {
+        if (!(srcIdx[s] >= 0)) {
+            return false
+        }
+    }
+    return true
+}
+
+//isLedgerShape, memberLedger 之入口檢查: 帳本物件之逐策略欄、逐單欄、進場規則之各條件之型別(內部槽)與長度須相符(讀取之區段不得超出)
+//  型別對照 loadLedger 之讀入; keySym / keyTh / keyOr 於舊帳本為 null(皆可); 起訖欄(off、keyOff)自 0 起且不遞減; 逐單與條件欄之長度不得短於其起訖欄之終點
+//  帳本為評估器自己之資料(loadLedger 之回傳; 挑選模組與擴充診斷碰不到): 本檢查為防呆(手組或損毀之帳本), 不處理「呼叫端以存取子在檢查後改內建物件」之情形(同 loadLedger / makeEvaluator 對呼叫端之信任)
+let isLedgerShape = (L) => {
+    if (L === null || typeof L !== 'object' || !NumberIsInteger(L.n) || L.n < 0) {
+        return false
+    }
+    let n = L.n
+    let colOk = (a, tag, len) => TypedArrayPrototypeGetToStringTag(a) === tag && TypedArrayPrototypeGetLength(a) === len
+    let atLeast = (a, tag, len) => TypedArrayPrototypeGetToStringTag(a) === tag && TypedArrayPrototypeGetLength(a) >= len
+    if (!colOk(L.off, 'Uint32Array', n + 1) || !colOk(L.keyOff, 'Uint32Array', n + 1)) {
+        return false
+    }
+    //起訖欄須自 0 起且不遞減(各段之端點才不越界; 損毀之帳本不得靜默產生假資料)
+    let mono = (a) => {
+        if (a[0] !== 0) {
+            return false
+        }
+        for (let s = 0; s < n; s++) {
+            if (!(a[s] <= a[s + 1])) {
+                return false
+            }
+        }
+        return true
+    }
+    if (!mono(L.off) || !mono(L.keyOff)) {
+        return false
+    }
+    let nOrd = L.off[n]
+    let nKey = L.keyOff[n]
+    return colOk(L.mode, 'Int8Array', n) && colOk(L.tp, 'Float32Array', n) && colOk(L.sl, 'Float32Array', n) && colOk(L.nKeys, 'Uint8Array', n) && colOk(L.lv, 'Int32Array', n) && colOk(L.fitNt, 'Int32Array', n) && colOk(L.cls, 'Uint8Array', 3 * n) &&
+        atLeast(L.ent, 'Int32Array', nOrd) && atLeast(L.ext, 'Int32Array', nOrd) && atLeast(L.pnl, 'Float32Array', nOrd) &&
+        atLeast(L.keyIdx, 'Uint16Array', nKey) &&
+        (L.keySym === null || atLeast(L.keySym, 'Int8Array', nKey)) && (L.keyTh === null || atLeast(L.keyTh, 'Float64Array', nKey)) && (L.keyOr === null || atLeast(L.keyOr, 'Uint8Array', nKey)) &&
+        (L.srcIdx === undefined || L.srcIdx === null || isSrcIdx(L.srcIdx, n)) &&
+        (L.member === undefined || L.member === null || (typeof L.member === 'object' && NumberIsInteger(L.member.nFull) && L.member.nFull >= n))
+}
+
+/**
+ * 成員重抽之半庫帳本: 把策略庫依各策略之同分次鍵之基底(tieBaseOf)與鹽之雜湊切成兩半, 回傳只含其中一半、且重新編號之帳本物件(不改動傳入之帳本; 規則 R-EV-40)
+ * 半庫帳本之各逐策略欄(逐單欄、靜態欄、進場規則之各條件、依出場棒排序之已結單欄)皆只含該半之策略、序號為半庫內之 0 ~ n-1(保持原先後), 內容與其於全庫時逐位相同(皆為新建之複本);
+ * 逐棒之欄(K 線、因子序列、外部序列)與原帳本共用; 另帶 srcIdx(Int32Array; 各策略於全庫之序號)—— 評估器以之產生同分次鍵, 使半庫內各策略之 ctx.meta.tie 與其於全庫時相同
+ * 用途: 以同一個挑選模組(不必改寫)在「換一批策略」之半庫上重跑, 檢驗其內容是否依賴特定成員; 訓練期之進場數須於其後另給(L.ntStatic = ntStaticOf(半庫帳本, 訓練期之終點棒序))
+ * dir 與 meta 沿用來源帳本(全庫之資訊: meta.nStrategies、nOrders 等為全庫之值; loadIds(dir) 之序號為全庫序號 —— 半庫內第 i 隻之策略檔名為 loadIds(dir)[srcIdx[i]])
+ * 入口先比對受保護之內建物件; 複製只用定型陣列之索引存取(不經可被改寫之方法); 參數不合者拋錯(訊息不帶輸入值)
+ * salt 與 half 依 wsemi iseint 判定(安全整數之數字或其數字字串, 通過者轉為數字); 十六進位之寫法(0x…)只於命令列解析, 此處只收整數
+ *
+ * @param {Object} L 輸入由 loadLedger 取得之帳本物件(亦可為另一個半庫帳本: 於其內再切, srcIdx 與 member.nFull 仍指全庫)
+ * @param {Integer} salt 輸入切半之鹽(0 ~ 4294967295 之整數; 換鹽 = 換一種切法)
+ * @param {Integer} half 輸入取哪一半(0 = 甲半、1 = 乙半)
+ * @returns {Object} 回傳半庫帳本物件, 欄位同 loadLedger 之回傳(不含 ntStatic), 另含 srcIdx 與 member({ salt, half, nFull }; 凍結)
+ * @example
+ * let L = loadLedger('./data/ledger/eval')
+ * let La = memberLedger(L, 0x5bd1e995, 0)
+ * La.ntStatic = ntStaticOf(La, trainEndBar)
+ * let ev = makeEvaluator(La, { warmupDays: 180, cadenceDays: 7 })
+ */
+let memberLedger = (L, salt, half) => {
+    assertIntrinsics('ledger-load')
+    if (!isLedgerShape(L)) {
+        throw new ErrorCtor('invalid L: must be a ledger object (see loadLedger and memberLedger)')
+    }
+    let saltV = iseint(salt) ? NumberCtor(salt) : NaN
+    if (!(saltV >= 0 && saltV <= 0xFFFFFFFF)) {
+        throw new ErrorCtor('invalid salt: must be an integer from 0 to 4294967295')
+    }
+    let halfV = iseint(half) ? NumberCtor(half) : NaN
+    if (halfV !== 0 && halfV !== 1) {
+        throw new ErrorCtor('invalid half: must be 0 or 1')
+    }
+    saltV = saltV === 0 ? 0 : saltV //-0 正規化
+    halfV = halfV === 0 ? 0 : 1
+    let n0 = L.n
+    let src0 = L.srcIdx === undefined || L.srcIdx === null ? null : L.srcIdx
+    //成員: 依各策略於全庫之序號(已是半庫者取其 srcIdx)之同分次鍵之基底切半
+    let sel = new Uint8ArrayCtor(n0)
+    let n = 0
+    for (let s = 0; s < n0; s++) {
+        if (memberOf(tieBaseOf(src0 === null ? s : src0[s]), saltV, halfV)) {
+            sel[s] = 1
+            n++
+        }
+    }
+    let keep = new Int32ArrayCtor(n)
+    for (let s = 0, i = 0; s < n0; s++) {
+        if (sel[s] === 1) {
+            keep[i++] = s
+        }
+    }
+    //gather, 逐策略 k 值之欄(第 s 隻策略之值在 [s * k, s * k + k); 只以索引讀寫定型陣列): 一般之靜態欄 k = 1; cls(各因子類別之條件數)k = 3(ledgerBuild.mjs 之 cls[si * 3 + 類別])
+    let gather = (a, Ctor, k = 1) => {
+        let out = new Ctor(n * k)
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < k; j++) {
+                out[i * k + j] = a[keep[i] * k + j]
+            }
+        }
+        return out
+    }
+    //gatherRanges, 以起訖欄(長度 n0 + 1)分段之欄: 回新之起訖欄與各欄(cols 之元素為 [欄, 建構子]; 欄為 null 者照舊為 null); 段內之先後不變
+    let gatherRanges = (offs, cols) => {
+        let off = new Uint32ArrayCtor(n + 1)
+        let tot = 0
+        for (let i = 0; i < n; i++) {
+            off[i] = tot
+            tot += offs[keep[i] + 1] - offs[keep[i]]
+        }
+        off[n] = tot
+        let outs = []
+        for (let c = 0; c < cols.length; c++) {
+            outs[c] = cols[c][0] === null ? null : new cols[c][1](tot)
+        }
+        for (let i = 0; i < n; i++) {
+            let a0 = offs[keep[i]]
+            let len = offs[keep[i] + 1] - a0
+            let p = off[i]
+            for (let c = 0; c < cols.length; c++) {
+                let src = cols[c][0]
+                if (src !== null) {
+                    let dst = outs[c]
+                    for (let j = 0; j < len; j++) {
+                        dst[p + j] = src[a0 + j]
+                    }
+                }
+            }
+        }
+        return { off, outs }
+    }
+    let ord = gatherRanges(L.off, [[L.ent, Int32ArrayCtor], [L.ext, Int32ArrayCtor], [L.pnl, Float32ArrayCtor]])
+    let key = gatherRanges(L.keyOff, [[L.keyIdx, Uint16ArrayCtor], [L.keySym, Int8ArrayCtor], [L.keyTh, Float64ArrayCtor], [L.keyOr, Uint8ArrayCtor]])
+    let srcIdx = new Int32ArrayCtor(n)
+    for (let i = 0; i < n; i++) {
+        srcIdx[i] = src0 === null ? keep[i] : src0[keep[i]]
+    }
+    let M = {
+        dir: L.dir,
+        meta: L.meta,
+        n,
+        nBars: L.nBars,
+        barsPerDay: L.barsPerDay,
+        off: ord.off,
+        ent: ord.outs[0],
+        ext: ord.outs[1],
+        pnl: ord.outs[2],
+        mode: gather(L.mode, Int8ArrayCtor),
+        tp: gather(L.tp, Float32ArrayCtor),
+        sl: gather(L.sl, Float32ArrayCtor),
+        nKeys: gather(L.nKeys, Uint8ArrayCtor),
+        lv: gather(L.lv, Int32ArrayCtor),
+        fitNt: gather(L.fitNt, Int32ArrayCtor),
+        cls: gather(L.cls, Uint8ArrayCtor, 3),
+        keyOff: key.off,
+        keyIdx: key.outs[0],
+        keyNames: L.keyNames,
+        px: L.px,
+        keySym: key.outs[1],
+        keyTh: key.outs[2],
+        keyOr: key.outs[3],
+        seriesNames: L.seriesNames,
+        srcIdx,
+        member: ObjectFreeze({ salt: saltV, half: halfV, nFull: L.member ? L.member.nFull : n0 }),
+    }
+    //逐棒之欄與原帳本共用(延遲讀取者仍於首次取用時才由原帳本載入, 其載入前之內建物件比對亦在原帳本內)
+    Object.defineProperty(M, 'fac', { enumerable: false, configurable: true, get: () => L.fac })
+    Object.defineProperty(M, 'ser', { enumerable: false, configurable: true, get: () => L.ser })
+    setExitCols(M)
+    return M
 }
 
 //ids, 策略序號 → 策略檔名(需要時才讀)
@@ -166,5 +383,5 @@ let loadIds = (dir) => {
 }
 
 
-export { loadLedger, loadIds }
+export { loadLedger, loadIds, tieBaseOf, isSrcIdx, memberLedger }
 export default loadLedger

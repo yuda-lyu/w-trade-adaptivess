@@ -2,11 +2,10 @@ import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import { getSettings, argOf } from '../cfg.mjs'
-import { loadLedger } from '../eval/ledger.mjs'
+import { loadLedger, memberLedger } from '../eval/ledger.mjs'
 import { makeEvaluator, ntStaticOf } from '../eval/evalCore.mjs'
-import { pathToFileURL } from 'url'
-import { loadPick, scanSnippet } from '../eval/pickLoader.mjs'
-import { P as PI, pushOwn, safeJson, assertIntrinsics, isIntegrityError, adoptError } from '../eval/intrinsics.mjs'
+import { loadPick, loadExt } from '../eval/pickLoader.mjs'
+import { P as PI, pushOwn, safeJson, assertIntrinsics, isIntegrityError } from '../eval/intrinsics.mjs'
 import { scoreOf } from '../eval/score.mjs'
 import { createResourceMonitor } from '../arsi/resources.mjs'
 
@@ -21,6 +20,9 @@ import { createResourceMonitor } from '../arsi/resources.mjs'
 //    --period train: 改看訓練期內之決策(診斷用; 訓練期是策略庫之求解期 = 樣本內, 不計入判讀)
 //    --seed N: 換亂數種子(**只在迴圈之重放(ARSI_HARNESS=1)時生效**; 其他呼叫者帶此旗標即忽略 —— 節點不得藉換種子挑結果)
 //    --tie-salt N: 換同分次序(ctx.meta.tie 與同一進場棒之訊號先後; 同樣只在迴圈之重放時生效; 節點要自檢同分之影響用共用工具區之 snippets/tieAlt.mjs)
+//    --member <鹽>:<0|1>: 成員重抽(規則 R-EV-40)—— 只把策略庫之一半交給挑選函數(0 = 甲半、1 = 乙半; 鹽為 0 ~ 4294967295 之整數, 十進位或 0x 開頭之十六進位; 換鹽 = 換一種切法),
+//           模組不必改寫: ctx.n 為半庫之隻數, ctx.meta 之各陣列與 ctx.stat 等皆為半庫內之序號, 各策略之 ctx.meta.tie 與其於全庫時相同; 期間、相位、虛無、擴充診斷照舊
+//           用途: 檢驗成品之內容是否依賴特定成員(「換一批策略」之重複; 兩半皆成立才算不依賴); **此結果不是正本**(結果檔與評估紀錄另記 member), 節點、做夢與迴圈皆可用; 格式不合者不評估(離開碼 2)
 //    --ref: 另以參考模組之 pick 於同相位、同亂數種子逐決策執行(各有自己的 ctx.state / ctx.rand, 與本模組互不影響),
 //           輸出兩者選集之重疊率(交集 ÷ 本模組之選集大小)依決策段(各相位最前 10% / 中段 / 最後 10% 之決策)之分佈;
 //           只增輸出(結果檔之 refOverlap), 既有數字與 selHash 不變; 可給多個(逗號分隔): refOverlap = 第一個, 另有 refOverlaps = 全部依序
@@ -40,6 +42,25 @@ if (!['backtest', 'train'].includes(periodArg)) {
     console.log('--period 須為 backtest(預設;評估期)或 train(診斷用;樣本內)')
     process.exit(2)
 }
+//成員重抽(規則 R-EV-40): --member <鹽>:<0|1> ⇒ 以半庫帳本(memberLedger: 只含該半之策略、重新編號、保留各策略於全庫之同分次鍵)評估; 未給 ⇒ 全庫(行為不變)
+//  格式不合者不評估(離開碼 2; 不靜默改用全庫: 那會把全庫之結果當成半庫之結果); 於載入模組與等資源閘之前即檢查(不先耗時), 不寫結果檔、不記評估紀錄
+//  鹽之 0x 十六進位寫法只於此處解析(memberLedger 收整數, 依 iseint); memberTag 為標記('0x<鹽之十六進位>:<0|1>'; 未給為 null): 結果檔之 member.tag 與評估紀錄之每一列(含失敗者)帶之 —— 帶此標記者不是正本之評估
+let memberArg = argOf('member', null)
+let member = null
+let memberTag = null
+if (memberArg !== null) {
+    //格式 <鹽>:<0|1>: 鹽之位數不另限(前導零無妨), 以數值 ≤ 4294967295 為界(過大者轉為 Infinity 或大數而拒收); 旗標重複給者拒收(argOf 只取第一個, 其餘靜默忽略會誤跑)
+    let mm = /^(0x[0-9a-fA-F]+|[0-9]+):([01])$/.exec(String(memberArg))
+    let saltV = mm ? (mm[1].startsWith('0x') ? parseInt(mm[1].slice(2), 16) : Number(mm[1])) : NaN
+    if (!mm || !(saltV <= 0xFFFFFFFF) || process.argv.filter((a) => a === '--member').length > 1) {
+        console.log('invalid --member: must be <salt>:<half>, where salt is an integer from 0 to 4294967295 (decimal or 0x hexadecimal) and half is 0 or 1')
+        process.exit(2)
+    }
+    member = { salt: saltV, half: Number(mm[2]) }
+    memberTag = `0x${saltV.toString(16)}:${member.half}`
+}
+//memberInfo, 失敗之結果檔所帶之 member(帳本尚未載入, 無 n / nFull): 成功之結果檔之 member 另含 n 與 nFull
+let memberInfo = () => (member ? { member: { tag: memberTag, salt: member.salt, half: member.half } } : {})
 let fpOut = argOf('out', '')
 let t0 = Date.now()
 //評估紀錄: 挑選模組位於節點 / 做夢之工作夾內時, 每次執行於其所在資料夾之 .evals.log 附加一列(時間、檔名、模式、結果), 供迴圈計數「交付前評估了幾次」
@@ -66,7 +87,7 @@ let logEval = (o) => {
         if (relToWork.startsWith('..') || path.isAbsolute(relToWork)) {
             return
         }
-        fs.appendFileSync(path.join(dir, '.evals.log'), safeJson({ at: new Date().toISOString(), pick: path.basename(String(fpPick)), mode, ...(periodArg !== 'backtest' ? { period: periodArg } : {}), h: pickHash, ...(waitedSec > 0 ? { waitedSec } : {}), ...o }) + '\n')
+        fs.appendFileSync(path.join(dir, '.evals.log'), safeJson({ at: new Date().toISOString(), pick: path.basename(String(fpPick)), mode, ...(periodArg !== 'backtest' ? { period: periodArg } : {}), h: pickHash, ...(memberTag ? { member: memberTag } : {}), ...(waitedSec > 0 ? { waitedSec } : {}), ...o }) + '\n')
     }
     catch (err) {}
 }
@@ -87,7 +108,7 @@ let failIntegrity = (err, extTestName = null) => {
     if (fpOut && fpOut !== true) {
         try {
             fs.mkdirSync(path.dirname(path.resolve(fpOut)), { recursive: true })
-            fs.writeFileSync(path.resolve(fpOut), safeJson({ ok: false, error: err.message, code: 'EVAL_INTEGRITY', where: err.where, items: err.items }, true), 'utf8')
+            fs.writeFileSync(path.resolve(fpOut), safeJson({ ok: false, ...memberInfo(), error: err.message, code: 'EVAL_INTEGRITY', where: err.where, items: err.items }, true), 'utf8')
         }
         catch (e) {}
     }
@@ -113,7 +134,7 @@ catch (err) {
     }
     console.log(`ERROR ${err.code || ''} ${err.message}`)
     if (fpOut && fpOut !== true) {
-        writeJson(path.resolve(fpOut), { ok: false, error: err.message, code: err.code || null, issues: err.issues || [] })
+        writeJson(path.resolve(fpOut), { ok: false, ...memberInfo(), error: err.message, code: err.code || null, issues: err.issues || [] })
     }
     logEval({ ok: false, code: err.code || 'PICK_LOAD' })
     process.exit(2)
@@ -151,7 +172,12 @@ let ledgerDir = harnessEnv && process.env.ARSI_LEDGER_DIR ? path.resolve(process
 let evalFrom = harnessEnv && process.env.ARSI_EVAL_FROM ? process.env.ARSI_EVAL_FROM : st.periods.backtest.start
 //讀帳本前比對內建物件(挑選模組已載入; 其延後執行之程式可能於上方之 await 期間才執行): 讀帳本與建評估器為同步, 其間不會再執行模組之程式
 checkOrFail('before-ledger')
-let L = loadLedger(ledgerDir)
+let Lfull = loadLedger(ledgerDir)
+//成員重抽: 半庫帳本(memberLedger 之入口另比對內建物件; 與讀帳本同為同步, 其間不會再執行模組之程式); 之後之評估期間、訓練期之進場數、評估器皆以半庫帳本為準
+let L = member ? memberLedger(Lfull, member.salt, member.half) : Lfull
+if (member) {
+    member = { ...member, n: L.n, nFull: Lfull.n }
+}
 //評估期間: 帳本涵蓋訓練期 + 回測期; 預設只計回測期內之決策, --period train 只計訓練期內之決策(診斷)
 let barMs = L.meta.barHours * 3600000
 let time0Ms = Date.parse(`${L.meta.time0}Z`)
@@ -206,30 +232,7 @@ if (typeof nullArg === 'number') {
 let extTest = argOf('ext-test', null)
 let extList = []
 let extLoadErrors = []
-let loadExt = async (fp) => {
-    let abs = path.resolve(fp)
-    let src = fs.readFileSync(abs, 'utf8')
-    let bad = scanSnippet(src)
-    if (bad.length) {
-        throw new Error(`不合限制: ${bad.join('、')}`)
-    }
-    //內建物件之完整性(規則 R-EV-35 ②; 比照挑選模組之 loadPick): 匯入(頂層程式已執行)後比對; 匯入失敗者其錯誤改以評估器自建之錯誤轉拋
-    let mod
-    try {
-        mod = await import(`${pathToFileURL(abs).href}?v=${fs.statSync(abs).mtimeMs}`)
-    }
-    catch (err) {
-        let e2 = adoptError(err)
-        assertIntrinsics('ext-load')
-        throw e2
-    }
-    let fn = mod.default
-    assertIntrinsics('ext-load')
-    if (typeof fn !== 'function') {
-        throw new Error('須 export default 一個函數')
-    }
-    return { name: path.basename(abs).replace(/\.mjs$/i, ''), fn }
-}
+//  載入器 loadExt 在 src/eval/pickLoader.mjs(與挑選模組之 loadPick 同處、同一種匯入快取鍵)
 if (typeof extTest === 'string' && extTest) {
     opt = { phases: [0, 3], horizons: [st.eval.cadenceDays], nullDraws: 8 }
     try {
@@ -313,7 +316,7 @@ catch (err) {
     checkOrFail('pick')
     console.log(`ERROR PICK_RUN ${String((err && err.stack) || err).split('\n').slice(0, 6).join('\n')}`)
     if (fpOut && fpOut !== true) {
-        writeJson(path.resolve(fpOut), { ok: false, error: String((err && err.message) || err), code: 'PICK_RUN' })
+        writeJson(path.resolve(fpOut), { ok: false, ...memberInfo(), error: String((err && err.message) || err), code: 'PICK_RUN' })
     }
     logEval({ ok: false, code: 'PICK_RUN' })
     process.exit(3)
@@ -404,8 +407,11 @@ let refOverlap = refOverlaps.length ? refOverlaps[0] : null
 let periodInfo = periodArg === 'train'
     ? { name: 'train', label: '訓練期(診斷;樣本內,不計入判讀)', start: st.periods.train.start, end: st.periods.train.end }
     : { name: 'backtest', label: '回測期', start: st.periods.backtest.start, end: st.periods.backtest.end }
-let out = { ok: true, mode, period: periodInfo, seed, ...(tieSalt !== 0 ? { tieSalt } : {}), pick: path.resolve(fpPick), pickBytes: pk.bytes, pickMeta: pk.meta, at: new Date().toISOString(), metrics: m, score: sc, limits: st.eval.limits, loadMs: Date.now() - t0 - m.ms.total, ...(refOverlap ? { refOverlap } : {}), ...(refOverlaps.length > 1 ? { refOverlaps } : {}) }
+let out = { ok: true, mode, period: periodInfo, seed, ...(tieSalt !== 0 ? { tieSalt } : {}), ...(member ? { member: { tag: memberTag, ...member } } : {}), pick: path.resolve(fpPick), pickBytes: pk.bytes, pickMeta: pk.meta, at: new Date().toISOString(), metrics: m, score: sc, limits: st.eval.limits, loadMs: Date.now() - t0 - m.ms.total, ...(refOverlap ? { refOverlap } : {}), ...(refOverlaps.length > 1 ? { refOverlaps } : {}) }
 let f1 = (x) => (typeof x === 'number' ? x.toFixed(1) : String(x))
+if (member) {
+    console.log(`成員重抽 ${memberTag}: 只用策略庫之${member.half === 0 ? '甲' : '乙'}半(${member.n} 隻 / 全庫 ${member.nFull} 隻;各策略之同分次鍵同全庫)—— 此結果不是正本`)
+}
 console.log(`[${mode}|${periodInfo.label} ${periodInfo.start.slice(0, 10)} ~ ${periodInfo.end.slice(0, 10)}] 相位 ${m.phases.join(',')} | 決策 ${m.op.nDecisions.join('/')} 次 | 選集大小 均 ${f1(m.sel.sizeMean)}(${m.sel.sizeMin} ~ ${m.sel.sizeMax}), 空 ${m.sel.nEmpty}, 換手 Jaccard ${m.sel.turnoverJaccard}`)
 console.log(`操作績效(${m.period.cadenceDays} 日一換): 等效年化 均 ${f1(m.op.eqYr.mean)}% 最差相位 ${f1(m.op.eqYr.min)}% 最佳 ${f1(m.op.eqYr.max)}% | 月均單 ${f1(m.op.monthlyOrders.mean)} | 最大同時持倉 ${m.op.peakHold.max} | 勝率 ${(m.op.winRate * 100).toFixed(1)}% | 執行規則 ${m.hasAccept ? `有(下單率 ${(m.op.acceptRate * 100).toFixed(1)}%)` : '無(全收)'}`)
 console.log(`新鮮度(七相位均 %): ${m.horizons.map((H) => `${H}d ${f1(m.fresh[H].eqYr.mean)}`).join(' | ')}`)

@@ -1,7 +1,8 @@
 import fs from 'fs'
 import path from 'path'
+import crypto from 'crypto'
 import { pathToFileURL } from 'url'
-import { P, assertIntrinsics, adoptError } from './intrinsics.mjs'
+import { P, assertIntrinsics, adoptError, isIntegrityError } from './intrinsics.mjs'
 
 const { JSONStringify, JSONParse } = P
 
@@ -79,8 +80,51 @@ let scanSnippet = (src) => {
     return RULES.filter(([re]) => re.test(s)).map(([, what]) => what)
 }
 
+//importTargetOf, 動態匯入之目標 { hash, base, url }(規則 R-EV-39; Gitea #161): 網址 = 檔案網址 + 快取鍵, 鍵為**本次所讀原始碼(src)之內容雜湊**, 不用修改時間
+//  同一路徑於短時間內被重寫者, 兩次之修改時間可相同(檔案系統之時間解析度; 實測連續兩次寫入約四成之 mtimeMs 相同)⇒ 以修改時間為鍵會取回先前已載入之舊模組:
+//  所執行之程式與本次所檢查(scanPick / scanSnippet)、所回報之原始碼(src / bytes / meta)不同份; 內容不同者必重新載入, 內容相同者共用同一份模組(同一內容本來就是同一個模組)
+//  只取完整之十六進位摘要字串(不經 String.prototype 之方法: 載入第二個以後之模組時內建物件可能已被前一個模組改寫, 其偵測在各自之 loadPick / loadExt 內)
+//  REDO(base → 次數): 鍵所對之模組不可再信者, 其後同鍵之載入改附序號(url 之 &t=<次數>)⇒ 重新匯入、重新執行其頂層程式 ——
+//    ①讀檔與匯入之間來源檔被改動(verifyUnchanged: 匯入後重讀之內容雜湊不同於匯入前所讀者; 否則以內容雜湊為鍵時, 被誤掛在 A 之鍵下之 B 會於來源檔改回 A 之後持續被執行)
+//    ②成品因完整性錯誤被拒(頂層程式改了內建物件): 其後(呼叫端還原內建物件後)同內容之載入須重新執行頂層程式再判定, 不得由快取直接放行
+//    ③匯入失敗(語法錯誤、頂層拋錯): Node 把失敗之模組亦以網址快取, 讀入 A 而實際匯入了壞掉之 B 時, 來源檔改回 A 後同鍵之載入會持續取到該失敗 ⇒ 匯入失敗者亦登記
+//    ④重讀失敗(無從核對): 該鍵所對之模組是否為所檢查者不明 ⇒ 本次不判定、不拋錯, 但登記(其後同鍵之載入重新匯入)
+//  網址以來源檔之實體路徑(fs.realpathSync.native)為準: Node 對同一實體檔(目錄連結、大小寫、8.3 短名等不同寫法)只建一份模組, 登記亦須以同一個身分為鍵
+const REDO = Object.create(null)
+let importTargetOf = (abs, src) => {
+    let real = abs
+    try {
+        real = fs.realpathSync.native(abs)
+    }
+    catch (err) {}
+    let hash = crypto.createHash('sha256').update(src).digest('hex')
+    let base = `${pathToFileURL(real).href}?v=${hash}`
+    let k = REDO[base]
+    return { hash, base, url: k === undefined ? base : `${base}&t=${k}` }
+}
+let redoNext = (tg) => {
+    REDO[tg.base] = REDO[tg.base] === undefined ? 1 : REDO[tg.base] + 1
+}
+//verifyUnchanged, 匯入(與其後之完整性比對)之後重讀來源檔: 內容雜湊須仍為匯入前所讀者, 否則所執行之模組可能不是所檢查者 ⇒ 該鍵改記為不可再信並拋 code 為 code 之錯誤
+//  讀不到(已被刪除等)者無從核對: 本次不判定(不拋錯), 但該鍵登記為不可再信; 核對時內容恰為匯入前所讀者(例如 A → B → A 於核對前復原)、核對之後再被改動者無從察覺(讀檔與匯入之競態無法由讀碼端完全消除)
+let verifyUnchanged = (abs, tg, what, code) => {
+    let again
+    try {
+        again = crypto.createHash('sha256').update(fs.readFileSync(abs, 'utf8')).digest('hex')
+    }
+    catch (err) {
+        redoNext(tg)
+        return
+    }
+    if (again !== tg.hash) {
+        redoNext(tg)
+        throw Object.assign(new Error(`${what}於載入期間被改動(匯入後重讀之內容與匯入前所讀者不同, 所執行者可能不是所檢查者; 請重新載入)`), { code })
+    }
+}
+
 /**
  * 載入挑選模組: 先以 scanPick 靜態檢查, 通過後動態匯入, 並驗證預設匯出為函數
+ * 匯入之快取鍵為本次所讀原始碼之內容雜湊(不用修改時間): 同一路徑重寫為不同內容者必重新載入(所執行者即所檢查、所回報之 src), 內容相同者共用同一份模組
  * 檔案不存在拋出 code 為 PICK_MISSING 之錯誤; 未通過檢查或匯出不合者拋出 code 為 PICK_SCAN 之錯誤(含 issues)
  * 匯入(模組之頂層程式已執行)後比對受保護之內建物件: 被改拋出 code 為 EVAL_INTEGRITY 之錯誤(items 列出被改之項目); 匯入失敗者其錯誤改以評估器自建之錯誤轉拋(訊息相同)
  * meta 為快照(JSON 往返之複本; 與寫入結果檔之內容相同; 無法序列化者為 null): 之後讀它或把它寫入結果檔不再執行模組之程式
@@ -100,38 +144,97 @@ let loadPick = async (fp) => {
     if (issues.length) {
         throw Object.assign(new Error(`挑選模組未通過靜態檢查: ${issues.join('; ')}`), { code: 'PICK_SCAN', issues })
     }
-    let mod
+    let tg = importTargetOf(abs, src)
     try {
-        mod = await import(`${pathToFileURL(abs).href}?v=${fs.statSync(abs).mtimeMs}`)
-    }
-    catch (err) {
-        let e2 = adoptError(err)
-        assertIntrinsics('pick-load')
-        throw e2
-    }
-    //第一段(可能執行模組之程式: meta 之 toJSON / 存取子): 取 meta 之快照; 之後比對內建物件(模組之頂層程式與此段皆已執行)
-    let fnPick = mod.default
-    let fnAccept = mod.accept
-    let meta0 = mod.meta
-    let meta = null
-    if (meta0 && typeof meta0 === 'object') {
+        let mod
         try {
-            meta = JSONParse(JSONStringify(meta0))
+            mod = await import(tg.url)
         }
         catch (err) {
-            meta = null
+            redoNext(tg)
+            let e2 = adoptError(err)
+            assertIntrinsics('pick-load')
+            throw e2
         }
+        //第一段(可能執行模組之程式: meta 之 toJSON / 存取子): 取 meta 之快照; 之後比對內建物件(模組之頂層程式與此段皆已執行)
+        let fnPick = mod.default
+        let fnAccept = mod.accept
+        let meta0 = mod.meta
+        let meta = null
+        if (meta0 && typeof meta0 === 'object') {
+            try {
+                meta = JSONParse(JSONStringify(meta0))
+            }
+            catch (err) {
+                meta = null
+            }
+        }
+        assertIntrinsics('pick-load')
+        //比對通過(內建物件完好)後才重讀來源檔核對(重讀用一般寫法, 不得在內建物件已被改之後執行)
+        verifyUnchanged(abs, tg, '挑選模組', 'PICK_CHANGED')
+        if (typeof fnPick !== 'function') {
+            throw Object.assign(new Error('挑選模組之預設匯出不是函數'), { code: 'PICK_SCAN', issues: ['預設匯出不是函數'] })
+        }
+        if (fnAccept !== undefined && typeof fnAccept !== 'function') {
+            throw Object.assign(new Error('挑選模組之具名匯出 accept 不是函數'), { code: 'PICK_SCAN', issues: ['accept 不是函數'] })
+        }
+        return { pick: fnPick, accept: typeof fnAccept === 'function' ? fnAccept : null, meta: meta && typeof meta === 'object' ? meta : null, src, bytes: Buffer.byteLength(src) }
     }
-    assertIntrinsics('pick-load')
-    if (typeof fnPick !== 'function') {
-        throw Object.assign(new Error('挑選模組之預設匯出不是函數'), { code: 'PICK_SCAN', issues: ['預設匯出不是函數'] })
+    catch (err) {
+        //完整性錯誤(頂層程式改了內建物件): 其後同內容之載入須重新執行頂層程式(R-EV-39 REDO ②)
+        if (isIntegrityError(err)) {
+            redoNext(tg)
+        }
+        throw err
     }
-    if (fnAccept !== undefined && typeof fnAccept !== 'function') {
-        throw Object.assign(new Error('挑選模組之具名匯出 accept 不是函數'), { code: 'PICK_SCAN', issues: ['accept 不是函數'] })
+}
+
+/**
+ * 載入擴充診斷模組(共用工具區之 metrics/*.mjs; 規則 R-EV-21): 先以 scanSnippet 靜態檢查(與挑選模組同一組限制), 通過後動態匯入, 並驗證預設匯出為函數
+ * 匯入(模組之頂層程式已執行)後比對受保護之內建物件(規則 R-EV-35 ②; 比照 loadPick): 被改拋出 code 為 EVAL_INTEGRITY 之錯誤; 匯入失敗者其錯誤改以評估器自建之錯誤轉拋
+ * 未通過檢查者拋 Error(訊息 不合限制: …); 預設匯出不是函數者拋 Error(須 export default 一個函數)
+ *
+ * @param {String} fp 輸入擴充診斷模組檔案路徑
+ * @returns {Promise<Object>} 回傳Promise,resolve為 { name(檔名去副檔名), fn(預設匯出函數) }
+ * @example
+ * let { name, fn } = await loadExt('./rsi/toolbox/metrics/foo.mjs')
+ */
+let loadExt = async (fp) => {
+    let abs = path.resolve(fp)
+    let src = fs.readFileSync(abs, 'utf8')
+    let bad = scanSnippet(src)
+    if (bad.length) {
+        throw new Error(`不合限制: ${bad.join('、')}`)
     }
-    return { pick: fnPick, accept: typeof fnAccept === 'function' ? fnAccept : null, meta: meta && typeof meta === 'object' ? meta : null, src, bytes: Buffer.byteLength(src) }
+    //內建物件之完整性(規則 R-EV-35 ②; 比照挑選模組之 loadPick): 匯入(頂層程式已執行)後比對; 匯入失敗者其錯誤改以評估器自建之錯誤轉拋
+    let tg = importTargetOf(abs, src)
+    try {
+        let mod
+        try {
+            mod = await import(tg.url)
+        }
+        catch (err) {
+            redoNext(tg)
+            let e2 = adoptError(err)
+            assertIntrinsics('ext-load')
+            throw e2
+        }
+        let fn = mod.default
+        assertIntrinsics('ext-load')
+        verifyUnchanged(abs, tg, '擴充診斷', 'EXT_CHANGED')
+        if (typeof fn !== 'function') {
+            throw new Error('須 export default 一個函數')
+        }
+        return { name: path.basename(abs).replace(/\.mjs$/i, ''), fn }
+    }
+    catch (err) {
+        if (isIntegrityError(err)) {
+            redoNext(tg)
+        }
+        throw err
+    }
 }
 
 
-export { scanPick, scanSnippet, loadPick, stripComments }
+export { scanPick, scanSnippet, loadPick, loadExt, stripComments }
 export default loadPick
