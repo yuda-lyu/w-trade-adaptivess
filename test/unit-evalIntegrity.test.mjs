@@ -917,6 +917,306 @@ describe('evalCore 內建物件之完整性(R-EV-35 ②):被改即評估失敗(E
         assert.deepEqual([m.ext.y.f, m.ext.y.s, called], [0, 0, 0])
     })
 
+    //規則 R-EV-38 / R-EV-35 ②: api.replaceNull 之 onlyGroups / onlyDecisions 與既有之 api 函數同寫法 —— 參數於第一段只以擷取之參照複製成評估器自有之陣列(元素不取值), guardExt('ext') 之後才驗證與計算
+    let pickGrouped = (ctx) => ({ ids: ids(ctx), group: [0, 0, 0, 1, 1, 1, 2, 2], tag: ctx.k % 2 })
+    let EXT_BASE = { phases: [0], nullDraws: 0, accept: (sig, book) => book.open < 3 }
+
+    it('擴充診斷之 api.replaceNull 之 onlyGroups / onlyDecisions 於內建物件被改時與既有之 api 函數一致:入口比對 ⇒ 該次呼叫拋 EVAL_INTEGRITY(where = ext)、替身未被呼叫(第一段之複本與其後之驗證 / 計算 —— 含 iseint 之 trim / test、遮罩之 Array / 定型陣列方法 —— 皆在比對之後);診斷攔下並改回者該次評估仍失敗', () => {
+        //onlyGroups 以數字字串給(其判定經 String.prototype.trim 與 RegExp.prototype.test); 參數皆於替身裝上之前建好
+        let calls = {
+            onlyGroups: (api) => ({ draws: 2, onlyGroups: ['0', ' 1 ', 2] }),
+            onlyDecisions: (api) => ({ draws: 2, onlyDecisions: api.phases.map((p) => p.bars.map((_, k) => k % 2 === 0)) }),
+            typed: (api) => ({ draws: 2, onlyGroups: Uint8Array.from([0, 1]), onlyDecisions: api.phases.map((p) => Uint8Array.from(p.bars, (_, k) => k % 2)) }),
+            existing: (api) => ({ draws: 2 }),
+        }
+        let TA_FROM = [Object.getPrototypeOf(Int8Array), 'from']
+        let targets = [
+            [Array.prototype, 'some', 'Array.prototype.some'], [Array.prototype, 'every', 'Array.prototype.every'], [Array.prototype, 'map', 'Array.prototype.map'],
+            [Array.prototype, 'filter', 'Array.prototype.filter'], [Array.prototype, 'slice', 'Array.prototype.slice'], [Array.prototype, 'reduce', 'Array.prototype.reduce'],
+            [Array.prototype, 'push', 'Array.prototype.push'], [Array.prototype, 'forEach', 'Array.prototype.forEach'], [Array.prototype, 'includes', 'Array.prototype.includes'], [Array.prototype, 'indexOf', 'Array.prototype.indexOf'],
+            [Array, 'isArray', 'Array.isArray'], [Array, 'from', 'Array.from'], [ArrayBuffer, 'isView', 'ArrayBuffer.isView'],
+            [TA_PROTO, 'set', '%TypedArray%.prototype.set'], [...TA_FROM, '%TypedArray%.from'],
+            [Number, 'isInteger', 'Number.isInteger'], [Number, 'isSafeInteger', 'Number.isSafeInteger'],
+            [String.prototype, 'trim', 'String.prototype.trim'], [RegExp.prototype, 'test', 'RegExp.prototype.test'],
+            [WeakMap.prototype, 'has', 'WeakMap.prototype.has'], [WeakMap.prototype, 'get', 'WeakMap.prototype.get'],
+            [Math, 'min', 'Math.min'], [Math, 'max', 'Math.max'], [Math, 'round', 'Math.round'],
+        ]
+        for (let [nm, mk] of Object.entries(calls)) {
+            for (let [o, k, label] of targets) {
+                let fired = Object.create(null)
+                let inner = null
+                let err = integrityOf(() => ev.evalPolicy(pickGrouped, {
+                    ...EXT_BASE,
+                    ext: [{
+                        name: 'x',
+                        fn: (api) => {
+                            let a = mk(api)
+                            withStubs([[o, k]], fired, () => {
+                                try {
+                                    api.replaceNull(a)
+                                }
+                                catch (e) {
+                                    inner = e
+                                }
+                            })
+                            return { text: 'x' }
+                        },
+                    }],
+                }))
+                let w = `${nm} × ${label}`
+                assert.equal(inner && inner.code, 'EVAL_INTEGRITY', `${w}: 入口比對`)
+                assert.equal(inner.where, 'ext', w)
+                assert(inner.items.includes(label), `${w}: ${inner.items}`)
+                assert.deepEqual(Object.keys(fired), [], `${w}: 替身未被呼叫`)
+                assert.equal(err && err.code, 'EVAL_INTEGRITY', `${w}: 診斷攔下並改回, 該次評估仍失敗`)
+            }
+        }
+        //未被改時照常(三種寫法皆回 applicable: true; 數字字串之元素通過 iseint)
+        let m = ev.evalPolicy(pickGrouped, { ...EXT_BASE, ext: [{ name: 'ok', fn: (api) => ({ a: api.replaceNull(calls.onlyGroups(api)).applicable, b: api.replaceNull(calls.onlyDecisions(api)).applicable, c: api.replaceNull(calls.typed(api)).applicable }) }] })
+        assert.deepEqual([m.ext.ok.a, m.ext.ok.b, m.ext.ok.c], [true, true, true])
+    })
+
+    it('api.replaceNull 之 onlyGroups / onlyDecisions 之複本不經可被改寫之迭代器:裝上「呼叫一次即自我還原」之替身於 Array / 定型陣列 / 陣列迭代器之迭代方法後呼叫 ⇒ 替身未被呼叫、該次呼叫拋 EVAL_INTEGRITY(where = ext)、評估失敗', () => {
+        //R-EV-38 / R-EV-35 ②: Array.from 會動態查找 Array.prototype[Symbol.iterator] 等方法, 替身執行一次後自我還原即逃過比對而改變評估器收到之選項; 複本改為只讀 length 與索引
+        let ARR_ITER_PROTO = Object.getPrototypeOf([][Symbol.iterator]())
+        let calls = {
+            array: (api) => ({ draws: 2, onlyGroups: [0, 1], onlyDecisions: api.phases.map((p) => p.bars.map(() => true)) }),
+            typed: (api) => ({ draws: 2, onlyGroups: Uint8Array.from([0, 1]), onlyDecisions: api.phases.map((p) => Uint8Array.from(p.bars, () => 1)) }),
+        }
+        let targets = [[Array.prototype, Symbol.iterator], [Array.prototype, 'values'], [TA_PROTO, Symbol.iterator], [TA_PROTO, 'values'], [ARR_ITER_PROTO, 'next']]
+        for (let [nm, mk] of Object.entries(calls)) {
+            for (let [o, k] of targets) {
+                let called = 0
+                let inner = null
+                let err = keep([[o, k]], () => integrityOf(() => ev.evalPolicy(pickGrouped, {
+                    ...EXT_BASE,
+                    ext: [{
+                        name: 'it',
+                        fn: (api) => {
+                            let a = mk(api)
+                            let orig = o[k]
+                            o[k] = function (...args) {
+                                called++
+                                o[k] = orig
+                                return Reflect.apply(orig, this, args)
+                            }
+                            try {
+                                api.replaceNull(a)
+                            }
+                            catch (e) {
+                                inner = e
+                            }
+                            finally {
+                                o[k] = orig
+                            }
+                            return { text: 'x' }
+                        },
+                    }],
+                })))
+                let w = `${nm} × ${String(k)}`
+                assert.equal(called, 0, `${w}: 替身未被呼叫`)
+                assert.equal(inner && inner.code, 'EVAL_INTEGRITY', `${w}: 入口比對`)
+                assert.equal(inner.where, 'ext', w)
+                assert(inner.items.join('|').includes(String(k)), `${w}: ${inner.items}`)
+                assert.equal(err && err.code, 'EVAL_INTEGRITY', `${w}: 評估失敗`)
+            }
+        }
+    })
+
+    it('api.replaceNull 之 onlyGroups / onlyDecisions:稀疏陣列之洞不沿原型鏈取值(Array.prototype[0] 之「取值一次即自我還原」存取子未被呼叫 ⇒ 拋 EVAL_INTEGRITY);複製拋錯(已撤銷之代理、拋錯之存取子)時內建物件已被改而不改回者仍拋 EVAL_INTEGRITY(比對不被跳過)', () => {
+        //R-EV-38 / R-EV-35 ②: v[i] 對洞會沿原型鏈找值 ⇒ 觸發 Array.prototype 上之索引存取子, 替身自我還原即逃過比對; 改以自有索引才取值
+        let calls = {
+            groups: (api) => ({ draws: 2, onlyGroups: new Array(1) }),
+            decisions: (api) => ({ draws: 2, onlyDecisions: api.phases.map((p) => new Array(p.bars.length)) }),
+        }
+        for (let [nm, mk] of Object.entries(calls)) {
+            let called = 0
+            let inner = null
+            let restore = () => {
+                delete Array.prototype[0]
+                Array.prototype.length = 0
+            }
+            let err = keep([[Array.prototype, '0'], [Array.prototype, 'length']], () => integrityOf(() => ev.evalPolicy(pickGrouped, {
+                ...EXT_BASE,
+                ext: [{
+                    name: 'hole',
+                    fn: (api) => {
+                        let a = mk(api)
+                        Object.defineProperty(Array.prototype, 0, {
+                            configurable: true,
+                            get() {
+                                called++
+                                restore()
+                                return 1
+                            },
+                        })
+                        try {
+                            api.replaceNull(a)
+                        }
+                        catch (e) {
+                            inner = e
+                        }
+                        finally {
+                            restore()
+                        }
+                        return { text: 'x' }
+                    },
+                }],
+            })))
+            assert.equal(called, 0, `${nm}: 洞不沿原型鏈取值`)
+            assert.equal(inner && inner.code, 'EVAL_INTEGRITY', `${nm}: 入口比對`)
+            assert(inner.items.join('|').includes('Array.prototype.0'), `${nm}: ${inner.items}`)
+            assert.equal(err && err.code, 'EVAL_INTEGRITY', `${nm}: 評估失敗`)
+        }
+        //複製拋錯: 呼叫前已改 Array.prototype.map 而不改回; 已撤銷之代理 / 拋錯之存取子使複製失敗, 其後仍須比對 ⇒ EVAL_INTEGRITY(而非透傳引擎之 TypeError 或模組之錯誤)
+        let rv = Proxy.revocable([0, 1], {})
+        rv.revoke()
+        let variants = [
+            ['撤銷代理(onlyGroups)', (api) => ({ onlyGroups: rv.proxy })],
+            ['撤銷代理(onlyDecisions 外層)', (api) => ({ onlyDecisions: rv.proxy })],
+            ['撤銷代理(onlyDecisions 內層)', (api) => ({ onlyDecisions: api.phases.map((p, i) => (i === 0 ? rv.proxy : p.bars.map(() => true))) })],
+            ['拋錯之存取子(onlyGroups)', (api) => ({
+                get onlyGroups() {
+                    throw new Error('boom')
+                },
+            })],
+            ['拋錯之存取子(onlyDecisions)', (api) => ({
+                get onlyDecisions() {
+                    throw new Error('boom')
+                },
+            })],
+        ]
+        for (let [nm, mk] of variants) {
+            let fired = Object.create(null)
+            let inner = null
+            let err = integrityOf(() => ev.evalPolicy(pickGrouped, {
+                ...EXT_BASE,
+                ext: [{
+                    name: 'x',
+                    fn: (api) => {
+                        let a = mk(api)
+                        withStubs([[Array.prototype, 'map']], fired, () => {
+                            try {
+                                api.replaceNull(a)
+                            }
+                            catch (e) {
+                                inner = e
+                            }
+                        })
+                        return { text: 'x' }
+                    },
+                }],
+            }))
+            assert.equal(inner && inner.code, 'EVAL_INTEGRITY', `${nm}: 複製拋錯時仍比對`)
+            assert.deepEqual(Object.keys(fired), [], `${nm}: 替身未被呼叫`)
+            assert.equal(err && err.code, 'EVAL_INTEGRITY', `${nm}: 診斷攔下並改回, 該次評估仍失敗`)
+        }
+        //未被改時: 複製拋錯 ⇒ 一般之 V19 訊息(不透傳引擎或模組之錯誤)
+        let m = ev.evalPolicy(pickGrouped, {
+            ...EXT_BASE,
+            ext: [{
+                name: 'y',
+                fn: (api) => ({
+                    msgs: variants.map(([nm, mk]) => {
+                        try {
+                            api.replaceNull(mk(api))
+                            return null
+                        }
+                        catch (e) {
+                            return e.message
+                        }
+                    }),
+                }),
+            }],
+        })
+        assert.deepEqual(m.ext.y.msgs.map((s) => s.replace(/\[\d+\]/g, '').split(':')[0]), [
+            'invalid opt.onlyGroups', 'invalid opt.onlyDecisions', 'invalid opt.onlyDecisions', 'invalid opt.onlyGroups', 'invalid opt.onlyDecisions',
+        ])
+    })
+
+    it('api.replaceNull 之 onlyGroups / onlyDecisions 於讀取參數之段(存取子)改內建物件而不改回:該次呼叫於比對時拋 EVAL_INTEGRITY、其下之一般寫法之替身未被呼叫、評估失敗;物件元素之 valueOf / toString 不被呼叫(元素不取值)', () => {
+        let variants = [
+            ['onlyGroups', Array.prototype, 'every', 'Array.prototype.every', (stub) => ({
+                draws: 2,
+                get onlyGroups() {
+                    Array.prototype.every = stub
+                    return [0, 1]
+                },
+            })],
+            ['onlyDecisions', Number, 'isInteger', 'Number.isInteger', (stub, api) => ({
+                draws: 2,
+                get onlyDecisions() {
+                    Number.isInteger = stub
+                    return api.phases.map((p) => p.bars.map(() => true))
+                },
+            })],
+        ]
+        for (let [nm, o, k, label, mk] of variants) {
+            let fired = Object.create(null)
+            let inner = null
+            let err = keep([[o, k]], () => integrityOf(() => ev.evalPolicy(pickGrouped, {
+                ...EXT_BASE,
+                ext: [{
+                    name: 'x',
+                    fn: (api) => {
+                        let stub = function () {
+                            fired[k] = true
+                            throw new Error('替身被呼叫')
+                        }
+                        try {
+                            api.replaceNull(mk(stub, api))
+                        }
+                        catch (e) {
+                            inner = e
+                        }
+                        return { text: 'x' }
+                    },
+                }],
+            })))
+            assert.equal(inner && inner.code, 'EVAL_INTEGRITY', `${nm}: 讀取參數之段改內建物件 ⇒ 比對時拋`)
+            assert.equal(inner.where, 'ext', nm)
+            assert(inner.items.includes(label), `${nm}: ${inner.items}`)
+            assert.deepEqual(Object.keys(fired), [], `${nm}: 替身未被呼叫`)
+            assert.equal(err && err.code, 'EVAL_INTEGRITY', `${nm}: 評估失敗`)
+        }
+        //物件元素不取值: valueOf / toString / Symbol.toPrimitive 皆不被呼叫(形狀不合 ⇒ 一般錯誤, 非完整性錯誤)
+        let called = 0
+        let obj = {
+            valueOf() {
+                called++
+                return 1
+            },
+            toString() {
+                called++
+                return '1'
+            },
+            [Symbol.toPrimitive]() {
+                called++
+                return 1
+            },
+        }
+        let m = ev.evalPolicy(pickGrouped, {
+            ...EXT_BASE,
+            ext: [{
+                name: 'y',
+                fn: (api) => {
+                    let msgs = []
+                    for (let a of [{ onlyGroups: [obj] }, { onlyDecisions: api.phases.map((p) => p.bars.map((_, k) => (k === 1 ? obj : true))) }]) {
+                        try {
+                            api.replaceNull({ draws: 2, ...a })
+                        }
+                        catch (e) {
+                            msgs.push(e.message)
+                        }
+                    }
+                    return { msgs }
+                },
+            }],
+        })
+        assert.deepEqual(m.ext.y.msgs, ['invalid opt.onlyGroups[0]: must be an integer from 0 to 3', 'invalid opt.onlyDecisions[0][1]: must be a boolean or 0 or 1'])
+        assert.equal(called, 0)
+    })
+
     it('擴充診斷之函數內改內建物件 ⇒ 評估失敗(where = ext);診斷攔下 api 內之錯誤並改回者亦然', () => {
         let pick = (ctx) => ({ ids: ids(ctx), tag: ctx.k % 2 })
         let accept = (sig, book) => book.open < 3

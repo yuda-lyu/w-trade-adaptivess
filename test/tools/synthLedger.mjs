@@ -39,10 +39,10 @@ let lcg = (seed) => {
 
 let writeBin = (fp, arr) => fs.writeFileSync(fp, Buffer.from(arr.buffer, arr.byteOffset, arr.byteLength))
 
-//writeSynthLedger, 於 dir 寫出合成帳本; opt: { n(策略數), nBars(K 棒數; 4 小時一根), seed, identical(true = 全部策略之訂單相同), series(外部序列之名稱陣列; 預設無) }
+//writeSynthLedger, 於 dir 寫出合成帳本; opt: { n(策略數), nBars(K 棒數; 4 小時一根), seed, identical(true = 全部策略之訂單相同), series(外部序列之名稱陣列; 預設無), dense(true = 每隻策略每 1 ~ 3 棒進場一次 ⇒ 任一決策視窗內每個被選之策略皆有訊號, 可由訊號還原選集, 且各策略之累計進場數不同; 預設 false) }
 //  每隻策略: 逐棒以各自之機率進場(同棒至多一單), 持有 1 ~ 40 棒後出場; 出場棒超出帳本者為未結(ext = -1, pnl = 0); 損益為 ±
 //  series(規則 R-EV-34): 給名稱者另寫 ser.f64(另用一組亂數, 不動既有欄之內容; 第 1 條序列之前 3 根為缺值)與 meta.seriesNames; 未給者不寫(與舊帳本同)
-export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical = false, series = null } = {}) => {
+export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical = false, series = null, dense = false } = {}) => {
     fs.mkdirSync(dir, { recursive: true })
     let rnd = lcg(seed)
     let off = new Uint32Array(n + 1)
@@ -50,13 +50,17 @@ export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical 
     let ext = []
     let pnl = []
     let mode = new Int8Array(n)
-    let gen = (r) => {
+    //dense: 第 s 隻策略每 (1 + s % 3) 棒進場一次(任一決策視窗內皆有訊號, 且各策略之累計進場數不同 ⇒ 活躍度名次有變化)
+    let gen = (r, s = 0) => {
         let p = 0.01 + r() * 0.08
+        if (dense) {
+            p = 2 //r() < 2 恆真(仍照常取亂數, 與非 dense 之亂數取用次序相同); 進場與否由下列間隔決定
+        }
         let es = []
         let xs = []
         let ps = []
         for (let b = 0; b < nBars; b++) {
-            if (r() < p) {
+            if (r() < p && (!dense || b % (1 + (s % 3)) === 0)) {
                 let x = b + 1 + Math.floor(r() * 40)
                 es.push(b)
                 if (x < nBars) {
@@ -75,7 +79,7 @@ export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical 
     for (let s = 0; s < n; s++) {
         off[s] = ent.length
         mode[s] = s % 3 === 0 ? -1 : 1
-        let g = shared || gen(rnd)
+        let g = shared || gen(rnd, s)
         ent.push(...g.es)
         ext.push(...g.xs)
         pnl.push(...g.ps)
