@@ -5,7 +5,7 @@ import { getSettings, argOf, writeJson } from '../cfg.mjs'
 import { peekRound } from '../engineApi.mjs'
 import { makeProject } from '../domain/domain.mjs'
 import { roundName } from '../arsi/records.mjs'
-import { runRounds, acquireRunLock, appendEvent, readEvents, trailingFailures } from '../arsi/runner.mjs'
+import { runRounds, acquireRunLock, appendEvent, readEvents, trailingFailures, planGateOf, roundOkOf } from '../arsi/runner.mjs'
 import { checkQuota } from '../arsi/dispatchers.mjs'
 import { fileURLToPath } from 'url'
 
@@ -23,6 +23,10 @@ let FP_DIGEST = fileURLToPath(new URL('../tools/roundDigest.mjs', import.meta.ur
 //                                             依自身設備與監督方式給定; CPU / 記憶體上限在 settings.resources, 派工前由資源閘等待)
 //                                             要它跑完本輪後停下: 於狀態根建空檔 STOP(每輪開始前檢查; 下次執行前請刪除)
 //                                             起跑時若上一輪之節點已入樹而做夢未交付(額度用盡、派工失敗、行程中斷), 先對該輪補做夢, 補成才起新的一輪(規則 R-RUN-6)
+//                                             前緣為空(下一輪之計畫為 0 個節點、無閘門拒絕、無待重審之節點、無認領中之節點)時不起空輪: 事件 run-done(rounds 0、reason 'frontier-empty'; 規則 R-RUN-9)
+//  node g_rsi.mjs --mode round --dream-only --file <文字檔>
+//                                             主控要求之「只做夢」輪次(規則 R-RUN-9): 前緣為空時, 讓做夢在沒有新節點之情形下重新彙整、預先核對、擴建並給方向(審計 0; 輪號照常遞增; 只跑 1 輪)
+//                                             文字檔(UTF-8)= 主控對本輪做夢之要求(原文列於做夢任務書之最前; 不得為空); 計畫有節點、有待重審之節點或有認領中之節點時不受理(reason 'dream-only-busy')
 //  node g_rsi.mjs --mode status               現況
 //  node g_rsi.mjs --mode board                重產臂看板(另重寫供 agent 閱讀之生效目錄 arms/catalog.json)
 //  node g_rsi.mjs --mode validate [--force]   對已入樹而尚無回測期旗標之節點補算旗標(需先 node g_build.mjs --full)
@@ -38,6 +42,24 @@ let FP_DIGEST = fileURLToPath(new URL('../tools/roundDigest.mjs', import.meta.ur
 //  一輪可能歷時數小時: 請以 g_launch.mjs 脫離執行, 進度看 rsi/STATUS.json 與 rsi/logs/
 let st = getSettings()
 let mode = argOf('mode', 'status')
+//只做夢輪次(規則 R-RUN-9): --dream-only --file <文字檔>; 於組裝專案之前先檢查(專案組裝之錯誤不得搶先於輸入錯誤)
+//  文字檔(UTF-8; BOM 去除)讀不到、為無效之 UTF-8 或為空 ⇒ 不啟動(離開碼 2; 不取鎖、不記事件; 訊息依 V19、不帶路徑); 檔名依命令列原字串(不經 argOf 之數字轉型: 001 不得變為 1)
+let dreamOnly = null
+if (mode === 'round' && process.argv.includes('--dream-only')) {
+    let iFile = process.argv.indexOf('--file')
+    let fpWhy = iFile >= 0 && process.argv[iFile + 1] !== undefined && !process.argv[iFile + 1].startsWith('--') ? process.argv[iFile + 1] : ''
+    let why = ''
+    try {
+        why = fpWhy ? new TextDecoder('utf-8', { fatal: true }).decode(fs.readFileSync(fpWhy)).trim() : ''
+    }
+    catch (err) {}
+    if (!why) {
+        console.log('invalid --file: must be the path of a readable, non-empty UTF-8 text file (the request for the dream-only round)')
+        console.log('用法: node g_rsi.mjs --mode round --dream-only --file <文字檔>')
+        process.exit(2)
+    }
+    dreamOnly = { why }
+}
 //執行規模之命令列覆寫(未給則用 settings.rsi 之 nodesPerRound / parallelNodes / roundsPerRun; --arms、--workers 為舊名)
 let cliInt = (k) => {
     let v = argOf(k, null)
@@ -72,6 +94,12 @@ else if (mode === 'round') {
     //一次執行連跑 roundsPerRun 輪(預設 1 = 每輪跑完即停, 由人檢視後再起); 每輪 nodesPerRound 個節點、同時 parallelNodes 個
     //  提前停止: 輪末回調失敗(做夢未交付或未更新專案文件)、狀態根下有停止檔 STOP(每輪開始前檢查; 要它跑完本輪後停下就建此檔)
     let { nodesPerRound, parallelNodes, roundsPerRun } = P.run
+    //planOpt, 計畫之預算: 起跑前之計畫判斷(乾跑)與正式起輪(rsi.auto)共用同一個物件, 乾跑之計畫才會與實際起輪之計畫一致(規則 R-RUN-9)
+    let planOpt = { arms: nodesPerRound, novelty: nodesPerRound }
+    //只做夢輪次(規則 R-RUN-9; 檔之檢查見檔頭附近): 只跑 1 輪(--rounds 不採)
+    if (dreamOnly) {
+        roundsPerRun = 1
+    }
     let fpStop = path.join(st.rsi.root, 'STOP')
     //無人值守之三件事(排程器定時觸發同一道指令即可; 規則 R-RUN-4): 單一執行之鎖、起跑前自檢、事件檔
     //  未啟動(已有執行中 / 鎖逾時 / 停止檔 / 連續失敗達上限)⇒ 事件 skipped、離開碼 3; 其餘事件: run-start、round-done(每輪)、run-done、run-failed
@@ -146,7 +174,7 @@ else if (mode === 'round') {
             process.exit(3)
         }
     }
-    ev({ event: 'run-start', pid: process.pid, rounds: roundsPerRun, nodesPerRound, parallelNodes, ...(quota ? { quota: snapOf(quota) } : {}) })
+    ev({ event: 'run-start', pid: process.pid, rounds: roundsPerRun, nodesPerRound, parallelNodes, ...(dreamOnly ? { dreamOnly: true } : {}), ...(quota ? { quota: snapOf(quota) } : {}) })
     let quotaPrev = snapOf(quota)
     //補做夢(規則 R-RUN-6): 上一輪之節點已入樹而做夢未交付(額度用盡、派工失敗、行程中斷)⇒ 先以同一個輪末鉤子對該輪補做夢, 補成才起新的一輪
     //  補成: 更新該輪之 ROUND.json(hook、redream)與一頁摘要; 事件 round-done(recovered: true)—— 事件檔末尾之連續失敗計數隨之歸零
@@ -229,11 +257,15 @@ else if (mode === 'round') {
         P.monitor.reset()
         P.monitor.start()
         //輪次層之欄位於每輪開始時重設(狀態檔以合併寫入; 不重設則做夢期間仍看到上一輪之資源、採納數與重做中之節點)
-        P.setStatus({ round, stage: 'explore', startedAt: new Date().toISOString(), done: false, error: null, run: { index: index + 1, total: roundsPerRun, nodesPerRound, parallelNodes }, lastNode: null, dreamNodes: null, reworking: null, sgud: null, applied: null, wallMin: null, hookFailed: null, resources: null })
-        P.log(`===== ${roundName(round)} 開始(本次執行第 ${index + 1} / ${roundsPerRun} 輪;節點 ${nodesPerRound} 個、同時 ${parallelNodes} 個;節點 agent ${st.agents.node.id};做夢 agent ${st.agents.dream.model})=====`)
+        P.setStatus({ round, stage: 'explore', startedAt: new Date().toISOString(), done: false, error: null, run: { index: index + 1, total: roundsPerRun, nodesPerRound, parallelNodes }, lastNode: null, dreamNodes: null, reworking: null, sgud: null, applied: null, wallMin: null, hookFailed: null, resources: null, dreamOnly: dreamOnly ? true : undefined })
+        P.log(`===== ${roundName(round)} 開始(本次執行第 ${index + 1} / ${roundsPerRun} 輪;節點 ${nodesPerRound} 個、同時 ${parallelNodes} 個;節點 agent ${st.agents.node.id};做夢 agent ${st.agents.dream.model}${dreamOnly ? ';只做夢輪次(主控要求)' : ''})=====`)
+        //只做夢輪次(規則 R-RUN-9): 登記主控之要求, 輪末鉤子於 0 個可審計之節點時仍派做夢(取用即清除)
+        if (dreamOnly) {
+            P.requestDreamOnly({ why: dreamOnly.why })
+        }
         let res
         try {
-            res = await rsi.auto({ by: 'main', protocol: { round }, arms: nodesPerRound, novelty: nodesPerRound, workers: parallelNodes, noDream: st.rsi.mechanicalDream !== true })
+            res = await rsi.auto({ by: 'main', protocol: { round }, ...planOpt, workers: parallelNodes, noDream: st.rsi.mechanicalDream !== true })
         }
         catch (err) {
             P.monitor.stop()
@@ -279,6 +311,7 @@ else if (mode === 'round') {
             at: new Date().toISOString(),
             wallMin: Number(((Date.now() - t0) / 60000).toFixed(1)),
             run: { index: index + 1, total: roundsPerRun, nodesPerRound, parallelNodes },
+            ...(dreamOnly ? { dreamOnly: { why: dreamOnly.why } } : {}),
             stagesSec: res.stagesSec,
             planned: (res.items || []).map((it) => ({ id: it.id, arms: it.spec.arms, base: it.spec.base, kindOf: it.kindOf })),
             nodes: (res.nodes || []).map((n) => {
@@ -312,8 +345,8 @@ else if (mode === 'round') {
             spawnSync(process.execPath, [FP_DIGEST, String(res.round), '--out'], { cwd: st.FD_ROOT, windowsHide: true, timeout: 120000, stdio: 'ignore' })
         }
         catch (err) {}
-        //事件: 本輪結束(ok = 有節點執行成功且輪末回調未失敗)
-        ev({ event: 'round-done', round: res.round, ok: (sm.nExecuted || 0) > 0 && !(out.hook && out.hook.failed), wallMin: out.wallMin, nExecuted: sm.nExecuted || 0, nError: sm.nError || 0, hookFailed: out.hook ? out.hook.failed === true : null, best: best ? { id: best.id, S: best.S } : null, summary: res.fd ? relOf(path.join(res.fd, 'ROUND.json')) : null, ...(quotaNow ? { quota: quotaNow } : {}) })
+        //事件: 本輪結束(ok = 有節點執行成功且輪末回調未失敗; 只做夢輪次 = 做夢已交付且輪末回調未失敗 —— runner.mjs 之 roundOkOf)
+        ev({ event: 'round-done', round: res.round, ok: roundOkOf({ dreamOnly: !!dreamOnly, nExecuted: sm.nExecuted || 0, hookFailed: !!(out.hook && out.hook.failed), delivered: !!(out.hook && out.hook.dream) }), ...(dreamOnly ? { dreamOnly: true } : {}), wallMin: out.wallMin, nExecuted: sm.nExecuted || 0, nError: sm.nError || 0, hookFailed: out.hook ? out.hook.failed === true : null, best: best ? { id: best.id, S: best.S } : null, summary: res.fd ? relOf(path.join(res.fd, 'ROUND.json')) : null, ...(quotaNow ? { quota: quotaNow } : {}) })
         lock.beat()
         P.setStatus({ stage: 'round-done', wallMin: out.wallMin, hookFailed: out.hook ? out.hook.failed : null, resources })
         P.log(`===== ${roundName(res.round)} 結束: 執行 ${sm.nExecuted} / 錯誤 ${sm.nError};階梯 ${JSON.stringify(sm.ladders || {})};回測期 S ${out.nodes.map((n) => (n.S === null ? '—' : n.S)).join(' / ')}${best ? `;本輪最高 ${best.id.slice(0, 8)} S ${best.S}(七相位均 ${best.eqYrMean}、最差相位 ${best.eqYrMin}、對隨機挑之超額 ${best.excess}${typeof best.compShare === 'number' ? `;組成對照之超額 ${best.compExcess}、p ${best.compP}、組成可重現 ${Math.round(best.compShare * 100)}%` : ''})` : ''};${out.wallMin} 分 =====`)
@@ -323,12 +356,30 @@ else if (mode === 'round') {
         P.log(`資源(全機;每 ${st.resources && st.resources.sampleSec ? st.resources.sampleSec : 5} 秒取樣 ${resources.samples} 次): CPU 平均 ${resources.cpuMean}%、最高 ${resources.cpuPeak}%(上限 ${resources.limits.cpuMax === null ? '未設' : resources.limits.cpuMax});已用記憶體最高 ${resources.ramPeakGB} GB(上限 ${resources.limits.ramUsedMaxGB === null ? '未設' : resources.limits.ramUsedMaxGB});超過上限之取樣 CPU ${resources.overCpu} / 記憶體 ${resources.overRam};資源閘等待 ${resources.waits} 次共 ${resources.waitedSec} 秒;節點評估之等待 ${resources.evalWaits.n} 次共 ${resources.evalWaits.sec} 秒`)
         return { ...out, halt: out.hook && out.hook.failed ? `輪末回調失敗(${(out.hook.errors || []).join(';').slice(0, 200)})` : null }
     }
+    //stopReason, 不再起新輪之機器可讀原因(目前只有起跑前之計畫判斷給值: 'frontier-empty' / 'dream-only-busy'); 併入事件 run-done 之 reason
+    let stopReason = null
     let rr = await runRounds({
         rounds: roundsPerRun,
         runRound: runOne,
         shouldStop: async ({ index }) => {
             if (fs.existsSync(fpStop)) {
                 return `停止檔 ${path.relative(st.FD_ROOT, fpStop).replace(/\\/g, '/')} 存在`
+            }
+            //起跑前之計畫判斷(規則 R-RUN-9; 每輪開始前): 一般輪次於前緣為空時不起空輪; 只做夢輪次只在計畫為 0 個節點且無待重審之節點時起
+            //  乾跑不寫任何檔; 乾跑本身拋錯者不擋(由正式之探索照原樣報錯)
+            //  認領中之節點(planned / running)乾跑視為已占用, 而正式之探索先回收遺留者 ⇒ 有者照起(nClaimed)
+            //  待重審名單、認領名單之讀取亦在 try 內: 狀態檔損毀者不擋, 由正式之輪次照原樣處理(原行為: 輪末鉤子拋錯、記為鉤子失敗)
+            {
+                let g = null
+                try {
+                    let dryPlan = await rsi.explore({ dry: true, ...planOpt })
+                    g = planGateOf({ dreamOnly: !!dreamOnly, nItems: (dryPlan.items || []).length, nRejected: (dryPlan.rejected || []).length, nReaudit: P.pendingReauditIds().length, nClaimed: P.claimedNodeIds().length })
+                }
+                catch (err) {}
+                if (g && !g.go) {
+                    stopReason = g.reason
+                    return g.detail
+                }
             }
             //連跑多輪時, 第 2 輪起每輪開始前再查一次額度(規則 R-RUN-5; --force 只解除起跑時之自檢; 查詢失敗不擋)
             if (index > 0 && pre.quota !== false) {
@@ -344,8 +395,9 @@ else if (mode === 'round') {
         },
         log: P.log,
     })
-    P.setStatus({ stage: 'done', done: true, run: { done: rr.done.length, total: roundsPerRun, stopped: rr.stopped } })
-    ev({ event: 'run-done', rounds: rr.done.length, total: roundsPerRun, stopped: rr.stopped || null })
+    //dreamOnly: 本次執行為只做夢者標記, 否則移除(undefined 於寫檔時略去; 狀態檔以合併寫入, 不移除則會殘留上次只做夢之標記)
+    P.setStatus({ stage: 'done', done: true, run: { done: rr.done.length, total: roundsPerRun, stopped: rr.stopped, ...(stopReason ? { reason: stopReason } : {}) }, dreamOnly: dreamOnly ? true : undefined })
+    ev({ event: 'run-done', rounds: rr.done.length, total: roundsPerRun, stopped: rr.stopped || null, ...(stopReason ? { reason: stopReason } : {}) })
     if (roundsPerRun > 1 || rr.stopped) {
         P.log(`本次執行結束: 已跑 ${rr.done.length} / ${roundsPerRun} 輪${rr.stopped ? `;提前停止: ${rr.stopped}` : ''}`)
     }

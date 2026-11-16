@@ -130,6 +130,8 @@ node node_modules/w-trade-adaptivess/src/tools/initProject.mjs --root .
 ## 4. 迴圈
 
 - 起跑一輪(脫離式;人、agent、作業系統之排程器皆用同一道指令):`node g_launch.mjs round -- g_rsi.mjs --mode round`;先看計畫:`node g_rsi.mjs --mode dry`.
+- 前緣為空(下一輪之計畫為 0 個節點、無閘門拒絕、無待重審之節點)時 `--mode round` 不起空輪:事件 `run-done` 帶 `reason: 'frontier-empty'`(`rounds` 為已跑之輪數;不耗輪號、不記為失敗輪、離開碼 0);連跑多輪時第 2 輪起每輪開始前亦判斷(第 1 輪於起跑前之自檢與補做夢之後判斷).有認領中(planned / running)之節點者照起(由正式之探索先回收遺留之認領).起跑前之乾跑本身拋錯者不擋(由正式之探索照原樣報錯).
+- 要讓做夢在沒有新節點之情形下重新彙整並給方向(工具或資訊源更新之後,或對上一份做夢文件有須回應之註記):`node g_launch.mjs round -- g_rsi.mjs --mode round --dream-only --file <文字檔>`.文字檔(UTF-8;相對路徑依命令列之工作目錄,經 `g_launch.mjs` 起跑時為專案根)= 對本輪做夢之要求,原文列於做夢任務書之最前(「## 0. 主控之要求」)與做夢文件;審計 0、輪號照常遞增、只跑 1 輪(`--rounds` 不採);檔讀不到、為無效之 UTF-8 或為空 ⇒ 印 `invalid --file: must be …` 與用法、離開碼 2、不取鎖、不記事件(此檢查先於專案之組裝).下一輪之計畫有節點、有待重審之節點或有認領中之節點時不受理(事件 `run-done` 帶 `reason: 'dream-only-busy'`、離開碼 0:起一般輪次即可,做夢照常).該輪之 `round-done.ok` = 做夢已交付且輪末回調未失敗;事件 `run-start`、`round-done` 與 `rsi/STATUS.json` 帶 `dreamOnly: true`,`ROUND.json` 記 `dreamOnly.why`.要求只存於本行程之記憶體,輪末鉤子取用即清除(做夢未交付者須重新要求);未帶 `--dream-only` 時,0 個可審計之節點之輪次照舊略過做夢、做夢任務書逐字不變.
 - 等待結束:`node tools/waitEvent.mjs --since <起跑之 UTC 時刻>`;事件檔 `rsi/logs/events.jsonl`;輪末一頁摘要 `rsi/rounds/rNNN/DIGEST.md`.
 - 節點與做夢各依任務書工作;交付之文件有固定規格(`arsi.node/3`、`arsi.dream/3`;見 `src/arsi/records.mjs` 檔頭),由迴圈檢核、渲染與存檔.
 - 迴圈對每個節點之成品**重跑**取得正本數字(另換亂數種子與同分次序重放),並掃描 agent 之操作紀錄(禁區、工作夾外之寫入、評估次數).

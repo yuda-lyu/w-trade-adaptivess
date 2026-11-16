@@ -275,6 +275,8 @@ let makeTexts = ({ st, FD_ROOT }) => {
     let dreamBrief = (c) => {
         let wd = rel(c.workDir)
         let x = c.context
+        //req: 主控對本輪做夢之要求(規則 R-RUN-9; 無或為空白者為 null ⇒ 任務書與改前逐字相同)
+        let req = x.request && typeof x.request.why === 'string' && x.request.why.trim() ? x.request : null
         let L = []
         L.push(`# 做夢任務書 —— ${roundName(c.round)}`)
         L.push('')
@@ -288,12 +290,32 @@ let makeTexts = ({ st, FD_ROOT }) => {
         L.push('')
         L.push(background())
         L.push('')
+        //主控對本輪做夢之要求(規則 R-RUN-9; context.request = { why, dreamOnly }): 原文列於任務書之最前; 只做夢輪次另說明本輪之範圍
+        //  未帶要求(或要求為空白)者此節不出現, 任務書與改前逐字相同
+        if (req) {
+            L.push(`## 0. 主控之要求${req.dreamOnly ? '(本輪為「只做夢」輪次)' : ''}`)
+            L.push('')
+            if (req.dreamOnly) {
+                L.push('**本輪沒有可審計之節點**:主控(迴圈之維護者)要求你在沒有新節點之情形下做一次夢。審計範圍為空(`audits` 給空陣列;§2 之規程本輪不適用),其餘照常 —— 彙整(§3;範圍為**整棵樹與前次做夢文件**,不限本輪)、預先核對、' + (x.toolbox ? '擴建(§4)、' : '') + '給下一輪之方向、更新專案之指引文件。`synthesis.summary` 寫明本輪未執行節點與本次重審之依據;前次方向之回顧照範本逐條填(未執行者 `not-run`)。重審後仍無可派之方向時,`guidance.directions` 給空陣列並在 `synthesis.overview.adjust` 寫明理由,不必湊數(本輪此例外優先於 §3 對「向外之方向」之要求)。')
+                L.push('')
+            }
+            L.push('主控之要求(原文):')
+            L.push('')
+            for (let l of req.why.trim().split(/\r?\n/)) {
+                L.push(`> ${l}`)
+            }
+            L.push('')
+        }
         L.push('## 1. 本輪審計範圍')
         L.push('')
         L.push('| 節點 | 臂 | 起點 | 類型 | 來源方向 | 回測期 S / 最差相位 / 對隨機之超額 / 階梯 | 組成對照之超額 / p / 可重現;幾何對照之超額 / p | 否決 | agent 自報 S | 評估次數 | 迴圈檢查 | 節點文件 | 工作夾 |')
         L.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|')
         for (let n of x.nodes) {
             L.push(`| \`${n.nodeId}\` | ${n.arms.join(' + ')} | ${n.base ? n.base.slice(0, 8) : '無'} | ${n.type === 'verify' ? '驗證' : '探索'} | ${n.from ? `做夢 ${roundName(n.from.round)}` : '—'} | **${n.S}** / ${typeof n.worst === 'number' ? n.worst.toFixed(1) : '—'} / ${typeof n.excess === 'number' ? n.excess.toFixed(1) : '—'} / ${n.ladder} | ${n.comp ? `${typeof n.comp.excess === 'number' ? n.comp.excess.toFixed(1) : '—'} / ${n.comp.p} / ${typeof n.comp.share === 'number' ? `${Math.round(n.comp.share * 100)}%` : '—'}${n.comp.triggered === false ? '(組成與隨機相近)' : ''}${n.geo ? `;${typeof n.geo.excess === 'number' ? n.geo.excess.toFixed(1) : '—'} / ${n.geo.p}` : ''}` : '—'} | ${n.vetoed ? '是' : '否'} | ${n.claimedS === null ? '未報' : n.claimedS} | ${n.nEvals === null || n.nEvals === undefined ? '—' : `${n.nEvals}${typeof n.nFull === 'number' && typeof n.nFullSel === 'number' ? `(完整 ${n.nFull}、相異選集 ${n.nFullSel})` : ''}`}${typeof n.pickSec === 'number' ? `;成品每次完整評估之挑選耗時 ${n.pickSec} 秒` : ''} | ${n.issues.length ? n.issues.join(';') : '無異常'} | \`${n.docMd}\` | \`${n.workDir}/\` |`)
+        }
+        if (req && !x.nodes.length) {
+            L.push('')
+            L.push('本輪無可審計之節點。')
         }
         //任務書條款之隨機對照(src/domain/briefTrials.mjs): 讓做夢知道同一輪之節點任務書有兩種版本, 審計依各自之任務書
         {
@@ -428,7 +450,7 @@ let makeTexts = ({ st, FD_ROOT }) => {
         L.push('')
         L.push(`## ${no++}. 交付`)
         L.push('')
-        L.push(`1. \`${wd}/dream.json\`:做夢文件之 agent 部分。**照 \`${wd}/dream.template.json\` 之鍵填寫**(\`audits\` 已預填本輪各節點之 id,每個都要審);必須是合法 JSON(UTF-8、雙引號、無註解、無結尾逗號)。`)
+        L.push(`1. \`${wd}/dream.json\`:做夢文件之 agent 部分。**照 \`${wd}/dream.template.json\` 之鍵填寫**(${req && !c.nodeIds.length ? '本輪無節點,`audits` 為空陣列' : '`audits` 已預填本輪各節點之 id,每個都要審'});必須是合法 JSON(UTF-8、雙引號、無註解、無結尾逗號)。`)
         if (x.extra) {
             L.push(x.extra)
         }

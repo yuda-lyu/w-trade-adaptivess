@@ -277,7 +277,9 @@ let createArsi = ({ records, dispatch, verify, texts, hooks = {}, workDir, artif
             round,
             createdAt: nowIso(),
             agent,
-            scope: { nodes: nodeIds, reworked: reworkedIds },
+            //request(選配): 主控對本輪做夢之要求({ why, dreamOnly }; 由領域經 context.request 傳入)—— 記入文件, 日後之讀者才知本份之範圍與緣由
+            //  why 非字串或為空白者視同未帶(與任務書、渲染之判斷一致; 規則 R-RUN-9)⇒ scope 與改前相同
+            scope: { nodes: nodeIds, reworked: reworkedIds, ...(context && context.request && typeof context.request.why === 'string' && context.request.why.trim() ? { request: context.request } : {}) },
             audits: part && Array.isArray(part.audits) ? part.audits : [],
             synthesis: part && part.synthesis ? part.synthesis : null,
             guidance: part && part.guidance ? part.guidance : null,

@@ -296,6 +296,78 @@ let trailingFailures = (events) => {
     return n
 }
 
+//planGateOf, 起一輪之前依乾跑之計畫判斷是否起跑(規則 R-RUN-9; 不含領域用語: 只看數目)
+//  一般輪次: 計畫 0 個節點、無閘門拒絕、無待重審之節點、無認領中之節點 ⇒ 不起(reason 'frontier-empty'): 起了只得一個空輪(耗一個輪號、輪末鉤子無可審計而略過做夢、記為失敗輪)
+//  只做夢輪次(主控明示要求): 計畫須為 0 個節點且無待重審之節點、無認領中之節點(否則 reason 'dream-only-busy': 有節點可執行、待重審或待回收時起一般輪次即可, 做夢照常)
+//  認領中之節點(planned / running): 乾跑之計畫視之為已占用, 而正式之探索於開始時先回收遺留(認領者行程已死)之認領、使其可重新計畫 ⇒ 一般輪次須照起(讓正式之探索回收), 否則遺留之認領永遠不被回收
+/**
+ * 起一輪之前,依乾跑之計畫判斷是否起跑
+ *
+ * 一般輪次於「計畫 0 個節點、無閘門拒絕、無待重審之節點、無認領中之節點」時不起(前緣為空);只做夢輪次(明示要求)只在「計畫 0 個節點、無待重審之節點、無認領中之節點」時起。
+ * opt 非物件者視為 {}(依跨套件規格 K3),其各數目欄非正整數者視為 0。
+ *
+ * @param {Object} [opt={}] 輸入設定物件,預設{}
+ * @param {Boolean} [opt.dreamOnly=false] 輸入是否為明示要求之只做夢輪次,須嚴格為 true,預設false
+ * @param {Number} [opt.nItems=0] 輸入乾跑之計畫之節點數,非正整數視為 0,預設0
+ * @param {Number} [opt.nRejected=0] 輸入乾跑時被閘門拒絕之計畫項數,非正整數視為 0,預設0
+ * @param {Number} [opt.nReaudit=0] 輸入待重審(上一輪判重做後之新交付)之節點數,非正整數視為 0,預設0
+ * @param {Number} [opt.nClaimed=0] 輸入認領中(planned / running)之節點數,非正整數視為 0,預設0
+ * @returns {Object} 可起跑回傳 { go: true };不起回傳 { go: false, reason: 'frontier-empty' 或 'dream-only-busy', detail: 說明文字 }
+ * @example
+ * let g = planGateOf({ nItems: 0 })
+ * console.log(g.go, g.reason)
+ * // => false frontier-empty
+ * console.log(planGateOf({ dreamOnly: true, nItems: 0 }))
+ * // => { go: true }
+ */
+let planGateOf = (opt = {}) => {
+    let o = opt && typeof opt === 'object' ? opt : {}
+    let cnt = (v) => (Number.isInteger(v) && v > 0 ? v : 0)
+    let nItems = cnt(o.nItems)
+    let nRejected = cnt(o.nRejected)
+    let nReaudit = cnt(o.nReaudit)
+    let nClaimed = cnt(o.nClaimed)
+    if (o.dreamOnly === true) {
+        if (nItems > 0 || nReaudit > 0 || nClaimed > 0) {
+            return { go: false, reason: 'dream-only-busy', detail: `不受理只做夢輪次:下一輪之計畫有 ${nItems} 個節點、待重審之節點 ${nReaudit} 個、認領中之節點 ${nClaimed} 個 —— 起一般輪次即可(做夢照常;認領中者由正式之探索先回收);要先讓做夢重新彙整者,先把前緣之提案結案` }
+        }
+        return { go: true }
+    }
+    if (nItems === 0 && nRejected === 0 && nReaudit === 0 && nClaimed === 0) {
+        return { go: false, reason: 'frontier-empty', detail: '前緣為空:下一輪之計畫為 0 個節點,亦無待重審之節點、認領中之節點' }
+    }
+    return { go: true }
+}
 
-export { runRounds, resolveRunConfig, acquireRunLock, peekRunLock, appendEvent, readEvents, trailingFailures, pidAlive }
+//roundOkOf, 一輪是否算成功(事件 round-done 之 ok; 事件檔末尾之連續失敗計數據此):
+//  一般輪次: 有節點執行成功且輪末回調未失敗(原判定)
+//  只做夢輪次: 做夢已交付且輪末回調未失敗(本來就沒有節點, 不以節點數判)
+/**
+ * 判定一輪是否算成功(事件 round-done 之 ok)
+ *
+ * @param {Object} [opt={}] 輸入設定物件,預設{}
+ * @param {Boolean} [opt.dreamOnly=false] 輸入是否為只做夢輪次,預設false
+ * @param {Number} [opt.nExecuted=0] 輸入本輪執行成功之節點數,預設0
+ * @param {Boolean} [opt.hookFailed=false] 輸入輪末回調是否失敗,預設false
+ * @param {Boolean} [opt.delivered=false] 輸入做夢是否已交付(只做夢輪次才看),預設false
+ * @returns {Boolean} 回傳該輪是否算成功
+ * @example
+ * console.log(roundOkOf({ nExecuted: 3, hookFailed: false }))
+ * // => true
+ * console.log(roundOkOf({ dreamOnly: true, nExecuted: 0, delivered: true }))
+ * // => true
+ */
+let roundOkOf = (opt = {}) => {
+    let o = opt && typeof opt === 'object' ? opt : {}
+    if (o.hookFailed === true) {
+        return false
+    }
+    if (o.dreamOnly === true) {
+        return o.delivered === true
+    }
+    return Number.isInteger(o.nExecuted) && o.nExecuted > 0
+}
+
+
+export { runRounds, resolveRunConfig, acquireRunLock, peekRunLock, appendEvent, readEvents, trailingFailures, pidAlive, planGateOf, roundOkOf }
 export default runRounds

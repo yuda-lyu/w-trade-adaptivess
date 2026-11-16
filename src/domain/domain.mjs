@@ -95,7 +95,7 @@ let prevDirectionOf = (r, x, ck = null) => {
  * @param {Function} [inject.dispatch] 輸入派工器,測試可換為假 agent;未給則用 makeDispatch 依 st.agents 組成
  * @param {String} [inject.catalogFile] 輸入供 agent 閱讀之生效目錄之寫出位置,預設 arms/catalog.json
  * @param {Object} [inject.run] 輸入執行規模覆寫,與 st.rsi 合併後由 resolveRunConfig 解析
- * @returns {Object} 回傳專案物件,主要鍵:st、rsi、arsi、records、toolbox、run、monitor、catalog、selectable、idOf、taskFor(節點任務內容)、typeOf、setDirectionTypes、writeBoard(臂看板)、writeCatalogFile、writeSearchMap、validatePending(補算回測期旗標)、reverifyAll、extFill、rescanTraces、rescanSideFlow、pendingDream、redream、inactiveArmsOf、offDefArmsOf、migrateDocs、annotateDream、closeFrontier、rearmFrontier、proposeDirection、pickStore()、setStatus、getState、setState、log、envKey、layerOfSpec、domain
+ * @returns {Object} 回傳專案物件,主要鍵:st、rsi、arsi、records、toolbox、run、monitor、catalog、selectable、idOf、taskFor(節點任務內容)、typeOf、setDirectionTypes、writeBoard(臂看板)、writeCatalogFile、writeSearchMap、validatePending(補算回測期旗標)、reverifyAll、extFill、rescanTraces、rescanSideFlow、pendingDream、redream、requestDreamOnly(登記主控要求之只做夢輪次)、pendingReauditIds(待重審之節點 id)、claimedNodeIds(認領中之節點 id)、inactiveArmsOf、offDefArmsOf、migrateDocs、annotateDream、closeFrontier、rearmFrontier、proposeDirection、pickStore()、setStatus、getState、setState、log、envKey、layerOfSpec、domain
  * @example
  * let project = makeProject(st)
  * let project2 = makeProject(st, { dispatch: myDispatch })
@@ -277,6 +277,26 @@ let makeProject = (st = getSettings(), inject = {}) => {
     let setStatus = (o) => writeJson(fpStatus, { ...(readJson(fpStatus, {}) || {}), ...o, pid: process.pid, at: new Date().toISOString() })
     let getState = () => readJson(fpState, null) || { pendingReaudit: [] }
     let setState = (s) => writeJson(fpState, s)
+    //pendingReauditIds, 待重審之節點(上一輪判「重做」後之新交付; 下一次輪末鉤子併入審計範圍; 只計樹上已執行者): 輪末鉤子與起跑前之計畫判斷(規則 R-RUN-9)共用此單一來源
+    let pendingReauditIds = () => (getState().pendingReaudit || []).filter((id) => {
+        let n = rsi.store.getNode(id); return !!n && n.status === 'executed'
+    })
+    //claimedNodeIds, 認領中之節點(planned / running; 只讀索引): 起跑前之計畫判斷(規則 R-RUN-9)用 ——
+    //  乾跑之計畫視之為已占用, 而正式之探索於開始時先回收遺留(認領者行程已死)之認領; 有認領中者須照起(由正式之探索回收), 不得以乾跑之計畫為空而不起
+    let claimedNodeIds = () => rsi.store.listIndex().filter((r) => r.status === 'planned' || r.status === 'running').map((r) => r.id)
+
+    //只做夢輪次(規則 R-RUN-9): 主控明示要求時, 計畫 0 個節點之輪次仍派做夢(審計 0; 彙整、預先核對、擴建、方向照常)
+    //  requestDreamOnly({ why }): 登記一次要求(只在本行程之記憶體內; 下一次輪末鉤子取用後即清除, 不論做夢是否交付); why = 主控之要求(原文列於做夢任務書)
+    //  未登記者, 0 個節點之輪次照舊略過做夢; why 須為非空字串(前後空白去除; 全為空白視同空), 否則拋 invalid opt.why(不登記)
+    let dreamOnlyReq = null
+    let requestDreamOnly = (o) => {
+        let why = o && typeof o.why === 'string' ? o.why.trim() : ''
+        if (!why) {
+            throw new Error('invalid opt.why: must be a non-empty string')
+        }
+        dreamOnlyReq = { why }
+        return { why }
+    }
 
     //執行規模(每輪幾個節點、同時幾個、一次跑幾輪)與資源上限: 由使用端依自身設備給定(settings.rsi / settings.resources; 命令列可覆寫, 見 g_rsi.mjs)
     let run = resolveRunConfig(st.rsi || {}, inject.run || {})
@@ -950,18 +970,24 @@ let makeProject = (st = getSettings(), inject = {}) => {
 
     //afterRound, 輪末: 代理式做夢(審計 → 寫回 → 重做 / 刪除 → 方向入前緣)→ 專案回調
     domain.hooks.afterRound = async ({ round, nodes }) => {
+        //只做夢輪次(規則 R-RUN-9): 主控之要求於進入鉤子時即取用並清除(只對本次鉤子有效; 其後任何步驟拋錯亦不殘留至下一次鉤子; 做夢未交付者須由主控重新要求)
+        let req = dreamOnlyReq
+        dreamOnlyReq = null
         let lines = []
         let state = getState()
         let executed = (nodes || []).filter((n) => n.status === 'executed')
         let failed = (nodes || []).filter((n) => n.status !== 'executed').map((n) => ({ nodeId: n.id, arms: n.spec.arms, error: String((n.notes && (n.notes.error || n.notes.why)) || '').split('\n')[0].slice(0, 160) }))
-        let reaudit = (state.pendingReaudit || []).filter((id) => {
-            let n = rsi.store.getNode(id); return n && n.status === 'executed' && !executed.some((e) => e.id === id)
-        })
+        let reaudit = pendingReauditIds().filter((id) => !executed.some((e) => e.id === id))
         let nodeIds = [...executed.map((n) => n.id), ...reaudit]
-        if (nodeIds.length === 0) {
+        //  request.dreamOnly: 本輪確為 0 個可審計之節點(有節點時要求之文字仍列於任務書, 但不是只做夢輪次)
+        let request = req ? { why: req.why, dreamOnly: nodeIds.length === 0 } : null
+        if (nodeIds.length === 0 && !request) {
             lines.push('代理式做夢:本輪無可審計之節點,略過')
             writeBoard()
             return { lines, dream: null }
+        }
+        if (request) {
+            lines.push(`${request.dreamOnly ? '只做夢輪次(主控要求;本輪無節點、審計 0)' : '主控對本輪做夢之要求'}:${request.why.split(/\r?\n/)[0].slice(0, 160)}`)
         }
         setStatus({ round, stage: 'dream', dreamNodes: nodeIds })
         let before = mtimes()
@@ -1035,7 +1061,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         //臂目錄之提案: 本輪節點所提者列於做夢任務書(由做夢彙整); 提案帳之渲染檔(引擎產生; 尚無提案帳者無此檔, 任務書不列)供做夢讀: 已在帳上者不重提
         let nodeProposals = ctxNodes.flatMap((n) => n.armProposals.map((p) => ({ ...p, nodeId: n.nodeId })))
         let ledgerMd = fs.existsSync(rsi.paths.govProposalsMd) ? rel(rsi.paths.govProposalsMd) : null
-        let dr = await arsi.runDream({ round, nodeIds, reworkedIds: reaudit, context: { nodes: ctxNodes, failed, refs: prevDreams, prevDirections, maxDirections: run.nodesPerRound + 2, extra: dreamExtra, toolbox: tbInfo, armProposals: { ledger: ledgerMd, fromNodes: nodeProposals } } })
+        let dr = await arsi.runDream({ round, nodeIds, reworkedIds: reaudit, context: { nodes: ctxNodes, failed, refs: prevDreams, prevDirections, maxDirections: run.nodesPerRound + 2, extra: dreamExtra, toolbox: tbInfo, armProposals: { ledger: ledgerMd, fromNodes: nodeProposals }, ...(request ? { request } : {}) } })
         if (!dr.ok) {
             lines.push(`代理式做夢:**未交付做夢文件**(${dr.doc.agent && dr.doc.agent.error ? dr.doc.agent.error : dr.issues.join(';')});本輪節點維持未審`)
             setStatus({ stage: 'dream-failed' })
@@ -1208,7 +1234,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         await arsi.roundEnd({ round, applied: a, sgud, board })
         setStatus({ stage: 'round-end', sgud, applied: { accepted: a.accepted.length, rework: a.rework.length, deleted: a.deleted.length, proposals: a.proposals.filter((x) => x.ok).length } })
         let bad = sgudFiles.filter((f) => !sgud[f])
-        return { lines, dream: { round, applied: a, sgud, docIssues: dr.issues, tally, nPrevDirections: prevDirections.length }, ...(bad.length ? { failed: true, errors: [`做夢未更新 ${bad.join('、')}`] } : {}) }
+        return { lines, dream: { round, applied: a, sgud, docIssues: dr.issues, tally, nPrevDirections: prevDirections.length, ...(request && request.dreamOnly ? { dreamOnly: true } : {}) }, ...(bad.length ? { failed: true, errors: [`做夢未更新 ${bad.join('、')}`] } : {}) }
     }
 
     rsi = createRsi({
@@ -1802,7 +1828,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         return { ok: true }
     }
 
-    return { st, rsi, arsi, records, toolbox, typeOf, setDirectionTypes, domain, catalog, selectable, run, monitor, idOf, taskFor, writeBoard, writeCatalogFile, writeSearchMap, validatePending, reverifyAll, extFill, rescanTraces, rescanSideFlow, pendingDream, redream, inactiveArmsOf, offDefArmsOf, migrateDocs, annotateDream, closeFrontier, rearmFrontier, proposeDirection, pickStore: () => buildPickStore(st), setStatus, getState, setState, log, envKey, layerOfSpec }
+    return { st, rsi, arsi, records, toolbox, typeOf, setDirectionTypes, domain, catalog, selectable, run, monitor, idOf, taskFor, writeBoard, writeCatalogFile, writeSearchMap, validatePending, reverifyAll, extFill, rescanTraces, rescanSideFlow, pendingDream, redream, requestDreamOnly, pendingReauditIds, claimedNodeIds, inactiveArmsOf, offDefArmsOf, migrateDocs, annotateDream, closeFrontier, rearmFrontier, proposeDirection, pickStore: () => buildPickStore(st), setStatus, getState, setState, log, envKey, layerOfSpec }
 }
 
 

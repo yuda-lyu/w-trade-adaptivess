@@ -35,6 +35,10 @@ P('')
         P('## 一眼看完(迴圈之機械摘要)')
         P('')
         P(`- 本輪 ${R.wallMin} 分;節點執行 ${R.summary ? R.summary.nExecuted : '—'}、錯誤 ${R.summary ? R.summary.nError : '—'};輪末回調 ${R.hook && R.hook.failed ? '**失敗**' : '正常'}`)
+        //只做夢輪次(規則 R-RUN-9): 主控要求、本輪無節點; 要求之原文(截短)
+        if (R.dreamOnly && typeof R.dreamOnly.why === 'string') {
+            P(`- **只做夢輪次**(主控要求;本輪無節點、審計 0):${R.dreamOnly.why.replace(/\s*\r?\n\s*/g, ' ').slice(0, 300)}`)
+        }
         for (let f of facts) {
             P(`- ${f}`)
         }
@@ -124,7 +128,7 @@ if (dream) {
     let imp = g.improvements || []
     P(`改進項 ${imp.length} 筆${imp.length ? ':' : ''}`)
     for (let x of imp) {
-        P(`- 〔${x.kind}〕${String(x.target || '').slice(0, 80)}:${String(x.change || x.spec || '').slice(0, 220)}`)
+        P(`- 〔${x.kind}〕${String(x.target || '').slice(0, 80)}:${String(x.what || x.change || x.spec || '').slice(0, 220)}`)
     }
     let ex = dream.expansion || []
     if (ex.length) {

@@ -24,7 +24,7 @@ import path from 'path'
 //    audit       做夢之審計 { round, by, trust, action, evidence[], issues[], reworkBrief, deleteWhy, inactiveArms?[](審計所定之「未作用之臂」; 有此鍵者優先於節點自報) }
 //    history     重做前各次之摘要 [{ attempt, S, fingerprint, audit }]
 //  做夢文件 arsi.dream/3(/2 → /3 之選配欄見下方「/2 → /3」; /1 → /2: guidance.toolRequests(未分類之字串)改為 guidance.improvements(分類之改進項); 加 synthesis.prevDirections(前次方向之回顧); /1 之文件照常可讀可渲染):
-//    round, createdAt, updatedAt, agent, scope{ nodes[], reworked[] }
+//    round, createdAt, updatedAt, agent, scope{ nodes[], reworked[], request?{ why, dreamOnly }(主控對本輪做夢之要求; 只做夢輪次 dreamOnly 為 true 而 nodes 為空; 規則 R-RUN-9) }
 //    audits[{ nodeId, trust('trusted' | 'partial' | 'untrusted'), action('accept' | 'rework' | 'delete'), evidence[], issues[], reworkBrief?, deleteWhy?, inactiveArms?[] }]
 //    synthesis{ summary, worked[], failed[], patterns[], prevDirections?[{ round, arms[], verdict, note }], overview?{ coverage{ verdict, why }, progress{ verdict, why }, localOptimum{ risk, why }, blindSpots?[], adjust?, prevReview? }(整體研判; 值域見 OVERVIEW_*) }
 //    guidance{ directions[{ arms[], base, rationale, expect }], avoid[], openQuestions[], improvements?[{ kind, target, what, evidence? }], toolRequests?[](/1 之舊欄) }
@@ -674,6 +674,10 @@ let renderDreamMd = (d) => {
     out.push('')
     out.push(`- 規格: ${DREAM_SCHEMA};agent: ${d.agent ? `${d.agent.kind} ${d.agent.model}${d.agent.effort ? ` (${d.agent.effort})` : ''};${d.agent.startedAt} ~ ${d.agent.endedAt}(${d.agent.durationSec}s)` : '—'}`)
     out.push(`- 審計範圍: ${((d.scope && d.scope.nodes) || []).length} 個節點${d.scope && isArr(d.scope.reworked) && d.scope.reworked.length ? `(含上輪重做 ${d.scope.reworked.length})` : ''}`)
+    //主控對本輪做夢之要求(選配; scope.request = { why, dreamOnly }): 只做夢輪次(本輪無節點、審計 0)者另註明
+    if (d.scope && isObj(d.scope.request) && isStr(d.scope.request.why) && d.scope.request.why.trim()) {
+        out.push(`- 主控之要求${d.scope.request.dreamOnly === true ? '(**只做夢輪次**:本輪無節點、審計 0)' : ''}: ${d.scope.request.why.trim().replace(/\s*\r?\n\s*/g, ' ')}`)
+    }
     out.push('')
     //迴圈註記: 做夢完成後才發生、會影響本文件結論效力之事(由迴圈之維護者後補; 正文不改)
     let add = d.harness && isArr(d.harness.addendum) ? d.harness.addendum : []
