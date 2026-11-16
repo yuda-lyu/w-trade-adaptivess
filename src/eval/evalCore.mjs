@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import iseint from 'wsemi/src/iseint.mjs'
 import { P, copyRange, copyAll, pushOwn, assertIntrinsics, violationMark, violationSince, isIntegrityError, integrityError, adoptError, snapData, handOut, isMutableSnap, isBrand } from './intrinsics.mjs'
 
 const { ObjectFreeze, ObjectSeal, ReflectApply, ArrayFrom, ArrayIsArray, ArrayPrototypeJoin, ArrayBufferIsView, NumberCtor, NumberIsInteger, NumberIsFinite, MathFloor, MathRound, MathMax, MathMin, MathImul, StringCtor, JSONStringify, StructuredClone, ErrorCtor, MapPrototypeGet, MapPrototypeSet, MapPrototypeHas, MapPrototypeDelete, MapPrototypeKeys, MapIteratorNext, SetPrototypeGetSize, TypedArrayFrom, TypedArrayPrototypeGetLength, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
@@ -25,6 +26,7 @@ const { ObjectFreeze, ObjectSeal, ReflectApply, ArrayFrom, ArrayIsArray, ArrayPr
 //    ② 內建物件之完整性: ctx 之各函數與逐訊號模擬只用 ./intrinsics.mjs 於載入時擷取之參照(複製帳本之區段用 copyRange);
 //       每次呼叫 pick 後、每批 accept 呼叫(一次逐訊號模擬)後、每個擴充診斷呼叫後與其 api 函數之入口比對受保護之內建物件, 不一致即拋 code 為 EVAL_INTEGRITY 之錯誤
 //    模組之回傳值與參數先只以擷取之參照讀成評估器自有之資料(此段可能執行模組之存取子), 比對通過後才以一般寫法處理
+//  擴充診斷之資料存取(規則 R-EV-36): api.market / factor / series 與 ctx 之同名介面共用同一份取值(marketAt / factorAt / seriesAt), 於同一棒逐位相同; api 之三個函數同其他 api 函數(apiFn、入口比對)
 /**
  * 於已升冪排序之陣列 arr 的 [lo, hi) 區間內做二分搜尋, 回傳第一個「值 >= v」之位置
  * 區間內皆 < v 時回傳 hi
@@ -122,6 +124,47 @@ let makeEvaluator = (L, cfg = {}) => {
     let barMs = L.meta.barHours * 3600000
     let dow0 = new Date(time0Ms).getUTCDay()
     let timeOf = (b) => new Date(time0Ms + b * barMs).toISOString().slice(0, 19)
+
+    //marketAt / factorAt / seriesAt, 棒 b 以前(棒序 < b; 不含 b)最近 nBack 根之 K 線 / 因子 / 外部序列之值(皆為複本; 由舊至新; 規則 R-EV-36)
+    //  挑選函數之 ctx.market / ctx.factor / ctx.series(b = 決策棒; 規則 R-EV-29、R-EV-34)與擴充診斷之 api.market / api.factor / api.series(b = 呼叫端所給之棒)共用同一份取值
+    //  ⇒ 兩邊於同一棒之取值逐位相同(由結構保證, 不靠兩份程式碼同步); who 為錯誤訊息之前綴('ctx.market' 或 'api.market' 等; 訊息其餘之文字相同)
+    //  只用擷取之參照(規則 R-EV-35 ②): ctx 之各函數於 pick 執行期間被呼叫(其間不比對內建物件), api 之各函數於入口比對之後才呼叫, 二者皆不得經可被改寫之方法或全域綁定
+    //  呼叫端須先驗好 b(0 ~ nBars 之整數)、ki(kiOk)與序列名稱(serIdx): 兩邊對輸入不合者之訊息不同(ctx 之訊息沿用既有字面且帶輸入值; api 之訊息不帶輸入值), 故驗證留在各自之呼叫端
+    let marketAt = (b, nBack, who) => {
+        if (!L.px) {
+            throw new ErrorCtor(`${who}: 帳本無 K 線欄(請重建帳本)`)
+        }
+        let m = MathMax(0, MathMin(MathRound(nBack), b))
+        let o = { open: new Float64ArrayCtor(m), high: new Float64ArrayCtor(m), low: new Float64ArrayCtor(m), close: new Float64ArrayCtor(m), volume: new Float64ArrayCtor(m) }
+        for (let i = 0; i < m; i++) {
+            let p = (b - m + i) * 5
+            o.open[i] = L.px[p]
+            o.high[i] = L.px[p + 1]
+            o.low[i] = L.px[p + 2]
+            o.close[i] = L.px[p + 3]
+            o.volume[i] = L.px[p + 4]
+        }
+        return o
+    }
+    let kiOk = (ki) => NumberIsInteger(ki) && ki >= 0 && ki < nFac
+    let factorAt = (ki, b, nBack, who) => {
+        let F = L.fac
+        if (!F || TypedArrayPrototypeGetLength(F) !== nFac * nBars) {
+            throw new ErrorCtor(`${who}: 帳本無因子序列欄(請重建帳本)`)
+        }
+        let m = NumberIsFinite(nBack) ? MathMax(0, MathMin(MathRound(nBack), b)) : 0
+        return copyRange(Float64ArrayCtor, F, ki * nBars + b - m, ki * nBars + b)
+    }
+    //serAvail, 訊息用之可用名稱(帳本未建入外部序列者另述)
+    let serAvail = () => (serNames.length ? ArrayPrototypeJoin(serNames, '、') : '無;帳本未建入外部序列')
+    let seriesAt = (si, b, nBack, who) => {
+        let S = L.ser
+        if (!S || TypedArrayPrototypeGetLength(S) !== serNames.length * nBars) {
+            throw new ErrorCtor(`${who}: 帳本之外部序列欄與名稱不符(請重建帳本)`)
+        }
+        let m = NumberIsFinite(nBack) ? MathMax(0, MathMin(MathRound(nBack), b)) : 0
+        return copyRange(Float64ArrayCtor, S, si * nBars + b - m, si * nBars + b)
+    }
 
     //meta, 交給挑選函數之靜態欄(複本; 帳本自身之陣列不外露)
     //  只含結構屬性; ntAll 為訓練期之進場數, 屬「靜態、含決策日之後」之樣本內計數(要走勢前向之計數請用 ctx.stat)
@@ -495,60 +538,40 @@ let makeEvaluator = (L, cfg = {}) => {
                 return copyRange(Int32ArrayCtor, L.xExt, x0, cx[s])
             }
             //market, 標的於決策棒以前最近 nBack 根 K 線(不含決策棒; 各陣列為複本, 由舊至新)
+            //  取值為評估器之共用實作 marketAt(與擴充診斷之 api.market 同一份; 規則 R-EV-36)
             let market = (nBack = 180) => {
                 if (!alive) {
                     throw deadErr()
                 }
-                if (!L.px) {
-                    throw new ErrorCtor('ctx.market: 帳本無 K 線欄(請重建帳本)')
-                }
-                let m = MathMax(0, MathMin(MathRound(nBack), b))
-                let o = { open: new Float64ArrayCtor(m), high: new Float64ArrayCtor(m), low: new Float64ArrayCtor(m), close: new Float64ArrayCtor(m), volume: new Float64ArrayCtor(m) }
-                for (let i = 0; i < m; i++) {
-                    let p = (b - m + i) * 5
-                    o.open[i] = L.px[p]
-                    o.high[i] = L.px[p + 1]
-                    o.low[i] = L.px[p + 2]
-                    o.close[i] = L.px[p + 3]
-                    o.volume[i] = L.px[p + 4]
-                }
-                return o
+                return marketAt(b, nBack, 'ctx.market')
             }
             //factor, 因子 ki(序同 ctx.meta.keyNames)於決策棒以前最近 nBack 根 K 棒之值(Float64Array 複本, 由舊至新; 不含決策棒; 缺值 NaN; 規則 R-EV-29)
             //  慣例同 market: 只含棒序 < 決策棒者 ⇒ 無前視; 即觸發進場所用之同一份序列(原值)
             //  ⇒ 策略於某棒進場 ⇔ 其各條件(ctx.meta.keySym / keyTh / keyOr)於該棒皆有值, and 條件全成立, 且(無 or 條件, 或 or 條件至少一個成立)
+            //  取值為共用實作 factorAt(與 api.factor 同一份; 規則 R-EV-36); 序號不合之訊息沿用既有字面(帶輸入值)
             let factor = (ki, nBack = 180) => {
                 if (!alive) {
                     throw deadErr()
                 }
-                if (!NumberIsInteger(ki) || ki < 0 || ki >= nFac) {
+                if (!kiOk(ki)) {
                     throw new ErrorCtor(`ctx.factor: 因子序號不合法 ${ki}`)
                 }
-                let F = L.fac
-                if (!F || TypedArrayPrototypeGetLength(F) !== nFac * nBars) {
-                    throw new ErrorCtor('ctx.factor: 帳本無因子序列欄(請重建帳本)')
-                }
-                let m = NumberIsFinite(nBack) ? MathMax(0, MathMin(MathRound(nBack), b)) : 0
-                return copyRange(Float64ArrayCtor, F, ki * nBars + b - m, ki * nBars + b)
+                return factorAt(ki, b, nBack, 'ctx.factor')
             }
             //series, 外部序列 name(ctx.meta.seriesNames 之一)於決策棒以前最近 nBack 根 K 棒之值(Float64Array 複本, 由舊至新; 不含決策棒; 缺值 NaN; 規則 R-EV-34)
             //  慣例同 factor: 只含棒序 < 決策棒者(slice 之終點 = 決策棒之起點, 不含) ⇒ 無前視; 序列於建帳本時以棒之開盤時間對位並於帳本終點截斷(src/eval/ledgerBuild.mjs),
             //  其值視為「於該棒收盤時已得知」(與因子、K 線同一約定)——量在該棒收盤後才得知者, 使用端須自行把它標在其後之棒(合約 §3)
-            //  帳本未建入任何外部序列、或名稱不在其內 ⇒ 拋錯(訊息列出可用之名稱)
+            //  帳本未建入任何外部序列、或名稱不在其內 ⇒ 拋錯(訊息列出可用之名稱; 沿用既有字面, 帶輸入值)
+            //  取值為共用實作 seriesAt(與 api.series 同一份; 規則 R-EV-36)
             let series = (name, nBack = 180) => {
                 if (!alive) {
                     throw deadErr()
                 }
                 let si = MapPrototypeGet(serIdx, name)
                 if (si === undefined) {
-                    throw new ErrorCtor(`ctx.series: 無此序列 ${typeof name === 'string' ? JSONStringify(name) : StringCtor(name)}(可用: ${serNames.length ? ArrayPrototypeJoin(serNames, '、') : '無;帳本未建入外部序列'})`)
+                    throw new ErrorCtor(`ctx.series: 無此序列 ${typeof name === 'string' ? JSONStringify(name) : StringCtor(name)}(可用: ${serAvail()})`)
                 }
-                let S = L.ser
-                if (!S || TypedArrayPrototypeGetLength(S) !== serNames.length * nBars) {
-                    throw new ErrorCtor('ctx.series: 帳本之外部序列欄與名稱不符(請重建帳本)')
-                }
-                let m = NumberIsFinite(nBack) ? MathMax(0, MathMin(MathRound(nBack), b)) : 0
-                return copyRange(Float64ArrayCtor, S, si * nBars + b - m, si * nBars + b)
+                return seriesAt(si, b, nBack, 'ctx.series')
             }
             let day = MathFloor(b / bpd)
             //ctx.prev: 前一選集之複本(規則 R-EV-35 ①; 原為評估器所記錄之選集本身, 改它即改了已記錄之選集)
@@ -1689,6 +1712,11 @@ let makeEvaluator = (L, cfg = {}) => {
         //      bySide{ long, short }{ orders, pnl, winRate }: 該次重放之兩側下單數與損益(各相位平均; 同 metrics.op.bySide 之定義)
         //    replaceNull({ grp?, nGroups?, actDays?, half?, draws? }) → { draws, mean, sd, p, z, excess, thirdsMean }: 配對隨機替換(組預設 = 方向; 活躍度預設 = 累計進場數, actDays > 0 改為近期)
         //    sideGroups()、geoGroups(nTp, nSl) → { grp, nGroups }; summarize(vals) → 同上之統計; rand(k) → 亂數產生器(與成品、既有虛無之亂數互不相干)
+        //    market(bar, nBack?)、factor(ki, bar, nBack?)、series(name, bar, nBack?)(規則 R-EV-36): 棒序 < bar 之最近 nBack 根之 K 線 / 因子 / 外部序列之值(複本; 由舊至新; nBack 預設 180)
+        //      取值與 ctx.market / ctx.factor / ctx.series 於決策棒 bar 之呼叫逐位相同(同一份實作); bar 須為 0 ~ K 棒數之整數(否則拋錯; 訊息不帶輸入值), 名稱見 meta.keyNames / meta.seriesNames
+        //      用途: 依「各決策之決策棒以前之行情 / 因子 / 外部序列狀態」把成品之選集分組後以 simulate 重放(損益依狀態之歸因)
+        //      擴充診斷於評估完成後才執行, 介面無從得知呼叫端拿某棒之值去為哪一次決策分組 —— 為某次決策分組時, bar 須用該決策自己之決策棒(phases[].bars)或更早者;
+        //        用較晚之棒 = 把較晚之資訊挪到較早之決策(前視), 與「不得把較晚做出之選集挪到較早之決策使用」同一條(只寫於合約, 不以程式強制; 同 pre)
         let ext = null
         if (Array.isArray(opt.ext) && opt.ext.length) {
             ext = {}
@@ -1828,6 +1856,38 @@ let makeEvaluator = (L, cfg = {}) => {
                 let g = sideGeoGroups(a, z)
                 return { grp: Int32Array.from(g.grp), nGroups: g.nGroups }
             })
+            //資料存取(規則 R-EV-36): market(bar, nBack)、factor(ki, bar, nBack)、series(name, bar, nBack) —— 棒序 < bar 之最近 nBack 根之值(複本), 取值與 ctx 之同名介面共用同一份實作(marketAt / factorAt / seriesAt)
+            //  同 simulate 等需比對之 api 函數: 以 apiFn 包裝, 入口先比對內建物件(guardExt), 其下之一般寫法(含 wsemi 之 iseint)於比對之後才執行; 參數不經物件取值(iseint 對物件不呼叫任何方法; ki 以 Number.isInteger、name 以 Map 之查找、nBack 同 ctx 之慣例)
+            //  檢查依參數位置之先後(ki / name, 再 bar); 錯誤訊息不帶輸入值(跨套件規格〈輸入參數之檢測機制〉§6 V20): 指明介面、參數名與期望(bar 之上限 = 帳本之 K 棒數, 即可取到帳本之末棒)
+            //  bar 之判定為 iseint(安全整數之數字或其數字字串; 通過者以 Number 轉為數字): 0 ~ nBars(-0 與 0 之取值相同)
+            //  擴充診斷於評估完成後才執行, 此處無從得知呼叫端拿某棒之值去為哪一次決策分組 ⇒ 「為某次決策分組須用該決策自己之決策棒或更早者」只寫於合約(§7), 不以程式強制(同 pre 之不得反向使用)
+            let barOf = (fnName, bar) => {
+                let v = iseint(bar) ? NumberCtor(bar) : NaN
+                if (!(v >= 0 && v <= nBars)) {
+                    throw new ErrorCtor(`api.${fnName}: bar 須為 0 ~ ${nBars} 之整數`)
+                }
+                return v
+            }
+            //  三個函數於 apiOf 內以 apiFn 另包並凍結(每個診斷各一份函數物件: 一個診斷於函數物件上掛屬性、改 call 等, 不影響其他診斷; 既有之 api 函數物件為各診斷共用, 見 sgud/state/state.md 之已知缺口)
+            let dataMarket = (bar, nBack = 180) => {
+                guardExt('ext')
+                return marketAt(barOf('market', bar), nBack, 'api.market')
+            }
+            let dataFactor = (ki, bar, nBack = 180) => {
+                guardExt('ext')
+                if (!kiOk(ki)) {
+                    throw new ErrorCtor(nFac > 0 ? `api.factor: ki 須為 0 ~ ${nFac - 1} 之整數(meta.keyNames 之序號)` : 'api.factor: 帳本無因子(meta.keyNames 為空)')
+                }
+                return factorAt(ki, barOf('factor', bar), nBack, 'api.factor')
+            }
+            let dataSeries = (name, bar, nBack = 180) => {
+                guardExt('ext')
+                let si = MapPrototypeGet(serIdx, name)
+                if (si === undefined) {
+                    throw new ErrorCtor(`api.series: name 須為 meta.seriesNames 之一(可用: ${serAvail()})`)
+                }
+                return seriesAt(si, barOf('series', bar), nBack, 'api.series')
+            }
             let rand = (k = 0) => mulberry32(seed + 32452843 + (NumberIsInteger(k) ? k : 0) * 7919)
             //apiOf, 每個擴充診斷各給一份 api(規則 R-EV-35 ①: meta 與各相位之選集 / tag 皆為該診斷自己之複本; 一個診斷改它, 不影響其他診斷)
             let apiOf = () => Object.freeze({
@@ -1860,6 +1920,9 @@ let makeEvaluator = (L, cfg = {}) => {
                 replaceNull,
                 sideGroups,
                 geoGroups,
+                market: ObjectFreeze(apiFn(dataMarket)),
+                factor: ObjectFreeze(apiFn(dataFactor)),
+                series: ObjectFreeze(apiFn(dataSeries)),
                 rand,
             })
             for (let x of opt.ext) {

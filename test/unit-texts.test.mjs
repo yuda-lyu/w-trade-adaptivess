@@ -200,6 +200,10 @@ describe('texts:任務類型與共用工具區', function () {
         assert(/^;\*\*無向外之方向\*\*.*未達/.test(outwardNoteOf({ nOut: 0, nDirs: 1, nUntried: 0, nChecked: OUT_CHECK_MIN - 1 })), '只核 1 ~ 2 種者照舊標示')
         assert(s.includes('## 4. 擴建:共用工具(由你統籌並親手完成)'))
         assert(s.includes('**交付前執行 `node g_toolbox.mjs` 自檢**'), '自檢入口(與迴圈之機械檢查同一套規則;做夢不必自寫檢查腳本)')
+        //規則 R-EV-36: 擴充診斷之資料存取(api.market / factor / series)列於做夢任務書之擴建一節(細節見合約 §7), 並註明「為某次決策分組只用該決策自己之決策棒或更早者」; 未啟用共用工具區者不出現
+        assert(s.includes('`market` / `factor` / `series` 取某棒以前之行情、因子、外部序列之值'), '擴充診斷之資料存取之說明')
+        assert(s.includes('為某次決策分組時 `bar` 只用該決策自己之決策棒或更早者'), '資料存取之分組須用該決策之決策棒或更早者(前視)')
+        assert(!texts.dreamBrief(ctx(null)).includes('`market` / `factor` / `series`'))
         assert(s.includes('本輪節點自報:`n1aaaaaa` seat.mjs(依側配席)'))
         assert(s.includes('## 5. 參考') && s.includes('## 6. 交付') && s.includes('## 7. 禁止'))
         assert(s.includes('共用工具區 `rsi/toolbox/`、下述之專案指引文件'))

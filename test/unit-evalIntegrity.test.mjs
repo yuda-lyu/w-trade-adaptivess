@@ -815,6 +815,105 @@ describe('evalCore 內建物件之完整性(R-EV-35 ②):被改即評估失敗(E
         assert(err.items.includes('Array.prototype.[Symbol(Symbol.iterator)]'), err.message)
     })
 
+    it('擴充診斷之 api.market / api.factor / api.series 於內建物件被改時與既有之 api 函數(geoGroups)一致:入口比對 ⇒ 該次呼叫拋 EVAL_INTEGRITY(where = ext)、替身未被呼叫、bar 之判定(iseint)於比對之後才執行;診斷攔下並改回者該次評估仍失敗', () => {
+        //R-EV-36 / R-EV-35 ②: 三個新介面經 apiFn / guardExt 包裝(同既有之 api 函數); 內建物件被改 ⇒ 入口比對即拋, 不執行其下之一般寫法(含 wsemi 之 iseint: bar 以數字字串給, 其判定經 String.prototype.trim 與 RegExp.prototype.test)
+        let calls = {
+            market: (api) => api.market('12', 5),
+            factor: (api) => api.factor(1, '12', 5),
+            series: (api) => api.series('a', '12', 5),
+            geoGroups: (api) => api.geoGroups(3, 3),
+        }
+        let targets = [
+            [Math, 'round', 'Math.round'], [Math, 'min', 'Math.min'], [Math, 'max', 'Math.max'],
+            [Number, 'isInteger', 'Number.isInteger'], [Number, 'isSafeInteger', 'Number.isSafeInteger'],
+            [TA_PROTO, 'set', '%TypedArray%.prototype.set'], [Map.prototype, 'get', 'Map.prototype.get'],
+            [String.prototype, 'trim', 'String.prototype.trim'], [RegExp.prototype, 'test', 'RegExp.prototype.test'],
+        ]
+        for (let [nm, call] of Object.entries(calls)) {
+            for (let [o, k, label] of targets) {
+                let fired = Object.create(null)
+                let inner = null
+                let err = integrityOf(() => ev.evalPolicy(ids, {
+                    phases: [0],
+                    nullDraws: 0,
+                    ext: [{
+                        name: 'x',
+                        fn: (api) => {
+                            withStubs([[o, k]], fired, () => {
+                                try {
+                                    call(api)
+                                }
+                                catch (e) {
+                                    inner = e
+                                }
+                            })
+                            return { text: 'x' }
+                        },
+                    }],
+                }))
+                let w = `${nm} × ${label}`
+                assert.equal(inner && inner.code, 'EVAL_INTEGRITY', `${w}: 入口比對`)
+                assert.equal(inner.where, 'ext', w)
+                assert(inner.items.includes(label), `${w}: ${inner.items}`)
+                assert.deepEqual(Object.keys(fired), [], `${w}: 替身未被呼叫`)
+                assert.equal(err && err.code, 'EVAL_INTEGRITY', `${w}: 診斷攔下並改回, 該次評估仍失敗`)
+            }
+        }
+        //未被改時照常
+        let m = ev.evalPolicy(ids, { phases: [0], nullDraws: 0, ext: [{ name: 'ok', fn: (api) => ({ m: api.market('12', 5).close.length, f: api.factor(1, '12', 5).length, s: api.series('a', '12', 5).length }) }] })
+        assert.deepEqual([m.ext.ok.m, m.ext.ok.f, m.ext.ok.s], [5, 5, 5])
+    })
+
+    it('擴充診斷之 api.market 之 nBack 於呼叫中(其 valueOf)改內建物件:該次回傳仍正確(只用擷取之參照,替身未被呼叫)、評估以 EVAL_INTEGRITY 失敗;api.factor / api.series 之物件型 nBack 不被呼叫任何方法(同 ctx 之慣例)', () => {
+        //R-EV-36: 共用之取值(marketAt)只用擷取之參照(MathMin / MathMax 等); 改而不改回者於其後之比對偵測到
+        let fired = Object.create(null)
+        let got = null
+        let ref = null
+        let err = keep([[Math, 'min'], [Math, 'max']], () => integrityOf(() => ev.evalPolicy(ids, {
+            phases: [0],
+            nullDraws: 0,
+            ext: [{
+                name: 'x',
+                fn: (api) => {
+                    ref = api.market(700, 3)
+                    let nb = {
+                        valueOf() {
+                            let stub = function () {
+                                fired.minmax = true
+                                throw new Error('替身被呼叫')
+                            }
+                            Math.min = stub
+                            Math.max = stub
+                            return 3
+                        },
+                    }
+                    got = api.market(700, nb)
+                    return { text: 'x' }
+                },
+            }],
+        })))
+        assert.equal(err && err.code, 'EVAL_INTEGRITY', String(err))
+        assert.equal(err.where, 'ext')
+        assert(err.items.includes('Math.min') && err.items.includes('Math.max'), err.message)
+        assert.deepEqual(Object.keys(fired), [], '替身未被呼叫')
+        let MKS = ['open', 'high', 'low', 'close', 'volume']
+        assert(got && ref && MKS.every((k) => got[k].length === 3 && Buffer.compare(Buffer.from(got[k].buffer), Buffer.from(ref[k].buffer)) === 0), '該次回傳與未被改者相同')
+        //api.factor / api.series: 物件型 nBack 非有限數 ⇒ 0 根, 不呼叫其 valueOf / toString(慣例同 ctx.factor / ctx.series)
+        let called = 0
+        let obj = {
+            valueOf() {
+                called++
+                return 3
+            },
+            toString() {
+                called++
+                return '3'
+            },
+        }
+        let m = ev.evalPolicy(ids, { phases: [0], nullDraws: 0, ext: [{ name: 'y', fn: (api) => ({ f: api.factor(0, 700, obj).length, s: api.series('a', 700, obj).length }) }] })
+        assert.deepEqual([m.ext.y.f, m.ext.y.s, called], [0, 0, 0])
+    })
+
     it('擴充診斷之函數內改內建物件 ⇒ 評估失敗(where = ext);診斷攔下 api 內之錯誤並改回者亦然', () => {
         let pick = (ctx) => ({ ids: ids(ctx), tag: ctx.k % 2 })
         let accept = (sig, book) => book.open < 3
@@ -923,7 +1022,7 @@ describe('命令列(src/cli/eval.mjs):挑選模組 / 擴充診斷模組之載入
     before(() => {
         t = makeTmp('evalIntegrityCli')
         root = path.join(t.dir, 'proj')
-        writeSynthLedger(path.join(root, 'ledger', 'eval'), { n: 60, nBars: 2400, seed: 7 })
+        writeSynthLedger(path.join(root, 'ledger', 'eval'), { n: 60, nBars: 2400, seed: 7, series: ['ser_a'] })
         fs.mkdirSync(path.join(root, 'rsi', 'toolbox', 'metrics'), { recursive: true })
         //期間: 帳本起點 2022-07-01, 4 小時棒 2400 根(400 日); 回測期自第 200 日起
         fs.writeFileSync(path.join(root, 'settings.json'), JSON.stringify({
@@ -1047,6 +1146,26 @@ describe('命令列(src/cli/eval.mjs):挑選模組 / 擴充診斷模組之載入
         finally {
             fs.rmSync(fpExt, { force: true })
             fs.rmSync(fpGood, { force: true })
+        }
+    })
+
+    it('擴充診斷用 api.market / api.factor / api.series(R-EV-36):--ext-test ⇒ EXT_OK;bar 不合者 ⇒ EXT_FAIL、訊息指明介面與範圍而不帶輸入值', () => {
+        //命令列之試跑與完整評估同一條路徑(載入診斷、以 api 執行); 範例診斷依各決策之決策棒以前之序列取值
+        let fpUse = path.join(root, 'rsi', 'toolbox', 'metrics', 'use_data.mjs')
+        fs.writeFileSync(fpUse, 'export default function (api) { let p = api.phases[0]; let bar = p.bars[p.bars.length - 1]; let s = api.series("ser_a", bar, 30); let m = api.market(bar, 30); let f = api.factor(0, bar, 30); return { text: "n " + s.length + "/" + m.close.length + "/" + f.length } }\n', 'utf8')
+        let fpBad = path.join(root, 'rsi', 'toolbox', 'metrics', 'bad_bar.mjs')
+        fs.writeFileSync(fpBad, 'export default function (api) { return { text: String(api.series("ser_a", 987654321, 5).length) } }\n', 'utf8')
+        try {
+            let r1 = run(['--pick', pickOk, '--ext-test', fpUse])
+            assert.equal(r1.status, 0, r1.out.slice(0, 800))
+            assert(/EXT_OK use_data[^\n]*: n 30\/30\/30/.test(r1.out), r1.out.slice(0, 800))
+            let r2 = run(['--pick', pickOk, '--ext-test', fpBad])
+            assert.equal(r2.status, 4, r2.out.slice(0, 800))
+            assert(/EXT_FAIL bad_bar: api\.series: bar 須為 0 ~ 2400 之整數\r?\n/.test(r2.out) && !r2.out.includes('987654321'), r2.out.slice(0, 800))
+        }
+        finally {
+            fs.rmSync(fpUse, { force: true })
+            fs.rmSync(fpBad, { force: true })
         }
     })
 })
