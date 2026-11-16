@@ -2,8 +2,8 @@ import assert from 'assert'
 import fs from 'fs'
 import path from 'path'
 import { loadLedger } from '../src/eval/ledger.mjs'
-import { makeEvaluator } from '../src/eval/evalCore.mjs'
-import { makeTmp, writeSynthLedger } from './tools/synthLedger.mjs'
+import { makeTmp, writeSynthLedger, makeTrainEvaluator as makeEvaluator } from './tools/synthLedger.mjs'
+//makeEvaluator: 合成帳本即訓練期帳本 ⇒ makeTrainEvaluator 補上 L.ntStatic 再建評估器(見 test/tools/synthLedger.mjs)
 
 
 //擴充診斷之資料存取(規則 R-EV-36): api.market(bar, nBack)、api.factor(ki, bar, nBack)、api.series(name, bar, nBack)
@@ -175,7 +175,7 @@ describe('擴充診斷之資料存取(api.market / api.factor / api.series)', fu
         })
     })
 
-    it('函數物件凍結且每個診斷各一份:一個診斷於 api.market / factor / series 上掛屬性、改 call ⇒ 不影響其他診斷(既有之 api 函數物件共用為已知缺口,見 sgud/state/state.md)', () => {
+    it('函數物件凍結且每個診斷各一份:一個診斷於 api.market / factor / series 上掛屬性、改 call ⇒ 不影響其他診斷(既有之六個 api 函數見下一案)', () => {
         //R-EV-35 ① / R-EV-36: 資料不共用 —— 新增之三個函數不新增診斷之間之旁路
         let seen = []
         let rec = (api) => {
@@ -212,6 +212,78 @@ describe('擴充診斷之資料存取(api.market / api.factor / api.series)', fu
         assert.equal(before.call, 'true', 'api.market.call 仍為 Function.prototype.call')
         //各診斷各一份函數物件
         assert(seen.length === 2 && seen[0].market !== seen[1].market && seen[0].factor !== seen[1].factor && seen[0].series !== seen[1].series)
+    })
+
+    it('既有之六個 api 函數(simulate / summarize / replaceNull / sideGroups / geoGroups / rand)之函數物件亦凍結且每個診斷各一份:一個診斷於其上掛屬性、改 call ⇒ 不影響其他診斷;函數之行為不變', () => {
+        //R-EV-35 ①: 資料不共用 —— 診斷之間不得有旁路(前一診斷改後一診斷所呼叫之函數); 函數物件為每個診斷另包並凍結, 其下之實作仍共用(行為不變)
+        const NAMES = ['simulate', 'summarize', 'replaceNull', 'sideGroups', 'geoGroups', 'rand']
+        let seen = []
+        let rec = (api) => {
+            seen.push(api)
+            let sim = api.simulate(api.phases.map((p) => p.sels))
+            let sg = api.sideGroups()
+            let rd = api.rand(3)
+            return {
+                text: 'rec',
+                mark: NAMES.map((k) => String(api[k].mark)),
+                call: NAMES.map((k) => String(api[k].call === Function.prototype.call)),
+                simMean: sim.mean,
+                simBy: sim.byPhase,
+                sg: [sg.nGroups, Array.from(sg.grp).slice(0, 20)],
+                gg: api.geoGroups(2, 2).nGroups,
+                sm: api.summarize([1, 2, 3]).mean,
+                rn: api.replaceNull({ grp: sg.grp, nGroups: sg.nGroups, draws: 4 }),
+                r1: rd(),
+                r2: rd(),
+                z: [api.rand()(), api.rand(1)(), api.rand(1.5)(), api.rand('3')()],
+                obs: api.obs.mean,
+            }
+        }
+        let m = ev.evalPolicy(pick, {
+            accept,
+            ext: [
+                { name: 'before', fn: rec },
+                { name: 'mut', fn: (api) => {
+                    let errs = []
+                    let tried = 0
+                    for (let k of NAMES) {
+                        for (let prop of ['call', 'apply', 'mark']) {
+                            tried++
+                            try {
+                                api[k][prop] = function () {
+                                    return null
+                                }
+                            }
+                            catch (e) {
+                                errs.push(e instanceof TypeError)
+                            }
+                        }
+                    }
+                    return { text: 'mut', frozen: NAMES.every((k) => Object.isFrozen(api[k])), tried, errs: errs.length, allType: errs.every((x) => x) }
+                } },
+                { name: 'after', fn: rec },
+            ],
+        })
+        for (let k of ['before', 'mut', 'after']) {
+            assert.equal(m.ext[k].error, undefined, `${k}: ${m.ext[k].error}`)
+        }
+        assert.deepEqual([m.ext.mut.frozen, m.ext.mut.tried, m.ext.mut.errs, m.ext.mut.allType], [true, 18, 18, true], '凍結: 掛屬性與改 call 皆被拒(TypeError)')
+        let { ms: _a, ...before } = m.ext.before
+        let { ms: _b, ...after } = m.ext.after
+        assert.deepEqual(after, before, '前一診斷之改動不影響後一診斷所得之值')
+        assert.deepEqual(before.call, NAMES.map(() => 'true'), '各函數之 call 仍為 Function.prototype.call')
+        assert.deepEqual(before.mark, NAMES.map(() => 'undefined'))
+        //函數之行為不變: 以成品自己之選集重放 = 成品之績效; 兩個分組各 2 組; 亂數產生器可重現且逐次不同
+        assert(Math.abs(before.simMean - before.obs) < 1e-9, `simulate(成品自己之選集) = 成品之績效: ${before.simMean} vs ${before.obs}`)
+        assert.deepEqual([before.sg[0], before.sm], [2, 2])
+        assert(before.gg >= 1 && before.rn.draws === 4 && before.r1 !== before.r2)
+        //rand(k): 種子 = 評估之種子 + 32452843 + k × 7919(k 非整數者視為 0; 與成品、既有虛無之亂數互不相干); 產生器為 mulberry32 ⇒ 對獨立算出之值
+        //固定值: 以獨立之 mulberry32 參考實作(公開算法; 種子 = 11 + 32452843 + k × 7919)算出, 不與被測之 mulberry32 共用實作(其常數被改時期望值不會跟著改)
+        assert.deepEqual([before.r1, before.r2], [0.667054069461301, 0.1860890865791589], 'rand(3) 之序列')
+        assert.deepEqual(before.z, [0.6773378413636237, 0.5891620756592602, 0.6773378413636237, 0.6773378413636237], 'rand() = rand(0)、rand(1) 不同於 rand(0)、非整數(1.5、字串 3)視為 0')
+        //各診斷各一份函數物件
+        assert(seen.length === 2 && NAMES.every((k) => seen[0][k] !== seen[1][k]), '每個診斷之函數物件不同一')
+        assert(NAMES.every((k) => typeof seen[0][k] === 'function' && Object.isFrozen(seen[0][k]) && Object.isFrozen(seen[1][k])))
     })
 
     it('bar 須為 0 ~ K 棒數之整數(依 wsemi iseint):負數、小數、超出、非數字、非有限數、包裝物件者三個介面皆拋錯(不帶輸入值、不取值);邊界值與數字字串(通過後轉為數字)照常', () => {

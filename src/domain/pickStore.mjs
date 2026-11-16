@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { loadPick } from '../eval/pickLoader.mjs'
+import { isIntegrityError, integrityError, assertIntrinsics, pushOwn } from '../eval/intrinsics.mjs'
 
 //共同儲存「自適應挑選策略」區(規則 R-REC-25): <狀態根>/picks/
 //  目的: 各節點(探索與驗證皆含)交付之挑選模組統一歸檔 —— 程式碼之逐位複本 + 由迴圈以同一評估器重跑所得之回測期績效與必要之欄位,
@@ -17,6 +18,9 @@ import { loadPick } from '../eval/pickLoader.mjs'
 //  本區由迴圈產生(輪末與主控審定後), agent 唯讀; 來源 = 節點文件(迴圈重跑之數字, 不是 agent 自報)與各節點工作夾之 pick.mjs
 
 let SCHEMA = 1
+
+//中止本次更新之說明(完整性錯誤之訊息前綴)
+const ABORT_NOTE = '共同儲存區之更新已中止(未寫入任何檔)'
 
 //欄位定義(寫入 README.md 與 index.json.fields)
 /**
@@ -214,6 +218,8 @@ let readmeText = (storeRel, n, asOf) => [
 //  st: getSettings() 之結果(records.nodeDir / workDir / dreamDir、rsi.root、FD_ROOT)
 /**
  * 產生或更新共同儲存「自適應挑選策略」區(<rsi.root>/picks/;會寫入 pick.mjs 複本、info.json、index.json、INDEX.md、README.md)
+ * 先載入各節點之挑選模組取 meta(模組之頂層程式於本行程執行),全部載入後才寫檔;挑選模組改了內建物件(完整性錯誤)者中止本次更新: 不寫任何檔、拋出 code 為 EVAL_INTEGRITY 之錯誤(訊息指明節點與被改之項目)
+ * 入口與每個節點載入後亦比對受保護之內建物件(成品之延後執行之程式、前次更新留下之改動皆於寫檔前偵測); 其他載入錯誤(靜態檢查未過、匯入失敗)不中止: 該策略之 meta 為 null、仍收錄
  *
  * @param {Object} st 輸入設定物件(getSettings 之結果),讀取 st.records.nodeDir、st.records.workDir、st.records.dreamDir、st.rsi.root、st.FD_ROOT
  * @returns {Promise<Object>} 回傳 { dir, n, copied, skipped, holdoutSigned }:儲存區路徑、策略數、新複製之程式碼數、略過清單、已有保留期正負號之數量
@@ -221,10 +227,11 @@ let readmeText = (storeRel, n, asOf) => [
  * let r = await buildPickStore(st)
  */
 let buildPickStore = async (st) => {
+    //入口比對(規則 R-EV-35 ②): 本行程之內建物件已被改者(前次更新載入之成品所改, 迴圈行程不因此終止)不再更新 —— 無候選、各候選皆於載入前被拒者亦然
+    assertIntrinsics('pick-store', ABORT_NOTE)
     let dir = path.join(st.rsi.root, 'picks')
     let rel = (p) => (p ? path.relative(st.FD_ROOT, p).replace(/\\/g, '/') : '')
     let storeRel = rel(dir)
-    fs.mkdirSync(dir, { recursive: true })
     let fams = familyMap(st.records.dreamDir)
     let hoFile = readJson(path.join(dir, '_holdout.json'))
     let hoItems = (hoFile && hoFile.items) || {}
@@ -232,6 +239,13 @@ let buildPickStore = async (st) => {
     let skipped = []
     let copied = 0
     let docs = fs.existsSync(st.records.nodeDir) ? fs.readdirSync(st.records.nodeDir).filter((f) => /^[0-9a-f]{16}\.json$/.test(f)).sort() : []
+    //第一段: 讀節點文件並載入各節點之成品取 meta(只讀; 不寫任何檔)
+    //  loadPick 於本行程執行成品之頂層程式: 成品改了內建物件者(完整性錯誤, code 為 EVAL_INTEGRITY; 規則 R-EV-35 ②)⇒ 本行程之內建物件可能已被改, 即中止本次更新:
+    //  不寫任何檔(區內維持上次之內容; 其後之寫檔亦不再依賴被改之內建物件)、拋完整性錯誤(訊息指明節點; 呼叫端記錄: 迴圈於輪末之記錄、命令列工具之 ERROR 行與離開碼 3)。
+    //  其他錯誤(靜態檢查未過、匯入失敗等)維持原處置: meta 為 null、該策略仍收錄
+    //  每個 await 恢復後、處理資料前再比對一次: 成品之延後執行之程式(微任務)可在 loadPick 內之比對之後、本函數恢復之前改內建物件;
+    //  錯誤一律以 intrinsics.mjs 之 integrityError 建立(只用擷取之參照; 內建物件已被改時不經全域之 Error / String)
+    let cands = []
     for (let f of docs) {
         let d = readJson(path.join(st.records.nodeDir, f))
         if (!d || !d.nodeId || !d.spec || !Array.isArray(d.spec.arms) || !d.harness || d.harness.ok !== true || !d.harness.score) {
@@ -245,18 +259,30 @@ let buildPickStore = async (st) => {
             skipped.push(`${String(d.nodeId).slice(0, 8)}(工作夾無 pick.mjs)`)
             continue
         }
-        let dst = path.join(dir, d.nodeId, 'pick.mjs')
+        //交付版之位元組於載入前讀入、第二段複製此份(meta 與複本取自同一份; 第二段不再讀來源檔)
         let code = fs.readFileSync(src)
+        let short = String(d.nodeId).slice(0, 8)
+        let meta = null
+        try {
+            meta = (await loadPick(src)).meta
+        }
+        catch (err) {
+            if (isIntegrityError(err)) {
+                throw integrityError(err.where, err.items, `${ABORT_NOTE}: 節點 ${short}`)
+            }
+        }
+        assertIntrinsics('pick-store', `${ABORT_NOTE}: 節點 ${short}`)
+        pushOwn(cands, { d, code, meta })
+    }
+    //第二段: 寫入(複製交付版、info.json、index.json、INDEX.md、README.md)
+    fs.mkdirSync(dir, { recursive: true })
+    for (let { d, code, meta } of cands) {
+        let dst = path.join(dir, d.nodeId, 'pick.mjs')
         if (!fs.existsSync(dst) || !fs.readFileSync(dst).equals(code)) {
             fs.mkdirSync(path.dirname(dst), { recursive: true })
             fs.writeFileSync(dst, code)
             copied++
         }
-        let meta = null
-        try {
-            meta = (await loadPick(src)).meta
-        }
-        catch (err) {}
         d.__docMd = path.join(st.records.nodeDir, `${d.nodeId}.md`)
         let ho = hoItems[d.nodeId] ? { ...hoItems[d.nodeId], asOf: hoFile.asOf || null } : null
         let info = infoOf(d, { meta, fam: fams.get(String(d.nodeId).slice(0, 8)) || null, ho, rel, storeRel })

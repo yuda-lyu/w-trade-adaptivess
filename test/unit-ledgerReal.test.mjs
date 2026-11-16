@@ -5,7 +5,7 @@ import runStrategy from 'w-trade-backtest/src/runStrategy.mjs'
 import ott from 'w-trade-backtest/src/ott.mjs'
 import { getSettings } from '../src/cfg.mjs'
 import { loadLedger, loadIds } from '../src/eval/ledger.mjs'
-import { makeEvaluator } from '../src/eval/evalCore.mjs'
+import { makeEvaluator, ntStaticOf } from '../src/eval/evalCore.mjs'
 
 
 //評估帳本(真實資料; 訓練期 + 回測期)與官方回測之一致性(R-EV-1、R-EV-4); 帳本或策略庫不在本機時略過(兩者皆不入版控)
@@ -79,6 +79,9 @@ describe('ledger(真實帳本):與官方 runStrategy 逐張一致', function () 
         this.timeout(170000)
         let L = loadLedger(st.eval.ledgerDir)
         let ids = loadIds(st.eval.ledgerDir)
+        //評估帳本涵蓋訓練期與回測期: 界線為訓練期之終點棒序(同命令列 src/cli/eval.mjs; 此案不讀 ctx.meta.ntAll, 但須明給才能建評估器)
+        let trainEndBar = Math.round((Date.parse(`${st.periods.train.end}Z`) - Date.parse(`${L.meta.time0}Z`)) / (L.meta.barHours * 3600000))
+        L.ntStatic = ntStaticOf(L, trainEndBar)
         let ev = makeEvaluator(L, { warmupDays: st.eval.warmupDays, cadenceDays: st.eval.cadenceDays })
         let seed = 20261114
         let rnd = () => {

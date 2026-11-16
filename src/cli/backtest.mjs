@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { getSettings, argOf } from '../cfg.mjs'
 import { loadLedger } from '../eval/ledger.mjs'
-import { makeEvaluator, lowerBound, mulberry32 } from '../eval/evalCore.mjs'
+import { makeEvaluator, ntStaticOf, mulberry32 } from '../eval/evalCore.mjs'
 import { loadPick } from '../eval/pickLoader.mjs'
 import { P as PI, assertIntrinsics, isIntegrityError } from '../eval/intrinsics.mjs'
 import { backtestCfg } from '../domain/backtestCfg.mjs'
@@ -63,10 +63,7 @@ let barOf = (iso) => Math.round((Date.parse(`${iso}Z`) - time0Ms) / barMs)
 let trainEndBar = barOf(st.periods.train.end)
 let btStartBar = barOf(st.periods.backtest.start)
 //訓練期之進場數(靜態欄; 不含回測期)並與訓練期帳本核對
-let ntStatic = new Int32Array(L.n)
-for (let s = 0; s < L.n; s++) {
-    ntStatic[s] = lowerBound(L.ent, L.off[s], L.off[s + 1], trainEndBar) - L.off[s]
-}
+let ntStatic = ntStaticOf(L, trainEndBar)
 {
     let b = fs.readFileSync(path.join(st.eval.ledgerDir, 'off.u32'))
     let offT = new Uint32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength))

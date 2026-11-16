@@ -3,7 +3,7 @@ import path from 'path'
 import crypto from 'crypto'
 import { getSettings, argOf } from '../cfg.mjs'
 import { loadLedger } from '../eval/ledger.mjs'
-import { makeEvaluator, lowerBound } from '../eval/evalCore.mjs'
+import { makeEvaluator, ntStaticOf } from '../eval/evalCore.mjs'
 import { pathToFileURL } from 'url'
 import { loadPick, scanSnippet } from '../eval/pickLoader.mjs'
 import { P as PI, pushOwn, safeJson, assertIntrinsics, isIntegrityError, adoptError } from '../eval/intrinsics.mjs'
@@ -162,14 +162,9 @@ if (periodArg === 'backtest' && btStartBar >= L.nBars) {
     console.log(`ERROR 評估帳本(${st.eval.ledgerDir};終點 ${L.meta.endTime})未涵蓋回測期(${st.periods.backtest.start} 起);請先建帳本: node g_build.mjs`)
     process.exit(2)
 }
-//靜態欄 ctx.meta.ntAll: 只計訓練期之進場數(策略庫之屬性; 不含訓練期以後之資訊)
-if (L.nBars > trainEndBar) {
-    let ntStatic = new Int32Array(L.n)
-    for (let s = 0; s < L.n; s++) {
-        ntStatic[s] = lowerBound(L.ent, L.off[s], L.off[s + 1], trainEndBar) - L.off[s]
-    }
-    L.ntStatic = ntStatic
-}
+//靜態欄 ctx.meta.ntAll: 只計訓練期之進場數(策略庫之屬性; 不含訓練期以後之資訊); makeEvaluator 要求明給訓練期之界線
+//  帳本只涵蓋訓練期者(終點 ≤ 訓練期之終點)其值 = 帳本全期之進場數(進場棒皆小於帳本之 K 棒數)
+L.ntStatic = ntStaticOf(L, trainEndBar)
 let win = periodArg === 'train' ? { toBar: trainEndBar } : { fromBar: btStartBar }
 //亂數種子: 預設 settings.eval.seed; --seed 只在迴圈之重放(ARSI_HARNESS=1)時生效
 let seedArg = argOf('seed', null)

@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import iseint from 'wsemi/src/iseint.mjs'
 import { P, copyRange, copyAll, pushOwn, assertIntrinsics, violationMark, violationSince, isIntegrityError, integrityError, adoptError, snapData, handOut, isMutableSnap, isBrand } from './intrinsics.mjs'
 
-const { ObjectFreeze, ObjectSeal, ReflectApply, ArrayFrom, ArrayIsArray, ArrayPrototypeJoin, ArrayBufferIsView, NumberCtor, NumberIsInteger, NumberIsFinite, MathFloor, MathRound, MathMax, MathMin, MathImul, StringCtor, JSONStringify, StructuredClone, ErrorCtor, MapPrototypeGet, MapPrototypeSet, MapPrototypeHas, MapPrototypeDelete, MapPrototypeKeys, MapIteratorNext, SetPrototypeGetSize, TypedArrayFrom, TypedArrayPrototypeGetLength, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
+const { ObjectFreeze, ObjectSeal, ReflectApply, ArrayFrom, ArrayIsArray, ArrayPrototypeJoin, ArrayBufferIsView, NumberCtor, NumberIsInteger, NumberIsFinite, MathFloor, MathRound, MathMax, MathMin, MathImul, StringCtor, JSONStringify, StructuredClone, ErrorCtor, MapPrototypeGet, MapPrototypeSet, MapPrototypeHas, MapPrototypeDelete, MapPrototypeKeys, MapIteratorNext, SetPrototypeGetSize, TypedArrayFrom, TypedArrayPrototypeGetLength, TypedArrayPrototypeGetToStringTag, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
 
 
 //快速評估核心:「項目之事件帳本 + 於各決策時點只憑過去資訊挑子集(可另給逐訊號之執行規則)+ 往後視窗之結果彙整」
@@ -53,6 +53,36 @@ let lowerBound = (arr, lo, hi, v) => {
 }
 
 /**
+ * 逐策略之訓練期進場數: 進場棒 < trainEndBar 之訂單數(帳本之逐單欄依進場棒升冪, 以二分搜尋取得; 自帳本起點起算, 不另依設定之訓練期起點扣除其前之進場 —— 同命令列原有之算法)
+ * makeEvaluator 要求呼叫端以此明給訓練期界線(L.ntStatic = ntStaticOf(L, trainEndBar)): ctx.meta.ntAll 只計訓練期之進場, 不含訓練期以後之資訊
+ * 帳本全為訓練期者(無回測期、保留期之資料)給 L.nBars; **帳本涵蓋訓練期以後者(命令列之評估帳本含回測期、回測期重放之全期帳本)須給訓練期之終點棒序, 不可給 L.nBars**(否則訓練期以後之進場數被帶進 ctx.meta.ntAll)
+ * 入口先比對受保護之內建物件(規則 R-EV-35 ②; 被改拋 code 為 EVAL_INTEGRITY 之錯誤); trainEndBar 之檢查依 wsemi iseint(安全整數之數字或其數字字串; 錯誤訊息不帶輸入值)
+ *
+ * @param {Object} L 輸入由 loadLedger 取得之帳本物件
+ * @param {Integer} trainEndBar 輸入訓練期之終點棒序(0 以上之整數; 進場棒小於此值者計入; 大於等於 L.nBars 者為全期)
+ * @returns {Int32Array} 回傳長度為 L.n 之陣列, 第 s 個為策略 s 於訓練期之進場數
+ * @example
+ * let st = getSettings()
+ * let L = loadLedger(st.eval.ledgerDir)
+ * //評估帳本涵蓋訓練期與回測期: 界線為訓練期之終點棒序(依帳本之 time0 與每棒小時數自設定之訓練期終點換算; 同命令列 src/cli/eval.mjs)
+ * let trainEndBar = Math.round((Date.parse(`${st.periods.train.end}Z`) - Date.parse(`${L.meta.time0}Z`)) / (L.meta.barHours * 3600000))
+ * L.ntStatic = ntStaticOf(L, trainEndBar)
+ * let ev = makeEvaluator(L, { warmupDays: 180, cadenceDays: 7 })
+ */
+let ntStaticOf = (L, trainEndBar) => {
+    assertIntrinsics('ledger-load')
+    let b = iseint(trainEndBar) ? NumberCtor(trainEndBar) : NaN
+    if (!(b >= 0)) {
+        throw new ErrorCtor('invalid trainEndBar: must be a non-negative integer')
+    }
+    let nt = new Int32ArrayCtor(L.n)
+    for (let s = 0; s < L.n; s++) {
+        nt[s] = lowerBound(L.ent, L.off[s], L.off[s + 1], b) - L.off[s]
+    }
+    return nt
+}
+
+/**
  * 以種子建立可重現之偽亂數產生器(mulberry32)
  * 同一種子產生之序列固定, 供評估器之虛無抽樣等需可重現亂數處使用
  *
@@ -89,7 +119,7 @@ let r4 = (x) => Math.round(x * 10000) / 10000
  * 以訂單帳本建立快速評估器
  * 評估器於各決策時點只憑決策棒以前之資訊呼叫挑選函數取得選集, 再彙整其後視窗之結果(操作績效、新鮮度、虛無檢定等); 詳細語義見檔頭說明
  *
- * @param {Object} L 輸入由 loadLedger 取得之帳本物件
+ * @param {Object} L 輸入由 loadLedger 取得之帳本物件; 須另給 L.ntStatic(Int32Array, 長度 L.n, 逐策略於訓練期之進場數; 以 ntStaticOf(L, 訓練期之終點棒序) 取得, 帳本全為訓練期者為 ntStaticOf(L, L.nBars)); 未給或型態、長度不合者拋 invalid L.ntStatic: must be … 之錯誤(不回退為全期進場數)
  * @param {Object} [cfg={}] 輸入設定物件,預設{}
  * @param {Integer} [cfg.warmupDays=180] 輸入暖機日數,預設180
  * @param {Integer} [cfg.cadenceDays=7] 輸入決策間隔日數,預設7
@@ -101,7 +131,10 @@ let r4 = (x) => Math.round(x * 10000) / 10000
  * @param {Integer} [cfg.seed=1] 輸入亂數種子,evalPolicy未於opt指定時採用,預設1
  * @returns {Object} 回傳評估器物件, 含方法: evalPolicy(評估一個挑選函數, 回傳完整評估結果), runPick(於一個相位依序呼叫挑選函數), opOf(操作績效), freshOf(新鮮度), nullOf(同劑量虛無), nullActOf(同活躍度虛無), nullSideActOf(同側同活躍度虛無), nullSideGeoOf(同側幾何分組虛無), sideGeoGroups(幾何分組), simWindows(視窗模擬), decisionBars(相位之決策棒), 以及屬性 meta(結構靜態欄)、timeOf(K棒序號轉時間字串)
  * @example
- * let L = loadLedger('./data/ledger/eval')
+ * let st = getSettings()
+ * let L = loadLedger(st.eval.ledgerDir)
+ * let trainEndBar = Math.round((Date.parse(`${st.periods.train.end}Z`) - Date.parse(`${L.meta.time0}Z`)) / (L.meta.barHours * 3600000))
+ * L.ntStatic = ntStaticOf(L, trainEndBar)
  * let ev = makeEvaluator(L, { warmupDays: 60, cadenceDays: 7 })
  * let { pick, accept } = await loadPick('./examples/pick_example.mjs')
  * let m = ev.evalPolicy(pick, { accept, phases: [0, 3], horizons: [3, 7], nullDraws: 16, seed: 11 })
@@ -168,10 +201,16 @@ let makeEvaluator = (L, cfg = {}) => {
 
     //meta, 交給挑選函數之靜態欄(複本; 帳本自身之陣列不外露)
     //  只含結構屬性; ntAll 為訓練期之進場數, 屬「靜態、含決策日之後」之樣本內計數(要走勢前向之計數請用 ctx.stat)
-    //  帳本涵蓋訓練期以外之期間時(回測期重放), 由呼叫端給 L.ntStatic(只計訓練期), 使此欄不含訓練期以後之資訊
+    //  訓練期之界線由呼叫端明給 L.ntStatic(= ntStaticOf(L, 訓練期之終點棒序); 帳本全為訓練期者為 ntStaticOf(L, L.nBars)), 使此欄不含訓練期以後之資訊;
+    //  未給(或型態、長度不合)者拒絕建評估器, 不回退為帳本全期之進場數 —— 帳本涵蓋訓練期以後者(回測期重放)回退即把其後之資訊帶進此欄(評估器無從得知帳本是否涵蓋訓練期以後)
+    let ntGiven = L.ntStatic
+    //型別以內部槽判定(不看原型鏈: 改了原型之其他定型陣列、偽造原型之物件不算 Int32Array; 跨 realm 之真 Int32Array 算)
+    if (TypedArrayPrototypeGetToStringTag(ntGiven) !== 'Int32Array' || TypedArrayPrototypeGetLength(ntGiven) !== n) {
+        throw new ErrorCtor('invalid L.ntStatic: must be an Int32Array of length L.n (entries per strategy within the training period; see ntStaticOf)')
+    }
     let ntAll = new Int32Array(n)
     for (let s = 0; s < n; s++) {
-        ntAll[s] = L.ntStatic ? L.ntStatic[s] : L.off[s + 1] - L.off[s]
+        ntAll[s] = ntGiven[s]
     }
     //tie, 各策略固定之亂數(Uint32; 由序號經雜湊而得, 與策略之任何屬性無關): 排序同分時作次鍵用 —— 序號是策略檔之排序位置, 帶有資訊, 不宜當次鍵
     //  cfg.tieSalt(選配; 整數; 預設 0 = 正本): 迴圈之重放用 —— 以另一組固定之同分次序重放(規則 R-EV-22)
@@ -1738,6 +1777,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 }
             }
             //apiFn, 包裝 api 之函數: 其內(含以 accept 重放之逐訊號模擬)偵測到之完整性錯誤一律記於 tripped
+            //  apiOf 對每個診斷各包一次並凍結(函數物件不共用: 一個診斷於函數物件上掛屬性、改 call 等, 不影響其他診斷); 其下之實作(下列各函數)為各診斷共用之內部函數, 不外露
             let apiFn = (fn) => (...args) => {
                 try {
                     return ReflectApply(fn, undefined, args)
@@ -1756,15 +1796,15 @@ let makeEvaluator = (L, cfg = {}) => {
                 let ge = v.filter((x) => x >= obs).length
                 return { draws: v.length, mean: r4(s.mean), sd: r4(s.sd), p: r4((1 + ge) / (1 + v.length)), z: s.sd > 0 ? r4((obs - s.mean) / s.sd) : 0, excess: r4(obs - s.mean), ...(th ? { thirdsMean: th.map(r4) } : {}) }
             }
-            let summarize = apiFn((v) => {
+            let summarize = (v) => {
                 let a = ArrayFrom(v, prim)
                 let th0 = v.thirds
                 let th = th0 ? ArrayFrom(th0, prim) : null
                 guardExt('ext')
                 return summarizeOf(a, th)
-            })
+            }
             let simScratch = null
-            let simulate = apiFn((selsByPhase, tagsByPhase = null, sOpt = null) => {
+            let simulate = (selsByPhase, tagsByPhase = null, sOpt = null) => {
                 //第一段: 讀參數(只用擷取之參照); 檢查之先後與錯誤訊息同原寫法
                 if (!ArrayIsArray(selsByPhase) || selsByPhase.length !== runs.length) {
                     throw new ErrorCtor('simulate: 須給與成品相同相位數之選集陣列')
@@ -1826,8 +1866,8 @@ let makeEvaluator = (L, cfg = {}) => {
                 let nP = Math.max(1, os.length)
                 let sideOf = (o) => ({ orders: r4(sc.side[o] / nP), pnl: r4(sc.side[o + 1] / nP), winRate: sc.side[o + 2] > 0 ? r4(sc.side[o + 3] / sc.side[o + 2]) : 0 })
                 return { mean: byPhase.reduce((a, v) => a + v, 0) / byPhase.length, byPhase, thirds: os.every((o) => o.t3) ? [0, 1, 2].map((g) => os.reduce((a, o) => a + o.t3[g], 0) / os.length) : null, bySide: { long: sideOf(0), short: sideOf(4) }, byGroup: groupRowsOf(sc.grp, ssAll, nP) }
-            })
-            let replaceNull = apiFn((o = {}) => {
+            }
+            let replaceNull = (o = {}) => {
                 //第一段: 讀參數(各欄只讀一次; 其後之判斷皆先以 Number.isInteger / isFinite 篩選, 不對物件取值)
                 let oGrp = o.grp
                 let grp = oGrp ? TypedArrayFrom(Int32ArrayCtor, oGrp) : null
@@ -1843,19 +1883,19 @@ let makeEvaluator = (L, cfg = {}) => {
                 let d = Number.isInteger(oDraws) && oDraws > 0 ? Math.min(oDraws, 64) : Math.max(1, Math.min(64, nullDraws || 16))
                 let v = nullGroupActOf(runs, accept, d, seed + 49979687, Number.isInteger(oHalf) && oHalf >= 0 ? oHalf : 50, g.grp, g.nGroups, oAct || 0)
                 return summarizeOf(Array.from(v), v.thirds)
-            })
-            let sideGroups = apiFn(() => {
+            }
+            let sideGroups = () => {
                 guardExt('ext')
                 nullSideActOf([], null, 0, 0)
                 return { grp: Int32Array.from(sideGrp), nGroups: 2 }
-            })
-            let geoGroups = apiFn((nTp = 3, nSl = 3) => {
+            }
+            let geoGroups = (nTp = 3, nSl = 3) => {
                 let a = prim(nTp)
                 let z = prim(nSl)
                 guardExt('ext')
                 let g = sideGeoGroups(a, z)
                 return { grp: Int32Array.from(g.grp), nGroups: g.nGroups }
-            })
+            }
             //資料存取(規則 R-EV-36): market(bar, nBack)、factor(ki, bar, nBack)、series(name, bar, nBack) —— 棒序 < bar 之最近 nBack 根之值(複本), 取值與 ctx 之同名介面共用同一份實作(marketAt / factorAt / seriesAt)
             //  同 simulate 等需比對之 api 函數: 以 apiFn 包裝, 入口先比對內建物件(guardExt), 其下之一般寫法(含 wsemi 之 iseint)於比對之後才執行; 參數不經物件取值(iseint 對物件不呼叫任何方法; ki 以 Number.isInteger、name 以 Map 之查找、nBack 同 ctx 之慣例)
             //  檢查依參數位置之先後(ki / name, 再 bar); 錯誤訊息不帶輸入值(跨套件規格〈輸入參數之檢測機制〉§6 V20): 指明介面、參數名與期望(bar 之上限 = 帳本之 K 棒數, 即可取到帳本之末棒)
@@ -1868,7 +1908,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 }
                 return v
             }
-            //  三個函數於 apiOf 內以 apiFn 另包並凍結(每個診斷各一份函數物件: 一個診斷於函數物件上掛屬性、改 call 等, 不影響其他診斷; 既有之 api 函數物件為各診斷共用, 見 sgud/state/state.md 之已知缺口)
+            //  api 之九個函數(simulate、summarize、replaceNull、sideGroups、geoGroups、rand 與此三個)皆於 apiOf 內以 apiFn 另包並凍結(每個診斷各一份函數物件: 一個診斷於函數物件上掛屬性、改 call 等, 不影響其他診斷)
             let dataMarket = (bar, nBack = 180) => {
                 guardExt('ext')
                 return marketAt(barOf('market', bar), nBack, 'api.market')
@@ -1915,15 +1955,15 @@ let makeEvaluator = (L, cfg = {}) => {
                         : { bars: [], sels: [], tags: [], groups: [] })
                 }))),
                 obs: Object.freeze({ mean: obs, byPhase: ops.map((o) => o.eqYr), thirds: obsThirds.slice() }),
-                simulate,
-                summarize,
-                replaceNull,
-                sideGroups,
-                geoGroups,
+                simulate: ObjectFreeze(apiFn(simulate)),
+                summarize: ObjectFreeze(apiFn(summarize)),
+                replaceNull: ObjectFreeze(apiFn(replaceNull)),
+                sideGroups: ObjectFreeze(apiFn(sideGroups)),
+                geoGroups: ObjectFreeze(apiFn(geoGroups)),
                 market: ObjectFreeze(apiFn(dataMarket)),
                 factor: ObjectFreeze(apiFn(dataFactor)),
                 series: ObjectFreeze(apiFn(dataSeries)),
-                rand,
+                rand: ObjectFreeze(apiFn(rand)),
             })
             for (let x of opt.ext) {
                 let te = Date.now()
@@ -2056,5 +2096,5 @@ let makeEvaluator = (L, cfg = {}) => {
 }
 
 
-export { makeEvaluator, lowerBound, mulberry32 }
+export { makeEvaluator, lowerBound, mulberry32, ntStaticOf }
 export default makeEvaluator

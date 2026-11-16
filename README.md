@@ -29,7 +29,7 @@ import WTradeAdaptivess from './src/WTradeAdaptivess.mjs'
 import { writeSynthLedger } from './test/tools/synthLedger.mjs'
 
 
-let { loadLedger, makeEvaluator, loadPick } = WTradeAdaptivess
+let { loadLedger, ntStaticOf, makeEvaluator, loadPick } = WTradeAdaptivess
 
 
 let test = async () => {
@@ -42,7 +42,9 @@ let test = async () => {
     ms.push({ ledger: { nStrategies: info.n, nBars: info.nBars, nOrders: info.nOrders } })
 
     //L, ev: 讀帳本並建評估器(暖機 60 日後每 7 日決策一次; 每次決策只看得到決策棒以前之資訊)
+    //  訓練期之界線須明給(ctx.meta.ntAll 只計訓練期之進場數): 此帳本全為訓練期, 給 L.nBars; 帳本涵蓋訓練期以後者給訓練期之終點棒序
     let L = loadLedger(`${root}/ledger`)
+    L.ntStatic = ntStaticOf(L, L.nBars)
     let ev = makeEvaluator(L, { warmupDays: 60, cadenceDays: 7 })
 
     //pk: 挑選模組(依合約 contract/pick-contract.md 撰寫之檔: 預設匯出 pick(ctx), 選配匯出 accept(sig, book)); 節點 agent 所寫者即此形式
@@ -114,11 +116,12 @@ node node_modules/w-trade-adaptivess/src/tools/initProject.mjs --root .
 - 建帳本:`node g_build.mjs`(由 `source.libraryRoot` 之策略庫與 K 線,產生各策略之進出場與每單位損益;止於回測期終點).
 - 外部序列(選配):策略庫以外、屬標的自身之序列,由專案備成與因子檔同格式之檔 `<名>.json` = `[{ time, value }]`(`time` 為 K 棒之開盤時間,與 K 線同一字串格式;缺值之棒不列),置於 `settings.source.seriesDir`;建帳本時對位到 K 棒並於帳本終點截斷(`ser.f64`、`meta.seriesNames`),挑選函數以 `ctx.series(name, nBack)` 取決策棒以前之值(不含決策棒).序列之值視為於其標記之棒收盤時已得知,得知較晚者須由使用端標在其後之棒(見合約).名稱限英文字母起首之英數與底線(至多 32 字);檔名以底線起首者略過.未設定者不建入,既有結果不變(帳本鍵不因此改變).
 - 評估:`node g_eval.mjs --pick <模組.mjs> --mode quick|full [--out <結果.json>]`.挑選函數自帳本起點連續執行,只有落在評估期之決策計入績效.
+- 直接以 API 單獨使用評估器(`makeEvaluator(L, cfg)`):須明給訓練期之界線 —— `L.ntStatic = ntStaticOf(L, 訓練期之終點棒序)`(**評估帳本涵蓋訓練期與回測期,界線為訓練期之終點棒序〔依帳本之 `time0` 與每棒小時數自 `settings.periods.train.end` 換算〕,不可給 `L.nBars`**;只有全為訓練期之帳本〔如 `g.mjs` 之合成帳本〕才給 `ntStaticOf(L, L.nBars)`),`ctx.meta.ntAll` 只計訓練期之進場數;未給(或型態、長度不合)者拋 `invalid L.ntStatic: must be …`,**不回退為帳本全期之進場數**(帳本涵蓋訓練期以後者,回退會把其後之資訊帶進該欄).命令列(`g_eval.mjs`、`g_backtest.mjs`)自設定之訓練期終點給界線,行為不變.`loadLedger` 對 K 線欄 `px.f64`(有此檔者)核對長度 = 5 × K 棒數,不符拋 `invalid px.f64: must be …(請重建帳本)`(舊帳本無此檔者 `px` 為 null,取用 `ctx.market` 時拋「帳本無 K 線欄」).
 - 挑選模組之形狀、`ctx` 之每個介面(`stat`、`orders`、`entryDays` / `entryBars`、`exitDays` / `exitBars`、`market`、`factor`、`series`、`meta`、`state`、`rand`)、`accept(sig, book)`、分帳、輸出之讀法與擴充診斷之寫法,全部寫在合約 `contract/pick-contract.md`(專案內為 `docs/pick-contract.md`).
 - 判讀:`S = 0.7 × 七相位平均 + 0.3 × 最差相位`;階梯 1 ~ 3 與否決見 `src/eval/score.mjs` 檔頭.
 - 擴充診斷:共用工具區 `metrics/*.mjs` 每次完整評估自動載入;可自帶看板值(`board`)、提示(`flag`)、「不計為挑選內容」(`notContent`)與量尺之子集(`subset`).診斷可用 `api.market(bar, nBack)`、`api.factor(ki, bar, nBack)`、`api.series(name, bar, nBack)` 取某棒以前之 K 線、因子、外部序列之值(與 `ctx` 之同名介面於決策棒 `bar` 之取值逐位相同),依各決策當時之狀態把成品之選集分組後以 `api.simulate` 重放;為某次決策分組時 `bar` 須用該決策自己之決策棒或更早者(不以程式強制,見合約 §7).
 - 評估器之狀態不受模組之寫入影響(挑選模組、擴充診斷模組與評估器同在一個 JavaScript realm;合約 §1):
-  - 資料不共用:交給模組之物件一律為複本或凍結 / 封裝之物件(`ctx.meta` 每次執行一份、`ctx.prev` 為複本、`accept` 之 `sig` / `book` 每次呼叫前重寫、擴充診斷之 `api` 每個診斷一份);`tag` 只收可結構化複製之資料,於 `pick` 回傳時取快照並凍結;`ctx` 之函數只在該次 `pick` 呼叫內有效.
+  - 資料不共用:交給模組之物件一律為複本或凍結 / 封裝之物件(`ctx.meta` 每次執行一份、`ctx.prev` 為複本、`accept` 之 `sig` / `book` 每次呼叫前重寫、擴充診斷之 `api` 每個診斷一份,其九個函數〔`simulate`、`summarize`、`replaceNull`、`sideGroups`、`geoGroups`、`rand`、`market`、`factor`、`series`〕之函數物件亦每個診斷各一份並凍結);`tag` 只收可結構化複製之資料,於 `pick` 回傳時取快照並凍結;`ctx` 之函數只在該次 `pick` 呼叫內有效.
   - 內建物件之完整性:評估器只用載入時擷取之內建方法(`src/eval/intrinsics.mjs`);載入模組後、評估器各方法與 `loadLedger` 之入口、每次 `pick` 後、每批 `accept` 後、每個擴充診斷後、讀帳本前與輸出前比對受保護之內建物件,被改即評估失敗(錯誤 code `EVAL_INTEGRITY`,列出被改之項目;`g_eval.mjs` 印 `ERROR EVAL_INTEGRITY …`、離開碼 3,`--ext-test` 印 `EXT_FAIL`、離開碼 4).
   - 仍只靠合約與審計者:模組層變數跨相位 / 跨模擬保存、檔案與行程介面之取用(靜態檢查為字樣層級之防呆)、受保護清單以外之內建物件;不另隔離 realm.
   - 成本:每次比對約 80 µs(約 1000 個屬性描述);一次完整評估約一萬次比對(每批 `accept` 呼叫一次);合成帳本之實測耗時增加約兩成至三成,大半在逐訊號迴圈之交出物件重寫與擷取函數之呼叫,比對本身約占 1 ~ 2%(見 `sgud/state/state.md`).
@@ -145,9 +148,9 @@ npm test
 
 | 測試檔 | 案例數 | 範圍 |
 |---|---|---|
-| `unit-evalCore.test.mjs` | 34 | 評估核心:無前視、執行規則、各虛無、歸因、擴充診斷之介面 |
+| `unit-evalCore.test.mjs` | 37 | 評估核心:無前視、執行規則、各虛無、歸因、擴充診斷之介面 |
 | `unit-evalIntegrity.test.mjs` | 37 | 評估器之狀態不受模組之寫入影響:交出之物件為複本或凍結(改寫 `ctx.prev` / `ctx.meta` / `book` / `tag` 結果不變)、內建物件被改即 `EVAL_INTEGRITY`(挑選函數、`accept`、擴充診斷、模組頂層與延後執行之程式、延遲讀取帳本欄)、ctx 之各函數與逐訊號模擬不經可被改寫之方法;擴充診斷之資料存取(`api.market` / `factor` / `series`)與 `simulate` 等需比對之 api 函數同樣於入口比對;含命令列之載入處 |
-| `unit-extData.test.mjs` | 13 | 擴充診斷之資料存取:`api.market` / `api.factor` / `api.series` 之取值與 `ctx` 之同名介面逐位相同、只含棒序 < `bar` 者、`nBack` 之各種寫法、`bar` / `ki` / `name` 之檢查與訊息(不帶輸入值)、帳本缺欄、回傳為複本、函數物件凍結且每個診斷各一份、不改既有數字、依狀態分組重放之用法 |
+| `unit-extData.test.mjs` | 14 | 擴充診斷之資料存取:`api.market` / `api.factor` / `api.series` 之取值與 `ctx` 之同名介面逐位相同、只含棒序 < `bar` 者、`nBack` 之各種寫法、`bar` / `ki` / `name` 之檢查與訊息(不帶輸入值)、帳本缺欄、回傳為複本、api 九個函數之函數物件凍結且每個診斷各一份、不改既有數字、依狀態分組重放之用法 |
 | `unit-guard.test.mjs` | 31 | 架構邊界(含子行程隱藏視窗之守門與其自驗);agent 操作紀錄之掃描與禁區 |
 | `unit-run.test.mjs` | 18 | 執行規模、資源閘、單一執行之鎖、事件檔 |
 | `unit-records.test.mjs` | 16 | 節點文件與做夢文件之規格、檢核、渲染 |
@@ -164,7 +167,8 @@ npm test
 | `unit-briefTrials.test.mjs` | 6 | 任務書條款之隨機對照 |
 | `unit-claimKey.test.mjs` | 8 | 驗證類方向之主張鍵;探索類方向與既有節點同臂同起點時另帶區分用之鍵(含已執行者逐字重提之略過);輪末摘要「方向未入前緣」各行 |
 | `unit-pickLoader.test.mjs` | 4 | 挑選模組之靜態檢查與載入 |
-| `unit-pickStore.test.mjs` | 3 | 共同儲存區 |
+| `unit-pickStore.test.mjs` | 11 | 共同儲存區;挑選模組載入時(含延後執行之程式)改了內建物件 ⇒ 中止更新(不寫任何檔、拋 `EVAL_INTEGRITY`;命令列工具離開碼 3);同行程前次已被改者入口即中止 |
+| `unit-evalCli.test.mjs` | 3 | 命令列對 `L.ntStatic` 之接線:`g_eval.mjs` 兩條路徑(帳本涵蓋回測期 / 只涵蓋訓練期)與 `g_backtest.mjs`(全期帳本)實跑,`ctx.meta.ntAll` 只計訓練期之進場數 |
 | `unit-ledgerReal.test.mjs` | 3 | 真實帳本與官方回測逐張一致(本機無策略庫與帳本時略過) |
 | `unit-archiveDocs.test.mjs` | 2 | 指引文件之自動整理 |
 | `unit-guides.test.mjs` | 2 | 寫法守則 |

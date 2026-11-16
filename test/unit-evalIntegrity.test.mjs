@@ -4,9 +4,10 @@ import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
 import { loadLedger } from '../src/eval/ledger.mjs'
-import { makeEvaluator } from '../src/eval/evalCore.mjs'
+import * as evalCoreNs from '../src/eval/evalCore.mjs'
 import { loadPick } from '../src/eval/pickLoader.mjs'
-import { makeTmp, writeSynthLedger, FD_ROOT } from './tools/synthLedger.mjs'
+import { makeTmp, writeSynthLedger, FD_ROOT, makeTrainEvaluator as makeEvaluator } from './tools/synthLedger.mjs'
+//makeEvaluator: 合成帳本即訓練期帳本 ⇒ makeTrainEvaluator 補上 L.ntStatic 再建評估器(見 test/tools/synthLedger.mjs)
 
 
 //規則 R-EV-35: 評估器之狀態與「無前視」不受挑選模組與擴充診斷模組之寫入影響(sgud/rule/rulebook.md; 合約 contract/pick-contract.md §1、§3、§4、§7)
@@ -670,6 +671,8 @@ describe('evalCore 內建物件之完整性(R-EV-35 ②):被改即評估失敗(E
             () => ev.decisionBars(0),
             () => ev.timeOf(10),
             () => loadLedger(t.dir),
+            //ntStaticOf: 呼叫端(命令列於比對後同步呼叫; 直接以 API 者可能在 await 之後呼叫)以其結果給 L.ntStatic ⇒ 入口先比對
+            () => evalCoreNs.ntStaticOf(L, 100),
         ]
         let fired = Object.create(null)
         //替身期間本測試自己也不用 map / push(只以索引寫入預先配好之陣列)

@@ -1,9 +1,13 @@
 import assert from 'assert'
 import fs from 'fs'
 import path from 'path'
+import vm from 'vm'
 import { loadLedger } from '../src/eval/ledger.mjs'
-import { makeEvaluator } from '../src/eval/evalCore.mjs'
-import { makeTmp, writeSynthLedger } from './tools/synthLedger.mjs'
+import * as evalCore from '../src/eval/evalCore.mjs'
+import { makeTmp, writeSynthLedger, makeTrainEvaluator as makeEvaluator } from './tools/synthLedger.mjs'
+
+//makeEvaluator: 合成帳本即訓練期帳本 ⇒ 以 makeTrainEvaluator 補上 L.ntStatic(= 帳本全期之進場數)再建評估器; makeEvaluator 本身之檢查(未給 L.ntStatic 即拒絕)與 ntStaticOf 見 ntAll 一條
+const makeEvaluatorRaw = evalCore.makeEvaluator
 
 
 //評估核心(src/eval/evalCore.mjs)對合成帳本之規則驗證; 規則編號見 sgud/rule/rulebook.md, 介面見 docs/pick-contract.md
@@ -311,13 +315,104 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         assert.equal(r.tags[0], 'x')
     })
 
-    it('ctx.meta.ntAll:未給 L.ntStatic 時為帳本內之進場數;給定時取其值(回測期重放時只計訓練期)', () => {
-        //R-EV-6
+    it('ctx.meta.ntAll:取呼叫端明給之 L.ntStatic(訓練期之進場數;回測期重放時只計訓練期)', () => {
+        //R-EV-6: ntAll = 靜態欄, 只計訓練期之進場數
         assert.deepEqual(Array.from(ev.meta.ntAll), Array.from({ length: L.n }, (_, s) => L.off[s + 1] - L.off[s]))
         let L2 = loadLedger(t.dir)
         L2.ntStatic = new Int32Array(L2.n).fill(7)
         let ev2 = makeEvaluator(L2, CFG)
         assert(Array.from(ev2.meta.ntAll).every((v) => v === 7))
+        //交給挑選函數之 ctx.meta.ntAll 與評估器之 meta 相同
+        let seen = null
+        ev2.runPick((ctx) => {
+            seen = seen || Array.from(ctx.meta.ntAll)
+            return []
+        }, 0)
+        assert(seen && seen.length === L2.n && seen.every((v) => v === 7))
+    })
+
+    it('makeEvaluator 未給 L.ntStatic(或型態、長度不合)⇒ 拒絕建評估器, 訊息為 invalid L.ntStatic: must be …(跨套件規格 V19, 不帶值)', () => {
+        //R-EV-6: ntAll 為訓練期之進場數; 帳本涵蓋訓練期以後者(回測期重放)若回退為全期進場數, 會把訓練期以後之資訊帶進靜態欄 ⇒ 不回退, 要求呼叫端明給(ntStaticOf(L, trainEndBar))
+        let want = 'invalid L.ntStatic: must be an Int32Array of length L.n (entries per strategy within the training period; see ntStaticOf)'
+        let msgOf = (L2) => {
+            try {
+                makeEvaluatorRaw(L2, CFG)
+            }
+            catch (err) {
+                return err instanceof Error ? err.message : `非 Error: ${String(err)}`
+            }
+            return null
+        }
+        let bads = [
+            ['未給', undefined],
+            ['null', null],
+            ['純陣列(長度相符)', Array.from({ length: L.n }, () => 3)],
+            ['Uint32Array(長度相符)', new Uint32Array(L.n)],
+            ['Int32Array 長度少一', new Int32Array(L.n - 1)],
+            ['Int32Array 長度多一', new Int32Array(L.n + 1)],
+            //型別以內部槽判定, 不看原型鏈: 原型改為 Int32Array.prototype 之其他定型陣列(值 4294967295 於 Int32Array 為 -1)與偽造原型之物件皆不收(且不拋 V8 之 TypeError)
+            ['Uint32Array 改原型為 Int32Array.prototype', Object.setPrototypeOf(new Uint32Array(L.n).fill(4294967295), Int32Array.prototype)],
+            ['Object.create(Int32Array.prototype)', Object.create(Int32Array.prototype)],
+            ['數字', 5],
+            ['字串', String(L.n)],
+            ['物件', { length: L.n }],
+        ]
+        for (let [nm, v] of bads) {
+            let L2 = loadLedger(t.dir)
+            if (v !== undefined) {
+                L2.ntStatic = v
+            }
+            assert.equal(msgOf(L2), want, nm)
+        }
+        //合法者(長度為 L.n 之 Int32Array)照常建出
+        let L3 = loadLedger(t.dir)
+        L3.ntStatic = new Int32Array(L3.n)
+        assert.equal(msgOf(L3), null)
+        //跨 realm 建立之真 Int32Array(內部槽為 Int32Array)照收
+        let L4 = loadLedger(t.dir)
+        L4.ntStatic = vm.runInNewContext(`new Int32Array(${L4.n})`)
+        assert.equal(msgOf(L4), null)
+    })
+
+    it('ntStaticOf(L, trainEndBar):逐策略之進場棒 < trainEndBar 之單數(進場棒升冪之逐單欄之二分搜尋); trainEndBar 不合者拋 invalid trainEndBar: must be …', () => {
+        //R-EV-6: 訓練期界線明給; 同命令列(src/cli/eval.mjs、src/cli/backtest.mjs)原有之算法
+        assert.equal(typeof evalCore.ntStaticOf, 'function')
+        let brute = (k) => Int32Array.from({ length: L.n }, (_, s) => {
+            let c = 0
+            for (let j = L.off[s]; j < L.off[s + 1]; j++) {
+                if (L.ent[j] < k) {
+                    c++
+                }
+            }
+            return c
+        })
+        for (let k of [0, 1, 100, 500, 1200, L.nBars - 1, L.nBars, L.nBars + 100, 1e9]) {
+            let got = evalCore.ntStaticOf(L, k)
+            assert(got instanceof Int32Array && got.length === L.n, `k = ${k}`)
+            assert.deepEqual(Array.from(got), Array.from(brute(k)), `k = ${k}`)
+        }
+        //界線之前後確有差別(帳本之進場分佈跨整段, 否則上列比對無意義)
+        assert(evalCore.ntStaticOf(L, 1200).some((v, s) => v < L.off[s + 1] - L.off[s]), '界線在帳本中段 ⇒ 部分策略之計數小於全期')
+        assert.deepEqual(Array.from(evalCore.ntStaticOf(L, L.nBars)), Array.from({ length: L.n }, (_, s) => L.off[s + 1] - L.off[s]), '界線 = 帳本 K 棒數 ⇒ 全期')
+        //數字字串(安全整數)依 wsemi iseint 通過
+        assert.deepEqual(Array.from(evalCore.ntStaticOf(L, '500')), Array.from(brute(500)))
+        //不合者: 訊息不帶輸入值
+        for (let bad of [-1, 1.5, NaN, Infinity, -Infinity, undefined, null, 'abc', '', ' ', [5], {}, 5n, true, Symbol('x'), new Number(3)]) {
+            let m = null
+            try {
+                evalCore.ntStaticOf(L, bad)
+            }
+            catch (err) {
+                m = err instanceof Error ? err.message : `非 Error: ${String(err)}`
+            }
+            assert.equal(m, 'invalid trainEndBar: must be a non-negative integer', typeof bad === 'bigint' ? `${bad}n` : (typeof bad === 'symbol' ? 'symbol' : JSON.stringify(bad)))
+        }
+        //以 ntStaticOf 給界線後建出之評估器: ntAll 只計界線以前之進場(不含其後之資訊)
+        let L2 = loadLedger(t.dir)
+        L2.ntStatic = evalCore.ntStaticOf(L2, 1200)
+        let ev2 = makeEvaluatorRaw(L2, CFG)
+        assert.deepEqual(Array.from(ev2.meta.ntAll), Array.from(brute(1200)))
+        assert(Array.from(ev2.meta.ntAll).some((v, s) => v < L.off[s + 1] - L.off[s]))
     })
 
     it('ctx.meta.fitEndBar:依方向取求解窗終點所對應之棒;未設定時為 -1', () => {
@@ -543,6 +638,84 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
                 return []
             }, 0)
             assert(n > 0)
+        }
+        finally {
+            t2.cleanup()
+        }
+    })
+
+    it('損毀之 K 線欄(R-EV-36):px.f64 之長度 ≠ 5 × K 棒數(截短、過長、位元組數非 8 之倍數)⇒ loadLedger 拋 invalid px.f64: must be …(請重建帳本;不帶值與路徑);無此檔之舊帳本仍為 null;長度相符者照常', () => {
+        //K 線欄為開高低收量逐棒五個值(ledgerBuild: px[i * 5 + 0..4]); 載入時只檢查存在而不核對長度者, 截短之帳本使 ctx.market / api.market 於缺尾處回 NaN 而不拋錯
+        //  因子欄與外部序列欄(延遲讀取)原已於取用時核對長度, 此處為 K 線欄於載入時核對
+        let t2 = makeTmp('evalCorePxBad')
+        try {
+            writeSynthLedger(t2.dir, { n: 20, nBars: 600, seed: 5 })
+            let fpPx = path.join(t2.dir, 'px.f64')
+            let px0 = fs.readFileSync(fpPx)
+            assert.equal(px0.length, 600 * 5 * 8, '合成帳本之 K 線欄 = 5 × K 棒數個 float64')
+            let want = 'invalid px.f64: must be 5 * meta.nBars float64 values (請重建帳本)'
+            let msgOf = () => {
+                try {
+                    loadLedger(t2.dir)
+                }
+                catch (err) {
+                    return err instanceof Error ? err.message : `非 Error: ${String(err)}`
+                }
+                return null
+            }
+            for (let [nm, buf] of [
+                ['少一個浮點數', px0.subarray(0, px0.length - 8)],
+                ['少一整棒(5 個)', px0.subarray(0, px0.length - 40)],
+                ['空檔', px0.subarray(0, 0)],
+                ['多一整棒', Buffer.concat([px0, Buffer.alloc(40)])],
+                ['多一個浮點數', Buffer.concat([px0, Buffer.alloc(8)])],
+                ['位元組數非 8 之倍數(多 1 位元組)', Buffer.concat([px0, Buffer.from([1])])],
+                ['位元組數非 8 之倍數(少 3 位元組)', px0.subarray(0, px0.length - 3)],
+            ]) {
+                fs.writeFileSync(fpPx, buf)
+                assert.equal(msgOf(), want, nm)
+            }
+            //(上列各案之訊息皆與固定字串全等 ⇒ 不含路徑、位元組數、期望值等輸入或帳本之值; V20)
+            //核對之位元組數即實際使用之位元組: 檔案大小之查詢(stat)回舊值而檔案已被截短(模擬核對與讀取之間帳本被重建)⇒ 仍拋錯(以讀入之那一份核對, 不依 stat)
+            let ss = fs.statSync
+            try {
+                fs.statSync = (p, ...r) => (String(p) === fpPx ? { size: px0.length } : ss(p, ...r))
+                fs.writeFileSync(fpPx, px0.subarray(0, px0.length - 40))
+                assert.equal(msgOf(), want, 'stat 回舊值')
+            }
+            finally {
+                fs.statSync = ss
+            }
+            //meta.nBars 須為非負整數: 小數(位元組數 60 = 40 × 1.5 但非 8 之倍數)、數字字串、負數、null、非數字 ⇒ 同一固定訊息(不得通過核對而於其後拋不指明欄名之錯誤)
+            let fpMeta = path.join(t2.dir, 'meta.json')
+            let meta0 = fs.readFileSync(fpMeta, 'utf8')
+            fs.writeFileSync(fpPx, px0.subarray(0, 60))
+            fs.writeFileSync(fpMeta, JSON.stringify({ ...JSON.parse(meta0), nBars: 1.5 }), 'utf8')
+            assert.equal(msgOf(), want, 'nBars 1.5 與 60 位元組')
+            fs.writeFileSync(fpPx, px0)
+            for (let bad of ['600', '6e2', -600, null, 'abc', true, [600]]) {
+                fs.writeFileSync(fpMeta, JSON.stringify({ ...JSON.parse(meta0), nBars: bad }), 'utf8')
+                assert.equal(msgOf(), want, `nBars ${JSON.stringify(bad)}`)
+            }
+            fs.writeFileSync(fpMeta, meta0, 'utf8')
+            //長度相符 ⇒ 照常; ctx.market 取得之值為實值(不是 NaN)
+            fs.writeFileSync(fpPx, px0)
+            let Lok = loadLedger(t2.dir)
+            assert.equal(Lok.px.length, 600 * 5)
+            let nan = 0
+            makeEvaluator(Lok, { ...CFG, warmupDays: 20 }).runPick((ctx) => {
+                let m = ctx.market(5)
+                nan += m.close.filter((v) => Number.isNaN(v)).length
+                return []
+            }, 0)
+            assert.equal(nan, 0)
+            //無此檔(舊帳本)⇒ px 為 null, 不拋錯; ctx.market 拋「帳本無 K 線欄」
+            fs.rmSync(fpPx)
+            let Lold = loadLedger(t2.dir)
+            assert.equal(Lold.px, null)
+            assert.throws(() => makeEvaluator(Lold, { ...CFG, warmupDays: 20 }).runPick((ctx) => {
+                ctx.market(3); return []
+            }, 0), /帳本無 K 線欄\(請重建帳本\)/)
         }
         finally {
             t2.cleanup()

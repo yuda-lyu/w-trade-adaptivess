@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { makeEvaluator } from '../../src/eval/evalCore.mjs'
 
 
 //測試用: 暫存夾與合成之訂單帳本(格式同 src/eval/ledgerBuild.mjs 之輸出, 供 loadLedger 讀取)
@@ -13,6 +14,19 @@ export let makeTmp = (name) => {
     let dir = path.join(FD_TMP, `${name}_${process.pid}_${Math.random().toString(36).slice(2, 8)}`)
     fs.mkdirSync(dir, { recursive: true })
     return { dir, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) }
+}
+
+//makeTrainEvaluator, 合成帳本即訓練期帳本(帳本全期 = 訓練期)時建評估器: 未給 L.ntStatic 者依帳本逐策略之進場數(全期)補上, 再呼叫 makeEvaluator
+//  makeEvaluator 要求呼叫端明給 L.ntStatic(訓練期之進場數; 未給即拒絕); 此處之計數以逐策略之位置差獨立計算, 不借用 src 之 ntStaticOf(以便驗證它)
+export let makeTrainEvaluator = (L, cfg) => {
+    if (!L.ntStatic) {
+        let nt = new Int32Array(L.n)
+        for (let s = 0; s < L.n; s++) {
+            nt[s] = L.off[s + 1] - L.off[s]
+        }
+        L.ntStatic = nt
+    }
+    return makeEvaluator(L, cfg)
 }
 
 let lcg = (seed) => {

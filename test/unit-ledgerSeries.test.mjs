@@ -4,8 +4,8 @@ import path from 'path'
 import { spawnSync } from 'child_process'
 import { buildLedger, alignSeries } from '../src/eval/ledgerBuild.mjs'
 import { loadLedger } from '../src/eval/ledger.mjs'
-import { makeEvaluator } from '../src/eval/evalCore.mjs'
-import { FD_ROOT, makeTmp } from './tools/synthLedger.mjs'
+import { FD_ROOT, makeTmp, makeTrainEvaluator as makeEvaluator } from './tools/synthLedger.mjs'
+//makeEvaluator: 建出之帳本即訓練期帳本 ⇒ makeTrainEvaluator 補上 L.ntStatic 再建評估器(見 test/tools/synthLedger.mjs)
 
 
 //外部序列之建置與對位(規則 R-EV-34): alignSeries、buildLedger 之 seriesDir、命令列之 settings.source.seriesDir; 序列之名稱與值皆為合成之中性資料

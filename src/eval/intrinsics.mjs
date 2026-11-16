@@ -74,6 +74,8 @@ const TypedArrayPrototypeGetLength = uncurryThis(ReflectGetOwnPropertyDescriptor
 const TypedArrayPrototypeGetBuffer = uncurryThis(ReflectGetOwnPropertyDescriptor(TypedArrayPrototype, 'buffer').get)
 const TypedArrayPrototypeGetByteOffset = uncurryThis(ReflectGetOwnPropertyDescriptor(TypedArrayPrototype, 'byteOffset').get)
 const TypedArrayPrototypeGetByteLength = uncurryThis(ReflectGetOwnPropertyDescriptor(TypedArrayPrototype, 'byteLength').get)
+//定型陣列之種類(內部槽 [[TypedArrayName]]; 不經原型鏈: 改了原型之物件、跨 realm 之真陣列皆回其真正之種類名; 非定型陣列回 undefined 而不拋錯)
+const TypedArrayPrototypeGetToStringTag = uncurryThis(ReflectGetOwnPropertyDescriptor(TypedArrayPrototype, Symbol.toStringTag).get)
 const Int8ArrayCtor = Int8Array
 const Uint8ArrayCtor = Uint8Array
 const Uint16ArrayCtor = Uint16Array
@@ -316,11 +318,12 @@ let defineData = (o, k, v) => {
  *
  * @param {String} where 輸入偵測之時點(例: 'pick'、'accept'、'ext'、'pick-load')
  * @param {Array} items 輸入被改之項目字串陣列
+ * @param {String} [note] 輸入說明(選配; 呼叫端所處置之說明, 例: 更新已中止), 置於訊息之開頭 EVAL_INTEGRITY 之後; 未給者訊息不變
  * @returns {Error} 回傳錯誤物件
  * @example
  * let e = integrityError('pick', ['Math.floor'])
  */
-let integrityError = (where, items) => {
+let integrityError = (where, items, note) => {
     //只用擷取之參照(此時內建物件已被改): 逐一複製, 不用 slice / 展開 / Array.from(後兩者經可被改寫之迭代器)
     let all = []
     let shown = []
@@ -333,7 +336,7 @@ let integrityError = (where, items) => {
     if (items.length > 12) {
         pushOwn(shown, `…等 ${items.length} 項`)
     }
-    let msg = `EVAL_INTEGRITY 評估器之內建物件被改(於 ${where}; 違反合約:不得改寫內建物件): ${ArrayPrototypeJoin(shown, '、')}`
+    let msg = `EVAL_INTEGRITY ${note === undefined ? '' : `${StringCtor(note)}: `}評估器之內建物件被改(於 ${where}; 違反合約:不得改寫內建物件): ${ArrayPrototypeJoin(shown, '、')}`
     let e = new ErrorCtor(msg)
     defineData(e, 'stack', `Error: ${msg}`)
     defineData(e, 'code', 'EVAL_INTEGRITY')
@@ -349,6 +352,7 @@ let integrityError = (where, items) => {
  * 比對受保護之內建物件; 不一致即拋完整性錯誤(code 為 EVAL_INTEGRITY)
  *
  * @param {String} where 輸入時點標示(寫入錯誤之 where 與訊息)
+ * @param {String} [note] 輸入說明(選配; 見 integrityError)
  * @returns {undefined} 一致時無回傳
  * @example
  * assertIntrinsics('pick-load')
@@ -356,10 +360,10 @@ let integrityError = (where, items) => {
 //VIOL, 本行程內偵測到之次數與最後一次之錯誤: 呼叫端記下呼叫模組前之 violationMark(), 呼叫後以 violationSince(mark) 查其間有無偵測
 //  (模組攔下評估器於其執行期間拋出之完整性錯誤〔例: 延遲讀取前之比對〕並改回者, 該次評估仍失敗)
 const VIOL = { seq: 0, last: null }
-let assertIntrinsics = (where) => {
+let assertIntrinsics = (where, note) => {
     let bad = checkIntrinsics()
     if (bad.length) {
-        let e = integrityError(where, bad)
+        let e = integrityError(where, bad, note)
         VIOL.seq++
         VIOL.last = e
         throw e
@@ -627,6 +631,7 @@ const P = ObjectFreeze({
     SetPrototypeGetSize,
     TypedArrayFrom,
     TypedArrayPrototypeGetLength,
+    TypedArrayPrototypeGetToStringTag,
     Int8ArrayCtor,
     Uint8ArrayCtor,
     Uint16ArrayCtor,

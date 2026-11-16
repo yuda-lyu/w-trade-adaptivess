@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { P, bytesAs, assertIntrinsics } from './intrinsics.mjs'
 
-const { Float64ArrayCtor } = P
+const { Float64ArrayCtor, TypedArrayPrototypeGetLength } = P
 
 
 //訂單帳本之載入: 讀 ledgerBuild 產出之二進位欄, 並建「依出場棒排序」之輔助欄(供「某時點以前已結之單」之統計以二分搜尋取得)
@@ -16,6 +16,7 @@ let readBin = (fp, Ctor) => bytesAs(fs.readFileSync(fp), Ctor)
 
 /**
  * 載入訂單帳本資料夾(由 buildLedger 產出之 meta.json 與二進位欄), 並建立依出場棒排序之已結單欄
+ * K 線欄 px.f64 有此檔者須恰為 5 × K 棒數個 float64(否則拋 invalid px.f64: must be … 之錯誤, 請重建帳本); 無此檔(舊帳本)者 px 為 null
  * 因子序列欄 fac 為延遲讀取(首次存取 L.fac 才載入; 無檔者為 null); 外部序列欄 ser 同(首次存取 L.ser 才載入; 無檔者為 null), 其名稱 seriesNames 取自 meta.seriesNames(舊帳本無此欄者為空陣列)
  *
  * @param {String} dir 輸入帳本資料夾路徑
@@ -27,6 +28,19 @@ let loadLedger = (dir) => {
     //入口比對(規則 R-EV-35 ②): 讀帳本之一般寫法(JSON.parse、push、sort、length 等)須在比對之後; 呼叫端之前可能已載入模組
     assertIntrinsics('ledger-load')
     let meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'))
+    //px, K 線欄(開高低收量逐棒五個值; px[i * 5 + 0..4]; 規則 R-EV-36): 有此檔者須恰為 5 × K 棒數個 float64(位元組數 = 5 × 8 × nBars), 否則拋錯請重建帳本
+    //  截短之欄使 ctx.market / api.market 於缺尾處回 NaN 而不拋錯; 無此檔(舊帳本)者為 null(取用時拋「帳本無 K 線欄」); 因子欄與外部序列欄為延遲讀取, 其長度於取用時核對(evalCore.mjs 之 factorAt / seriesAt)
+    //  核對之位元組數即實際使用之位元組(讀入一次、核對該份、再轉為 Float64Array; 不先 stat 再讀: 兩次之間檔案被重建者核對與使用不同份; 非 8 之倍數者不致由定型陣列建構子拋出不指明欄名之錯誤)
+    //  meta.nBars 須為非負整數(小數、數字字串使乘積可通過核對而於其後建評估器時拋不指明欄名之錯誤); 錯誤訊息不帶值與路徑(跨套件規格〈輸入參數之檢測機制〉§6 V19、V20)
+    let fpPx = path.join(dir, 'px.f64')
+    let px = null
+    if (fs.existsSync(fpPx)) {
+        let bufPx = fs.readFileSync(fpPx)
+        if (!Number.isInteger(meta.nBars) || meta.nBars < 0 || TypedArrayPrototypeGetLength(bufPx) !== 40 * meta.nBars) {
+            throw new Error('invalid px.f64: must be 5 * meta.nBars float64 values (請重建帳本)')
+        }
+        px = bytesAs(bufPx, Float64Array)
+    }
     let L = {
         dir,
         meta,
@@ -47,7 +61,7 @@ let loadLedger = (dir) => {
         keyOff: readBin(path.join(dir, 'keyOff.u32'), Uint32Array),
         keyIdx: readBin(path.join(dir, 'keyIdx.u16'), Uint16Array),
         keyNames: meta.keyNames,
-        px: fs.existsSync(path.join(dir, 'px.f64')) ? readBin(path.join(dir, 'px.f64'), Float64Array) : null,
+        px,
         //進場規則之各條件(與 keyIdx 逐格對齊; 規則 R-EV-29); 舊帳本無此三欄者為 null
         keySym: fs.existsSync(path.join(dir, 'keySym.i8')) ? readBin(path.join(dir, 'keySym.i8'), Int8Array) : null,
         keyTh: fs.existsSync(path.join(dir, 'keyTh.f64')) ? readBin(path.join(dir, 'keyTh.f64'), Float64Array) : null,

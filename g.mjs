@@ -3,7 +3,7 @@ import WTradeAdaptivess from './src/WTradeAdaptivess.mjs'
 import { writeSynthLedger } from './test/tools/synthLedger.mjs'
 
 
-let { loadLedger, makeEvaluator, loadPick } = WTradeAdaptivess
+let { loadLedger, ntStaticOf, makeEvaluator, loadPick } = WTradeAdaptivess
 
 
 let test = async () => {
@@ -16,7 +16,9 @@ let test = async () => {
     ms.push({ ledger: { nStrategies: info.n, nBars: info.nBars, nOrders: info.nOrders } })
 
     //L, ev: 讀帳本並建評估器(暖機 60 日後每 7 日決策一次; 每次決策只看得到決策棒以前之資訊)
+    //  訓練期之界線須明給(ctx.meta.ntAll 只計訓練期之進場數): 此帳本全為訓練期, 給 L.nBars; 帳本涵蓋訓練期以後者給訓練期之終點棒序
     let L = loadLedger(`${root}/ledger`)
+    L.ntStatic = ntStaticOf(L, L.nBars)
     let ev = makeEvaluator(L, { warmupDays: 60, cadenceDays: 7 })
 
     //pk: 挑選模組(依合約 contract/pick-contract.md 撰寫之檔: 預設匯出 pick(ctx), 選配匯出 accept(sig, book)); 節點 agent 所寫者即此形式
