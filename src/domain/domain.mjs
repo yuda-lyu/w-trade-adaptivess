@@ -71,6 +71,51 @@ let outwardNoteOf = ({ nOut, nDirs, nUntried, nChecked, saturated }) => {
     return `;**無向外之方向**(可選之臂皆已試過;預先核對而皆無內容之向外候選 ${nChecked} 種,未達 ${OUT_CHECK_MIN} 種)`
 }
 
+//SIGN_WORD, 保留期 / 其他標的之正負號之字樣(規則 R-REC-32; 輪末摘要之機械提示用): 保留期、他標(「其他標的」亦含此二字)、他幣(「其他幣種」亦含此二字)、
+//  holdout(不分大小寫), 或「號」字 —— 但排除與正負號無關之常見複合詞:
+//    前字(編號、代號、序號、符號、記號、括號、字號、型號、帳號 / 賬號、口號、問號、逗號、句號、頓號、冒號、引號、分號、番號、掛號、年號、
+//      訊號、信號、頭號、條號、版號、單號、行號、列號)與後字(號碼、號稱)
+//  與正負號有關者照列(正負號、正號、負號、同號、異號、反號、翻號、加號、之號、內容號 …); 「標號」不排除(「兩標號皆正」可作「兩個標的之號」解)
+let SIGN_WORD = /保留期|他標|他幣|holdout|(?<![編代序符記括字型帳賬口問逗句頓冒引分番掛年訊信頭條版單行列])號(?![碼稱])/i
+//signsMentionOf, 做夢文件中「方向之理由」與「整體研判之調整與三項判定之依據」是否出現保留期 / 他標 / 他幣 / 號之字樣(純函數; 規則 R-REC-32)
+//  掃描: guidance.directions[k].rationale(列為「方向 k+1 之理由」)、synthesis.overview.adjust(「整體研判之調整」)、
+//    synthesis.overview.coverage / progress / localOptimum 之 why(「集中度 / 進度 / 局部最佳點之風險之依據」); 只看字串, 其他型別略過
+//  不掃描: 機制家族之歸類(families; 家族層級之讀號只寫於該處之附記, 為任務書所許)與其他欄
+//  回傳所在之欄之標籤陣列(依上列之序; 無則 [])—— 輪末摘要據以列「待核對」一行(只提示、不否決; 不讀文意)
+/**
+ * 做夢文件中方向之理由、整體研判之調整與三項判定之依據是否出現保留期 / 他標 / 他幣 / 號之字樣(純函數)
+ *
+ * @param {Object} doc 輸入做夢文件(agent 部分;可為 null)
+ * @returns {Array<String>} 回傳出現字樣之欄之標籤陣列,無則空陣列
+ * @example
+ * let a = signsMentionOf({ guidance: { directions: [{ rationale: '供保留期之號之判讀' }] } })
+ * // => ['方向 1 之理由']
+ */
+let signsMentionOf = (doc) => {
+    let out = []
+    let hit = (v) => typeof v === 'string' && SIGN_WORD.test(v)
+    let dirs = doc && doc.guidance && Array.isArray(doc.guidance.directions) ? doc.guidance.directions : []
+    dirs.forEach((x, k) => {
+        if (x && hit(x.rationale)) {
+            out.push(`方向 ${k + 1} 之理由`)
+        }
+    })
+    let ov = doc && doc.synthesis && doc.synthesis.overview && typeof doc.synthesis.overview === 'object' ? doc.synthesis.overview : null
+    if (ov) {
+        if (hit(ov.adjust)) {
+            out.push('整體研判之調整')
+        }
+        for (let [k, lab] of [['coverage', '集中度之依據'], ['progress', '進度之依據'], ['localOptimum', '局部最佳點之風險之依據']]) {
+            if (ov[k] && typeof ov[k] === 'object' && hit(ov[k].why)) {
+                out.push(lab)
+            }
+        }
+    }
+    return out
+}
+//SIGNS_HINT, 輪末摘要之「待核對」一行之說明(任務書之同一句之要旨; 只提示、不否決)
+let SIGNS_HINT = '任務書:號之取得與號之正負不作派方向、定先後、選入樹版本之理由,亦不入整體研判之依據;家族層級之讀號只寫於歸類之附記。只提示、不否決'
+
 //unproposedNoteOf, 輪末摘要「方向未入前緣」之各行(純函數; Gitea #154): proposals = 做夢文件 harness.applied.proposals(與 guidance.directions 逐條對齊; 每條 { arms, base, ok, note, ... })
 //  回傳字串陣列: 全數入前緣 ⇒ []; 否則首行為筆數與說明, 其後每條未入者一行(序號自 1 起、臂、起點、原因; 起點為空者寫「起點 無」)
 //  —— 做夢文件內仍有該方向, 不列則只能由「入前緣」之筆數看出下一輪少了節點; 一條一行, 免得一頁摘要(roundDigest 每行截 400 字)截掉後面之條目
@@ -1219,6 +1264,12 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 let need = (ov.coverage === 'concentrated' || ov.localOptimum === 'high') && exps.length > 0 && nNew * 2 < exps.length
                 lines.push(`整體研判:機制家族 ${ov.nFamilies === null || ov.nFamilies === undefined ? '未歸類' : `${ov.nFamilies} 個`};搜尋之集中度 ${lab(ov.coverage)}、進度 ${lab(ov.progress)}、卡在局部最佳點之風險 ${lab(ov.localOptimum)};探索類方向 ${exps.length} 條中押新家族者 ${nNew} 條${need ? ';**研判與配比不一致**(判為過於集中或風險高,而押新家族之探索方向不到一半)' : ''}`)
             }
+            //號之用法之機械提示(規則 R-REC-32): 方向之理由、整體研判之調整與三項判定之依據出現保留期 / 他標 / 他幣 / 號之字樣 ⇒ 列「待核對」一行
+            //  (只提示、不否決, 方向照常入前緣; 不讀文意; 由主控核對); 無則不列(摘要與改前逐字相同)
+            let signHit = signsMentionOf(dr.doc)
+            if (signHit.length) {
+                lines.push(`待核對:${signHit.join('、')}出現保留期 / 他標 / 他幣 / 號之字樣(${SIGNS_HINT})`)
+            }
         }
         //臂目錄之提案(規則 R-ARM-1): 做夢所提者記入提案帳(rsi.governance.propose); 節點所提而做夢未彙整者(做夢之提案其 sources 未含該節點)亦記入, 以免漏掉 —— 皆待主控審定
         //  與帳上待審者同鍵者(類別 + 臂 + 層 + 名稱; 修訂另含修訂內容)由引擎補記「再提」; 形不合者(如新臂無名稱)引擎不收, 列於摘要
@@ -1848,5 +1899,5 @@ let makeProject = (st = getSettings(), inject = {}) => {
 }
 
 
-export { makeProject, outwardNoteOf, unproposedNoteOf, prevDirectionOf, OUT_CHECK_MIN }
+export { makeProject, outwardNoteOf, unproposedNoteOf, prevDirectionOf, signsMentionOf, OUT_CHECK_MIN }
 export default makeProject
