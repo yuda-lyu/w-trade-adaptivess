@@ -72,12 +72,15 @@ let makeTexts = ({ st, FD_ROOT }) => {
     //共同儲存「自適應挑選策略」區(規則 R-REC-25; src/domain/pickStore.mjs): 已產生(有總表)時才寫進任務書
     let storeRel = rel(path.join(st.rsi.root, 'picks'))
     let hasStore = () => fs.existsSync(path.join(st.rsi.root, 'picks', 'INDEX.md'))
+    //其他標的之正負號(規則 R-REC-30; 選配): 共同儲存區有 _cross.json 時才寫進任務書(只說明欄之意義與讀法; 任務書只依檔之有無、不讀該檔之內容, 不出現任何號或數字);
+    //  只在 hasStore() 之段內使用(尚無總表者不提)
+    let hasCross = () => fs.existsSync(path.join(st.rsi.root, 'picks', '_cross.json'))
     let lim = st.eval.limits
     let sc = st.score
     let guidesOn = !(st.rsi && st.rsi.guides === false)
 
     //期間: 訓練期 = 策略庫之求解期(其資訊已濃縮在策略庫內); **回測期 = 挑選方法之評估期**(節點可直接回測、看完整數字);
-    //  回測外(保留期)與他幣只供監控日後檢定, 不在任務書內提及其用法
+    //  回測外(保留期)與其他標的之數字只供監控日後檢定, 任務書不提其數字與用法; 兩者之正負號只在「共同儲存區」之說明內提及(規則 R-BT-4、R-REC-30; 不寫其他標的之名稱)
     let pTrain = `${st.periods.train.start.slice(0, 10)} ~ ${st.periods.train.end.slice(0, 10)}`
     let pBt = `${st.periods.backtest.start.slice(0, 10)} ~ ${st.periods.backtest.end.slice(0, 10)}`
     let ladderText = () => [
@@ -245,7 +248,7 @@ let makeTexts = ({ st, FD_ROOT }) => {
         L.push('- **只能寫自己的工作夾** `' + wd + '/`(含 `--out`、輸出重導向、測試用之暫存檔);不得改 `' + codeRootRel + '/`、`g_*.mjs`、`settings.json`、`arms/`' + (t.toolbox ? '、共用工具區' : '') + ' 與其他任何檔。')
         L.push('- **可讀**:`docs/`、`examples/`、`rsi/records/`(節點文件 `' + rel(st.records.nodeDir) + '/` 與做夢文件)、`rsi/ARMS_BOARD.md`' + (t.toolbox ? '、共用工具區 `' + t.toolbox.dir + '/`' : '') + (hasStore() ? '、共同儲存區 `' + storeRel + '/`(全部已執行節點之挑選策略:總表 `INDEX.md`、各策略之程式碼複本與欄位;用法見其 `README.md`)' : '') + ',以及本任務書 §1 ~ §3 明列之起點、參考節點之成品與做夢之診斷模組。**不得讀取或列出其他節點之工作夾,也不得列出 `' + rel(st.records.workDir) + '/` 本身**(同輪之節點正在併行,互看會使結果不獨立)。')
         if (hasStore()) {
-            L.push('- **動手前先看共同儲存區之總表** `' + storeRel + '/INDEX.md`:已有哪些機制、各自之回測期挑選內容與**保留期之正負號**(保留期 = 回測期之後、未用於搜尋之期間;只有正負號,數字不提供;用法與限制見其 README)。不重做已有之設計;要參考其他節點之成品者,讀該區內之程式碼複本(不讀其工作夾)。')
+            L.push('- **動手前先看共同儲存區之總表** `' + storeRel + '/INDEX.md`:已有哪些機制、各自之回測期挑選內容與**保留期之正負號**(保留期 = 回測期之後、未用於搜尋之期間;只有正負號,數字不提供;用法與限制見其 README)' + (hasCross() ? '、**其他標的之正負號**(同一挑選模組原樣不改、於另一標的之策略庫上評估;回測期與保留期各一;只有正負號,數字不提供;讀法同保留期)' : '') + '。不重做已有之設計;要參考其他節點之成品者,讀該區內之程式碼複本(不讀其工作夾)。')
         }
         L.push('- **不得**:讀取 `data/`、`tmp/` 或專案夾以外之任何路徑(含策略庫專案、私有資料與舊制之備份);執行 `g_backtest.mjs`;讀取迴圈驗證之原始碼(`g_backtest.mjs`、`' + codeRel + '/backtest*.mjs`、`' + codeRel + '/verify.mjs` —— 評估時 `ctx` 之行為已寫在合約 §2);以 `--no-log` 或 `--seed` 執行評估(只供迴圈使用);硬編策略序號清單或日期清單;使用決策日之後之資訊(回測期之結果只能經由「依結果改機制」影響你的挑法,不得把回測期之答案寫進模組)。')
         L.push('- 只評估自己工作夾內之模組(要跑範例或他人之成品,先複製進來)。讀過評估器或迴圈之其他原始碼(`g_eval.mjs`、`' + codeRootRel + '/eval/`、`' + codeRootRel + '/arsi/`)者,於 `conclusion.limitations` 寫明讀了哪些檔與原因;覺得評估器或合約有缺陷或沒寫清楚,也寫在那裡。')
@@ -457,7 +460,7 @@ let makeTexts = ({ st, FD_ROOT }) => {
         L.push('- `rsi/ARMS_BOARD.md`:各臂之節點數、最佳 S、未試之臂。')
         L.push('- `rsi/SEARCH_MAP.md`:搜尋地圖(逐輪趨勢、各層之覆蓋、譜系、集中度之機械指標;整體研判之依據)。')
         if (hasStore()) {
-            L.push('- `' + storeRel + '/INDEX.md`:**共同儲存「自適應挑選策略」區**之總表(全部已執行節點之成品:回測期 S、七相位、挑選內容、審計、**保留期之正負號**;全部欄位 `index.json`、各策略之程式碼複本 `<節點 id>/pick.mjs`;說明 `README.md`)。保留期(回測期之後、未用於搜尋之期間)之檢定由主控執行,**只提供正負號**(績效與挑選內容各一;新節點之正負號於下一輪補入):用於大致判斷一條線於回測期之外是否仍成立 —— 看同一家族多個成品是否同號,不以單一成品之正負號下結論,亦不為湊出正號而反覆換設計;整體研判之「卡在局部最佳點之風險」請把它列為依據之一。')
+            L.push('- `' + storeRel + '/INDEX.md`:**共同儲存「自適應挑選策略」區**之總表(全部已執行節點之成品:回測期 S、七相位、挑選內容、審計、**保留期之正負號**;全部欄位 `index.json`、各策略之程式碼複本 `<節點 id>/pick.mjs`;說明 `README.md`)。保留期(回測期之後、未用於搜尋之期間)之檢定由主控執行,**只提供正負號**(績效與挑選內容各一;新節點之正負號於下一輪補入):用於大致判斷一條線於回測期之外是否仍成立 —— 看同一家族多個成品是否同號,不以單一成品之正負號下結論,亦不為湊出正號而反覆換設計;整體研判之「卡在局部最佳點之風險」請把它列為依據之一。' + (hasCross() ? '總表另列**其他標的之正負號**(`cross` 欄:同一挑選模組原樣不改、於另一標的之策略庫上評估;回測期與保留期各給績效與挑選內容之號;同樣由主控執行、**只提供正負號**,新節點之正負號於下一輪補入):用於大致判斷一條線換一個標的是否仍成立(機制是否只屬本標的);讀法與限制同保留期之正負號。' : ''))
         }
         for (let r of x.refs || []) {
             L.push(`- \`${r.path}\`:${r.why}`)

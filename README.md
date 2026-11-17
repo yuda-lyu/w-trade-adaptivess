@@ -160,7 +160,7 @@ npm test
 | `unit-guard.test.mjs` | 31 | 架構邊界(含子行程隱藏視窗之守門與其自驗);agent 操作紀錄之掃描與禁區 |
 | `unit-run.test.mjs` | 18 | 執行規模、資源閘、單一執行之鎖、事件檔 |
 | `unit-records.test.mjs` | 16 | 節點文件與做夢文件之規格、檢核、渲染 |
-| `unit-texts.test.mjs` | 12 | 任務書文字(含「不得改」之程式夾由所在推得、探索類方向之去重說明、前次方向回顧之範本) |
+| `unit-texts.test.mjs` | 13 | 任務書文字(含「不得改」之程式夾由所在推得、探索類方向之去重說明、前次方向回顧之範本、其他標的之正負號之說明只依 `_cross.json` 之有無且只在共同儲存區之說明內) |
 | `unit-armCatalog.test.mjs` | 10 | 臂目錄之提案、審定與生效目錄 |
 | `unit-backtestGrade.test.mjs` | 10 | 檢定旗標之分級 |
 | `unit-score.test.mjs` | 10 | S、階梯與否決 |
@@ -174,6 +174,8 @@ npm test
 | `unit-claimKey.test.mjs` | 8 | 驗證類方向之主張鍵;探索類方向與既有節點同臂同起點時另帶區分用之鍵(含已執行者逐字重提之略過);輪末摘要「方向未入前緣」各行 |
 | `unit-pickLoader.test.mjs` | 4 | 挑選模組之靜態檢查與載入 |
 | `unit-pickStore.test.mjs` | 11 | 共同儲存區;挑選模組載入時(含延後執行之程式)改了內建物件 ⇒ 中止更新(不寫任何檔、拋 `EVAL_INTEGRITY`;命令列工具離開碼 3);同行程前次已被改者入口即中止 |
+| `unit-pickStoreCross.test.mjs` | 9 | 共同儲存區之其他標的之正負號(`_cross.json`;R-REC-30):無此檔或形狀不合時各產出檔與 1.0.17 逐位相同、有此檔時插兩欄與 `cross` 鍵、只收 `"+"` / `"-"` / `"0"`(其他值忽略並計數、不帶進任何產出檔)、`infoOf` 之直接呼叫、命令列之統計;保留期之 `_holdout.json` 同樣只收號(數字不進任何產出檔) |
+| `unit-pickStoreExt.test.mjs` | 3 | 共同儲存區之各列帶各擴充診斷自帶之 `board` / `flag` / `notContent` / `subset`(`ext`;R-REC-31):原值不改寫、有無之判定同看板(`extSurfaceOf`)、出錯者只有 `error`、與節點文件同一份值、欄位定義與 README、總表之欄不變 |
 | `unit-loaderRewrite.test.mjs` | 10 | 載入器(`loadPick`、`loadExt`)之匯入快取鍵 = 本次所讀原始碼之內容雜湊:同一路徑連續寫入不同內容(以 `utimes` 把修改時間釘成同一值,不依賴計時)各載入一次,每次執行到的皆為該次寫入之內容;內容相同者共用同一份模組、實體檔不同者各有其模組;A → B → A;讀檔與匯入之間來源檔被改動 ⇒ `PICK_CHANGED` / `EXT_CHANGED` 且該鍵不再被信任(重讀不到、匯入失敗者亦然;經實體路徑與目錄連結路徑一致);因完整性錯誤被拒者還原內建物件後同內容再載入仍被拒;CRLF 與 BOM 不誤判 |
 | `unit-memberLedger.test.mjs` | 18 | 成員重抽(`memberLedger`、`L.srcIdx`、`g_eval.mjs --member`;含空半庫、已結單欄之獨立重算、失敗之結果檔與評估紀錄之 `member`、旗標重複):`tieBaseOf` 與原寫法逐值相同、兩半互補且各欄(含每策略 3 值之 `cls`、段長不一之進場規則欄)與全庫逐位相同、逐棒之欄共用、半庫上之評估器所見(`ctx.n`、`tie`、`ntAll`)、「全庫限半庫」與「半庫帳本」之評估結果逐值相同(含持倉上限下之同棒次序)、半庫內再切、參數與 `L.srcIdx` 之檢查(訊息不帶輸入值)、入口比對內建物件、命令列之標記(結果檔、評估紀錄含失敗者、畫面)與格式不合之離開碼 2;`memberLedger` 與聚合入口之 JSDoc `@example` 取出實跑(R-PKG-7) |
 | `unit-evalCli.test.mjs` | 10 | 命令列對 `L.ntStatic` 之接線:`g_eval.mjs` 兩條路徑(帳本涵蓋回測期 / 只涵蓋訓練期)與 `g_backtest.mjs`(標準配置:評估帳本 = 全期帳本之前綴)實跑,`ctx.meta.ntAll` 只計訓練期之進場數;`g_backtest.mjs` 之帳本一致性核對(以評估帳本自身之訓練期進場數與全期帳本逐策略比對):標準配置不誤報、評估帳本之訓練期進場數少一筆 / 多一筆 / 策略數不同皆拒絕(離開碼 5)、全期帳本與評估帳本同終點不誤報、評估帳本之 `time0` 或棒長(`barHours`)不同(同一時刻之進場)不誤報、評估帳本無法載入(缺檔 / 缺 `meta`)與核對之前提不合(`off` 欄長度、`time0` / `barHours` 無效含負棒長、帳本未涵蓋訓練期終點)皆明確訊息與離開碼 5 |

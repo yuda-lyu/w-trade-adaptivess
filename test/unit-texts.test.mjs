@@ -25,15 +25,16 @@ describe('texts:任務類型與共用工具區', function () {
         assert(s.includes('**評估器預設評估回測期**') && s.includes('`--period train`') && s.includes('**訓練期之績效不是目標**'))
         assert(s.includes('**防偶然**') && s.includes('平原上的一點'))
         assert(s.includes('不得把回測期之答案寫進模組') && s.includes('`tmp/`') && s.includes('`--seed`'))
-        //保留期只在「共同儲存區」之說明內出現(保留期由主控檢定, 只把正負號給節點與做夢; 規則 R-BT-4); 其餘各處仍不提保留期與他幣
+        //保留期與其他標的只在「共同儲存區」之說明內出現(由主控檢定, 只把正負號給節點與做夢; 規則 R-BT-4、R-REC-30); 其餘各處仍不提保留期與其他標的;
+        //  其他標的之名稱(他幣、標的代號)一律不出現; 其數字不出現(任務書不讀 _cross.json 之內容, 見下方 R-REC-30 之案)
         let noStore = (x) => x.split('\n').filter((l) => !l.includes('共同儲存')).join('\n')
-        assert(!/旗標|樣本外|above|mixed|保留期|BTC/.test(noStore(s)), '共同儲存區之說明以外, 任務書不得出現檢定旗標之等級用語, 亦不提保留期與他幣')
+        assert(!/旗標|樣本外|above|mixed|保留期|其他標的|BTC/.test(noStore(s)), '共同儲存區之說明以外, 任務書不得出現檢定旗標之等級用語, 亦不提保留期與其他標的')
         assert(!/BTC|他幣/.test(s))
         let d = texts.dreamBrief({ round: 1, nodeIds: ['n1'], reworkedIds: [], workDir: path.join(st.records.workDir, 'dream_r001'), context: { nodes: [{ nodeId: 'n1', arms: ['A04_act'], base: null, S: -12.3, worst: -30.1, excess: 8.2, ladder: 0, vetoed: false, claimedS: -12.3, nEvals: 6, nFull: 4, nFullSel: 4, issues: [], from: null, type: 'explore', docMd: 'd.md', workDir: 'rsi/work/n1' }], failed: [], refs: [], prevDirections: [], maxDirections: 7, extra: '2. 更新文件', toolbox } })
         assert(d.includes('**你與節點共同之目標:找出自適應挑選策略,使回測期(2025-10-06 ~ 2026-07-31)之等效年化報酬更佳'))
         assert(d.includes('| 回測期 S / 最差相位 / 對隨機之超額 / 階梯 |') && d.includes('| **-12.3** / -30.1 / 8.2 / 0 |'))
         assert(d.includes('**審偶然**') && d.includes('**以回測期之績效為準**'))
-        assert(!/回測期旗標|樣本外|保留期|BTC/.test(noStore(d)))
+        assert(!/回測期旗標|樣本外|保留期|其他標的|BTC/.test(noStore(d)))
         assert(!/BTC|他幣/.test(d))
     })
 
@@ -55,6 +56,61 @@ describe('texts:任務類型與共用工具區', function () {
             assert(s1.includes('**動手前先看共同儲存區之總表**') && s1.includes('**保留期之正負號**') && s1.includes('只有正負號,數字不提供') && s1.includes('不讀其工作夾'))
             assert(d1.includes('**共同儲存「自適應挑選策略」區**') && d1.includes('**只提供正負號**') && d1.includes('不以單一成品之正負號下結論'))
             assert(Buffer.byteLength(s1) <= 15000, `節點任務書 ${Buffer.byteLength(s1)} 位元組`)
+        }
+        finally {
+            fs.rmSync(root0, { recursive: true, force: true })
+        }
+    })
+
+    it('其他標的之正負號(R-REC-30):共同儲存區有 _cross.json 時兩份任務書各插一段固定之說明(只有正負號);無此檔或無總表時不提;只依檔之有無、不讀其內容 ⇒ 任務書不出現任何號、數字、期間或其他標的之名稱;與無此檔時之差只在所插入之文字', () => {
+        let FD_ROOT = st.FD_ROOT
+        let mk = (root) => makeTexts({ st: { ...st, rsi: { ...st.rsi, root } }, FD_ROOT })
+        let dctx = { round: 1, nodeIds: ['n1'], reworkedIds: [], workDir: path.join(st.records.workDir, 'dream_r001'), context: { nodes: [{ nodeId: 'n1', arms: ['A04_act'], base: null, S: 1, worst: 0, excess: 0, ladder: 0, vetoed: false, claimedS: 1, nEvals: 1, nFull: 1, nFullSel: 1, issues: [], from: null, type: 'explore', docMd: 'd.md', workDir: 'rsi/work/n1' }], failed: [], refs: [], prevDirections: [], maxDirections: 7, extra: '', toolbox } }
+        let nb = (tx) => tx.nodeBrief({ workDir: wd, task: task(), round: 7, nodeId: 'nodeX', attempt: 1 })
+        let root0 = path.join(FD_ROOT, 'test', '_tmp', `texts_cross_${process.pid}`)
+        fs.mkdirSync(path.join(root0, 'picks'), { recursive: true })
+        //檔之內容含數字、號、期間與標的代號: 任務書只依檔之有無, 不讀內容
+        let crossText = JSON.stringify({ note: '標的 QQXYZ 3141.5', items: { n1: { backtest: { perf: '+', content: 4242.6 }, holdout: { perf: '-', content: '-5353.7' } } }, period: '2031-04-05 ~ 2032-06-07' })
+        let NODE_INS = '、**其他標的之正負號**(同一挑選模組原樣不改、於另一標的之策略庫上評估;回測期與保留期各一;只有正負號,數字不提供;讀法同保留期)'
+        let DREAM_INS = '總表另列**其他標的之正負號**(`cross` 欄:同一挑選模組原樣不改、於另一標的之策略庫上評估;回測期與保留期各給績效與挑選內容之號;同樣由主控執行、**只提供正負號**,新節點之正負號於下一輪補入):用於大致判斷一條線換一個標的是否仍成立(機制是否只屬本標的);讀法與限制同保留期之正負號。'
+        try {
+            //只有 _cross.json、尚無總表 ⇒ 不提(共同儲存區未產生)
+            fs.writeFileSync(path.join(root0, 'picks', '_cross.json'), crossText, 'utf8')
+            let t0 = mk(root0)
+            assert(!nb(t0).includes('其他標的') && !t0.dreamBrief(dctx).includes('其他標的'))
+            fs.rmSync(path.join(root0, 'picks', '_cross.json'))
+            //有總表而無 _cross.json ⇒ 不提
+            fs.writeFileSync(path.join(root0, 'picks', 'INDEX.md'), '# 總表\n', 'utf8')
+            let t1 = mk(root0)
+            let s1 = nb(t1)
+            let d1 = t1.dreamBrief(dctx)
+            assert(!s1.includes('其他標的') && !d1.includes('其他標的'))
+            //兩者皆有 ⇒ 兩份任務書皆說明, 差只在所插入之文字
+            fs.writeFileSync(path.join(root0, 'picks', '_cross.json'), crossText, 'utf8')
+            let t2 = mk(root0)
+            let s2 = nb(t2)
+            let d2 = t2.dreamBrief(dctx)
+            assert(s2.includes(NODE_INS) && d2.includes(DREAM_INS))
+            assert.equal(s2.indexOf(NODE_INS), s2.lastIndexOf(NODE_INS), '節點任務書只插一次')
+            assert.equal(d2.indexOf(DREAM_INS), d2.lastIndexOf(DREAM_INS), '做夢任務書只插一次')
+            assert.equal(s2.replace(NODE_INS, ''), s1, '節點任務書之差只在所插入之文字')
+            assert.equal(d2.replace(DREAM_INS, ''), d1, '做夢任務書之差只在所插入之文字')
+            //所插入之文字不含任何數字、號之字面與期間(只說明欄之意義與讀法)
+            for (let ins of [NODE_INS, DREAM_INS]) {
+                assert(!/[0-9]/.test(ins), '插入之文字不含數字')
+            }
+            for (let x of [s2, d2]) {
+                assert(!/QQXYZ|3141|4242|5353|2031|2032|他幣/.test(x), '不讀檔之內容、不寫其他標的之名稱、數字與期間(標的代號之檢查見「目標與期間」一案)')
+                assert(!/其他標的/.test(x.split('\n').filter((l) => !l.includes('共同儲存')).join('\n')), '只在共同儲存區之說明內')
+            }
+            assert(Buffer.byteLength(s2) <= 15000, `節點任務書 ${Buffer.byteLength(s2)} 位元組`)
+            //只依檔之有無: 檔之內容換成非 JSON、空檔、形狀不合者, 兩份任務書逐字不變
+            for (let other of ['{ not json', '', '[]', '{"items":"x"}', JSON.stringify({ items: { n1: { backtest: { perf: '0' } } } })]) {
+                fs.writeFileSync(path.join(root0, 'picks', '_cross.json'), other, 'utf8')
+                let t3 = mk(root0)
+                assert.equal(nb(t3), s2, `內容 ${JSON.stringify(other)}`)
+                assert.equal(t3.dreamBrief(dctx), d2, `內容 ${JSON.stringify(other)}`)
+            }
         }
         finally {
             fs.rmSync(root0, { recursive: true, force: true })
