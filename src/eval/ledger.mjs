@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import iseint from 'wsemi/src/iseint.mjs'
 import { P, bytesAs, assertIntrinsics } from './intrinsics.mjs'
+import { normUnit } from './unit.mjs'
 
 const { ObjectFreeze, NumberCtor, NumberIsInteger, MathImul, ErrorCtor, TypedArrayPrototypeGetLength, TypedArrayPrototypeGetToStringTag, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
 
@@ -19,9 +20,10 @@ let readBin = (fp, Ctor) => bytesAs(fs.readFileSync(fp), Ctor)
  * 載入訂單帳本資料夾(由 buildLedger 產出之 meta.json 與二進位欄), 並建立依出場棒排序之已結單欄
  * K 線欄 px.f64 有此檔者須恰為 5 × K 棒數個 float64(否則拋 invalid px.f64: must be … 之錯誤, 請重建帳本); 無此檔(舊帳本)者 px 為 null
  * 因子序列欄 fac 為延遲讀取(首次存取 L.fac 才載入; 無檔者為 null); 外部序列欄 ser 同(首次存取 L.ser 才載入; 無檔者為 null), 其名稱 seriesNames 取自 meta.seriesNames(舊帳本無此欄者為空陣列)
+ * 基礎單位(規則 R-EV-43; 選配): 帳本有 unit.f64 與 meta.unit 者另帶 unitN(Float64Array(nBars); 每根棒之基礎單位名義)與 unit(交易規則、緩衝、研究用本金); 只有其一或不合者拋 invalid unit.f64 / meta.unit… 之錯誤; 無者不帶此二欄
  *
  * @param {String} dir 輸入帳本資料夾路徑
- * @returns {Object} 回傳帳本物件L, 含 dir、meta、n(策略數)、nBars、barsPerDay、逐單欄(off、ent、ext、pnl)、靜態欄(mode、tp、sl、nKeys、lv、fitNt、cls、keyOff、keyIdx、keyNames、px、keySym、keyTh、keyOr; px、keySym、keyTh、keyOr 於無檔時為 null)、依出場棒升冪之已結單欄(xoff、xExt、xPnlCum、xWinCum)、延遲讀取之 fac 與外部序列(seriesNames、延遲讀取之 ser)
+ * @returns {Object} 回傳帳本物件L, 含 dir、meta、n(策略數)、nBars、barsPerDay、逐單欄(off、ent、ext、pnl)、靜態欄(mode、tp、sl、nKeys、lv、fitNt、cls、keyOff、keyIdx、keyNames、px、keySym、keyTh、keyOr; px、keySym、keyTh、keyOr 於無檔時為 null)、依出場棒升冪之已結單欄(xoff、xExt、xPnlCum、xWinCum)、延遲讀取之 fac 與外部序列(seriesNames、延遲讀取之 ser); 帳本帶基礎單位者另含 unitN(Float64Array(nBars))與 unit(meta.unit 之正規化)
  * @example
  * let L = loadLedger('./data/ledger/eval')
  */
@@ -110,6 +112,29 @@ let loadLedger = (dir) => {
             return ser
         },
     })
+    //unitN / unit, 基礎單位(規則 R-EV-43; 選配; buildLedger 給 unit 者才有): 每根棒之基礎單位名義(unit.f64; 恰 nBars 個正有限之 float64)與 meta.unit(交易規則、緩衝、研究用本金)
+    //  兩者須同時有或同時無(只有其一者拋錯請重建帳本; 不靜默當成未啟用); 無者不加此二欄(L 之欄位與未加入本功能時相同 ⇒ 評估器以每單 1 單位計)
+    let fpUnit = path.join(dir, 'unit.f64')
+    let hasUnitFile = fs.existsSync(fpUnit)
+    let hasUnitMeta = meta.unit !== undefined && meta.unit !== null
+    if (hasUnitFile !== hasUnitMeta) {
+        throw new Error('invalid unit.f64: must exist together with meta.unit (請重建帳本)')
+    }
+    if (hasUnitFile) {
+        let unit = normUnit(meta.unit, 'meta.unit')
+        let bufU = fs.readFileSync(fpUnit)
+        if (TypedArrayPrototypeGetLength(bufU) !== 8 * meta.nBars) {
+            throw new Error('invalid unit.f64: must be meta.nBars positive finite float64 values (請重建帳本)')
+        }
+        let unitN = bytesAs(bufU, Float64Array)
+        for (let i = 0; i < unitN.length; i++) {
+            if (!(unitN[i] > 0 && unitN[i] < Infinity)) {
+                throw new Error('invalid unit.f64: must be meta.nBars positive finite float64 values (請重建帳本)')
+            }
+        }
+        L.unitN = unitN
+        L.unit = unit
+    }
     setExitCols(L)
     return L
 }
@@ -234,6 +259,9 @@ let isLedgerShape = (L) => {
         atLeast(L.keyIdx, 'Uint16Array', nKey) &&
         (L.keySym === null || atLeast(L.keySym, 'Int8Array', nKey)) && (L.keyTh === null || atLeast(L.keyTh, 'Float64Array', nKey)) && (L.keyOr === null || atLeast(L.keyOr, 'Uint8Array', nKey)) &&
         (L.srcIdx === undefined || L.srcIdx === null || isSrcIdx(L.srcIdx, n)) &&
+        //基礎單位(規則 R-EV-43): unitN 與 unit 須同時有或同時無(只有其一者, 全庫建評估器即拒絕, 半庫亦不得靜默以每單 1 單位評估)
+        ((L.unitN === undefined || L.unitN === null) === (L.unit === undefined || L.unit === null)) &&
+        (L.unitN === undefined || L.unitN === null || colOk(L.unitN, 'Float64Array', L.nBars)) &&
         (L.member === undefined || L.member === null || (typeof L.member === 'object' && NumberIsInteger(L.member.nFull) && L.member.nFull >= n))
 }
 
@@ -367,6 +395,11 @@ let memberLedger = (L, salt, half) => {
         member: ObjectFreeze({ salt: saltV, half: halfV, nFull: L.member ? L.member.nFull : n0 }),
     }
     //逐棒之欄與原帳本共用(延遲讀取者仍於首次取用時才由原帳本載入, 其載入前之內建物件比對亦在原帳本內)
+    //  基礎單位之每根棒之名義(規則 R-EV-43; 有者才帶)亦為逐棒之欄 ⇒ 共用
+    if (L.unitN !== undefined && L.unitN !== null) {
+        M.unitN = L.unitN
+        M.unit = L.unit
+    }
     Object.defineProperty(M, 'fac', { enumerable: false, configurable: true, get: () => L.fac })
     Object.defineProperty(M, 'ser', { enumerable: false, configurable: true, get: () => L.ser })
     setExitCols(M)

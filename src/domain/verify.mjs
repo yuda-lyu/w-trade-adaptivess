@@ -712,7 +712,7 @@ let notesOf = (m, seedS = null, train = null, replays = null, half = false) => {
     }
     if (m.op.bySide) {
         let sd = (x) => `${f1(x.orders)} 單、損益 ${x.pnl}、勝率 ${f1(x.winRate * 100)}%`
-        out.push(`損益歸因(各相位平均;損益 = 每單 1 單位之損益和,合計 ${m.op.pnl}): 做多 ${sd(m.op.bySide.long)};做空 ${sd(m.op.bySide.short)}${Array.isArray(m.op.byGroup) && m.op.byGroup.length > 1 ? `;依子帳: ${m.op.byGroup.map((g) => `子帳 ${g.group}(每次決策 ${f1(g.seats)} 席)${sd(g)}`).join(' | ')}` : ''}${m.sel && Array.isArray(m.sel.tagPerf) && m.sel.tagPerf.length ? `;依 tag(前 6 種): ${m.sel.tagPerf.slice(0, 6).map((t) => `${t.tag} ${t.decisions} 次決策、${f1(t.orders)} 單、損益 ${t.pnl}`).join(' | ')}` : ''}`)
+        out.push(`損益歸因(各相位平均;損益 = ${m.unit ? '各單依其基礎單位名義計之損益和(u)' : '每單 1 單位之損益和'},合計 ${m.op.pnl}): 做多 ${sd(m.op.bySide.long)};做空 ${sd(m.op.bySide.short)}${Array.isArray(m.op.byGroup) && m.op.byGroup.length > 1 ? `;依子帳: ${m.op.byGroup.map((g) => `子帳 ${g.group}(每次決策 ${f1(g.seats)} 席)${sd(g)}`).join(' | ')}` : ''}${m.sel && Array.isArray(m.sel.tagPerf) && m.sel.tagPerf.length ? `;依 tag(前 6 種): ${m.sel.tagPerf.slice(0, 6).map((t) => `${t.tag} ${t.decisions} 次決策、${f1(t.orders)} 單、損益 ${t.pnl}`).join(' | ')}` : ''}`)
     }
     if (Array.isArray(m.op.thirds) && m.op.thirds.length) {
         out.push(`評估期間三等分(各段自空倉起算;看績效是否集中於某一段): ${m.op.thirds.map((g) => `${String(g.from).slice(0, 10)} ~ ${String(g.to).slice(0, 10)} 均 ${f1(g.eqYr.mean)}%(最差相位 ${f1(g.eqYr.min)}${typeof g.nullMean === 'number' ? `;隨機挑 ${f1(g.nullMean)}` : ''})`).join(' | ')}`)
@@ -763,7 +763,7 @@ let datedIn = (src, period) => {
     return null
 }
 
-//  refsOf(spec)(選配): 回傳任務書列為參考之節點 id 陣列(其工作夾可讀)
+//  refsOf(spec, nodeId)(選配): 回傳任務書列為參考之節點 id 陣列(其工作夾可讀); nodeId = 所驗證之節點之 id(評估環境之鍵改變後之舊節點, 其 id 與以規格求得者不同)
 /**
  * 建立節點之迴圈驗證函數(重跑完整評估、掃操作紀錄、必要時重放回測期旗標);驗證時會起子行程,不宜於文件範例中實跑
  *
@@ -771,7 +771,7 @@ let datedIn = (src, period) => {
  * @param {Object} opt.st 輸入設定物件(getSettings 之結果)
  * @param {String} opt.FD_ROOT 輸入專案根路徑
  * @param {Function} opt.layerOfSpec 輸入由規格取得所屬層之函數
- * @param {Function|null} [opt.refsOf=null] 輸入回傳任務書列為參考之節點 id 陣列之函數(輸入 spec),預設null
+ * @param {Function|null} [opt.refsOf=null] 輸入回傳任務書列為參考之節點 id 陣列之函數(輸入 spec 與所驗證之節點之 id),預設null
  * @returns {Function} 回傳非同步驗證函數 async ({ nodeId, spec, workDir, attempt=1, keepValidation=null, evalsUntil=null }),成功回傳 { ok:true, raw, score, summary, notes, fingerprint, issues, checks, validation, evalJson },失敗回傳 { ok:false, error, issues }
  * @example
  * let verify = makeVerify({ st, FD_ROOT, layerOfSpec })
@@ -803,7 +803,9 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
             return { ok: false, error: `重跑逾時(${st.eval.timeoutSec || 900}s; 挑選模組過慢)`, issues: [] }
         }
         if (!out || out.ok !== true) {
-            return { ok: false, error: `重跑失敗(離開碼 ${r.code}): ${out && out.error ? out.error : r.out.split('\n').slice(-6).join(' | ').slice(0, 600)}`, issues: (out && out.issues) || [] }
+            //結果檔帶 code 者(EVAL_UNIT_CAPITAL、PICK_RUN、LEDGER_UNIT_MISMATCH 等; 同為離開碼 3 或 2 者以之分辨)一併列於訊息與回傳
+            let code = out && typeof out.code === 'string' ? out.code : null
+            return { ok: false, error: `重跑失敗(離開碼 ${r.code}${code ? `; ${code}` : ''}): ${out && out.error ? out.error : r.out.split('\n').slice(-6).join(' | ').slice(0, 600)}`, issues: (out && out.issues) || [], ...(code ? { code } : {}) }
         }
         let issues = []
         let declared = out.pickMeta && Array.isArray(out.pickMeta.arms) ? out.pickMeta.arms : null
@@ -928,7 +930,7 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
             }
         }
         //可讀之他節點工作夾: 起點(spec.base)與任務書列為參考之節點(由呼叫端經 allowWork 給入)
-        let tr = scanTrace({ workDir, attempt, privateRoot: backtest.cfg.privateRoot, root: FD_ROOT, writeRoots: [workDir], workRoot: st.records.workDir, allowWork: [...(spec.base ? [spec.base] : []), ...(typeof refsOf === 'function' ? refsOf(spec) : [])], nodeRules: true })
+        let tr = scanTrace({ workDir, attempt, privateRoot: backtest.cfg.privateRoot, root: FD_ROOT, writeRoots: [workDir], workRoot: st.records.workDir, allowWork: [...(spec.base ? [spec.base] : []), ...(typeof refsOf === 'function' ? refsOf(spec, nodeId) : [])], nodeRules: true })
         issues.push(...tr.issues)
         if (nNoLog > 0) {
             issues.push(`以 --no-log 執行評估 ${nNoLog} 次(該旗標只供迴圈重跑; 已照記入評估次數)`)

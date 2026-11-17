@@ -3,6 +3,7 @@ import path from 'path'
 import crypto from 'crypto'
 import genKLinesTpSl from 'w-trade-backtest/src/genKLinesTpSl.mjs'
 import settleOrderPnl from 'w-trade-backtest/src/settleOrderPnl.mjs'
+import { normUnit, unitKeyOf } from './unit.mjs'
 
 
 //訂單帳本之建置: 把策略庫之每隻策略於 [數據起點, endTime) 之逐張訂單(進場棒、出場棒、每單位損益)一次算出並存成緊湊二進位
@@ -14,6 +15,11 @@ import settleOrderPnl from 'w-trade-backtest/src/settleOrderPnl.mjs'
 //  帳本鍵(meta.key)只由訂單內容決定: 加靜態欄 / 因子序列欄 / 外部序列欄不改鍵(既有之評估結果仍對得上)
 //  外部序列(選配; 規則 R-EV-34): 策略庫以外之標的自身序列, 由使用端備成與因子檔同格式之檔(<名>.json = [{ time, value }])置於 seriesDir, 建帳本時對位到 K 棒;
 //    time = 棒之開盤時間(與 K 線之 time 同一字串約定), 該值視為「於該棒收盤時已得知」⇒ 決策棒 b 只見棒序 < b(見 ctx.series); 量在該棒收盤後才得知者, 使用端須自行標在其後之棒
+//  基礎單位(選配; 規則 R-EV-43; 見 ./unit.mjs、./unitNotional.mjs〔給了 unit 才動態匯入〕): 給 unit = { rule, buffer, uIni } 時另存每根棒之基礎單位名義(unit.f64; = calcBaseUnitQuantity(該棒收盤價, rule, { buffer }).notional),
+//    meta.unit 記交易規則、緩衝與研究用本金, 交易規則與緩衝入帳本鍵(規則改變 ⇒ 鍵改變); 每單位損益(pnl)照存、不變(每單之損益(u) = pnl × 進場棒之名義, 由評估器計算)
+//    單一策略之峰值名義(只記錄, 不設門檻、不中止): 每隻策略於帳本全期之最大同時持倉名義(其單於 [進場棒, 出場棒) 持倉; 未結者持倉至期末);
+//      meta.unitStat 記其最大者與其策略、超過 uIni 之隻數(恰等於者不算)與峰值最高之至多 10 隻之檔名; 記錄列一行最大者與隻數(超過者 0 亦列)—— 研究用本金之「超過即中止」只施於挑選後之持倉組合(評估器; 見 ./evalCore.mjs)
+//    未給 ⇒ 帳本之各檔與鍵與未加入本功能時逐位相同(重建於同一資料夾時移除舊之 unit.f64)
 /**
  * 帳本格式版本號, 併入帳本鍵(meta.key)之雜湊與 meta.version
  *
@@ -143,14 +149,30 @@ let alignSeries = (arr, kpTimeInd, n, stat = null) => {
  * @param {Number} [opt.barHours=4] 輸入每根K棒小時數,預設4
  * @param {Integer} [opt.limit=0] 輸入只取前幾隻策略(0為全部),預設0
  * @param {String} [opt.seriesDir=null] 輸入外部序列資料夾路徑(選配; 其下每個 <名>.json 為一條序列 [{ time, value }], time 為K棒之開盤時間, 檔名以底線起首者略過; 名稱須英文字母起首、其後英數或底線、至多32字),預設null(不建入; 資料夾不存在者亦不建入並於記錄註明)
+ * @param {Object} [opt.unit=null] 輸入基礎單位之設定(選配; 規則 R-EV-43){ rule: { stepSize, minQty, minNotional, asOf?, source? }, buffer = 0.1, uIni }: 給者另存每根棒之基礎單位名義(unit.f64)、meta.unit 與 meta.unitStat, 交易規則與緩衝入帳本鍵; 單一策略之全期最大同時持倉名義只記錄(最大者與超過 uIni 之隻數; 不拋錯、照寫出); 不合者拋 invalid unit…之錯誤,預設null(不啟用; 帳本與未加入本功能時逐位相同)
  * @param {Function} [opt.log=console.log] 輸入記錄函數,預設console.log
- * @returns {Promise<Object>} 回傳Promise,resolve為帳本 meta 物件(含 version、key、endTime、time0、nBars、nStrategies、nOrders、nUnsettled、keyNames、seriesNames 等)
+ * @returns {Promise<Object>} 回傳Promise,resolve為帳本 meta 物件(含 version、key、endTime、time0、nBars、nStrategies、nOrders、nUnsettled、keyNames、seriesNames 等; 給 unit 者另含 unit、unitStat)
  * @example
  * let meta = await buildLedger({ libraryRoot: './data/library', keyOhlc: 'BTCUSDT_4h', endTime: '2024-01-01T00:00:00', outDir: './data/ledger/eval' })
  */
-let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, limit = 0, seriesDir = null, log = console.log }) => {
+let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, limit = 0, seriesDir = null, unit = null, log = console.log }) => {
 
     let t0 = Date.now()
+    //基礎單位之設定(規則 R-EV-43): 先於讀任何檔檢查(不合者不耗時)
+    let nu = normUnit(unit, 'unit')
+    //每根棒之名義之函數(回測套件之 calcBaseUnitQuantity): 給了 unit 才動態匯入 ⇒ 未給者不依賴之; 相依之回測套件不含此函數(或其所匯入之相依缺漏)者拋 invalid unit…(不留載入失敗之堆疊; 原錯誤保留於 err.cause)
+    let unitNotionalOf = null
+    if (nu) {
+        try {
+            unitNotionalOf = (await import('./unitNotional.mjs')).unitNotionalOf
+        }
+        catch (err) {
+            if (err && err.code === 'ERR_MODULE_NOT_FOUND') {
+                throw new Error('invalid unit: must be used with a w-trade-backtest that provides calcBaseUnitQuantity and its dependencies (upgrade or reinstall w-trade-backtest)', { cause: err })
+            }
+            throw err
+        }
+    }
 
     //ohlc(於 endTime 截斷)
     let arrAll = JSON.parse(fs.readFileSync(path.join(libraryRoot, 'ohlc', `${keyOhlc}.json`), 'utf8'))
@@ -173,6 +195,18 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
         kpTimeInd.set(arrOhlc[i].time, i)
     }
     log(`ohlc ${keyOhlc}: ${n} 根, ${time0} ~ ${arrOhlc[n - 1].time}(endTime ${endTime} 不含)`)
+    //每根棒之基礎單位名義(規則 R-EV-43; 給 unit 者): 進場價 = 進場棒之收盤價 ⇒ 每單之名義 = uN[進場棒]
+    let uN = nu ? unitNotionalOf(C, nu, arrOhlc.map((r) => r.time)) : null
+    //dN, 逐策略之持倉名義之差分(單一策略之峰值名義之記錄; 每隻策略算完即歸零重用)
+    let dN = nu ? new Float64Array(n + 1) : null
+    let uPeak = 0
+    let uPeakFile = null
+    let uOver = 0
+    //uOverTop, 超過 uIni 者之峰值最高之至多 10 隻 [峰值, 策略序號](供核查; 峰值降冪、同值依策略序)
+    let uOverTop = []
+    if (nu) {
+        log(`基礎單位: 交易規則 ${unitKeyOf(nu)}(步長|最小數量|最小名義價值|緩衝), 每根棒之名義 ${uN.reduce((a, v) => Math.min(a, v), Infinity)} ~ ${uN.reduce((a, v) => Math.max(a, v), -Infinity)}u, 研究用本金 ${nu.uIni}u`)
+    }
 
     //因子序列對位(缺值 NaN)
     let fdParam = path.join(libraryRoot, 'param')
@@ -360,6 +394,49 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
                 nUnsettled++
             }
         }
+        //單一策略之峰值名義(規則 R-EV-43; 給 unit 者; 只記錄): 本策略於帳本全期之最大同時持倉名義 —— 其各單於 [進場棒, 出場棒) 持倉(與評估器之持倉計法相同), 未結者持倉至期末
+        //  持倉只在進場棒增加 ⇒ 峰值落在某一進場棒; 掃描至最後一個進場棒或出場棒(其間之差分全部歸零, 供下一隻重用)
+        if (nu) {
+            let E0 = ent.done()
+            let X0 = ext.done()
+            let a = off[si]
+            let z = E0.length
+            if (z > a) {
+                let lo = E0[a]
+                let hi = E0[z - 1]
+                for (let j = a; j < z; j++) {
+                    let w = uN[E0[j]]
+                    dN[E0[j]] += w
+                    if (X0[j] >= 0) {
+                        dN[X0[j]] -= w
+                        if (X0[j] > hi) {
+                            hi = X0[j]
+                        }
+                    }
+                }
+                let cur = 0
+                let pk = 0
+                for (let i = lo; i <= hi; i++) {
+                    cur += dN[i]
+                    if (cur > pk) {
+                        pk = cur
+                    }
+                    dN[i] = 0
+                }
+                if (pk > uPeak) {
+                    uPeak = pk
+                    uPeakFile = files[si]
+                }
+                if (pk > nu.uIni) {
+                    uOver++
+                    uOverTop.push([pk, si])
+                    uOverTop.sort((a, b) => b[0] - a[0] || a[1] - b[1])
+                    if (uOverTop.length > 10) {
+                        uOverTop.pop()
+                    }
+                }
+            }
+        }
         mode[si] = md === 'long' ? 1 : -1
         tp[si] = rtp
         sl[si] = rsl
@@ -402,6 +479,10 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
     }
     off[ns] = ent.size()
     keyOff[ns] = keyIdx.size()
+    //單一策略之峰值名義(規則 R-EV-43): 只記錄 —— 不設門檻、不中止(研究用本金之「超過即中止」只施於挑選後之持倉組合, 由評估器檢)
+    if (nu) {
+        log(`單一策略之全期最大同時持倉名義: 最大者 ${uPeakFile} ${uPeak}u;超過研究用本金 ${nu.uIni}u 者 ${uOver} 隻(只記錄、不中止;研究用本金之檢查只施於挑選後之持倉組合,由評估器檢)`)
+    }
 
     //寫出
     fs.mkdirSync(outDir, { recursive: true })
@@ -446,6 +527,13 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
     else {
         fs.rmSync(path.join(outDir, 'ser.f64'), { force: true })
     }
+    //每根棒之基礎單位名義(規則 R-EV-43; 給 unit 者): unit.f64 = Float64Array(nBars); 未給者不留檔(重建於同一資料夾時移除舊檔)
+    if (nu) {
+        writeBin(path.join(outDir, 'unit.f64'), uN)
+    }
+    else {
+        fs.rmSync(path.join(outDir, 'unit.f64'), { force: true })
+    }
     if (rule.nSymOther > 0) {
         log(`注意: 比較符號非 '>' / '<' 之條件 ${rule.nSymOther} 個(觸發與 keySym 皆當 '<')`)
     }
@@ -465,6 +553,10 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
     h.update(`${LEDGER_VERSION}|${endTime}|${time0}|${n}|${ns}|${E.length}|`)
     h.update(files.join(','))
     h.update(Buffer.from(E.buffer, E.byteOffset, E.byteLength))
+    //基礎單位(給 unit 者): 交易規則與緩衝入鍵(規則改變 ⇒ 鍵改變); 未給者不加 ⇒ 鍵與未加入本功能時相同
+    if (nu) {
+        h.update(`|unit|${unitKeyOf(nu)}`)
+    }
     let key = h.digest('hex').slice(0, 16)
     let meta = {
         version: LEDGER_VERSION,
@@ -484,6 +576,15 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
         rule,
         keyNames,
         seriesNames,
+        //基礎單位(給 unit 者才有此二欄): unit = 交易規則、緩衝與研究用本金(其他標的之帳本自帶其交易規則; 評估器依此欄與 unit.f64);
+        //  unitStat = 每根棒之名義之範圍、單一策略之全期最大同時持倉名義之最大者與其策略、其超過研究用本金之隻數(nStrategyOverUIni; 恰等於者不算)與峰值最高之至多 10 隻之檔名(strategyOverFiles)
+        //    只記錄於摘要(不另存逐策略之欄); 以帳本全期算得 ⇒ 不交給挑選函數與擴充診斷(loadLedger 之 L.meta 雖帶之, 評估器之 ctx.meta / api.meta 不含)
+        ...(nu
+            ? {
+                unit: { rule: { ...nu.rule }, buffer: nu.buffer, uIni: nu.uIni },
+                unitStat: { notionalMin: uN.reduce((a, v) => Math.min(a, v), Infinity), notionalMax: uN.reduce((a, v) => Math.max(a, v), -Infinity), strategyPeakNotional: uPeak, strategyPeakFile: uPeakFile, nStrategyOverUIni: uOver, strategyOverFiles: uOverTop.map(([, si]) => files[si]) },
+            }
+            : {}),
         buildSec: Number(((Date.now() - t0) / 1000).toFixed(1)),
     }
     fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify(meta, null, 1), 'utf8')

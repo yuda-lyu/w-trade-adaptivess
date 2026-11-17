@@ -95,10 +95,10 @@ describe('套件:發布面與依賴', function () {
         }
     })
 
-    it('聚合入口之站點全集(R-PKG-7;排程第 500 項):76 鍵(函數 60、常數 16);memberLedger 併入且與 ledger.mjs 之匯出為同一實體;tieBaseOf、isSrcIdx 不併入(以 ESM 深層路徑取用)', async () => {
+    it('聚合入口之站點全集(R-PKG-7;排程第 500 項):79 鍵(函數 63、常數 16;基礎單位之 isCapitalError、normUnit、sameUnit 併入);memberLedger 併入且與 ledger.mjs 之匯出為同一實體;tieBaseOf、isSrcIdx 不併入(以 ESM 深層路徑取用)', async () => {
         let keys = Object.keys(WTradeAdaptivess)
-        assert.equal(keys.length, 76)
-        assert.equal(keys.filter((k) => typeof WTradeAdaptivess[k] === 'function').length, 60)
+        assert.equal(keys.length, 79)
+        assert.equal(keys.filter((k) => typeof WTradeAdaptivess[k] === 'function').length, 63)
         assert.equal(keys.filter((k) => typeof WTradeAdaptivess[k] !== 'function').length, 16)
         let ledgerMod = await import('../src/eval/ledger.mjs')
         assert.equal(WTradeAdaptivess.memberLedger, ledgerMod.memberLedger)

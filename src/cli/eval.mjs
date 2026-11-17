@@ -3,7 +3,8 @@ import path from 'path'
 import crypto from 'crypto'
 import { getSettings, argOf } from '../cfg.mjs'
 import { loadLedger, memberLedger } from '../eval/ledger.mjs'
-import { makeEvaluator, ntStaticOf } from '../eval/evalCore.mjs'
+import { makeEvaluator, ntStaticOf, isCapitalError } from '../eval/evalCore.mjs'
+import { normUnit, sameUnit } from '../eval/unit.mjs'
 import { loadPick, loadExt } from '../eval/pickLoader.mjs'
 import { P as PI, pushOwn, safeJson, assertIntrinsics, isIntegrityError } from '../eval/intrinsics.mjs'
 import { scoreOf } from '../eval/score.mjs'
@@ -40,6 +41,9 @@ import { createResourceMonitor } from '../arsi/resources.mjs'
 //    --ref: 另以參考模組之 pick 於同相位、同亂數種子逐決策執行(各有自己的 ctx.state / ctx.rand, 與本模組互不影響),
 //           輸出兩者選集之重疊率(交集 ÷ 本模組之選集大小)依決策段(各相位最前 10% / 中段 / 最後 10% 之決策)之分佈;
 //           只增輸出(結果檔之 refOverlap), 既有數字與 selHash 不變; 可給多個(逗號分隔): refOverlap = 第一個, 另有 refOverlaps = 全部依序
+//  基礎單位(規則 R-EV-43; 設定 source.unit 有給、且帳本以之建成者): 損益與等效年化依實際名義計(等效年化 = 損益和 ÷ 最大同時持倉名義 ÷ 年數), 另印峰值持倉名義;
+//    帳本之 meta.unit 與設定之 source.unit 不同(含一方未給)者不評估(離開碼 2; 請重建帳本)—— 迴圈之重放改用他份帳本者(ARSI_LEDGER_DIR)以該帳本自帶之交易規則為準、不比對;
+//    操作績效之最大同時持倉名義超過研究用本金 ⇒ 評估中止(ERROR EVAL_UNIT_CAPITAL; 離開碼 3)
 //  離開碼: 0 完成 / 2 挑選模組不存在或未過靜態檢查 / 3 挑選函數執行錯誤(含內建物件被改: ERROR EVAL_INTEGRITY)
 //  內建物件之完整性(規則 R-EV-35 ②): 挑選模組、擴充診斷模組、參考模組各於載入後比對; 讀帳本前與輸出前(最後一個 await 之後)再比對 ——
 //    模組可排入延後執行之程式(微任務), 於其後之 await 期間才改內建物件; 評估本身為同步, 執行中不會插入
@@ -213,6 +217,51 @@ let evalFrom = harnessEnv && process.env.ARSI_EVAL_FROM ? process.env.ARSI_EVAL_
 //讀帳本前比對內建物件(挑選模組已載入; 其延後執行之程式可能於上方之 await 期間才執行): 讀帳本與建評估器為同步, 其間不會再執行模組之程式
 checkOrFail('before-ledger')
 let Lfull = loadLedger(ledgerDir)
+//基礎單位(規則 R-EV-43): 帳本之 meta.unit 須與設定之 source.unit 相同(交易規則之三個數值、緩衝、研究用本金; 皆未給亦可)—— 改了設定而未重建帳本者不評估
+//  (離開碼 2; 給 --out 者寫失敗之結果檔 { ok: false, code: 'LEDGER_UNIT_MISMATCH', mismatch }, 不留前次之結果; 不記評估紀錄)
+//  迴圈之重放改用他份帳本者(ARSI_HARNESS=1 且 ARSI_LEDGER_DIR; 保留期、其他標的): 只放寬「交易規則之三個數值」(以該帳本自帶者為準; 其他標的之交易規則隨其帳本),
+//    仍須「設定有給 ⇔ 帳本帶 meta.unit」且緩衝與研究用本金相同(不合 ⇒ 同上, 不以另一口徑評估; 訊息不指 g_build.mjs —— 他份帳本不由其建)
+//  設定之 source.unit 本身不合者同樣不評估(離開碼 2; 給 --out 者寫失敗之結果檔 { ok: false, code: 'SOURCE_UNIT_INVALID' }; 不記評估紀錄)
+//  mismatch, 不合之項: ['presence'](一方未給)或 'rule'(交易規則之三個數值; 他份帳本不比)、'buffer'、'uIni' 之子集
+{
+    let su = null
+    try {
+        su = normUnit(st.source && st.source.unit !== undefined ? st.source.unit : null, 'source.unit')
+    }
+    catch (err) {
+        console.log(err.message)
+        if (fpOut && fpOut !== true) {
+            writeJson(path.resolve(fpOut), { ok: false, ...memberInfo(), error: err.message, code: 'SOURCE_UNIT_INVALID' })
+        }
+        process.exit(2)
+    }
+    let lu = Lfull.unit === undefined ? null : Lfull.unit
+    let other = harnessEnv && Boolean(process.env.ARSI_LEDGER_DIR)
+    let mismatch = []
+    if ((su === null) !== (lu === null)) {
+        mismatch.push('presence')
+    }
+    else if (su !== null) {
+        if (!other && (su.rule.stepSize !== lu.rule.stepSize || su.rule.minQty !== lu.rule.minQty || su.rule.minNotional !== lu.rule.minNotional)) {
+            mismatch.push('rule')
+        }
+        if (su.buffer !== lu.buffer) {
+            mismatch.push('buffer')
+        }
+        if (su.uIni !== lu.uIni) {
+            mismatch.push('uIni')
+        }
+    }
+    let ok = other ? mismatch.length === 0 : sameUnit(su, lu)
+    if (!ok) {
+        let msg = other ? 'invalid ledger: must have the same presence, buffer and uIni of unit as source.unit of settings (ledger of ARSI_LEDGER_DIR)' : 'invalid ledger: must be rebuilt with the current source.unit of settings'
+        console.log(other ? msg : `${msg} (node g_build.mjs)`)
+        if (fpOut && fpOut !== true) {
+            writeJson(path.resolve(fpOut), { ok: false, ...memberInfo(), error: msg, code: 'LEDGER_UNIT_MISMATCH', mismatch })
+        }
+        process.exit(2)
+    }
+}
 //成員重抽: 半庫帳本(memberLedger 之入口另比對內建物件; 與讀帳本同為同步, 其間不會再執行模組之程式); 之後之評估期間、訓練期之進場數、評估器皆以半庫帳本為準
 let L = member ? memberLedger(Lfull, member.salt, member.half) : Lfull
 if (member) {
@@ -386,6 +435,18 @@ catch (err) {
     }
     //寫錯誤結果前再比對一次(驗證拋錯之訊息組字可能執行模組之 toString)
     checkOrFail('pick')
+    //研究用本金之檢查(規則 R-EV-43; 評估器自建之錯誤): 操作績效之最大同時持倉名義超過研究用本金 ⇒ 評估中止並回報(離開碼 3)
+    if (isCapitalError(err)) {
+        //相位、峰值持倉名義與研究用本金皆為評估器之計算值(非輸入值); 畫面之峰值持倉名義至多印 4 位小數(結果檔保留原值)
+        let capInfo = { phase: err.phase, peakNotional: err.peakNotional, uIni: err.uIni }
+        let pkTxt = typeof capInfo.peakNotional === 'number' && Number.isFinite(capInfo.peakNotional) ? String(Number(capInfo.peakNotional.toFixed(4))) : String(capInfo.peakNotional)
+        console.log(`ERROR EVAL_UNIT_CAPITAL ${err.message}(相位 ${capInfo.phase}:峰值持倉名義 ${pkTxt}u > 研究用本金 ${capInfo.uIni}u)`)
+        if (fpOut && fpOut !== true) {
+            writeJson(path.resolve(fpOut), { ok: false, ...memberInfo(), error: err.message, code: 'EVAL_UNIT_CAPITAL', ...capInfo })
+        }
+        logEval({ ok: false, code: 'EVAL_UNIT_CAPITAL' })
+        process.exit(3)
+    }
     console.log(`ERROR PICK_RUN ${String((err && err.stack) || err).split('\n').slice(0, 6).join('\n')}`)
     if (fpOut && fpOut !== true) {
         writeJson(path.resolve(fpOut), { ok: false, ...memberInfo(), error: String((err && err.message) || err), code: 'PICK_RUN' })
@@ -491,7 +552,10 @@ if (postfit) {
     console.log(`求解窗後段(--period postfit): 只計決策棒落在 ${periodInfo.start} ~ ${periodInfo.end}(不含)之決策, 且每次決策只留「求解窗之終點棒早於決策棒」之席 —— 此結果不是正本(佐證; 不入 S、階梯與看板之排序; 不印判讀)`)
 }
 console.log(`[${mode}|${periodInfo.label} ${periodInfo.start.slice(0, 10)} ~ ${periodInfo.end.slice(0, 10)}] 相位 ${m.phases.join(',')} | 決策 ${m.op.nDecisions.join('/')} 次 | 選集大小 均 ${f1(m.sel.sizeMean)}(${m.sel.sizeMin} ~ ${m.sel.sizeMax}), 空 ${m.sel.nEmpty}, 換手 Jaccard ${m.sel.turnoverJaccard}`)
-console.log(`操作績效(${m.period.cadenceDays} 日一換): 等效年化 均 ${f1(m.op.eqYr.mean)}% 最差相位 ${f1(m.op.eqYr.min)}% 最佳 ${f1(m.op.eqYr.max)}% | 月均單 ${f1(m.op.monthlyOrders.mean)} | 最大同時持倉 ${m.op.peakHold.max} | 勝率 ${(m.op.winRate * 100).toFixed(1)}% | 執行規則 ${m.hasAccept ? `有(下單率 ${(m.op.acceptRate * 100).toFixed(1)}%)` : '無(全收)'}`)
+if (m.unit) {
+    console.log(`基礎單位(交易規則 步長 ${m.unit.rule.stepSize} / 最小數量 ${m.unit.rule.minQty} / 最小名義價值 ${m.unit.rule.minNotional}, 緩衝 ${m.unit.buffer}, 研究用本金 ${m.unit.uIni}u): 每單之損益 = 每單位損益 × 該單之基礎單位名義; 等效年化 = 損益和 ÷ 最大同時持倉名義 ÷ 年數(挑選與執行規則所見之統計仍為每單位損益與單數)`)
+}
+console.log(`操作績效(${m.period.cadenceDays} 日一換): 等效年化 均 ${f1(m.op.eqYr.mean)}% 最差相位 ${f1(m.op.eqYr.min)}% 最佳 ${f1(m.op.eqYr.max)}% | 月均單 ${f1(m.op.monthlyOrders.mean)} | 最大同時持倉 ${m.op.peakHold.max}${m.op.peakNotional ? `(名義 ${f1(m.op.peakNotional.max)}u)` : ''} | 勝率 ${(m.op.winRate * 100).toFixed(1)}% | 執行規則 ${m.hasAccept ? `有(下單率 ${(m.op.acceptRate * 100).toFixed(1)}%)` : '無(全收)'}`)
 console.log(`新鮮度(七相位均 %): ${m.horizons.map((H) => `${H}d ${f1(m.fresh[H].eqYr.mean)}`).join(' | ')}`)
 if (m.null) {
     console.log(`同劑量虛無(${m.null.draws} 抽): 均 ${f1(m.null.mean)}% sd ${f1(m.null.sd)} p95 ${f1(m.null.p95)} | 超額 ${f1(m.null.excess)} z ${m.null.z} p ${m.null.p}`)
@@ -513,7 +577,7 @@ if (m.nullSideGeo) {
 console.log(`選集組成: 每隻每個決策視窗之訊號數 ${m.sel.sigPerPick}${m.null ? `(虛無 ${m.null.sigPerPick})` : ''} | 做多比例 ${m.sel.longRatio}${m.null ? `(虛無 ${m.null.longRatio})` : ''} | 平均因子數 ${m.sel.nKeysMean} | 平均止盈 / 止損 ${m.sel.tpMean} / ${m.sel.slMean}`)
 if (m.op.bySide) {
     let sd = (x) => `${f1(x.orders)} 單、損益 ${x.pnl}、勝率 ${(x.winRate * 100).toFixed(1)}%`
-    console.log(`損益歸因(各相位平均;損益 = 每單 1 單位之損益和, 合計 ${m.op.pnl}): 做多 ${sd(m.op.bySide.long)} | 做空 ${sd(m.op.bySide.short)}${Array.isArray(m.op.byGroup) && m.op.byGroup.length > 1 ? ` | 依子帳: ${m.op.byGroup.map((g) => `子帳 ${g.group}(每次決策 ${f1(g.seats)} 席)${sd(g)}`).join('、')}` : ''}${m.sel.tagPerf ? ` | 依 tag(共 ${m.sel.tagPerf.length} 種${m.sel.tagPerf.length > 8 ? ';列前 8 種, 全部見 metrics.sel.tagPerf' : ''}): ${m.sel.tagPerf.slice(0, 8).map((t) => `${t.tag} ${t.decisions} 次決策 ${f1(t.orders)} 單 損益 ${t.pnl}`).join('、')}` : ''}`)
+    console.log(`損益歸因(各相位平均;損益 = ${m.unit ? '各單依其基礎單位名義計之損益和(u)' : '每單 1 單位之損益和'}, 合計 ${m.op.pnl}): 做多 ${sd(m.op.bySide.long)} | 做空 ${sd(m.op.bySide.short)}${Array.isArray(m.op.byGroup) && m.op.byGroup.length > 1 ? ` | 依子帳: ${m.op.byGroup.map((g) => `子帳 ${g.group}(每次決策 ${f1(g.seats)} 席)${sd(g)}`).join('、')}` : ''}${m.sel.tagPerf ? ` | 依 tag(共 ${m.sel.tagPerf.length} 種${m.sel.tagPerf.length > 8 ? ';列前 8 種, 全部見 metrics.sel.tagPerf' : ''}): ${m.sel.tagPerf.slice(0, 8).map((t) => `${t.tag} ${t.decisions} 次決策 ${f1(t.orders)} 單 損益 ${t.pnl}`).join('、')}` : ''}`)
 }
 for (let [nm, r] of Object.entries(m.ext || {})) {
     console.log(`擴充診斷 ${nm}(共用工具區 metrics/${nm}.mjs): ${r.error ? `未算(${r.error})` : (typeof r.text === 'string' ? r.text : JSON.stringify(r).slice(0, 400))}`)

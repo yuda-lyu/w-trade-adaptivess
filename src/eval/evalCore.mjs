@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import iseint from 'wsemi/src/iseint.mjs'
 import { P, copyRange, copyAll, pushOwn, assertIntrinsics, violationMark, violationSince, isIntegrityError, integrityError, adoptError, snapData, handOut, isMutableSnap, isBrand } from './intrinsics.mjs'
 import { tieBaseOf, isSrcIdx } from './ledger.mjs'
+import { normUnit } from './unit.mjs'
 
 const { ObjectFreeze, ObjectSeal, ObjectHasOwn, ReflectApply, ArrayFrom, ArrayIsArray, ArrayPrototypeJoin, ArrayBufferIsView, NumberCtor, NumberIsInteger, NumberIsFinite, MathFloor, MathRound, MathMax, MathMin, MathImul, StringCtor, JSONStringify, StructuredClone, ErrorCtor, MapPrototypeGet, MapPrototypeSet, MapPrototypeHas, MapPrototypeDelete, MapPrototypeKeys, MapIteratorNext, SetPrototypeGetSize, SetPrototypeValues, SetIteratorNext, TypedArrayPrototypeGetLength, TypedArrayPrototypeGetToStringTag, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
 
@@ -17,7 +18,13 @@ const { ObjectFreeze, ObjectSeal, ObjectHasOwn, ReflectApply, ArrayFrom, ArrayIs
 //    accept 須為 (sig, book) 之純函數(評估器於操作績效、各新鮮度視窗、虛無各自獨立模擬, 各有自己的 book)
 //  操作績效 op(視窗 = 決策間隔, 首尾相接, book 連續): 等效年化 eqYr(%) = 已下單之總損益 ÷ 最大同時持倉單數 ÷ 年數 × 100(每單 1 單位)
 //    帳本期末仍未出場者: 損益 0、計入持倉至期末
+//    基礎單位(規則 R-EV-43; 帳本帶 L.unitN / L.unit 時): 每單之損益(u) = 每單位損益 × 該單之基礎單位名義(L.unitN[進場棒]), 持倉名義 = 未出場各單之名義和,
+//      等效年化 = 損益和 ÷ 最大同時持倉名義 ÷ 年數 × 100 —— 操作績效、各相位、新鮮度、三等分、各虛無與對照、求解窗後段、損益歸因、擴充診斷之 simulate / replaceNull 皆經 simWindows, 一併依此;
+//      挑選函數與執行規則所見者不變(ctx.stat / ctx.orders 之損益仍為每單位損益; book.open 等仍為單數、book.pnlClosed 仍為每單位損益之和)⇒ 同一挑選模組之選集與下單不變;
+//      峰值持倉(單數)與月均單照舊(階梯與上限以單數計), 另報峰值持倉名義(op.peakNotional、fresh[H].peakNotional); 操作績效之峰值持倉名義超過研究用本金(L.unit.uIni)即中止(拋錯; isCapitalError)
+//      帳本未帶者: 每單 1 單位(與未加入本功能時逐位相同)
 //  新鮮度 fresh[H]: 各決策之選集於其後 H 日內之訊號(每窗獨立之 book); eqYr_H = 各窗損益之平均 ÷ (H/365.25) ÷ 各窗最大同時持倉之最大值 × 100
+//    (基礎單位者: 損益依名義、分母為各窗峰值持倉名義之最大值)
 //  同劑量虛無 null: 同決策時點、同每次選集大小、同 tag 與同 accept, 選集改自全部項目均勻不放回隨機挑, 重複 draws 次 ⇒ op 等效年化(相位平均)之虛無分佈與 p 值
 //  無前視: 挑選函數只拿到 ctx, 其統計一律以決策棒 b 為界(出場棒 < b 者才算已結); accept 只拿到訊號當下之資訊; 帳本陣列不外露
 //  評估器之狀態不受模組之寫入影響(規則 R-EV-35; 挑選模組、擴充診斷模組與評估器同在一個 realm):
@@ -212,11 +219,34 @@ let isArr = (v) => {
 }
 
 
+//capitalError / isCapitalError, 研究用本金之檢查(規則 R-EV-43; 評估器 = 成品之操作績效超過即中止並回報)之錯誤: 由評估器自建並登記(模組拋出之同名錯誤不算)
+//  code = 'EVAL_UNIT_CAPITAL'; 訊息依 invalid <名稱>: must …(不帶輸入值); 另帶計算值 phase(相位)、peakNotional(該相位之峰值持倉名義)、uIni(研究用本金)供回報
+let capitalErrors = new WeakSet()
+let capitalError = (phase, peakNotional, uIni) => {
+    let err = new ErrorCtor('invalid peak notional of open orders: must not exceed the research capital (unit.uIni)')
+    err.code = 'EVAL_UNIT_CAPITAL'
+    err.phase = phase
+    err.peakNotional = peakNotional
+    err.uIni = uIni
+    capitalErrors.add(err)
+    return err
+}
+/**
+ * 是否為評估器之研究用本金之檢查所拋之錯誤(規則 R-EV-43): 帳本帶基礎單位時, 操作績效之最大同時持倉名義超過研究用本金(L.unit.uIni)即拋此錯誤(另帶 phase、peakNotional、uIni)
+ *
+ * @param {*} err 輸入錯誤
+ * @returns {Boolean} 回傳是否為該錯誤
+ * @example
+ * try { ev.evalPolicy(pick) } catch (err) { if (isCapitalError(err)) { console.log(err.code) } }
+ */
+let isCapitalError = (err) => err !== null && typeof err === 'object' && capitalErrors.has(err)
+
+
 /**
  * 以訂單帳本建立快速評估器
  * 評估器於各決策時點只憑決策棒以前之資訊呼叫挑選函數取得選集, 再彙整其後視窗之結果(操作績效、新鮮度、虛無檢定等); 詳細語義見檔頭說明
  *
- * @param {Object} L 輸入由 loadLedger 取得之帳本物件; 須另給 L.ntStatic(Int32Array, 長度 L.n, 逐策略於訓練期之進場數; 以 ntStaticOf(L, 訓練期之終點棒序) 取得, 帳本全為訓練期者為 ntStaticOf(L, L.nBars)); 未給或型態、長度不合者拋 invalid L.ntStatic: must be … 之錯誤(不回退為全期進場數)
+ * @param {Object} L 輸入由 loadLedger 取得之帳本物件; 須另給 L.ntStatic(Int32Array, 長度 L.n, 逐策略於訓練期之進場數; 以 ntStaticOf(L, 訓練期之終點棒序) 取得, 帳本全為訓練期者為 ntStaticOf(L, L.nBars)); 未給或型態、長度不合者拋 invalid L.ntStatic: must be … 之錯誤(不回退為全期進場數); 帳本帶基礎單位者另有 L.unitN(Float64Array(nBars); 每根棒之基礎單位名義)與 L.unit(交易規則、緩衝、研究用本金), 兩者須同時給或同時不給(規則 R-EV-43; 給者績效依實際名義計)
  * @param {Object} [cfg={}] 輸入設定物件,預設{}
  * @param {Integer} [cfg.warmupDays=180] 輸入暖機日數,預設180
  * @param {Integer} [cfg.cadenceDays=7] 輸入決策間隔日數,預設7
@@ -308,6 +338,32 @@ let makeEvaluator = (L, cfg = {}) => {
     let ntAll = new Int32Array(n)
     for (let s = 0; s < n; s++) {
         ntAll[s] = ntGiven[s]
+    }
+    //UN / unitCfg, 基礎單位(規則 R-EV-43; 選配): 帳本帶 L.unitN(Float64Array(nBars); 每根棒之基礎單位名義)與 L.unit(交易規則、緩衝、研究用本金)者, 績效依實際名義計
+    //  兩者須同時給或同時不給; 給而不合(型別以內部槽判定、長度非 nBars、含非正或非有限之值; L.unit 不合 normUnit)即拒絕建評估器; 名義為評估器自己之複本
+    //  皆未給 ⇒ UN 為 null: 每單 1 單位, 各數字與輸出之欄位與未加入本功能時逐位相同
+    let UN = null
+    let unitCfg = null
+    {
+        let un0 = L.unitN === undefined || L.unitN === null ? null : L.unitN
+        let uc0 = L.unit === undefined || L.unit === null ? null : L.unit
+        if ((un0 === null) !== (uc0 === null)) {
+            throw new ErrorCtor('invalid L.unitN: must be given together with L.unit (see loadLedger)')
+        }
+        if (un0 !== null) {
+            if (TypedArrayPrototypeGetToStringTag(un0) !== 'Float64Array' || TypedArrayPrototypeGetLength(un0) !== nBars) {
+                throw new ErrorCtor('invalid L.unitN: must be a Float64Array of length L.nBars with positive finite values (base-unit notional of each bar)')
+            }
+            UN = new Float64Array(nBars)
+            for (let i = 0; i < nBars; i++) {
+                let v = un0[i]
+                if (!(v > 0 && v < Infinity)) {
+                    throw new ErrorCtor('invalid L.unitN: must be a Float64Array of length L.nBars with positive finite values (base-unit notional of each bar)')
+                }
+                UN[i] = v
+            }
+            unitCfg = normUnit(uc0, 'L.unit')
+        }
     }
     //tie, 各策略固定之亂數(Uint32; 由序號經雜湊而得, 與策略之任何屬性無關): 排序同分時作次鍵用 —— 序號是策略檔之排序位置, 帶有資訊, 不宜當次鍵
     //  cfg.tieSalt(選配; 整數; 預設 0 = 正本): 迴圈之重放用 —— 以另一組固定之同分次序重放(規則 R-EV-22)
@@ -759,11 +815,15 @@ let makeEvaluator = (L, cfg = {}) => {
     }
 
     //simWindows, 逐訊號模擬: wins = [{ b, e, sel, tag, k }](依 b 升冪, 互不重疊); accept 為 null ⇒ 全收
-    //  回 { totalPnl, nSignals, nOrders, nClosed, nWin, nUnsettled, peak, hash }
+    //  回 { totalPnl, nSignals, nOrders, nClosed, nWin, nUnsettled, peak, hash }: peak = 最大同時持倉單數
+    //    帳本帶基礎單位者(規則 R-EV-43): totalPnl = Σ(每單位損益 × 進場棒之名義), 另帶 peakN = 最大同時持倉名義; 未帶者 totalPnl = Σ 每單位損益、不帶 peakN(回傳之形狀不變; 名義即單數)
     let closeL = new Int32Array(nBars + 2)
     let closeS = new Int32Array(nBars + 2)
     let closeP = new Float64Array(nBars + 2)
     let closeG = [0, 1, 2, 3].map(() => new Int32Array(nBars + 2)) //分帳: 各子帳於各棒出場之單數(只在選集有登記 group 時使用)
+    //基礎單位(規則 R-EV-43; UN 有者才用): closeN = 全收時之持倉名義之差分(進場棒 +、出場棒 −); closeNP = 逐訊號時各棒出場之單之名義和
+    let closeN = UN ? new Float64Array(nBars + 2) : null
+    let closeNP = UN ? new Float64Array(nBars + 2) : null
     //  col(選配)= { strat: Int32Array(n), bar: Int32Array(nBars + 2) }: 給定時把每張已下單之單計入其策略與進場棒(下單集中度用; 不影響任何數字)
     //    col 另帶 side(Float64Array(8): 做多之 [單數, 損益, 已結單數, 獲利單數] + 做空之同四項)與 tags(Map: tag 字串 → { orders, pnl })時, 另把每張單歸到其策略之方向與其決策視窗之 tag(損益歸因用)
     //    col 再帶 grp(Float64Array(N_GROUP * 4): 各子帳之 [單數, 損益, 已結單數, 獲利單數])時, 另把每張單歸到其策略所屬之子帳(未分帳者皆歸子帳 0; 規則 R-EV-33)
@@ -777,7 +837,7 @@ let makeEvaluator = (L, cfg = {}) => {
             throw new ErrorCtor(REENTRY_MSG)
         }
         if (wins.length === 0) {
-            return { totalPnl: 0, nSignals: 0, nOrders: 0, nClosed: 0, nWin: 0, nUnsettled: 0, peak: 0, hash: 0 }
+            return { totalPnl: 0, nSignals: 0, nOrders: 0, nClosed: 0, nWin: 0, nUnsettled: 0, peak: 0, hash: 0, ...(UN ? { peakN: 0 } : {}) }
         }
         //tag 之歸因(col.tags): 各視窗之 tag 字串先於迴圈外對到槽位, 迴圈內只累加定型陣列(逐訊號之迴圈內不呼叫 Map / JSON 等可被改寫之方法; 規則 R-EV-35 ②)
         //  槽位之初值 = col.tags 內既有之累計, 迴圈後寫回 ⇒ 加總之先後與原寫法(逐單 a.pnl += p)相同, 數字逐位不變
@@ -829,7 +889,8 @@ let makeEvaluator = (L, cfg = {}) => {
             ? (s, w, j, g) => {
                 let o = L.mode[s] > 0 ? 0 : 4
                 let closed = L.ext[j] >= 0
-                let p = closed ? L.pnl[j] : 0
+                //損益(基礎單位者為 u = 每單位損益 × 進場棒之名義; 規則 R-EV-43)
+                let p = closed ? (UN ? L.pnl[j] * UN[L.ent[j]] : L.pnl[j]) : 0
                 col.side[o]++
                 if (closed) {
                     col.side[o + 1] += p
@@ -887,16 +948,25 @@ let makeEvaluator = (L, cfg = {}) => {
         let nWin = 0
         let nUnsettled = 0
         let peak = 0
+        let peakN = 0
         let hash = 2166136261
         if (!accept) {
-            //全收: 以差分陣列求最大同時持倉(不必排序)
+            //全收: 以差分陣列求最大同時持倉(不必排序); 基礎單位者另以名義之差分求最大同時持倉名義
             let lo = wins[0].b
             let hiBar = nBars
             closeL.fill(0, lo, hiBar + 1)
+            if (UN) {
+                closeN.fill(0, lo, hiBar + 1)
+            }
             for (let i = 0; i < nSig; i++) {
                 let j = cj[i]
                 nOrders++
                 closeL[L.ent[j]]++
+                let wN = 1
+                if (UN) {
+                    wN = UN[L.ent[j]]
+                    closeN[L.ent[j]] += wN
+                }
                 if (col) {
                     col.strat[cs[i]]++
                     col.bar[L.ent[j]]++
@@ -906,27 +976,40 @@ let makeEvaluator = (L, cfg = {}) => {
                 }
                 let x = L.ext[j]
                 if (x >= 0) {
-                    totalPnl += L.pnl[j]
+                    totalPnl += UN ? L.pnl[j] * wN : L.pnl[j]
                     nClosed++
                     if (L.pnl[j] > 0) {
                         nWin++
                     }
                     closeL[x]--
+                    if (UN) {
+                        closeN[x] -= wN
+                    }
                 }
                 else {
                     nUnsettled++
                 }
             }
             let cur = 0
+            let curN = 0
             for (let i = lo; i < hiBar; i++) {
                 cur += closeL[i]
                 if (cur > peak) {
                     peak = cur
                 }
+                if (UN) {
+                    curN += closeN[i]
+                    if (curN > peakN) {
+                        peakN = curN
+                    }
+                }
             }
             closeL.fill(0, lo, hiBar + 1)
+            if (UN) {
+                closeN.fill(0, lo, hiBar + 1)
+            }
             tagFlush()
-            return { totalPnl, nSignals: nSig, nOrders, nClosed, nWin, nUnsettled, peak, hash: nSig }
+            return { totalPnl, nSignals: nSig, nOrders, nClosed, nWin, nUnsettled, peak, hash: nSig, ...(UN ? { peakN } : {}) }
         }
         //逐訊號: 依(進場棒, 策略之固定亂數 tie)排序
         let sidOf = new Int32Array(nSig)
@@ -969,11 +1052,16 @@ let makeEvaluator = (L, cfg = {}) => {
         closeL.fill(0, lo, nBars + 2)
         closeS.fill(0, lo, nBars + 2)
         closeP.fill(0, lo, nBars + 2)
+        if (UN) {
+            closeNP.fill(0, lo, nBars + 2)
+        }
         if (hasGrp) {
             for (let g = 0; g < N_GROUP; g++) {
                 closeG[g].fill(0, lo, nBars + 2)
             }
         }
+        //openN, 現有持倉之名義和(基礎單位者; 規則 R-EV-43): 只供峰值持倉名義, 不交給 accept(book 仍為單數與每單位損益)
+        let openN = 0
         //持倉簿與訊號(規則 R-EV-35 ①): 評估器以自己之計數(open … pnlClosed、og)模擬, 持倉峰值只依它;
         //  交給 accept 之 book / sig 為封裝(seal)之交出物件, 每次呼叫前以計數重寫 —— accept 改它們不影響模擬(原寫法 book 即計數本身, 改 book.open 即改了峰值)
         //  逐訊號之迴圈內只用擷取之參照與定型陣列(accept 為模組之程式, 兩次呼叫之間評估器不呼叫可被改寫之方法); 迴圈結束(或 accept 拋錯)時比對內建物件
@@ -1009,6 +1097,9 @@ let makeEvaluator = (L, cfg = {}) => {
                         openShort -= c
                         open -= a + c
                         pnlClosed += closeP[cur]
+                        if (UN) {
+                            openN -= closeNP[cur]
+                        }
                         if (hasGrp) {
                             for (let g = 0; g < N_GROUP; g++) {
                                 og[g] -= closeG[g][cur]
@@ -1079,6 +1170,14 @@ let makeEvaluator = (L, cfg = {}) => {
                 if (open > peak) {
                     peak = open
                 }
+                let wN = 1
+                if (UN) {
+                    wN = UN[t]
+                    openN += wN
+                    if (openN > peakN) {
+                        peakN = openN
+                    }
+                }
                 if (col) {
                     col.strat[s]++
                     col.bar[t]++
@@ -1089,7 +1188,10 @@ let makeEvaluator = (L, cfg = {}) => {
                 hash = MathImul(hash ^ (j + 1), 16777619) >>> 0
                 let x = L.ext[j]
                 if (x >= 0) {
-                    totalPnl += L.pnl[j]
+                    totalPnl += UN ? L.pnl[j] * wN : L.pnl[j]
+                    if (UN) {
+                        closeNP[x] += wN
+                    }
                     nClosed++
                     if (L.pnl[j] > 0) {
                         nWin++
@@ -1128,19 +1230,28 @@ let makeEvaluator = (L, cfg = {}) => {
         closeL.fill(0, lo, nBars + 2)
         closeS.fill(0, lo, nBars + 2)
         closeP.fill(0, lo, nBars + 2)
-        return { totalPnl, nSignals: nSig, nOrders, nClosed, nWin, nUnsettled, peak, hash }
+        if (UN) {
+            closeNP.fill(0, lo, nBars + 2)
+        }
+        return { totalPnl, nSignals: nSig, nOrders, nClosed, nWin, nUnsettled, peak, hash, ...(UN ? { peakN } : {}) }
     }
 
     //opOf, 操作績效(視窗 = 決策間隔, 首尾相接, book 連續)
     //  opt(選配)= { k0, col, ordKey }: k0 為 bars[0] 之決策序(切片重放時使 accept 收到之 sig.k 與挑選函數之 ctx.k 一致; 預設 0); col、ordKey 見 simWindows
+    //  基礎單位(規則 R-EV-43; UN 有者): 等效年化之分母改為最大同時持倉名義, 另帶 peakNotional; opt.capCheck 為真(evalPolicy 之操作績效)且峰值持倉名義超過研究用本金 ⇒ 拋錯(capitalError)
     let opOf = (sels, bars, tags, accept, opt = null) => {
         let k0 = opt && Number.isInteger(opt.k0) ? opt.k0 : 0
         let wins = bars.map((b, k) => ({ b, e: b + cad, sel: sels[k], tag: tags ? tags[k] : null, k: k + k0 }))
         let r = simWindows(wins, accept, opt && opt.col ? opt.col : null, opt && opt.ordKey ? opt.ordKey : null)
         let days = bars.length * cadenceDays
         let years = days / 365.25
+        //pkN, 等效年化之分母: 基礎單位者為最大同時持倉名義, 否則為最大同時持倉單數(每單 1 單位)
+        let pkN = UN ? r.peakN : r.peak
+        if (UN && opt && opt.capCheck === true && pkN > unitCfg.uIni) {
+            throw capitalError(opt.phase === undefined ? null : opt.phase, pkN, unitCfg.uIni)
+        }
         return {
-            eqYr: r.peak > 0 && years > 0 ? r.totalPnl / r.peak / years * 100 : 0,
+            eqYr: pkN > 0 && years > 0 ? r.totalPnl / pkN / years * 100 : 0,
             totalPnl: r.totalPnl,
             nSignals: r.nSignals,
             nOrders: r.nOrders,
@@ -1151,6 +1262,7 @@ let makeEvaluator = (L, cfg = {}) => {
             monthlyOrders: days > 0 ? r.nOrders / (days / 30.4375) : 0,
             nDecisions: bars.length,
             hash: r.hash,
+            ...(UN ? { peakNotional: pkN } : {}),
         }
     }
 
@@ -1192,6 +1304,8 @@ let makeEvaluator = (L, cfg = {}) => {
         let nw = 0
         let nPos = 0
         let maxPeak = 0
+        //maxPeakN, 各窗最大同時持倉名義之最大值(基礎單位者為等效年化之分母; 規則 R-EV-43)
+        let maxPeakN = 0
         for (let k = 0; k < bars.length; k++) {
             let b = bars[k]
             if (b + W > nBars) {
@@ -1201,13 +1315,17 @@ let makeEvaluator = (L, cfg = {}) => {
             if (r.peak > maxPeak) {
                 maxPeak = r.peak
             }
+            if (UN && r.peakN > maxPeakN) {
+                maxPeakN = r.peakN
+            }
             sum += r.totalPnl
             nw++
             if (r.totalPnl > 0) {
                 nPos++
             }
         }
-        return { eqYr: nw > 0 && maxPeak > 0 ? (sum / nw) / (H / 365.25) / maxPeak * 100 : 0, posRate: nw > 0 ? nPos / nw : 0, nWindows: nw, peakHold: maxPeak }
+        let den = UN ? maxPeakN : maxPeak
+        return { eqYr: nw > 0 && den > 0 ? (sum / nw) / (H / 365.25) / den * 100 : 0, posRate: nw > 0 ? nPos / nw : 0, nWindows: nw, peakHold: maxPeak, ...(UN ? { peakNotional: maxPeakN } : {}) }
     }
 
     let jaccard = (a, b) => {
@@ -1393,7 +1511,7 @@ let makeEvaluator = (L, cfg = {}) => {
     //    decMask(各相位一個 Uint8Array, 與該相位之決策數等長; 1 = 替換該決策之席): 遮罩外之決策給**空選集**(不計席數; 實作上亦不耗亂數 —— 非合約: 部分遮罩時各抽之選集僅於同選項重跑時可重現)
     //      —— 與成品之「只留遮罩內決策」之重放成對(依市況或任何狀態分組之組成對照: 活躍度為決策當下之值, 不必以靜態量近似)
     //    某一個為「全部」時(subMask 涵蓋成品之全部子帳、或 decMask 全為 1), 等同不給該項、只給另一項; 兩者皆為「全部」(或另一項未給)時, 亂數之取用與選集與未給 more 時逐位相同
-    //  給 more 者回傳另帶 pnl(Float64Array(draws); 各抽之損益和(已結之單; 每單 1 單位)之相位平均; 定義同 opOf 之 totalPnl); 未給者回傳之形狀(含可列舉之鍵)不變
+    //  給 more 者回傳另帶 pnl(Float64Array(draws); 各抽之損益和(已結之單; 每單 1 單位, 基礎單位者為依名義之 u)之相位平均; 定義同 opOf 之 totalPnl); 未給者回傳之形狀(含可列舉之鍵)不變
     //  鄰域內無未用之策略時該席從缺(同既有寫法; 保留之席先占位, 故部分替換時較易發生)
     let nullGroupActOf = (runs, accept, draws, seed, half, grp, nGrp, actDays = 0, more = null) => {
         let subMask = more && more.subMask ? more.subMask : null
@@ -1859,15 +1977,16 @@ let makeEvaluator = (L, cfg = {}) => {
         //操作績效; 同時收集下單集中度(各相位分別彙整後取平均; 不影響任何既有數字)
         let col = { strat: new Int32Array(n), bar: new Int32Array(nBars + 2), side: new Float64Array(8), tags: new Map(), grp: new Float64Array(N_GROUP * 4) }
         let ords = []
+        //  基礎單位(規則 R-EV-43): 各相位之操作績效之最大同時持倉名義超過研究用本金即中止(capCheck; 只對成品之操作績效 —— 新鮮度、各虛無與對照、擴充診斷之重放不檢)
         let ops = runs.map((r) => {
-            let o = opOf(r.sels, r.bars, r.tags, accept, { col, k0: r.k0 })
+            let o = opOf(r.sels, r.bars, r.tags, accept, { col, k0: r.k0, capCheck: true, phase: r.phase })
             ords.push(ordersOf(col, r.bars))
             return o
         })
         let fresh = {}
         for (let H of horizons) {
             let fs2 = runs.map((r) => freshOf(r.sels, r.bars, r.tags, accept, H, r.k0))
-            fresh[H] = { eqYr: statOf(fs2.map((f) => f.eqYr)), posRate: r4(fs2.reduce((s, f) => s + f.posRate, 0) / fs2.length), nWindows: fs2.map((f) => f.nWindows), peakHold: Math.max(...fs2.map((f) => f.peakHold)) }
+            fresh[H] = { eqYr: statOf(fs2.map((f) => f.eqYr)), posRate: r4(fs2.reduce((s, f) => s + f.posRate, 0) / fs2.length), nWindows: fs2.map((f) => f.nWindows), peakHold: Math.max(...fs2.map((f) => f.peakHold)), ...(UN ? { peakNotional: Math.max(...fs2.map((f) => f.peakNotional)) } : {}) }
         }
         let sizes = runs.flatMap((r) => r.sels.map((s) => s.length))
         let jac = []
@@ -2040,7 +2159,7 @@ let makeEvaluator = (L, cfg = {}) => {
         //        onlyDecisions: [各相位一個布林陣列](相位數與各相位之決策數同成品; 元素為布林或 0 / 1): 只換遮罩內之決策之席, 遮罩外之決策給空選集
         //          —— 配對之成品值改為「成品只留遮罩內決策」之重放(依市況或任何狀態分組之組成對照; 活躍度為決策當下之值)
         //        給任一者時回傳另帶 applicable: true、obs(配對之成品值; 等效年化之相位平均; p / z / excess 皆對它算)、
-        //          obsPnl / pnlMean / pnlSd(成品與各抽之損益和; 每單 1 單位、已結之單、各相位平均; 不受峰值持倉之正規化, 但各遮罩為獨立重放〔持倉簿各自起算、抽樣各自獨立〕, 跨遮罩相加不保證等於全體, 執行規則依持倉簿狀態時尤然)
+        //          obsPnl / pnlMean / pnlSd(成品與各抽之損益和; 每單 1 單位〔基礎單位者為依名義之 u〕、已結之單、各相位平均; 不受峰值持倉之正規化, 但各遮罩為獨立重放〔持倉簿各自起算、抽樣各自獨立〕, 跨遮罩相加不保證等於全體, 執行規則依持倉簿狀態時尤然)
         //          某一個為全部(所列子帳涵蓋成品之全部子帳、或遮罩全為真)時等同只給另一個; 兩者皆為全部(或另一個未給)時, 各抽之選集與既有欄與未給時逐位相同
         //          成品未分帳而給 onlyGroups 者只回 { applicable: false, reason }(不帶其餘新欄); 鄰域內無未用之策略時該席從缺(同既有寫法)
         //        參數不合者拋錯, 訊息依跨套件規格 V19、V20: invalid opt.onlyGroups(或 onlyDecisions, 帶索引時 [i] / [i][k]): must be …(不帶輸入值)
@@ -2358,7 +2477,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 if (!more) {
                     return summarizeOf(Array.from(v), v.thirds)
                 }
-                //給任一者: 另帶配對之成品值 obs(未給 onlyDecisions = 成品本身之 obs, 逐位相同; 給者 = 成品只留遮罩內決策之重放)與損益(每單 1 單位; 已結之單; 各相位平均)
+                //給任一者: 另帶配對之成品值 obs(未給 onlyDecisions = 成品本身之 obs, 逐位相同; 給者 = 成品只留遮罩內決策之重放)與損益(每單 1 單位〔基礎單位者為依名義之 u〕; 已結之單; 各相位平均)
                 //  obsPnl = 成品, pnlMean / pnlSd = 各抽之均與標準差 —— 各遮罩為獨立重放(持倉簿各自起算、抽樣各自獨立), 損益與等效年化(以各自之峰值持倉正規化)皆不保證可跨遮罩相加
                 let ob = obs
                 let obP = 0
@@ -2510,11 +2629,12 @@ let makeEvaluator = (L, cfg = {}) => {
         let rr = (o) => ({ mean: r4(o.mean), min: r4(o.min), max: r4(o.max), sd: r4(o.sd), byPhase: o.byPhase.map(r4) })
         let freshOut = {}
         for (let H of horizons) {
-            freshOut[H] = { eqYr: rr(fresh[H].eqYr), posRate: fresh[H].posRate, peakHold: fresh[H].peakHold, nWindows: fresh[H].nWindows }
+            freshOut[H] = { eqYr: rr(fresh[H].eqYr), posRate: fresh[H].posRate, peakHold: fresh[H].peakHold, nWindows: fresh[H].nWindows, ...(UN ? { peakNotional: r4(fresh[H].peakNotional) } : {}) }
         }
         let nSig = ops.reduce((s, o) => s + o.nSignals, 0)
         let nOrd = ops.reduce((s, o) => s + o.nOrders, 0)
         //損益歸因(各相位平均; 只增輸出): 依策略之方向(bySide)、所屬之子帳(byGroup)與其決策視窗之 tag(tagPerf); 兩側之 pnl 和 = 各子帳之 pnl 和 = 各 tag 之 pnl 和(每個決策皆有 tag 時)= op.pnl
+        //  基礎單位者(規則 R-EV-43): pnl 與 tagPerf[].pnlPerOrder(每單之平均損益)皆為依名義之 u(否則為每單位損益)
         let nPh = Math.max(1, ops.length)
         let sideOut = (o) => ({ orders: r4(col.side[o] / nPh), pnl: r4(col.side[o + 1] / nPh), winRate: col.side[o + 2] > 0 ? r4(col.side[o + 3] / col.side[o + 2]) : 0 })
         let tagDec = new Map()
@@ -2543,10 +2663,13 @@ let makeEvaluator = (L, cfg = {}) => {
             phases,
             horizons,
             hasAccept: !!accept,
+            //基礎單位(規則 R-EV-43; 帳本帶者才有): 交易規則、緩衝、研究用本金 —— 本結果之損益與等效年化依實際名義計
+            ...(UN ? { unit: { rule: { ...unitCfg.rule }, buffer: unitCfg.buffer, uIni: unitCfg.uIni } } : {}),
             op: {
                 eqYr: rr(statOf(ops.map((o) => o.eqYr))),
                 monthlyOrders: rr(statOf(ops.map((o) => o.monthlyOrders))),
                 peakHold: rr(statOf(ops.map((o) => o.peakHold))),
+                ...(UN ? { peakNotional: rr(statOf(ops.map((o) => o.peakNotional))) } : {}),
                 winRate: r4(ops.reduce((s, o) => s + o.winRate, 0) / ops.length),
                 acceptRate: nSig > 0 ? r4(nOrd / nSig) : 0,
                 nSignals: ops.map((o) => o.nSignals),
@@ -2596,5 +2719,5 @@ let makeEvaluator = (L, cfg = {}) => {
 }
 
 
-export { makeEvaluator, lowerBound, mulberry32, ntStaticOf }
+export { makeEvaluator, lowerBound, mulberry32, ntStaticOf, isCapitalError }
 export default makeEvaluator

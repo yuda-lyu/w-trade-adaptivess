@@ -2,7 +2,8 @@
 //  不另放邏輯; 各模組之函數皆可自其檔以深層路徑取用
 //  三組: 評估器(eval; 與迴圈無關, 可單獨使用)、代理式迴圈之通用層(arsi; 不含交易領域之用語)、領域接線(domain; 把兩者接到 w-recursi 之樹與臂目錄)
 //  命令列程式(src/cli/*.mjs)與工具(src/tools/*.mjs)是「執行即動作」之指令稿, 不在此匯出: 由專案根之進入檔載入(node src/tools/initProject.mjs 產生)
-import { makeEvaluator, lowerBound, mulberry32, ntStaticOf } from './eval/evalCore.mjs'
+import { makeEvaluator, lowerBound, mulberry32, ntStaticOf, isCapitalError } from './eval/evalCore.mjs'
+import { normUnit, sameUnit } from './eval/unit.mjs'
 import { loadLedger, loadIds, memberLedger } from './eval/ledger.mjs'
 import { buildLedger, LEDGER_VERSION } from './eval/ledgerBuild.mjs'
 import { scanPick, scanSnippet, loadPick, stripComments } from './eval/pickLoader.mjs'
@@ -77,6 +78,9 @@ let WTradeAdaptivess = {
     memberLedger,
     makeEvaluator,
     ntStaticOf,
+    isCapitalError,
+    normUnit,
+    sameUnit,
     lowerBound,
     mulberry32,
     loadPick,

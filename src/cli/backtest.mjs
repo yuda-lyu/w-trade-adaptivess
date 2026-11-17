@@ -298,6 +298,8 @@ let out = {
     at: new Date().toISOString(),
     pick: path.resolve(fpPick),
     ledgerKey: L.meta.key,
+    //基礎單位(規則 R-EV-43; 回測期旗標之重放現行關閉): 全期帳本帶者才記(無此鍵 = 每單 1 單位; 未開啟者輸出不變); 帳本與設定之比對、研究用本金之檢查未接(啟用此機制前須補)
+    ...(L.unit === undefined || L.unit === null ? {} : { unit: { rule: { stepSize: L.unit.rule.stepSize, minQty: L.unit.rule.minQty, minNotional: L.unit.rule.minNotional }, buffer: L.unit.buffer, uIni: L.unit.uIni } }),
     period: { start: st.periods.backtest.start, end: st.periods.backtest.end, firstDecision: runs[0] && runs[0].bars.length ? ev.timeOf(runs[0].bars[0]) : null },
     rule: bt.rule,
     flag,

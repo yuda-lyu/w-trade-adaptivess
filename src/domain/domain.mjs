@@ -4,6 +4,7 @@ import { createRsi, nodeIdOf, specHash, makeNode, peekRound, makePaths, effectiv
 import { writeFileAtomic, sha } from '../engineProtocol.mjs'
 import { getSettings, readJson, writeJson, FD_ROOT } from '../cfg.mjs'
 import { scoreOf } from '../eval/score.mjs'
+import { normUnit } from '../eval/unit.mjs'
 import { createFileRecords, roundName, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_LABELS, ARM_KINDS, ARM_LABELS, CLAIM_VERDICTS } from '../arsi/records.mjs'
 import { proposalOf } from './armCatalog.mjs'
 import { buildPickStore } from './pickStore.mjs'
@@ -175,7 +176,19 @@ let makeProject = (st = getSettings(), inject = {}) => {
         throw new Error(`缺訂單帳本 ${st.eval.ledgerDir}(請先 node g_build.mjs)`)
     }
     let EVAL_VERSION = 2
-    let envKey = `${ledgerMeta.key}|eval${EVAL_VERSION}`
+    //envKey, 評估環境之鍵(帳本鍵 + 評估器版本): 基礎單位開啟者(帳本帶 meta.unit; 規則 R-EV-43)另併入研究用本金 —— 其不入帳本鍵(不改每單之名義),
+    //  但改變研究用本金之檢查之結果 ⇒ 改了須重算; 未開啟者逐位不變
+    //  研究用本金取 normUnit 之轉換值(與評估器載入帳本時之 L.unit 同一規則: 數字字串通過即轉為數值, 檢查之值即使用之值); meta.unit 不合者不併入(載入帳本時評估器會拒絕並指明)
+    let uIniOfMeta = null
+    if (ledgerMeta.unit !== undefined && ledgerMeta.unit !== null) {
+        try {
+            uIniOfMeta = normUnit(ledgerMeta.unit, 'meta.unit').uIni
+        }
+        catch (err) {
+            uIniOfMeta = null
+        }
+    }
+    let envKey = `${ledgerMeta.key}|eval${EVAL_VERSION}${uIniOfMeta === null ? '' : `|uIni${uIniOfMeta}`}`
     let idOf = (spec) => nodeIdOf(spec, envKey)
     let normArms = (arr) => [...new Set(arr)].sort()
     let maxArms = st.rsi.maxArmsPerNode || 4
@@ -220,6 +233,48 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //  只在方向與既有節點同臂同起點時才取用(proposeDirection); 未相撞者規格不帶鍵
     let exploreKeyOf = (x) => (x && x.type !== 'verify' && typeof x.rationale === 'string' && x.rationale.trim() ? sha(`explore|${x.rationale.trim()}`, 8) : null)
 
+    //storedIdOf, 規格於樹上之節點 id(算子之子規格之起點用; 規則 R-REC-33): 節點 id = 規格與評估環境之鍵之雜湊, 評估環境之鍵改變後(帳本重建而鍵變)舊節點保留其 id ⇒ 與現行之 idOf(spec) 不同
+    //  取法: ①樹上有 idOf(spec) 之節點且為已執行者 ⇒ 即之(評估環境之鍵未變者之常態; 與未加本函數時相同)
+    //        ②否則取樹上同規格(specHash 相同)之節點: 已執行者優先, 同級依 id —— 現行之 idOf(spec) 之節點存在而非已執行者(例: 鍵改變後同規格又入樹而被閘門拒絕之存根)時, 只取同規格之已執行者(閘門只放行已執行之起點), 無則仍為該節點
+    //        ③樹上無同規格之節點(假設之規格, 例: 多臂組合之中間規格)⇒ idOf(spec)
+    //  對照表(specHash → { id, executed })於第一次用到時建一次(讀樹上全部節點): 本程序之後新增之節點皆為現行之 idOf(走 ①)⇒ 不會漏列;
+    //    表內所選之 id 已不在樹上(節點於本程序存續中被刪除、失效)者重建一次再取(不沿用已刪除者)
+    let oldIdBySpec = null
+    let buildOldIdBySpec = () => {
+        let m = new Map()
+        let rank = (n) => (n.status === 'executed' ? 0 : 1)
+        let ns = rsi.store.loadNodes().filter((n) => n && n.spec).sort((a, b) => rank(a) - rank(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+        for (let n of ns) {
+            let h = n.specHash || specHash(n.spec)
+            if (!m.has(h)) {
+                m.set(h, { id: n.id, executed: n.status === 'executed' })
+            }
+        }
+        return m
+    }
+    let storedIdOf = (s) => {
+        let id = idOf(s)
+        if (!rsi) {
+            return id
+        }
+        let cur = rsi.store.getNode(id)
+        if (cur && cur.status === 'executed') {
+            return id
+        }
+        if (!oldIdBySpec) {
+            oldIdBySpec = buildOldIdBySpec()
+        }
+        let h = specHash(s)
+        let hit = oldIdBySpec.get(h)
+        if (hit && !rsi.store.hasNode(hit.id)) {
+            oldIdBySpec = buildOldIdBySpec()
+            hit = oldIdBySpec.get(h)
+        }
+        if (!hit) {
+            return id
+        }
+        return cur && !hit.executed ? id : hit.id
+    }
     //目錄之落成名列有 add:<臂> 而不可選者(引擎之治理所停用之臂: 留在目錄、落成名不變)亦登錄而永不適用
     //  (w-recursi 1.0.9 組裝時會以「算子不在登錄表」拋錯; 1.0.10 起引擎已把停用之臂視為 lenient(issue #144), 此登錄已非必要 —— 行為相同, 保留作雙重保險)
     let opArms = catalog.arms.filter((a) => a.selectable === true || (Array.isArray(a.realize) && a.realize.some((r) => r && r.kind === 'operator' && r.op === `add:${a.id}`)))
@@ -228,9 +283,18 @@ let makeProject = (st = getSettings(), inject = {}) => {
             name: `add:${a.id}`,
             family: a.layer,
             applies: (s) => a.selectable === true && Array.isArray(s.arms) && !s.arms.includes(a.id) && s.arms.length < maxArms,
-            children: (s) => [{ spec: { arms: normArms([...s.arms, a.id]), base: idOf(s) }, params: { arm: a.id }, reason: `於 ${idOf(s).slice(0, 8)} 之成品上加入臂 ${a.id}` }],
+            children: (s) => {
+                let b = storedIdOf(s); return [{ spec: { arms: normArms([...s.arms, a.id]), base: b }, params: { arm: a.id }, reason: `於 ${b.slice(0, 8)} 之成品上加入臂 ${a.id}` }]
+            },
         })),
-        { name: 'refine', family: 'R', applies: () => true, children: (s) => [{ spec: { arms: s.arms, base: idOf(s) }, params: {}, reason: `改進 ${idOf(s).slice(0, 8)}(同臂)` }] },
+        {
+            name: 'refine',
+            family: 'R',
+            applies: () => true,
+            children: (s) => {
+                let b = storedIdOf(s); return [{ spec: { arms: s.arms, base: b }, params: {}, reason: `改進 ${b.slice(0, 8)}(同臂)` }]
+            },
+        },
     ]
 
     //載體: 各可選臂之單臂根節點; 依層輪替排序(A、B、C … 各取一個再回頭), 使冷啟動之各輪跨層取樣
@@ -406,13 +470,13 @@ let makeProject = (st = getSettings(), inject = {}) => {
         }
         return out
     }
-    //refsOf: 任務書列為參考之節點(其工作夾可讀)與來源方向內提到之工作夾、指名之節點; 於驗證時呼叫(同輪內與派工時之參考相同)
+    //refsOf: 任務書列為參考之節點(其工作夾可讀)與來源方向內提到之工作夾、指名之節點; 於驗證時呼叫(同輪內與派工時之參考相同; nodeId = 驗證之節點之 id, 同派工時之 taskFor)
     let verify = makeVerify({
         st,
         FD_ROOT,
         layerOfSpec,
-        refsOf: (spec) => {
-            let t = taskFor(spec); return [...t.refs.filter((r) => r.nodeId).map((r) => r.nodeId), ...dirWorkIds(t.direction), ...dirNodeIds(t.direction)]
+        refsOf: (spec, nodeId = null) => {
+            let t = taskFor(spec, null, { nodeId }); return [...t.refs.filter((r) => r.nodeId).map((r) => r.nodeId), ...dirWorkIds(t.direction), ...dirNodeIds(t.direction)]
         }
     })
     //maxPercent: 訂閱之用量守門之門檻, 與起跑前之額度檢查同一個設定(settings.rsi.preflight.quotaMaxPercent; 未設取 95; 規則 R-RUN-8); 各角色另可設 agents.<role>.quotaMaxPercent(優先)
@@ -500,8 +564,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
 
     //trialFor, 本節點於任務書條款之隨機對照(src/domain/briefTrials.mjs)內之組別: { id, variant } 或 null(該輪無試驗)
     //  重做者沿用其節點文件所記之組別; 首次派工者依該輪之計畫(rounds/rNNN/plan.json 之 items)分層交替指派; 讀不到計畫時依雜湊之奇偶
-    let trialFor = (spec, round) => {
-        let id = idOf(spec)
+    //  nodeId: 呼叫端給之節點 id(重做: 樹上之 id —— 評估環境之鍵改變後與 idOf(spec) 不同); 未給 = idOf(spec)(首次派工)
+    let trialFor = (spec, round, nodeId = null) => {
+        let id = nodeId || idOf(spec)
         let old = records.getNodeDoc(id)
         if (old && old.task && old.task.trial && old.task.trial.id) {
             return old.task.trial
@@ -524,8 +589,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
         return { id: tr.id, variant: variant || variantFallback(tr.id, id) }
     }
 
-    //taskFor(spec, round, { prepare }): 節點任務之內容; prepare = true(派工 / 重做時)另把參考節點之成品複製進節點之工作夾
-    let taskFor = (spec, round = null, { prepare = false } = {}) => {
+    //taskFor(spec, round, { prepare, nodeId }): 節點任務之內容; prepare = true(派工 / 重做時)另把參考節點之成品複製進節點之工作夾
+    //  nodeId: 本節點之 id(工作夾、參考清單之「不含自己」、隨機對照之組別皆依之); 重做與驗證時由呼叫端給樹上之 id(評估環境之鍵改變後與 idOf(spec) 不同); 未給 = idOf(spec)(首次派工)
+    let taskFor = (spec, round = null, { prepare = false, nodeId = null } = {}) => {
+        let selfId = nodeId || idOf(spec)
         //格點: 修訂移除格點者為空物件(引擎之修訂不能刪鍵)⇒ 視同無
         let arms = spec.arms.map((id) => {
             let a = armById.get(id)
@@ -538,7 +605,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         if (spec.base) {
             let bn = rsi.store.getNode(spec.base)
             let fpBasePick = path.join(st.records.workDir, spec.base, 'pick.mjs')
-            let wd = path.join(st.records.workDir, idOf(spec))
+            let wd = path.join(st.records.workDir, selfId)
             fs.mkdirSync(wd, { recursive: true })
             if (fs.existsSync(fpBasePick)) {
                 fs.copyFileSync(fpBasePick, path.join(wd, 'base_pick.mjs'))
@@ -554,7 +621,6 @@ let makeProject = (st = getSettings(), inject = {}) => {
             refs.push({ kind: 'dream', dream: d.round, path: rel(records.paths.dreamMd(d.round)), why: `做夢文件 ${roundName(d.round)}(審計、彙整與方向;**先讀開頭之「迴圈註記」(若有;與正文牴觸時以註記為準),再讀「整體研判」(若有)、「給下一輪之方向」與「避免」**)` })
         }
         //較佳節點: 不含自己(重做時)與起點; 不含被否決與不可信者; 已審(可信 / 部分可信)者優先於未審者, 同級依 S
-        let selfId = idOf(spec)
         let rows = rsi.store.listIndex().filter((r) => r.status === 'executed' && r.id !== spec.base && r.id !== selfId)
         //排序: 已審(可信 / 部分可信)→ 回測期之 S(評估期 = 回測期)
         let audited = (n) => (n.evidence && (n.evidence.trust === 'trusted' || n.evidence.trust === 'partial') ? 1 : 0)
@@ -608,7 +674,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         //任務類型: 出自做夢方向者依該方向之 type; 其餘(載體、算子所生)為探索
         let type = direction ? direction.type : 'explore'
         let claim = type === 'verify' && direction ? direction.claim : null
-        let t = { goal: `${type === 'verify' ? '〔驗證〕' : '〔探索〕'}以臂 ${spec.arms.join(' + ')} 為主軸${spec.base ? `, 於起點節點 ${String(spec.base).slice(0, 8)} 之成品上` : ', 從零'}寫出自適應挑選策略之挑選模組, 驗證並交付`, type, claim, arms, base, refs, direction, toolbox: toolboxInfo(), trial: trialFor(spec, round) }
+        let t = { goal: `${type === 'verify' ? '〔驗證〕' : '〔探索〕'}以臂 ${spec.arms.join(' + ')} 為主軸${spec.base ? `, 於起點節點 ${String(spec.base).slice(0, 8)} 之成品上` : ', 從零'}寫出自適應挑選策略之挑選模組, 驗證並交付`, type, claim, arms, base, refs, direction, toolbox: toolboxInfo(), trial: trialFor(spec, round, selfId) }
         //重做時通用層會先把工作夾內之檔移入 attempt{n} 夾、之後才寫任務書 ⇒ 給 prepare()(不可列舉, 不入紀錄), 由通用層於封存後呼叫, 把起點與參考成品之複本補回
         if (prepare && copies.length) {
             Object.defineProperty(t, 'prepare', {
@@ -1153,7 +1219,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 let old = rsi.store.getNode(nodeId)
                 setStatus({ stage: 'rework', reworking: nodeId })
                 try {
-                    let { raw } = await arsi.runNode({ nodeId, spec: old.spec, round: old.round, task: taskFor(old.spec, null, { prepare: true }), rework: audit.reworkBrief })
+                    let { raw } = await arsi.runNode({ nodeId, spec: old.spec, round: old.round, task: taskFor(old.spec, null, { prepare: true, nodeId }), rework: audit.reworkBrief })
                     let node = makeNode({ id: nodeId, spec: old.spec, parent: old.parent, round: old.round, origin: old.origin, raw, envHash: envKey, evidence: { ...(old.evidence || {}), trust: null, reworkOf: round, reworkedAt: new Date().toISOString() }, notes: old.notes, children: old.children, createdAt: old.createdAt }, domain)
                     rsi.store.putNode(node)
                     pending.push(nodeId)

@@ -11,6 +11,9 @@ import buildLedger from '../eval/ledgerBuild.mjs'
 //  保留期(settings.periods.holdoutFrom 起)與他幣之帳本不由本腳本建立: 該數據保留給監控日後檢定, 須另行授權
 //  外部序列(選配; 規則 R-EV-34): settings.source.seriesDir(相對專案根)下之各 <名>.json 一併建入帳本, 供挑選函數以 ctx.series 取用;
 //    序列同樣於帳本終點截斷(時間 ≥ 終點之列對不到棒; 訓練期帳本亦然); 未設定或資料夾不存在者不建入
+//  基礎單位(選配; 規則 R-EV-43): settings.source.unit = { rule: { stepSize, minQty, minNotional, asOf?, source? }, buffer = 0.1, uIni } 有給者, 帳本另存每根棒之基礎單位名義並記交易規則(入帳本鍵);
+//    單一策略之全期最大同時持倉名義只記錄(輸出之 unitStat: 最大者與其策略、超過 uIni 之隻數 nStrategyOverUIni; 有超過者另列一行 WARN, 帳本照寫出、離開碼 0);
+//    設定不合者不寫出(離開碼 2); 未給(或 null)⇒ 帳本與未加入本功能時逐位相同
 let st = getSettings()
 let limit = argOf('limit', 0)
 let train = argOf('train', false) === true
@@ -21,13 +24,30 @@ if (Date.parse(`${endTime}Z`) >= Date.parse(`${st.periods.holdoutFrom}Z`)) {
     process.exit(2)
 }
 console.log(`建帳本: ${train ? '訓練期' : '評估(訓練期 + 回測期)'} 終點 ${endTime} → ${path.resolve(outDir)}`)
-let meta = await buildLedger({
-    libraryRoot: st.source.libraryRoot,
-    keyOhlc: st.source.keyOhlc,
-    barHours: st.source.barHours,
-    endTime,
-    outDir,
-    limit: train ? 0 : limit,
-    seriesDir: typeof st.source.seriesDir === 'string' && st.source.seriesDir ? P(st.source.seriesDir) : null,
-})
-console.log(JSON.stringify({ key: meta.key, endTime: meta.endTime, nBars: meta.nBars, nStrategies: meta.nStrategies, nOrders: meta.nOrders, nUnsettled: meta.nUnsettled, check: meta.check, seriesNames: meta.seriesNames, buildSec: meta.buildSec }))
+let unit = st.source.unit === undefined ? null : st.source.unit
+let meta
+try {
+    meta = await buildLedger({
+        libraryRoot: st.source.libraryRoot,
+        keyOhlc: st.source.keyOhlc,
+        barHours: st.source.barHours,
+        endTime,
+        outDir,
+        limit: train ? 0 : limit,
+        seriesDir: typeof st.source.seriesDir === 'string' && st.source.seriesDir ? P(st.source.seriesDir) : null,
+        ...(unit !== null ? { unit } : {}),
+    })
+}
+catch (err) {
+    //基礎單位之設定不合(含收盤價不合; 規則 R-EV-43): 不寫出, 離開碼 2; 其他錯誤照舊拋出
+    if (unit !== null && /^invalid (unit|close)\b/.test(String(err && err.message))) {
+        console.log(`ERROR ${err.message.replace(/^invalid unit/, 'invalid source.unit')}`)
+        process.exit(2)
+    }
+    throw err
+}
+console.log(JSON.stringify({ key: meta.key, endTime: meta.endTime, nBars: meta.nBars, nStrategies: meta.nStrategies, nOrders: meta.nOrders, nUnsettled: meta.nUnsettled, check: meta.check, seriesNames: meta.seriesNames, ...(meta.unit ? { unit: meta.unit, unitStat: meta.unitStat } : {}), buildSec: meta.buildSec }))
+//單一策略之峰值名義(規則 R-EV-43; 只記錄): 有超過研究用本金者列一行醒目之說明(離開碼仍 0)
+if (meta.unit && meta.unitStat.nStrategyOverUIni > 0) {
+    console.log(`WARN 單一策略之全期最大同時持倉名義超過研究用本金 ${meta.unit.uIni}u 者 ${meta.unitStat.nStrategyOverUIni} 隻(最大者 ${meta.unitStat.strategyPeakFile} ${meta.unitStat.strategyPeakNotional}u);只記錄、帳本已寫出 —— 研究用本金之檢查只施於挑選後之持倉組合(評估器)`)
+}
