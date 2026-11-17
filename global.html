@@ -1156,7 +1156,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line465">line 465</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line464">line 464</a>
     </li></ul></dd>
     
 
@@ -1620,7 +1620,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line362">line 362</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line361">line 361</a>
     </li></ul></dd>
     
 
@@ -1687,7 +1687,7 @@
     
     <dt class="tag-description">Description:</dt>
     <dd class="tag-description"><ul class="dummy"><li><p>自適應挑選策略之探尋框架之聚合物件(與各模組之匯出為同一實體)</p>
-<p>總組裝：makeProject(st, inject)(別名createAdaptivess)；評估器：buildLedger、loadLedger、ntStaticOf、makeEvaluator、loadPick、scoreOf；
+<p>總組裝：makeProject(st, inject)(別名createAdaptivess)；評估器：buildLedger、loadLedger、memberLedger(成員重抽之半庫帳本)、ntStaticOf、makeEvaluator、loadPick、scoreOf；
 代理式迴圈之通用層：createArsi、createFileRecords、createToolbox、makeDispatch、checkQuota、createResourceMonitor、runRounds、acquireRunLock、appendEvent等；
 領域接線：makeTexts、makeVerify、scanTrace、buildPickStore、mkArm、decideArgsOf、makeToolboxRules等；專案接入：initProject、getSettings</p></li></ul></dd>
     
@@ -1695,7 +1695,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="WTradeAdaptivess.mjs.html">WTradeAdaptivess.mjs</a>, <a href="WTradeAdaptivess.mjs.html#line51">line 51</a>
+        <a href="WTradeAdaptivess.mjs.html">WTradeAdaptivess.mjs</a>, <a href="WTradeAdaptivess.mjs.html#line57">line 57</a>
     </li></ul></dd>
     
 
@@ -1736,7 +1736,7 @@
 
 <div class="description usertext">
     <p>自適應挑選策略之探尋框架之聚合物件(與各模組之匯出為同一實體)</p>
-<p>總組裝：makeProject(st, inject)(別名createAdaptivess)；評估器：buildLedger、loadLedger、ntStaticOf、makeEvaluator、loadPick、scoreOf；
+<p>總組裝：makeProject(st, inject)(別名createAdaptivess)；評估器：buildLedger、loadLedger、memberLedger(成員重抽之半庫帳本)、ntStaticOf、makeEvaluator、loadPick、scoreOf；
 代理式迴圈之通用層：createArsi、createFileRecords、createToolbox、makeDispatch、checkQuota、createResourceMonitor、runRounds、acquireRunLock、appendEvent等；
 領域接線：makeTexts、makeVerify、scanTrace、buildPickStore、mkArm、decideArgsOf、makeToolboxRules等；專案接入：initProject、getSettings</p>
 </div>
@@ -1772,7 +1772,13 @@ let trainEndBar = Math.round((Date.parse(`${st.periods.train.end}Z`) - Date.pars
 L.ntStatic = WTradeAdaptivess.ntStaticOf(L, trainEndBar)
 let ev = WTradeAdaptivess.makeEvaluator(L, { warmupDays: 180, cadenceDays: 7 })
 let m = ev.evalPolicy((ctx) => [0, 1, 2], { accept: (sig, book) => book.open &lt; 30, nullDraws: 16 })
-console.log(m.op.eqYr.mean, m.selHash)</code></pre>
+console.log(m.op.eqYr.mean, m.selHash)
+
+//成員重抽: 同一個挑選函數只拿到策略庫之一半(重新編號之半庫帳本; 界線照常明給)
+let La = WTradeAdaptivess.memberLedger(L, 0x5bd1e995, 0)
+La.ntStatic = WTradeAdaptivess.ntStaticOf(La, trainEndBar)
+let evA = WTradeAdaptivess.makeEvaluator(La, { warmupDays: 180, cadenceDays: 7 })
+console.log(La.n, La.member.half)</code></pre>
 
 
 
@@ -2349,7 +2355,7 @@ if (lock.ok) {
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line411">line 411</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line410">line 410</a>
     </li></ul></dd>
     
 
@@ -4770,7 +4776,7 @@ K 線於 endTime 截斷(不含); 語義與輸出欄見檔頭說明</p></li></ul>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line139">line 139</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line138">line 138</a>
     </li></ul></dd>
     
 
@@ -5370,7 +5376,7 @@ if (es.length > 0) {
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line249">line 249</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line248">line 248</a>
     </li></ul></dd>
     
 
@@ -6113,7 +6119,7 @@ console.log(q.ok)</code></pre>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line128">line 128</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line127">line 127</a>
     </li></ul></dd>
     
 
@@ -6307,7 +6313,7 @@ Ctor 須與 src 同型(位元組逐一複製; NaN 之位元與原值相同); 區
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line105">line 105</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line104">line 104</a>
     </li></ul></dd>
     
 
@@ -9934,7 +9940,7 @@ dispatch.skillsRoot 未給時取使用者家目錄下之 .claude/skills; 回傳�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line549">line 549</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line548">line 548</a>
     </li></ul></dd>
     
 
@@ -10887,7 +10893,7 @@ dispatch.skillsRoot 未給時取使用者家目錄下之 .claude/skills; 回傳�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line326">line 326</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line325">line 325</a>
     </li></ul></dd>
     
 
@@ -11126,7 +11132,7 @@ dispatch.skillsRoot 未給時取使用者家目錄下之 .claude/skills; 回傳�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line400">line 400</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line399">line 399</a>
     </li></ul></dd>
     
 
@@ -11289,7 +11295,7 @@ dispatch.skillsRoot 未給時取使用者家目錄下之 .claude/skills; 回傳�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line596">line 596</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line595">line 595</a>
     </li></ul></dd>
     
 
@@ -11968,7 +11974,7 @@ dispatch.skillsRoot 未給時取使用者家目錄下之 .claude/skills; 回傳�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_ledger.mjs.html">eval/ledger.mjs</a>, <a href="eval_ledger.mjs.html#line380">line 380</a>
+        <a href="eval_ledger.mjs.html">eval/ledger.mjs</a>, <a href="eval_ledger.mjs.html#line385">line 385</a>
     </li></ul></dd>
     
 
@@ -13126,7 +13132,7 @@ let r = await dispatch('node', { prompt, tag: 'r001_node', logFile: './work/agen
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_evalCore.mjs.html">eval/evalCore.mjs</a>, <a href="eval_evalCore.mjs.html#line143">line 143</a>
+        <a href="eval_evalCore.mjs.html">eval/evalCore.mjs</a>, <a href="eval_evalCore.mjs.html#line239">line 239</a>
     </li></ul></dd>
     
 
@@ -14857,7 +14863,7 @@ salt 與 half 依 wsemi iseint 判定(安全整數之數字或其數字字串, �
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_ledger.mjs.html">eval/ledger.mjs</a>, <a href="eval_ledger.mjs.html#line259">line 259</a>
+        <a href="eval_ledger.mjs.html">eval/ledger.mjs</a>, <a href="eval_ledger.mjs.html#line264">line 264</a>
     </li></ul></dd>
     
 
@@ -14904,10 +14910,15 @@ salt 與 half 依 wsemi iseint 判定(安全整數之數字或其數字字串, �
 
     <h5 class="h5-examples">Example</h5>
     
-    <pre class="prettyprint"><code>let L = loadLedger('./data/ledger/eval')
+    <pre class="prettyprint"><code>let st = getSettings()
+let L = loadLedger(st.eval.ledgerDir)
+//甲半(half = 0); 換鹽 = 換一種切法
 let La = memberLedger(L, 0x5bd1e995, 0)
+//訓練期之界線須明給(同 ntStaticOf: 依帳本之 time0 與每棒小時數自設定之訓練期終點換算)
+let trainEndBar = Math.round((Date.parse(`${st.periods.train.end}Z`) - Date.parse(`${La.meta.time0}Z`)) / (La.meta.barHours * 3600000))
 La.ntStatic = ntStaticOf(La, trainEndBar)
-let ev = makeEvaluator(La, { warmupDays: 180, cadenceDays: 7 })</code></pre>
+let ev = makeEvaluator(La, { warmupDays: 180, cadenceDays: 7 })
+console.log(La.n, La.member.half) //半庫之策略數(依鹽而異, 約為全庫之一半)與所取之半</code></pre>
 
 
 
@@ -19349,7 +19360,7 @@ console.log(r)
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line562">line 562</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line561">line 561</a>
     </li></ul></dd>
     
 
@@ -22264,7 +22275,7 @@ console.log(n)
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line380">line 380</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line379">line 379</a>
     </li></ul></dd>
     
 
@@ -22377,7 +22388,7 @@ console.log(n)
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line390">line 390</a>
+        <a href="eval_intrinsics.mjs.html">eval/intrinsics.mjs</a>, <a href="eval_intrinsics.mjs.html#line389">line 389</a>
     </li></ul></dd>
     
 
@@ -22729,7 +22740,7 @@ console.log(n)
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Tue Nov 17 2026 07:15:19 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Tue Nov 17 2026 14:02:32 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>
