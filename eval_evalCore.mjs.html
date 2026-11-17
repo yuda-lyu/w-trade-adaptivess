@@ -1611,15 +1611,16 @@ let makeEvaluator = (L, cfg = {}) => {
     }
 
     //nullSideActOf, 組 = 方向(做多 0 / 做空 1)
+    //  actDays(選配; 預設 0 = 累計進場數; 規則 R-EV-42): > 0 時活躍度改為決策棒以前最近 actDays 日之進場數(同 nullGroupActOf; 即擴充診斷 api.replaceNull 之 actDays); 未給者之行為與輸出逐位不變
     let sideGrp = null
-    let nullSideActOf = (runs, accept, draws, seed, half = 50) => {
+    let nullSideActOf = (runs, accept, draws, seed, half = 50, actDays = 0) => {
         if (!sideGrp) {
             sideGrp = new Int32Array(n)
             for (let s = 0; s &lt; n; s++) {
                 sideGrp[s] = L.mode[s] > 0 ? 0 : 1
             }
         }
-        return nullGroupActOf(runs, accept, draws, seed, half, sideGrp, 2)
+        return nullGroupActOf(runs, accept, draws, seed, half, sideGrp, 2, actDays)
     }
 
     //sideGeoGroups, 組 = 方向 × 該側內依止盈升冪之 nTp 等分 × 該側內依止損升冪之 nSl 等分(同值依 tie; 兩個等分各自獨立劃分); 回 { grp, nGroups }
@@ -1798,7 +1799,7 @@ let makeEvaluator = (L, cfg = {}) => {
     //    切片帶 k0(其第一個決策於整段之決策序): accept 收到之 sig.k 與挑選函數之 ctx.k 一致
     //  afterFitOnly(選配; 布林; null / undefined 視同 false; 規則 R-EV-41): 只留求解窗已結束之席 —— 挑選函數照常執行(ctx.prev、ctx.state 皆為其完整之選集),
     //    評估期間內每個決策(決策棒 b)只留選集中 0 ≤ fitEndBar[s] &lt; b 之策略(求解窗之終點棒本身在窗內, 完全未見之第一根為其次一根 ⇒ 決策棒晚於終點棒者, 其決策視窗內之進場皆在求解窗之後;
-    //    fitEndBar 為 -1(未設定)者一律不留); 其後之績效、新鮮度、各虛無與對照、選集統計與 selHash 皆依所留之席(分帳隨席帶過; 等同挑選函數自行只回所留之席); 另回 afterFit(所留 / 所捨之席數、下單數、前段 / 後段之分段)
+    //    fitEndBar 為 -1(未設定)者一律不留); 其後之績效、新鮮度、各虛無與對照、選集統計與 selHash 皆依所留之席(分帳隨席帶過; 等同挑選函數自行只回所留之席); 另回 afterFit(所留 / 所捨之席數、下單數、前段 / 後段之分段; 全段與各段之近期活躍度版之組成對照 sideActRecent, 規則 R-EV-42)
     //    須有 cfg.fitEnd(否則拋 invalid opt.afterFitOnly: …); 不與 opt.ext 併用(擴充診斷之介面以完整之選集為前提); 未給或 false 時行為與輸出逐位不變
     //    前提: 同一側之 fitEndBar 相同(依方向而定; 組成對照 nullSideActOf 之替換池 = 同側 ⇒ 替換者與被替換者之求解窗終點相同, 皆已結束)。日後若改為逐策略之終點, 組成對照之替換池須另限 fitEndBar &lt; 決策棒
     let PRE_N = 26
@@ -2015,12 +2016,24 @@ let makeEvaluator = (L, cfg = {}) => {
         //只留求解窗已結束之席之彙總與分段(afterFitOnly; 規則 R-EV-41): 前段 / 後段 = 各相位之決策依決策序各半(前段 floor(決策數 / 2) 個), 各段自空倉起算(同 thirds 之寫法)
         //  各段: 所留之席之等效年化、下單數(各相位平均)與組成對照(同側同活躍度; 只換所留之席; 有算組成對照時才有; 亂數種子 seed + 33554393 + g × 16777259, 與既有各虛無互不相干)
         //  —— 以過往之損益為輸入之排序鍵, 其輸入於評估期間之前段多為求解窗內之單; 分段供判讀(只增輸出, 不入任何既有數字)
+        //  近期活躍度版之組成對照 sideActRecent(規則 R-EV-42): 全段與各段各一組; 算法 = 擴充診斷之 api.replaceNull({ actDays: 90, half })(同一函數 nullGroupActOf; 組 = 方向;
+        //    活躍度 = 決策棒以前最近 90 日之進場數; 自該席於同側之名次 ± sideActHalf 名內均勻抽一隻; 只換所留之席; 抽數 = nullDraws); 有算組成對照(nulSide 非 null)時才有;
+        //    亂數種子 seed + 67867967(全段)、seed + 86028121 + g × 16777259(各段), 與既有各虛無互不相干(各抽之亂數依種子另起, 不動既有之取用); 新鍵置於各物件之末(既有鍵、次序與值不變)
+        //  —— 累計進場數之組成對照於所留之席近期比其累計之同儕更活躍(或更安靜)時, 會把近期活躍度之差算成內容; 擴充診斷於此段不載入(不與 opt.ext 併用), 故於此另列; 不入 S 與階梯(此段 score 本為 null)
         let afterFitOut = null
         if (afterFit) {
             let ordMean = (os) => r4(os.reduce((a, o) => a + o.nOrders, 0) / Math.max(1, os.length))
             let halves = null
+            let halfSA = cfg.sideActHalf === undefined ? 50 : cfg.sideActHalf
+            let RECENT_ACT_DAYS = 90
+            //sideRecentOf, 近期活躍度版之組成對照(obsV = 該段所留之席之等效年化; 回同 sideAct 之欄 + actDays)
+            let sideRecentOf = (parts, obsV, sd) => {
+                let v = nullSideActOf(parts, accept, nullDraws, sd, halfSA, RECENT_ACT_DAYS)
+                let s = statOf(v)
+                let ge = v.filter((x) => x >= obsV).length
+                return { draws: nullDraws, half: halfSA, actDays: RECENT_ACT_DAYS, mean: r4(s.mean), sd: r4(s.sd), p: r4((1 + ge) / (1 + nullDraws)), z: s.sd > 0 ? r4((obsV - s.mean) / s.sd) : 0, excess: r4(obsV - s.mean) }
+            }
             if (runs.every((r) => r.bars.length >= 2)) {
-                let halfSA = cfg.sideActHalf === undefined ? 50 : cfg.sideActHalf
                 halves = [0, 1].map((g) => {
                     let parts = runs.map((r) => {
                         let nd = r.bars.length
@@ -2040,17 +2053,19 @@ let makeEvaluator = (L, cfg = {}) => {
                         eqYr: { mean: r4(sg.mean), min: r4(sg.min), max: r4(sg.max) },
                         orders: ordMean(os),
                         sideAct: null,
+                        sideActRecent: null,
                     }
                     if (nulSide) {
                         let v = nullSideActOf(parts, accept, nullDraws, seed + 33554393 + g * 16777259, halfSA)
                         let s = statOf(v)
                         let ge = v.filter((x) => x >= sg.mean).length
                         seg.sideAct = { draws: nullDraws, half: halfSA, mean: r4(s.mean), sd: r4(s.sd), p: r4((1 + ge) / (1 + nullDraws)), z: s.sd > 0 ? r4((sg.mean - s.mean) / s.sd) : 0, excess: r4(sg.mean - s.mean) }
+                        seg.sideActRecent = sideRecentOf(parts, sg.mean, seed + 86028121 + g * 16777259)
                     }
                     return seg
                 })
             }
-            afterFitOut = { seatsKept: r4(afterFit.nKept / Math.max(1, afterFit.nDec)), seatsDropped: r4(afterFit.nDrop / Math.max(1, afterFit.nDec)), orders: ordMean(ops), halves }
+            afterFitOut = { seatsKept: r4(afterFit.nKept / Math.max(1, afterFit.nDec)), seatsDropped: r4(afterFit.nDrop / Math.max(1, afterFit.nDec)), orders: ordMean(ops), halves, sideActRecent: nulSide ? sideRecentOf(runs, obs, seed + 67867967) : null }
         }
         //擴充診斷(opt.ext = [{ name, fn }]; 由呼叫端自共用工具區之 metrics/ 載入; 規則 R-EV-21): 每個 fn(api) 回一個可序列化之物件(建議含 text: 一行說明)
         //  api 全為唯讀之複本與函數 —— 擴充診斷拿不到帳本、也改不了 S、階梯、selHash 與任何既有欄; 單一診斷拋錯或輸出過大只記 error, 不影響評估
@@ -2644,7 +2659,7 @@ export default makeEvaluator
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Tue Nov 17 2026 16:51:51 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Tue Nov 17 2026 21:07:07 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>
