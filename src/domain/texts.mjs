@@ -5,6 +5,17 @@ import { roundName, armProposalLine } from '../arsi/records.mjs'
 import { TRIALS } from './briefTrials.mjs'
 
 
+//OUT_SATURATED_NOTE, 輪末摘要「配比」一列之附註: 可選之臂皆已試過、向外 0 條, 而做夢本輪宣告(或續存)「現行資訊範圍內已無可試之向外方向」(規則 R-REC-29)
+//  domain.mjs 之 outwardNoteOf 回傳此字串; 做夢任務書之配比之例外之二引其去掉開頭分號之文字(兩處同一來源, 不會各說各話)
+/**
+ * 已宣告「現行資訊範圍內已無可試之向外方向」而向外 0 時之輪末摘要附註
+ *
+ * @type {String}
+ */
+let OUT_SATURATED_NOTE = ';向外 0(已宣告向外飽和)'
+//satOkOf, 做夢任務書之配比之例外之二是否適用: 派做夢當下可選之臂皆已試過(context.outward.nUntried 恰為數字 0); 未給或其他值 ⇒ 不適用(任務書與範本逐字不變)
+let satOkOf = (x) => !!(x && typeof x === 'object' && x.outward && typeof x.outward === 'object' && x.outward.nUntried === 0)
+
 //寫法守則(規則 R-MON-3; 目標: 主控不必再為此改任務書):「方向該怎麼寫、判定該怎麼定、節點實驗之通則」由做夢自己維護兩個檔,
 //  其條目(以「- 」開頭之列與其續行)原文附於做夢 / 節點任務書之末; 逾上限之部分截掉; 與任務書本文牴觸者無效(本文在前、並明寫以本文為準)
 //  此類改進項多為「做夢提、改一兩句任務書」—— 交還做夢後主控不必經手
@@ -371,7 +382,11 @@ let makeTexts = ({ st, FD_ROOT }) => {
         L.push('  - 三個判定在**樣本不足以判定時填 `unknown`**,並在 `why` 寫還缺什麼;不要硬下結論。**判為 `concentrated` 或 `risk` 為 `high` 時:探索類之方向中,押新家族者(方向之 `newFamily: true`)至少占一半;驗證類不計入(候選仍須先驗證);做不到須在 `adjust` 寫理由。**判為 `scattered` 時先收斂驗證。此欄隨做夢文件交給下一輪之節點與日後之做夢;其結論另寫入 `sgud/state/state.md` §2。')
         L.push(`- \`guidance.directions\`:給下一輪之方向 ${x.maxDirections} 條以內,每條 \`{ type, newFamily, arms: [臂 id…], base: 節點 id 或 null, claim, rationale, expect }\`:`)
         L.push('  - `type`(任務類型;節點任務書依此給不同之做法要求):`explore`(探索:寫出新機制,或在起點上加臂、改進;節點可試 3 ~ 12 個變體,依機制先定交付版)或 `verify`(驗證:檢驗一項既有之主張 —— 消融、以不同定義重複、穩健性;**設計由你在 `expect` 定死**(交付版、對照版、評估次數、判定方式),節點不得另試變體;**須寫明交付清單之 `control.mjs` 是哪一檔**(方向所指之對照版,或起點成品之逐位複本並完整評估一次以核可重現 —— 計入評估次數;不得寫「起點不重跑」,那與節點之交付清單牴觸);方向指名之節點成品,迴圈會複製到節點工作夾之 `ref_<節點 id 前 8 碼>.mjs`,寫方向時以節點 id 指名即可;**判定只設兩帶:門檻即主張本身,達到 ⇒ 成立、未達 ⇒ 不成立,不設「部分成立」之中間帶**(下一輪回顧之判定無中間值可對應;要報之範圍與差另列為「另須報」))。`verify` 須另給 `claim`:一句話寫出要檢驗之主張(例:「某成品之回測期優勢來自其排序鍵之內容,而非只是排除了休眠之策略」)。單一成品之高分在被重複(換亂數種子、鄰近參數、以不同定義重做)之前只是候選:先排驗證,再疊加機制。')
-        L.push('  - **配比:向內深掘與向外探勘並行**(如蟻群:沿已有線索深掘,同時保留向外探路者)。**向內** = 以未被否決之節點為對象之驗證與改進;**向外** = 不以現有候選為起點(`base` 為 null)之探索,且「含至少一個未試之臂(看板之「未試之可選臂」)」或「押新家族(`newFamily: true`:不同於現有有內容成品之資訊源或機制;須附預先核對或具體之依據)」—— 可選之臂皆已試過時,向外即指後者。有待驗證之候選時以向內為主,但**每輪至少 1 條向外**,以免整棵樹收斂在單一線索;候選被推翻時改以向外為主。**例外(向外可為 0 條)**:可選之臂皆已試過,且你本輪已以完整評估預先核對 **3 種以上**不同之新資訊源或機制(各含兩端)而皆無內容 —— 預期作用量很小者不必硬派成方向;此時於 `synthesis.overview.outwardChecked` 填 `{ kinds: 種數, files: [所核之檔名…] }`,並於 `adjust` 列出各設計與其數字(內容、時效),輪末摘要即記為「向外 0(預先核對皆不成立)」。尚有未試之臂、或只核了 1 ~ 2 種者,照舊須有向外。向外之方向同樣須寫「它抓到什麼結構、為何可望使回測期之績效更佳」,不是隨機挑臂。**用了未試之臂不等於換了機制**(r003:兩條向外之方向最後都做成與現有候選同一家族之排序鍵)⇒ 每條方向另標 `newFamily`(`true` = 押不同於現有有內容成品之資訊源或機制;`false` = 同家族之驗證、延伸或鄰點)。本次之配比與理由寫在 `synthesis.overview.adjust`(迴圈會統計並列於輪末摘要)。')
+        //配比之例外之二(規則 R-REC-29): 只在派做夢當下可選之臂皆已試過(context.outward.nUntried === 0; 領域層以派做夢前之樹求得)時列出;
+        //  未給 outward 或尚有未試之臂者此句不出現, 任務書與改前逐字相同。輪末摘要之附註(outwardNoteOf)以套用做夢之審計後之樹判定(同例外之一之既有寫法), 附註字串同一來源(OUT_SATURATED_NOTE);
+        //  兩個時點只在「做夢判刪除某臂之唯一已試節點」時不同(該臂回到未試 ⇒ 摘要照舊標示) —— 此句寫明該情形, 使做夢依任務書所為者與摘要之判定一致
+        let satClause = satOkOf(x) ? `**例外之二(向外可為 0 條;現行資訊範圍內已無可試之向外方向)**:可選之臂皆已試過(本輪即是),且你已宣告(或續存)「現行資訊範圍內已無可試之向外方向」時,方向可只含驗證類(向外 0 條),**不必另以完整評估預先核對新機制**(此時不受上句「照舊須有向外」之限);於 \`synthesis.overview.outwardSaturated\` 填 \`{ basis: 已核之機制與結果,或首次宣告之輪次與其依據 }\`(每輪重申;未填即不適用此例外),輪末摘要即記為「${OUT_SATURATED_NOTE.slice(1)}」。輪末摘要依套用你之審計後之樹判定:你判刪除之節點若是某臂唯一之已試者,該臂即回到未試,此例外不適用(須有向外)。改提 \`guidance.improvements\`(評估器之新能力、專案以外之資訊)或 \`guidance.armProposals\`(新臂)照舊每輪皆可;日後有新資訊源或新臂開放時,向外照常。` : ''
+        L.push('  - **配比:向內深掘與向外探勘並行**(如蟻群:沿已有線索深掘,同時保留向外探路者)。**向內** = 以未被否決之節點為對象之驗證與改進;**向外** = 不以現有候選為起點(`base` 為 null)之探索,且「含至少一個未試之臂(看板之「未試之可選臂」)」或「押新家族(`newFamily: true`:不同於現有有內容成品之資訊源或機制;須附預先核對或具體之依據)」—— 可選之臂皆已試過時,向外即指後者。有待驗證之候選時以向內為主,但**每輪至少 1 條向外**,以免整棵樹收斂在單一線索;候選被推翻時改以向外為主。**例外(向外可為 0 條)**:可選之臂皆已試過,且你本輪已以完整評估預先核對 **3 種以上**不同之新資訊源或機制(各含兩端)而皆無內容 —— 預期作用量很小者不必硬派成方向;此時於 `synthesis.overview.outwardChecked` 填 `{ kinds: 種數, files: [所核之檔名…] }`,並於 `adjust` 列出各設計與其數字(內容、時效),輪末摘要即記為「向外 0(預先核對皆不成立)」。尚有未試之臂、或只核了 1 ~ 2 種者,照舊須有向外。' + satClause + '向外之方向同樣須寫「它抓到什麼結構、為何可望使回測期之績效更佳」,不是隨機挑臂。**用了未試之臂不等於換了機制**(r003:兩條向外之方向最後都做成與現有候選同一家族之排序鍵)⇒ 每條方向另標 `newFamily`(`true` = 押不同於現有有內容成品之資訊源或機制;`false` = 同家族之驗證、延伸或鄰點)。本次之配比與理由寫在 `synthesis.overview.adjust`(迴圈會統計並列於輪末摘要)。')
         L.push(`  - \`arms\` 須為「可選臂」之 id(清單與各臂之現況見 \`rsi/ARMS_BOARD.md\`;機制說明見 \`arms/catalog.json\`),一個節點至多 ${st.rsi.maxArmsPerNode} 臂。`)
         L.push('  - `base` 為 null(從零)或一個已採納(accept)且**未被否決**之節點 id(在其成品上加臂 / 改進;被否決者——超過硬限制或審計不可信——不得作為起點);`arms` 是該節點**完整**之臂組合(含起點已有之臂)。探索類:同臂組合 + 同起點之節點若已存在,迴圈會讓該方向之規格另帶一個區分用之鍵(依據文字之雜湊)後照常入前緣;依據文字完全相同者(同一探索之重提)才略過。**無依據文字者、或樹上尚無同規格之節點而前緣內已有同臂同起點之待執行提案者,仍會被略過**(輪末摘要列出)—— 同一機制請勿換個說法重提,不同之機制請在 `rationale` 寫清楚其差異。既有之臂之下已掛多種互不相干之機制者,宜另提新臂(`guidance.armProposals`),使看板之「已試」有意義。**驗證類:去重另含主張**(`claim` 之文字)—— 同一候選之不同主張之驗證(半庫、鄰格、換定義重複)可用相同之臂與起點,各成一個節點;主張之文字完全相同者才略過。')
         L.push('  - 方向要兼顧「擴展有希望者」(回測期 S 較高、對隨機挑之超額顯著之節點:怎麼讓它更高、各相位皆為正、更穩)與「探索未試之層」;`rationale` 寫清楚依據(哪個節點之哪個數字),並說明**此方向抓到什麼市場結構或數據特徵、為何可望使回測期之績效更佳且換一段期間仍成立**;`expect` 寫預期與判定方式(以回測期之 S、最差相位、對隨機挑或對照之差判定)。**判定若含「相鄰 / 平原 / 同向」,須寫量級門檻**(例:鄰點之七相位平均、或其對組成對照之超額 ≥ 交付版之一半),只看符號不算平原;選集之每隻訊號數為全體隨機之 2 倍以上者(或預期會如此者),判準另含近期活躍度之組成對照(`metrics.ext.nullRecentAct.side`)之超額與 p。**對照以評估器內建之組成對照 / 幾何對照(64 抽)為準**,不要求節點另手跑單抽之替換樣板(只有要換活躍度或分組之定義時才指名樣板)。要量選集重疊率時寫「以 `quick --ref` 量」(不計為版本;交付之 `result_full.json` 不帶 `--ref`),不寫「交付版之 full 加 `--ref`」或「不跑 quick」。**探索方向之交付規則須與判定所用之條件一致**:交付規則與判定用同一組量,不另寫較寬之規則。**判定量會隨抽取而變者**(池內隨機抽取之成品;或依鍵取席而迴圈重放之 S 與主分數相差 > 5、下單率 < 30% 之成品)**以 ≥ 3 組抽取之平均為準**(池內隨機用 pick 開頭多耗 0 / 1 / 2 次 `ctx.rand`;依鍵取席用 `snippets/tieAlt.mjs` 之 k 0 / 1 / 2;節點文件與看板已列「正本與兩次重放之平均」,亦可用),不以單抽、也不以「每抽皆 ≥ X」為準 —— 效果略高於門檻時每抽皆過之機率很低,而無內容者單抽即可能過 p ≤ 0.05。')
@@ -491,7 +506,7 @@ let makeTexts = ({ st, FD_ROOT }) => {
                 let hit = ((c.context && c.context.nodes) || []).find((n) => n.from && n.claimVerdict && keyOf(n.from) === keyOf(x))
                 return { round: x.round, arms: x.arms, ...(x.claimKey ? ('claim' in x ? { claim: x.claim } : { rationale: x.rationale }) : {}), verdict: hit ? hit.claimVerdict : 'confirmed | refuted | inconclusive | flawed | not-run(擇一)', note: hit ? `(節點 ${String(hit.nodeId).slice(0, 8)} 自判 ${hit.claimVerdict}${hit.claimNote ? `: ${hit.claimNote}` : ''};請核對後改寫為依據,要改判者說明原因)` : '(對應之節點與依據)' }
             }),
-            overview: { families: [{ name: '(家族名: 資訊源 × 方向 × 時間尺度)', nodes: ['(節點 id)'], basis: '(歸類之依據)' }], coverage: { verdict: 'concentrated | balanced | scattered | unknown(擇一)', why: '(依家族看; 依據之節點與數字)' }, progress: { verdict: 'advancing | flat | regressing | unknown(擇一)', why: '(以有內容且可信者對組成對照之超額為主; 最高點是否已驗證)' }, localOptimum: { risk: 'low | medium | high | unknown(擇一)', why: '(改進是否遞減; 有無第二條線; 行情性質之支持與反對證據)' }, blindSpots: ['(至多 6 項: 尚未觸及或只淺試之區域與理由)'], adjust: '(據此對本次方向之配比與選題之調整; 配比與理由只寫在這裡)', outwardChecked: null, prevReview: '(前次整體研判之回顧; 首次留空字串)' }
+            overview: { families: [{ name: '(家族名: 資訊源 × 方向 × 時間尺度)', nodes: ['(節點 id)'], basis: '(歸類之依據)' }], coverage: { verdict: 'concentrated | balanced | scattered | unknown(擇一)', why: '(依家族看; 依據之節點與數字)' }, progress: { verdict: 'advancing | flat | regressing | unknown(擇一)', why: '(以有內容且可信者對組成對照之超額為主; 最高點是否已驗證)' }, localOptimum: { risk: 'low | medium | high | unknown(擇一)', why: '(改進是否遞減; 有無第二條線; 行情性質之支持與反對證據)' }, blindSpots: ['(至多 6 項: 尚未觸及或只淺試之區域與理由)'], adjust: '(據此對本次方向之配比與選題之調整; 配比與理由只寫在這裡)', outwardChecked: null, ...(satOkOf(c.context) ? { outwardSaturated: null } : {}), prevReview: '(前次整體研判之回顧; 首次留空字串)' }
         },
         guidance: { directions: [{ type: 'explore | verify(擇一)', newFamily: false, arms: ['(臂 id)'], base: null, claim: '(type 為 verify 時必填: 要檢驗之主張; explore 則刪除此鍵)', rationale: '(依據)', expect: '(預期與判定方式; verify 須寫定交付版、對照版、評估次數)' }], avoid: ['(應避免之做法與依據)'], openQuestions: ['(待解問題)'], improvements: [{ kind: 'loop | dream | node | tool | score | validation | external(擇一)', target: '(要改之檔或機制)', what: '(具體要改成什麼)', evidence: '(依據之節點、紀錄列或數字)' }], armProposals: [] },
         ...(c.context && c.context.toolbox ? { expansion: [{ item: '(可共用之輔助: 是什麼)', sources: ['(出處之節點 id 或檔)'], decision: 'built | updated | declined | core(擇一)', files: ['(built / updated 時必填: 共用工具區內所寫之檔)'], verify: '(built / updated 時必填: 怎麼驗、看到什麼)', note: '(declined 之理由、core 所對應之改進項等; 無則刪除此鍵)' }] } : {}),
@@ -502,5 +517,5 @@ let makeTexts = ({ st, FD_ROOT }) => {
 }
 
 
-export { makeTexts, GUIDE, guideText }
+export { makeTexts, GUIDE, guideText, OUT_SATURATED_NOTE }
 export default makeTexts

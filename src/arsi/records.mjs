@@ -108,6 +108,7 @@ let DIR_LABELS = { 'confirmed': '預期成立', 'refuted': '預期不成立', 'i
 //  blindSpots[]                  尚未觸及或過早放棄之區域
 //  adjust                        據此對方向之配比與選題之調整;  prevReview?  前次之整體研判哪些被本輪支持 / 推翻
 //  outwardChecked?{ kinds, files[] }  本輪已預先核對而皆無內容之向外候選之種數與其檔(無向外之方向時之依據; 是否足以免除由領域層判定)
+//  outwardSaturated?{ basis }   本輪宣告(或續存)「現行資訊範圍內已無可試之向外方向」, basis = 已核之機制與結果或首次宣告之輪次(非空字串; 無向外之方向時之另一依據; 是否足以免除由領域層判定; 規則 R-REC-29)
 //  三個判定皆可填 unknown(樣本不足以判定; why 寫還缺什麼) —— 節點尚少時不硬下結論
 let OVERVIEW_COVERAGE = ['concentrated', 'balanced', 'scattered', 'unknown']
 let OVERVIEW_PROGRESS = ['advancing', 'flat', 'regressing', 'unknown']
@@ -146,6 +147,8 @@ let isStr = (x) => typeof x === 'string'
 let isArr = (x) => Array.isArray(x)
 let isObj = (x) => x !== null && typeof x === 'object' && !Array.isArray(x)
 let strArr = (x) => isArr(x) && x.every(isStr)
+//saturatedOf, 整體研判之 outwardSaturated 是否為有效之宣告({ basis: 非空字串 }); 驗證、計數(tallyDream)與渲染共用
+let saturatedOf = (ov) => isObj(ov) && isObj(ov.outwardSaturated) && isStr(ov.outwardSaturated.basis) && ov.outwardSaturated.basis.trim() !== ''
 
 //checkArmProposals, 臂目錄之提案之檢核 ⇒ 問題清單(空 = 合格); where = 欄位路徑(訊息用)
 /**
@@ -363,6 +366,10 @@ let checkDreamAgentPart = (a, scope = []) => {
                 if (ov.outwardChecked !== undefined && ov.outwardChecked !== null && !(isObj(ov.outwardChecked) && Number.isInteger(ov.outwardChecked.kinds) && ov.outwardChecked.kinds >= 1 && strArr(ov.outwardChecked.files) && ov.outwardChecked.files.length >= 1)) {
                     e.push('synthesis.overview.outwardChecked 須為 { kinds: 正整數(已預先核對而皆無內容之向外候選之種數), files: [檔名](至少 1 個) }')
                 }
+                //outwardSaturated(選配): 宣告(或續存)「現行資訊範圍內已無可試之向外方向」之依據 —— 無向外之方向時之另一依據(由領域層決定是否足以免除「須有向外」)
+                if (ov.outwardSaturated !== undefined && ov.outwardSaturated !== null && !saturatedOf(ov)) {
+                    e.push('synthesis.overview.outwardSaturated 須為 { basis: 非空字串(宣告「現行資訊範圍內已無可試之向外方向」之依據:已核之機制與結果,或首次宣告之輪次) }')
+                }
             }
         }
     }
@@ -484,7 +491,7 @@ let tallyDream = (d) => {
     //整體研判之三個判定(無此欄或不在值域 ⇒ null); 逐輪比較用
     let ov = d && d.synthesis && isObj(d.synthesis.overview) ? d.synthesis.overview : null
     let pickOf = (x, key, dom) => (isObj(x) && dom.includes(x[key]) ? x[key] : null)
-    let overview = ov ? { coverage: pickOf(ov.coverage, 'verdict', OVERVIEW_COVERAGE), progress: pickOf(ov.progress, 'verdict', OVERVIEW_PROGRESS), localOptimum: pickOf(ov.localOptimum, 'risk', OVERVIEW_RISK), nFamilies: isArr(ov.families) ? ov.families.length : null, outwardChecked: isObj(ov.outwardChecked) && Number.isInteger(ov.outwardChecked.kinds) && ov.outwardChecked.kinds >= 1 ? ov.outwardChecked.kinds : 0 } : null
+    let overview = ov ? { coverage: pickOf(ov.coverage, 'verdict', OVERVIEW_COVERAGE), progress: pickOf(ov.progress, 'verdict', OVERVIEW_PROGRESS), localOptimum: pickOf(ov.localOptimum, 'risk', OVERVIEW_RISK), nFamilies: isArr(ov.families) ? ov.families.length : null, outwardChecked: isObj(ov.outwardChecked) && Number.isInteger(ov.outwardChecked.kinds) && ov.outwardChecked.kinds >= 1 ? ov.outwardChecked.kinds : 0, ...(saturatedOf(ov) ? { outwardSaturated: true } : {}) } : null
     let plain = d && d.synthesis && isStr(d.synthesis.plain) ? d.synthesis.plain.trim() : ''
     //臂目錄之提案依類別之筆數(類別不在值域者只計入 total)
     let ap = { total: 0, ...Object.fromEntries(ARM_KINDS.map((k) => [k, 0])) }
@@ -745,6 +752,9 @@ let renderDreamMd = (d) => {
         }
         if (isObj(ov.outwardChecked) && Number.isInteger(ov.outwardChecked.kinds)) {
             out.push(`- 已預先核對而皆無內容之向外候選:${ov.outwardChecked.kinds} 種(${(isArr(ov.outwardChecked.files) ? ov.outwardChecked.files : []).map((f) => `\`${f}\``).join('、') || '未列檔'})`)
+        }
+        if (saturatedOf(ov)) {
+            out.push(`- 已宣告現行資訊範圍內已無可試之向外方向:${ov.outwardSaturated.basis.trim().replace(/\s*\r?\n\s*/g, ' ')}`)
         }
         if (ov.prevReview) {
             out.push(`- 前次整體研判之回顧:${ov.prevReview}`)

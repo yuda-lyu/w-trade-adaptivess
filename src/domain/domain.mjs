@@ -12,7 +12,7 @@ import { createToolbox } from '../arsi/toolbox.mjs'
 import { makeDispatch } from '../arsi/dispatchers.mjs'
 import { createResourceMonitor } from '../arsi/resources.mjs'
 import { resolveRunConfig } from '../arsi/runner.mjs'
-import { makeTexts, GUIDE, guideText } from './texts.mjs'
+import { makeTexts, GUIDE, guideText, OUT_SATURATED_NOTE } from './texts.mjs'
 import { makeVerify, summaryOf, notesOf, scanTrace, shortShareOf, sideFlowIssue, extSurfaceOf, extFlagIssue, runNodeProc, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD } from './verify.mjs'
 import { makeToolboxRules } from './toolboxRules.mjs'
 import { archiveExperience, archiveFeedback } from './archiveDocs.mjs'
@@ -36,31 +36,39 @@ let LAYER_ORDER = 'ABCDEFG'
  */
 let OUT_CHECK_MIN = 3
 //outwardNoteOf, 輪末摘要「配比」一列之附註(純函數): nOut = 向外之方向數, nDirs = 方向總數, nUntried = 未試之可選臂數, nChecked = 做夢自報已預先核對而皆無內容之向外候選種數
-//  有向外或無方向 ⇒ 空字串; 尚有未試之臂 ⇒ 標示; 可選之臂皆已試過而 nChecked ≥ OUT_CHECK_MIN ⇒ 另列(不記為違反); 其餘 ⇒ 標示
+//  saturated = 做夢本輪於 synthesis.overview.outwardSaturated 宣告(或續存)「現行資訊範圍內已無可試之向外方向」(規則 R-REC-29)
+//  有向外或無方向 ⇒ 空字串; 尚有未試之臂 ⇒ 標示; 可選之臂皆已試過而 nChecked ≥ OUT_CHECK_MIN ⇒ 另列(不記為違反);
+//  可選之臂皆已試過而已宣告(saturated === true)⇒ 另列「向外 0(已宣告向外飽和)」(OUT_SATURATED_NOTE; 不記為違反); 其餘 ⇒ 標示
+//  nUntried 由呼叫端(afterRound)以套用做夢之審計後之樹求得(同例外之一); 做夢任務書之例外之二則以派做夢前之樹判定是否列出 —— 兩者只在做夢判刪除某臂之唯一已試節點時不同, 任務書之該句寫明此情形
 /**
  * 產生輪末摘要「配比」一列之附註(純函數)
  *
- * 有向外或無方向回傳空字串;尚有未試之臂或預先核對種數不足時回傳標示文字;可選之臂皆已試過且 nChecked 達 OUT_CHECK_MIN 時另列「向外 0」。
+ * 有向外或無方向回傳空字串;尚有未試之臂或預先核對種數不足(且未宣告向外已飽和)時回傳標示文字;可選之臂皆已試過且 nChecked 達 OUT_CHECK_MIN 時另列「向外 0(預先核對皆不成立)」;可選之臂皆已試過且 saturated 為 true 時另列「向外 0(已宣告向外飽和)」。
  *
  * @param {Object} opt 輸入設定物件
  * @param {Number} opt.nOut 輸入向外之方向數
  * @param {Number} opt.nDirs 輸入方向總數
  * @param {Number} opt.nUntried 輸入未試之可選臂數
  * @param {Number} opt.nChecked 輸入做夢自報已預先核對而皆無內容之向外候選種數
+ * @param {Boolean} [opt.saturated=false] 輸入做夢本輪是否宣告(或續存)「現行資訊範圍內已無可試之向外方向」,只認 true
  * @returns {String} 回傳附註字串,無須附註時為空字串
  * @example
  * let s = outwardNoteOf({ nOut: 0, nDirs: 3, nUntried: 2, nChecked: 0 })
  */
-let outwardNoteOf = ({ nOut, nDirs, nUntried, nChecked }) => {
+let outwardNoteOf = ({ nOut, nDirs, nUntried, nChecked, saturated }) => {
     if (nOut > 0 || nDirs === 0) {
         return ''
     }
     if (nUntried > 0) {
         return `;**無向外之方向**(未試之可選臂尚有 ${nUntried} 個)`
     }
-    return nChecked >= OUT_CHECK_MIN
-        ? `;向外 0(預先核對皆不成立;${nChecked} 種)`
-        : `;**無向外之方向**(可選之臂皆已試過;預先核對而皆無內容之向外候選 ${nChecked} 種,未達 ${OUT_CHECK_MIN} 種)`
+    if (nChecked >= OUT_CHECK_MIN) {
+        return `;向外 0(預先核對皆不成立;${nChecked} 種)`
+    }
+    if (saturated === true) {
+        return OUT_SATURATED_NOTE
+    }
+    return `;**無向外之方向**(可選之臂皆已試過;預先核對而皆無內容之向外候選 ${nChecked} 種,未達 ${OUT_CHECK_MIN} 種)`
 }
 
 //unproposedNoteOf, 輪末摘要「方向未入前緣」之各行(純函數; Gitea #154): proposals = 做夢文件 harness.applied.proposals(與 guidance.directions 逐條對齊; 每條 { arms, base, ok, note, ... })
@@ -216,6 +224,15 @@ let makeProject = (st = getSettings(), inject = {}) => {
     let triedArmsOf = (n) => {
         let off = offDefArmsOf(n)
         return (n && n.spec && Array.isArray(n.spec.arms) ? n.spec.arms : []).filter((a) => !off.includes(a))
+    }
+    //untriedOf, 樹上已執行之節點所試過之臂(tried)與未試之可選臂數(nUntried)—— 輪末摘要之配比與做夢任務書之例外之二共用同一算法(規則 R-REC-26、R-REC-29)
+    //  呼叫時點不同: 任務書於派做夢前、輪末摘要於套用做夢之審計後各算一次; 其間只有審計之刪除(remove → 節點不再為已執行)會減少已試之臂
+    //  (採納之 inactiveArms 不影響「已試」; 重做沿用同一 spec; 新方向只入前緣) ⇒ 摘要以套用後之樹為準(同例外之一之既有寫法)
+    let untriedOf = () => {
+        let tried = new Set(rsi.store.listIndex().filter((r) => r.status === 'executed').flatMap((r) => {
+            let n = rsi.store.getNode(r.id); return n && n.spec ? triedArmsOf(n) : []
+        }))
+        return { tried, nUntried: selectable.filter((a) => !tried.has(a.id)).length }
     }
     //armsLabel, 節點之臂之顯示文字(未作用者加註)
     let armsLabel = (n, sep = ' + ') => {
@@ -1061,7 +1078,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
         //臂目錄之提案: 本輪節點所提者列於做夢任務書(由做夢彙整); 提案帳之渲染檔(引擎產生; 尚無提案帳者無此檔, 任務書不列)供做夢讀: 已在帳上者不重提
         let nodeProposals = ctxNodes.flatMap((n) => n.armProposals.map((p) => ({ ...p, nodeId: n.nodeId })))
         let ledgerMd = fs.existsSync(rsi.paths.govProposalsMd) ? rel(rsi.paths.govProposalsMd) : null
-        let dr = await arsi.runDream({ round, nodeIds, reworkedIds: reaudit, context: { nodes: ctxNodes, failed, refs: prevDreams, prevDirections, maxDirections: run.nodesPerRound + 2, extra: dreamExtra, toolbox: tbInfo, armProposals: { ledger: ledgerMd, fromNodes: nodeProposals }, ...(request ? { request } : {}) } })
+        //outward.nUntried: 派做夢當下之未試之可選臂數(任務書之配比之例外之二只在 0 時列出; 規則 R-REC-29)
+        let dr = await arsi.runDream({ round, nodeIds, reworkedIds: reaudit, context: { nodes: ctxNodes, failed, refs: prevDreams, prevDirections, maxDirections: run.nodesPerRound + 2, extra: dreamExtra, toolbox: tbInfo, armProposals: { ledger: ledgerMd, fromNodes: nodeProposals }, outward: { nUntried: untriedOf().nUntried }, ...(request ? { request } : {}) } })
         if (!dr.ok) {
             lines.push(`代理式做夢:**未交付做夢文件**(${dr.doc.agent && dr.doc.agent.error ? dr.doc.agent.error : dr.issues.join(';')});本輪節點維持未審`)
             setStatus({ stage: 'dream-failed' })
@@ -1175,16 +1193,14 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let dirs = ((dr.doc.guidance && dr.doc.guidance.directions) || []).filter((x) => x && Array.isArray(x.arms))
             //配比(向外探勘 / 向內深掘): 向外 = 探索類、無起點, 且「含至少一個未試之臂(樹上尚無已執行之節點含此臂)」或「做夢自標押新家族(newFamily: true)」; 其餘為向內
             //  後者之用意: 可選臂全數試過後(新臂一通過即由改掛之方向試), 只以未試之臂定義之向外恆為 0, 押新資訊源之從零探索不被計入
-            let tried = new Set(rsi.store.listIndex().filter((r) => r.status === 'executed').flatMap((r) => {
-                let n = rsi.store.getNode(r.id); return n && n.spec ? triedArmsOf(n) : []
-            }))
-            let nUntried = selectable.filter((a) => !tried.has(a.id)).length
+            let { tried, nUntried } = untriedOf()
             let isOut = (x) => x.type !== 'verify' && !x.base && (x.newFamily === true || x.arms.some((a) => armById.has(a) && armById.get(a).selectable === true && !tried.has(a)))
             let nOut = dirs.filter(isOut).length
             //無向外之方向(規則 R-REC-26): 「每輪至少 1 條向外」之例外 —— 可選之臂皆已試過, 且做夢該輪以完整評估預先核對之向外候選
             //  (synthesis.overview.outwardChecked.kinds)達 OUT_CHECK_MIN 種而皆無內容 ⇒ 另列為「向外 0(預先核對皆不成立; n 種)」, 不記為違反; 其餘之「向外 0」照舊標示
             let nChecked = tally.overview && Number.isInteger(tally.overview.outwardChecked) ? tally.overview.outwardChecked : 0
-            let outNote = outwardNoteOf({ nOut, nDirs: dirs.length, nUntried, nChecked })
+            //已宣告向外飽和(synthesis.overview.outwardSaturated; 規則 R-REC-29)⇒ 可選之臂皆已試過時記為「向外 0(已宣告向外飽和)」(nUntried 為套用審計後之樹; 見 untriedOf)
+            let outNote = outwardNoteOf({ nOut, nDirs: dirs.length, nUntried, nChecked, saturated: !!(tally.overview && tally.overview.outwardSaturated === true) })
             lines.push(`任務類型:本輪節點 探索 ${ctxNodes.length - nV}、驗證 ${nV};下一輪方向 探索 ${dirs.filter((x) => x.type !== 'verify').length}、驗證 ${dirs.filter((x) => x.type === 'verify').length};配比 向外 ${nOut}、向內 ${dirs.length - nOut}${outNote}`)
             //整體研判(synthesis.overview; 規則 R-REC-14): 三個判定列入輪末摘要(逐輪比較); 未交者標示; 判定與配比之機械核對 ——
             //  「過於集中」或「局部最佳點之風險高」而探索類之方向中押新家族者(newFamily: true)不到一半者標示(驗證類不計入; 不否決; 由主控看做夢是否言行一致)

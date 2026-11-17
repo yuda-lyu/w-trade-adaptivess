@@ -14,10 +14,22 @@ import { createResourceMonitor } from '../arsi/resources.mjs'
 //  **預設評估回測期**(settings.periods.backtest): 目標 = 回測期之等效年化更佳
 //    挑選函數自帳本起點(暖機後之第一個決策)連續執行到回測期終點, 每個決策只看得到決策棒以前之資訊;
 //    只有決策棒落在回測期者計入績效、新鮮度、虛無與選集統計(持倉簿自回測期起點為空)。ctx.meta.ntAll 只計訓練期之進場數(策略庫之靜態屬性)
-//  node g_eval.mjs --pick <挑選模組.mjs> [--mode quick|full] [--period backtest|train] [--out <結果.json>] [--null N] [--phases 0,3] [--ref <參考模組.mjs>[,<參考模組2.mjs>…]]
+//  node g_eval.mjs --pick <挑選模組.mjs> [--mode quick|full] [--period backtest|train|postfit] [--out <結果.json>] [--null N] [--phases 0,3] [--ref <參考模組.mjs>[,<參考模組2.mjs>…]]
 //    quick: 相位 0 與 3、地平線 7 日、不算虛無(數秒; 迭代用)
 //    full : 七相位、全部地平線、同劑量虛無 64 抽(交付用; 結果之 selHash 為選集序列之指紋)
 //    --period train: 改看訓練期內之決策(診斷用; 訓練期是策略庫之求解期 = 樣本內, 不計入判讀)
+//    --period postfit(規則 R-EV-41; 診斷用; **此結果不是正本**): 求解窗後段 —— 只計決策棒落在「帳本內最早之求解窗終點棒之次一根 ~ 回測期起點(不含)」之決策,
+//           且每個決策只留選集中「求解窗終點棒早於該決策棒」之席(評估器之 fitEndBar 逐席判定; 設定 eval.fitEnd)
+//           挑選函數照常自帳本起點連續執行(ctx.prev、ctx.state 為其完整之選集); 輸出所留之席之等效年化、組成對照(同側同活躍度; 只換所留之席)之超額與 p、下單數,
+//           另列前段 / 後段(依決策序各半; 各段自空倉起算)之同一組量(metrics.afterFit);
+//           決策棒皆早於回測期起點(最後一個決策之視窗可跨過回測期起點至多一個決策間隔, 同 --period train 於訓練期終點之寫法; 帳本止於回測期終點)
+//           用途: 回測期以外、策略未見過之另一段期間, 判一條線之內容是否換期仍成立(佐證; 不入 S、階梯與看板之排序; 結果檔之 score 為 null、不印判讀列;
+//             評估紀錄記 period, 不算版本之評估; 以之挑參數即失去其獨立性)
+//           **效度限制**: 此段內, 決策棒以前之單多在求解窗內(樣本內); 以過往之損益為輸入之排序鍵, 其輸入於此段與回測期性質不同
+//             (回看 N 日之鍵要到求解窗終點之後 N 日, 其輸入才全為求解窗外之單)⇒ 看分段(前段 / 後段); 以進場時點或結構為輸入之鍵不受此限
+//           同劑量 / 同訊號量 / 同活躍度虛無之替換池為全庫(含求解窗涵蓋此段之策略)⇒ 此段讀組成對照(同側; 同側之 fitEndBar 相同為其前提, 見 evalPolicy 之註解)
+//           須有虛無(--mode full, 或 --null N 且 N ≥ 1); 不與 --ref、--ext-test 併用; 迴圈之重放之 ARSI_LEDGER_DIR / ARSI_EVAL_FROM 不與之併用(皆離開碼 2); --member、--phases 可併用; 擴充診斷不載入
+//           每一個所評估之相位於段內皆須有決策棒(某相位無決策者其等效年化為 0, 併入各相位之平均會稀釋所留之席之數字 ⇒ 不評估, 離開碼 2)
 //    --seed N: 換亂數種子(**只在迴圈之重放(ARSI_HARNESS=1)時生效**; 其他呼叫者帶此旗標即忽略 —— 節點不得藉換種子挑結果)
 //    --tie-salt N: 換同分次序(ctx.meta.tie 與同一進場棒之訊號先後; 同樣只在迴圈之重放時生效; 節點要自檢同分之影響用共用工具區之 snippets/tieAlt.mjs)
 //    --member <鹽>:<0|1>: 成員重抽(規則 R-EV-40)—— 只把策略庫之一半交給挑選函數(0 = 甲半、1 = 乙半; 鹽為 0 ~ 4294967295 之整數, 十進位或 0x 開頭之十六進位; 換鹽 = 換一種切法),
@@ -33,14 +45,40 @@ import { createResourceMonitor } from '../arsi/resources.mjs'
 let st = getSettings()
 let fpPick = argOf('pick', '')
 if (!fpPick || fpPick === true) {
-    console.log('用法: node g_eval.mjs --pick <挑選模組.mjs> [--mode quick|full] [--period backtest|train] [--out <結果.json>] [--null N] [--phases 0,3] [--ref <參考模組.mjs>]')
+    console.log('用法: node g_eval.mjs --pick <挑選模組.mjs> [--mode quick|full] [--period backtest|train|postfit] [--out <結果.json>] [--null N] [--phases 0,3] [--ref <參考模組.mjs>]')
     process.exit(2)
 }
 let mode = argOf('mode', 'quick')
 let periodArg = String(argOf('period', 'backtest'))
-if (!['backtest', 'train'].includes(periodArg)) {
-    console.log('--period 須為 backtest(預設;評估期)或 train(診斷用;樣本內)')
+if (!['backtest', 'train', 'postfit'].includes(periodArg)) {
+    console.log('invalid --period: must be one of backtest, train, postfit')
     process.exit(2)
+}
+//求解窗後段(--period postfit; 規則 R-EV-41)與其他參數之併用 —— 不合者不評估(離開碼 2; 於載入模組與等資源閘之前即檢查, 不寫結果檔、不記評估紀錄; 訊息依 V19、V20, 不帶輸入值)
+//  須有虛無(組成對照是此段之判讀所在): 實際之抽數 = --null N(給數字者)或完整評估之設定值(quick 為 0)
+//  --ref(重疊率以完整之選集定義)、--ext-test(擴充診斷以完整之選集為前提)不併用; 迴圈之重放改帳本 / 評估起點之環境變數不併用(此段之終點固定為回測期起點)
+//  --ext-test 與其他期間之併用維持現狀(不在本規則範圍)
+let isPostfit = periodArg === 'postfit'
+if (isPostfit) {
+    let nullArg0 = argOf('null', null)
+    let nDraws = typeof nullArg0 === 'number' ? nullArg0 : (mode === 'full' ? (st.eval.nullDraws === undefined ? 64 : st.eval.nullDraws) : 0)
+    let bad = null
+    if (argOf('ref', null) !== null) {
+        bad = 'cannot be combined with --ref'
+    }
+    else if (argOf('ext-test', null) !== null) {
+        bad = 'cannot be combined with --ext-test'
+    }
+    else if (!(Number.isInteger(nDraws) && nDraws >= 1)) {
+        bad = 'must have null draws (--mode full, or --null N with N >= 1)'
+    }
+    else if (process.env.ARSI_HARNESS === '1' && (process.env.ARSI_LEDGER_DIR || process.env.ARSI_EVAL_FROM)) {
+        bad = 'cannot be combined with ARSI_LEDGER_DIR or ARSI_EVAL_FROM'
+    }
+    if (bad) {
+        console.log(`invalid --period postfit: ${bad}`)
+        process.exit(2)
+    }
 }
 //成員重抽(規則 R-EV-40): --member <鹽>:<0|1> ⇒ 以半庫帳本(memberLedger: 只含該半之策略、重新編號、保留各策略於全庫之同分次鍵)評估; 未給 ⇒ 全庫(行為不變)
 //  格式不合者不評估(離開碼 2; 不靜默改用全庫: 那會把全庫之結果當成半庫之結果); 於載入模組與等資源閘之前即檢查(不先耗時), 不寫結果檔、不記評估紀錄
@@ -226,6 +264,37 @@ let nullArg = argOf('null', null)
 if (typeof nullArg === 'number') {
     opt.nullDraws = nullArg
 }
+//求解窗後段(--period postfit; 規則 R-EV-41): 起 = 評估器之 fitEndBar 之最小者(0 以上)之次一根(終點棒本身在求解窗內); 終 = 回測期起點(設定之回測期, 不含; 不取環境變數)
+//  不合者不評估(離開碼 2; 不寫結果檔、不記評估紀錄; 訊息依 V19、V20): 設定無 eval.fitEnd、帳本未涵蓋至回測期起點、所評估之相位於段內皆無決策棒
+let postfit = null
+if (isPostfit) {
+    let fe = ev.meta.fitEndBar
+    let minFe = -1
+    for (let s = 0; s < fe.length; s++) {
+        if (fe[s] >= 0 && (minFe < 0 || fe[s] < minFe)) {
+            minFe = fe[s]
+        }
+    }
+    if (minFe < 0) {
+        console.log('invalid --period postfit: must have eval.fitEnd in settings (the end of the fitting window of each side)')
+        process.exit(2)
+    }
+    let pfTo = barOf(st.periods.backtest.start)
+    if (pfTo > L.nBars) {
+        console.log('invalid --period postfit: must have a ledger that covers the start of the backtest period (rebuild it: node g_build.mjs)')
+        process.exit(2)
+    }
+    let pfFrom = minFe + 1
+    //所評估之相位(同 evalPolicy 之預設: opt.phases ?? settings.eval.phases ?? 0 ~ 6)**每一個**須於段內有決策棒:
+    //  某相位無決策者其等效年化為 0, 併入各相位之平均會稀釋所留之席之數字(且分段不成立) ⇒ 與其輸出被誤讀, 不如不評估(拒絕)
+    let pfPhases = opt.phases || [0, 1, 2, 3, 4, 5, 6]
+    if (!(pfPhases.length > 0 && pfPhases.every((ph) => ev.decisionBars(ph).some((b) => b >= pfFrom && b < pfTo)))) {
+        console.log('invalid --period postfit: must have at least one decision bar in every evaluated phase after the earliest end of the fitting windows and before the start of the backtest period')
+        process.exit(2)
+    }
+    postfit = { fromBar: pfFrom, toBar: pfTo }
+    win = { fromBar: pfFrom, toBar: pfTo }
+}
 //擴充診斷(共用工具區之 metrics/*.mjs; 由做夢擴建; 規則 R-EV-21): 完整評估且有算虛無時逐一載入, 結果附於 metrics.ext.<檔名>
 //  每個檔 `export default function (api) { … return { text, … } }`; 與挑選模組同一組字樣限制(不得匯入、不得碰檔案 / 行程 / 時鐘); api 見 src/eval/evalCore.mjs
 //  --ext-test <檔>: 只載入該檔、以小規模(相位 0,3、8 抽)試跑一次, 印 EXT_OK / EXT_FAIL(迴圈之機械檢查與自檢入口用; 不記評估紀錄、不寫結果檔)
@@ -287,6 +356,7 @@ try {
     m = ev.evalPolicy(pk.pick, {
         ...opt,
         ...win,
+        ...(postfit ? { afterFitOnly: true } : {}),
         seed,
         accept: pk.accept,
         ...(extList.length ? { ext: extList } : {}),
@@ -321,7 +391,8 @@ catch (err) {
     logEval({ ok: false, code: 'PICK_RUN' })
     process.exit(3)
 }
-let sc = scoreOf(m, { limits: st.eval.limits, score: st.score })
+//求解窗後段(--period postfit)為佐證、不入 S、階梯與量尺之排序: 不計 S(結果檔之 score 與評估紀錄之 S 為 null)、不印判讀列(與回測期之 S 並列易被當成分數)
+let sc = postfit ? null : scoreOf(m, { limits: st.eval.limits, score: st.score })
 //與參考模組之選集重疊率(--ref): 診斷用; 參考模組執行失敗只記錯誤, 不影響本模組之評估結果
 //  結果檔: refOverlap = 第一個參考(物件; 單一參考時與舊版逐欄相同); 給多個參考時另有 refOverlaps = 全部參考依序之陣列(各自之 ctx.state / ctx.rand)
 let overlapOf = async (refPath) => {
@@ -406,11 +477,16 @@ checkOrFail('output')
 let refOverlap = refOverlaps.length ? refOverlaps[0] : null
 let periodInfo = periodArg === 'train'
     ? { name: 'train', label: '訓練期(診斷;樣本內,不計入判讀)', start: st.periods.train.start, end: st.periods.train.end }
-    : { name: 'backtest', label: '回測期', start: st.periods.backtest.start, end: st.periods.backtest.end }
+    : (postfit
+        ? { name: 'postfit', label: '求解窗後段(診斷;只留求解窗已結束之席;非正本)', start: ev.timeOf(postfit.fromBar), end: st.periods.backtest.start, canonical: false }
+        : { name: 'backtest', label: '回測期', start: st.periods.backtest.start, end: st.periods.backtest.end })
 let out = { ok: true, mode, period: periodInfo, seed, ...(tieSalt !== 0 ? { tieSalt } : {}), ...(member ? { member: { tag: memberTag, ...member } } : {}), pick: path.resolve(fpPick), pickBytes: pk.bytes, pickMeta: pk.meta, at: new Date().toISOString(), metrics: m, score: sc, limits: st.eval.limits, loadMs: Date.now() - t0 - m.ms.total, ...(refOverlap ? { refOverlap } : {}), ...(refOverlaps.length > 1 ? { refOverlaps } : {}) }
 let f1 = (x) => (typeof x === 'number' ? x.toFixed(1) : String(x))
 if (member) {
     console.log(`成員重抽 ${memberTag}: 只用策略庫之${member.half === 0 ? '甲' : '乙'}半(${member.n} 隻 / 全庫 ${member.nFull} 隻;各策略之同分次鍵同全庫)—— 此結果不是正本`)
+}
+if (postfit) {
+    console.log(`求解窗後段(--period postfit): 只計決策棒落在 ${periodInfo.start} ~ ${periodInfo.end}(不含)之決策, 且每次決策只留「求解窗之終點棒早於決策棒」之席 —— 此結果不是正本(佐證; 不入 S、階梯與看板之排序; 不印判讀)`)
 }
 console.log(`[${mode}|${periodInfo.label} ${periodInfo.start.slice(0, 10)} ~ ${periodInfo.end.slice(0, 10)}] 相位 ${m.phases.join(',')} | 決策 ${m.op.nDecisions.join('/')} 次 | 選集大小 均 ${f1(m.sel.sizeMean)}(${m.sel.sizeMin} ~ ${m.sel.sizeMax}), 空 ${m.sel.nEmpty}, 換手 Jaccard ${m.sel.turnoverJaccard}`)
 console.log(`操作績效(${m.period.cadenceDays} 日一換): 等效年化 均 ${f1(m.op.eqYr.mean)}% 最差相位 ${f1(m.op.eqYr.min)}% 最佳 ${f1(m.op.eqYr.max)}% | 月均單 ${f1(m.op.monthlyOrders.mean)} | 最大同時持倉 ${m.op.peakHold.max} | 勝率 ${(m.op.winRate * 100).toFixed(1)}% | 執行規則 ${m.hasAccept ? `有(下單率 ${(m.op.acceptRate * 100).toFixed(1)}%)` : '無(全收)'}`)
@@ -458,8 +534,20 @@ for (let ro of refOverlaps) {
         console.log(`與參考模組 ${path.basename(ro.ref)} 之選集重疊率(交集 ÷ 本模組之選集大小;參考選集平均 ${ro.refSizeMean} 隻;交集 ÷ 參考選集 均 ${ro.ofRefMean}): 全部 ${d(ro.all)} | 各相位最前 10% 之決策 ${d(ro.head)} | 中段 ${d(ro.mid)} | 最後 10% ${d(ro.tail)}`)
     }
 }
-console.log(`判讀${periodArg === 'train' ? '(訓練期之診斷;不是成績)' : '(回測期)'}: S ${sc.S} 階梯 ${sc.ladder}${sc.flags.vetoed ? ' 否決' : ''} | 各相位之等效年化 ${m.op.eqYr.byPhase.map((v) => f1(v)).join(' / ')}${sc.flags.why.length ? ` | ${sc.flags.why.join('; ')}` : ''}`)
-logEval({ ok: true, S: sc.S, selHash: m.selHash, ...(hasRef ? { ref: refList.map((x) => path.basename(x)).join(',') } : {}) })
+if (m.afterFit) {
+    let af = m.afterFit
+    let ctl = (x) => (x ? `組成對照(同側同活躍度;只換所留之席) 超額 ${f1(x.excess)} z ${x.z} p ${x.p}` : '組成對照 未算(所留之席無訊號)')
+    console.log(`求解窗後段之席(每次決策只留求解窗已結束之席): 所留 均 ${f1(af.seatsKept)} 隻、所捨 均 ${f1(af.seatsDropped)} 隻 | 所留之席之等效年化 均 ${f1(m.op.eqYr.mean)}% 最差相位 ${f1(m.op.eqYr.min)}% | ${ctl(m.nullSideAct)} | 下單 ${f1(af.orders)} 單(各相位平均)`)
+    if (af.halves) {
+        console.log(`求解窗後段之分段(依決策序各半;各段自空倉起算): ${af.halves.map((g, i) => `${i === 0 ? '前段' : '後段'} ${g.from.slice(0, 10)} ~ ${g.to.slice(0, 10)} 等效年化 均 ${f1(g.eqYr.mean)}%(最差相位 ${f1(g.eqYr.min)}), ${ctl(g.sideAct)}, 下單 ${f1(g.orders)} 單`).join(' | ')}`)
+    }
+    console.log('效度限制: 此段內, 決策棒以前之單多在求解窗內(樣本內); 以過往之損益為輸入之排序鍵, 其輸入於此段與回測期性質不同(回看 N 日之鍵要到求解窗終點之後 N 日, 其輸入才全為求解窗外之單)⇒ 看分段; 以進場時點或結構為輸入之鍵不受此限。同劑量 / 同訊號量 / 同活躍度虛無之替換池為全庫(含求解窗涵蓋此段之策略)⇒ 此段讀組成對照。最後一個決策之視窗可跨過回測期起點至多一個決策間隔')
+}
+//判讀列: 求解窗後段不印(此段為佐證, 不是成績)
+if (!postfit) {
+    console.log(`判讀${periodArg === 'train' ? '(訓練期之診斷;不是成績)' : '(回測期)'}: S ${sc.S} 階梯 ${sc.ladder}${sc.flags.vetoed ? ' 否決' : ''} | 各相位之等效年化 ${m.op.eqYr.byPhase.map((v) => f1(v)).join(' / ')}${sc.flags.why.length ? ` | ${sc.flags.why.join('; ')}` : ''}`)
+}
+logEval({ ok: true, S: sc ? sc.S : null, selHash: m.selHash, ...(hasRef ? { ref: refList.map((x) => path.basename(x)).join(',') } : {}) })
 console.log(`selHash ${m.selHash} | 耗時 挑選 ${m.ms.pick}ms 指標 ${m.ms.metrics}ms 虛無 ${m.ms.null}ms(載入 ${out.loadMs}ms)`)
 if (fpOut && fpOut !== true) {
     writeJson(path.resolve(fpOut), out)
