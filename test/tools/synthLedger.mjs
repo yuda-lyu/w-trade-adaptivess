@@ -39,11 +39,12 @@ let lcg = (seed) => {
 
 let writeBin = (fp, arr) => fs.writeFileSync(fp, Buffer.from(arr.buffer, arr.byteOffset, arr.byteLength))
 
-//writeSynthLedger, 於 dir 寫出合成帳本; opt: { n(策略數), nBars(K 棒數; 4 小時一根), seed, identical(true = 全部策略之訂單相同), series(外部序列之名稱陣列; 預設無), dense(true = 每隻策略每 1 ~ 3 棒進場一次 ⇒ 任一決策視窗內每個被選之策略皆有訊號, 可由訊號還原選集, 且各策略之累計進場數不同; 預設 false) }
+//writeSynthLedger, 於 dir 寫出合成帳本; opt: { n(策略數), nBars(K 棒數; 4 小時一根), seed, identical(true = 全部策略之訂單相同), series(外部序列之名稱陣列; 預設無), dense(true = 每隻策略每 1 ~ 3 棒進場一次 ⇒ 任一決策視窗內每個被選之策略皆有訊號, 可由訊號還原選集, 且各策略之累計進場數不同; 預設 false), cut(< nBars 之正整數時: 以 nBars 根生成後只寫出前 cut 根 —— 同 seed 之 cut 帳本 = 較長帳本之前綴〔同一策略庫以較早之終點截斷所建之帳本; 進場棒 ≥ cut 之單不收, 出場棒 ≥ cut 者記為未結〕; meta.nBars = cut; 預設不截斷) }
 //  每隻策略: 逐棒以各自之機率進場(同棒至多一單), 持有 1 ~ 40 棒後出場; 出場棒超出帳本者為未結(ext = -1, pnl = 0); 損益為 ±
 //  series(規則 R-EV-34): 給名稱者另寫 ser.f64(另用一組亂數, 不動既有欄之內容; 第 1 條序列之前 3 根為缺值)與 meta.seriesNames; 未給者不寫(與舊帳本同)
-export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical = false, series = null, dense = false } = {}) => {
+export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical = false, series = null, dense = false, cut = 0 } = {}) => {
     fs.mkdirSync(dir, { recursive: true })
+    let nOut = Number.isInteger(cut) && cut > 0 && cut < nBars ? cut : nBars //寫出之 K 棒數(生成仍以 nBars 根: 各亂數之取用次序與不截斷者相同)
     let rnd = lcg(seed)
     let off = new Uint32Array(n + 1)
     let ent = []
@@ -80,9 +81,20 @@ export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical 
         off[s] = ent.length
         mode[s] = s % 3 === 0 ? -1 : 1
         let g = shared || gen(rnd, s)
-        ent.push(...g.es)
-        ext.push(...g.xs)
-        pnl.push(...g.ps)
+        if (nOut < nBars) {
+            //截斷: 進場棒 < nOut 之單照收(g.es 升冪; g.es / g.xs / g.ps 等長); 出場棒 ≥ nOut(或原為未結)者記為未結(ext = -1, pnl = 0)
+            for (let i = 0; i < g.es.length && g.es[i] < nOut; i++) {
+                let closed = g.xs[i] >= 0 && g.xs[i] < nOut
+                ent.push(g.es[i])
+                ext.push(closed ? g.xs[i] : -1)
+                pnl.push(closed ? g.ps[i] : 0)
+            }
+        }
+        else {
+            ent.push(...g.es)
+            ext.push(...g.xs)
+            pnl.push(...g.ps)
+        }
     }
     off[n] = ent.length
     let px = new Float64Array(nBars * 5)
@@ -119,10 +131,21 @@ export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical 
         fac[i] = rf() * 2 - 1
     }
     fac.fill(NaN, nBars, nBars + 5)
+    //逐棒之欄於截斷時只留前 nOut 根(因子 / 序列各自之區段 [i * nBars, i * nBars + nOut))
+    let barCut = (a, rows) => {
+        if (nOut === nBars) {
+            return a
+        }
+        let out = new Float64Array(rows * nOut)
+        for (let i = 0; i < rows; i++) {
+            out.set(a.subarray(i * nBars, i * nBars + nOut), i * nOut)
+        }
+        return out
+    }
     writeBin(path.join(dir, 'keySym.i8'), keySym)
     writeBin(path.join(dir, 'keyTh.f64'), keyTh)
     writeBin(path.join(dir, 'keyOr.u8'), keyOr)
-    writeBin(path.join(dir, 'fac.f64'), fac)
+    writeBin(path.join(dir, 'fac.f64'), barCut(fac, 2))
     writeBin(path.join(dir, 'off.u32'), off)
     writeBin(path.join(dir, 'ent.i32'), Int32Array.from(ent))
     writeBin(path.join(dir, 'ext.i32'), Int32Array.from(ext))
@@ -136,7 +159,7 @@ export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical 
     writeBin(path.join(dir, 'cls.u8'), new Uint8Array(n * 3))
     writeBin(path.join(dir, 'keyOff.u32'), keyOff)
     writeBin(path.join(dir, 'keyIdx.u16'), keyIdx)
-    writeBin(path.join(dir, 'px.f64'), px)
+    writeBin(path.join(dir, 'px.f64'), nOut === nBars ? px : px.subarray(0, nOut * 5))
     let seriesNames = Array.isArray(series) && series.length ? series.slice() : null
     if (seriesNames) {
         let rs = lcg(seed + 13)
@@ -145,9 +168,9 @@ export let writeSynthLedger = (dir, { n = 60, nBars = 2400, seed = 1, identical 
             ser[i] = rs() * 100
         }
         ser.fill(NaN, 0, 3)
-        writeBin(path.join(dir, 'ser.f64'), ser)
+        writeBin(path.join(dir, 'ser.f64'), barCut(ser, seriesNames.length))
     }
     fs.writeFileSync(path.join(dir, 'ids.json'), JSON.stringify(Array.from({ length: n }, (_, i) => `s${i}.json`)), 'utf8')
-    fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ version: 0, key: `synth${seed}${identical ? 'i' : ''}`, endTime: '2099-01-01T00:00:00', time0: '2022-07-01T00:00:00', barHours: 4, nBars, nStrategies: n, nOrders: ent.length, keyNames: ['k0', 'k1'], ...(seriesNames ? { seriesNames } : {}) }), 'utf8')
-    return { dir, n, nBars, nOrders: ent.length }
+    fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ version: 0, key: `synth${seed}${identical ? 'i' : ''}`, endTime: '2099-01-01T00:00:00', time0: '2022-07-01T00:00:00', barHours: 4, nBars: nOut, nStrategies: n, nOrders: ent.length, keyNames: ['k0', 'k1'], ...(seriesNames ? { seriesNames } : {}) }), 'utf8')
+    return { dir, n, nBars: nOut, nOrders: ent.length }
 }

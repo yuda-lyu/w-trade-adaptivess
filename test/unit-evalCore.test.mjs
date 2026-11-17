@@ -1023,8 +1023,9 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         assert(/壞了/.test(m.ext.boom.error) && /超過上限/.test(m.ext.big.error))
         //api: 凍結; 選集為複本; 不含帳本陣列
         assert(Object.isFrozen(seen) && Object.isFrozen(seen.obs) && !('L' in seen) && !('ent' in seen))
-        assert.throws(() => seen.simulate([[]]), /相位數|決策數/)
-        assert.throws(() => seen.replaceNull({ grp: [0, 1], nGroups: 2 }), /grp/)
+        //訊息依跨套件規格 V19(排程第 497 項; 原為中文之 simulate: 須給與成品相同相位數之選集陣列、replaceNull: grp 須為…)
+        assert.throws(() => seen.simulate([[]]), (e) => e.message === 'invalid selsByPhase: must be an array with one entry per phase of phases[]')
+        assert.throws(() => seen.replaceNull({ grp: [0, 1], nGroups: 2 }), (e) => /^invalid opt\.grp: must be an array or typed array with one integer from 0 to opt\.nGroups - 1 per strategy/.test(e.message))
     })
 
     it('擴充診斷之 simulate 與分帳(R-EV-27):元素明給 group 者照用(含全為 0);未給者沿用成品同一決策之分帳', () => {

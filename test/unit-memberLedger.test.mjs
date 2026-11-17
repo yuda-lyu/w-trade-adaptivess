@@ -5,6 +5,7 @@ import path from 'path'
 import crypto from 'crypto'
 import { spawnSync } from 'child_process'
 import { loadLedger, memberLedger, tieBaseOf } from '../src/eval/ledger.mjs'
+import WTradeAdaptivess from '../src/WTradeAdaptivess.mjs'
 import { makeEvaluator as makeEvaluatorRaw, ntStaticOf } from '../src/eval/evalCore.mjs'
 import { isIntegrityError } from '../src/eval/intrinsics.mjs'
 import { makeTmp, writeSynthLedger, makeTrainEvaluator as makeEvaluator, FD_ROOT } from './tools/synthLedger.mjs'
@@ -651,5 +652,61 @@ describe('成員重抽之半庫帳本(memberLedger)與命令列之 --member', fu
                 assert.equal(r.o.member.tag, `0x${salt.toString(16)}:${halfS}`, v)
             }
         })
+    })
+})
+
+describe('memberLedger 之 JSDoc @example 可實跑(R-PKG-7;排程第 500 項)', function () {
+    let t
+    before(() => {
+        t = makeTmp('memberLedgerDoc')
+        writeSynthLedger(path.join(t.dir, 'eval'), { n: 60, nBars: 2400, seed: 7 })
+    })
+    after(() => {
+        t.cleanup()
+    })
+
+    it('取出 src/eval/ledger.mjs 內 memberLedger 之 @example 之程式碼, 於合成之設定與帳本上執行:不拋錯, 印出之半庫策略數 + 另一半 = 全庫、所取之半 = 0', () => {
+        let src = fs.readFileSync(path.join(FD_ROOT, 'src', 'eval', 'ledger.mjs'), 'utf8')
+        let m = /\/\*\*((?:(?!\*\/)[\s\S])*?)\*\/\s*let memberLedger = /.exec(src)
+        assert(m, '找得到 memberLedger 之 JSDoc')
+        let parts = m[1].split(/@example[ \t]*\r?\n/)
+        assert.equal(parts.length, 2, 'JSDoc 恰有一個 @example')
+        let code = parts[1].split(/\r?\n/).map((l) => l.replace(/^\s*\*[ ]?/, '')).join('\n')
+        assert(/memberLedger\(L, /.test(code) && /ntStaticOf\(La, trainEndBar\)/.test(code) && /makeEvaluator\(La, /.test(code), `範例含完整流程: ${code}`)
+        let logs = []
+        let st = { eval: { ledgerDir: path.join(t.dir, 'eval') }, periods: { train: { end: '2023-01-17T00:00:00' } } }
+        //範例以 getSettings、loadLedger、memberLedger、ntStaticOf、makeEvaluator 為自由變數(聚合入口或各模組之匯出); 其中 makeEvaluator 為評估器之原函數(範例之 La 已由 ntStaticOf 給 ntStatic)
+        // eslint-disable-next-line no-new-func
+        let run = new Function('getSettings', 'loadLedger', 'memberLedger', 'ntStaticOf', 'makeEvaluator', 'console', code)
+        run(() => st, loadLedger, memberLedger, ntStaticOf, makeEvaluatorRaw, { log: (...a) => logs.push(a) })
+        assert.equal(logs.length, 1, JSON.stringify(logs))
+        let L = loadLedger(path.join(t.dir, 'eval'))
+        let other = memberLedger(L, 0x5bd1e995, 1)
+        assert.equal(logs[0][1], 0)
+        assert.equal(logs[0][0] + other.n, L.n, '範例印出之半庫策略數與另一半互補')
+        assert(logs[0][0] > 0 && logs[0][0] < L.n)
+    })
+
+    it('聚合入口 src/WTradeAdaptivess.mjs 之 JSDoc @example(評估器單獨使用 + 成員重抽)可實跑:取出範例程式碼(去掉說明行與 import)於合成之設定與帳本上執行, 印出兩列(評估結果之均與選集指紋、半庫之策略數與所取之半)', () => {
+        let src = fs.readFileSync(path.join(FD_ROOT, 'src', 'WTradeAdaptivess.mjs'), 'utf8')
+        let m = /\/\*\*((?:(?!\*\/)[\s\S])*?)\*\/\s*let WTradeAdaptivess = /.exec(src)
+        assert(m, '找得到聚合入口之 JSDoc')
+        let parts = m[1].split(/@example[ \t]*\r?\n/)
+        assert.equal(parts.length, 2, 'JSDoc 恰有一個 @example')
+        let code = parts[1].split(/\r?\n/).map((l) => l.replace(/^\s*\*[ ]?/, '')).filter((l) => l !== 'need test in nodejs.' && !/^import /.test(l)).join('\n')
+        assert(/WTradeAdaptivess\.memberLedger\(L, /.test(code) && /WTradeAdaptivess\.ntStaticOf\(La, trainEndBar\)/.test(code), `範例含成員重抽之流程: ${code}`)
+        let logs = []
+        let st = { eval: { ledgerDir: path.join(t.dir, 'eval') }, periods: { train: { end: '2023-01-17T00:00:00' } } }
+        //範例之 WTradeAdaptivess 為聚合物件; getSettings 換成回合成之設定(真實者讀專案根之 settings.json)
+        let W = { ...WTradeAdaptivess, getSettings: () => st }
+        // eslint-disable-next-line no-new-func
+        let run = new Function('WTradeAdaptivess', 'console', code)
+        run(W, { log: (...a) => logs.push(a) })
+        assert.equal(logs.length, 2, JSON.stringify(logs))
+        assert.equal(logs[0].length, 2)
+        assert(Number.isFinite(logs[0][0]) && typeof logs[0][1] === 'string', JSON.stringify(logs[0]))
+        let L = loadLedger(path.join(t.dir, 'eval'))
+        assert.equal(logs[1][1], 0)
+        assert.equal(logs[1][0], memberLedger(L, 0x5bd1e995, 0).n)
     })
 })

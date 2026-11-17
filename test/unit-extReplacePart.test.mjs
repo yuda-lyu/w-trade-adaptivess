@@ -872,8 +872,8 @@ describe('擴充診斷之 api.replaceNull:只替換一部分之席(onlyGroups / 
                     msgs.push(msg)
                 }
                 assert(msgs.every((m) => m && /重入/.test(m)), JSON.stringify(msgs))
-                //grp 之既有檢查(中文訊息)先於新選項; grp 合法者再依新選項(V19)
-                assert(/^replaceNull: grp /.test(msgOf(() => api.replaceNull({ grp: [0], nGroups: 1, onlyGroups: [] }))))
+                //grp 之既有檢查先於新選項(訊息自排程第 497 項起依 V19; 原為中文之 replaceNull: grp 須為…); grp 合法者再依新選項(V19)
+                assert(/^invalid opt\.grp: must be /.test(msgOf(() => api.replaceNull({ grp: [0], nGroups: 1, onlyGroups: [] }))))
                 assert.strictEqual(msgOf(() => api.replaceNull({ grp: new Array(api.n).fill(0), nGroups: 1, onlyGroups: [] })), 'invalid opt.onlyGroups: must be a non-empty array or typed array of integers from 0 to 3')
                 return { text: 'ok' }
             }, pk)

@@ -251,10 +251,15 @@ let isLedgerShape = (L) => {
  * @param {Integer} half 輸入取哪一半(0 = 甲半、1 = 乙半)
  * @returns {Object} 回傳半庫帳本物件, 欄位同 loadLedger 之回傳(不含 ntStatic), 另含 srcIdx 與 member({ salt, half, nFull }; 凍結)
  * @example
- * let L = loadLedger('./data/ledger/eval')
+ * let st = getSettings()
+ * let L = loadLedger(st.eval.ledgerDir)
+ * //甲半(half = 0); 換鹽 = 換一種切法
  * let La = memberLedger(L, 0x5bd1e995, 0)
+ * //訓練期之界線須明給(同 ntStaticOf: 依帳本之 time0 與每棒小時數自設定之訓練期終點換算)
+ * let trainEndBar = Math.round((Date.parse(`${st.periods.train.end}Z`) - Date.parse(`${La.meta.time0}Z`)) / (La.meta.barHours * 3600000))
  * La.ntStatic = ntStaticOf(La, trainEndBar)
  * let ev = makeEvaluator(La, { warmupDays: 180, cadenceDays: 7 })
+ * console.log(La.n, La.member.half) //半庫之策略數(依鹽而異, 約為全庫之一半)與所取之半
  */
 let memberLedger = (L, salt, half) => {
     assertIntrinsics('ledger-load')

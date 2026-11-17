@@ -68,7 +68,6 @@ const SharedArrayBufferPrototypeGetByteLength = typeof SharedArrayBuffer === 'fu
 const DataViewPrototypeGetBuffer = uncurryThis(ReflectGetOwnPropertyDescriptor(DataView.prototype, 'buffer').get)
 const TypedArray = ReflectGetPrototypeOf(Int8Array)
 const TypedArrayPrototype = TypedArray.prototype
-const TypedArrayFrom = uncurryThis(TypedArray.from)
 const TypedArrayPrototypeSet = uncurryThis(TypedArrayPrototype.set)
 const TypedArrayPrototypeGetLength = uncurryThis(ReflectGetOwnPropertyDescriptor(TypedArrayPrototype, 'length').get)
 const TypedArrayPrototypeGetBuffer = uncurryThis(ReflectGetOwnPropertyDescriptor(TypedArrayPrototype, 'buffer').get)
@@ -629,7 +628,8 @@ const P = ObjectFreeze({
     MapPrototypeKeys,
     MapIteratorNext,
     SetPrototypeGetSize,
-    TypedArrayFrom,
+    SetPrototypeValues,
+    SetIteratorNext,
     TypedArrayPrototypeGetLength,
     TypedArrayPrototypeGetToStringTag,
     Int8ArrayCtor,

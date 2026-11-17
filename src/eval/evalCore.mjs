@@ -3,7 +3,7 @@ import iseint from 'wsemi/src/iseint.mjs'
 import { P, copyRange, copyAll, pushOwn, assertIntrinsics, violationMark, violationSince, isIntegrityError, integrityError, adoptError, snapData, handOut, isMutableSnap, isBrand } from './intrinsics.mjs'
 import { tieBaseOf, isSrcIdx } from './ledger.mjs'
 
-const { ObjectFreeze, ObjectSeal, ObjectHasOwn, ReflectApply, ArrayFrom, ArrayIsArray, ArrayPrototypeJoin, ArrayBufferIsView, NumberCtor, NumberIsInteger, NumberIsFinite, MathFloor, MathRound, MathMax, MathMin, MathImul, StringCtor, JSONStringify, StructuredClone, ErrorCtor, MapPrototypeGet, MapPrototypeSet, MapPrototypeHas, MapPrototypeDelete, MapPrototypeKeys, MapIteratorNext, SetPrototypeGetSize, TypedArrayFrom, TypedArrayPrototypeGetLength, TypedArrayPrototypeGetToStringTag, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
+const { ObjectFreeze, ObjectSeal, ObjectHasOwn, ReflectApply, ArrayFrom, ArrayIsArray, ArrayPrototypeJoin, ArrayBufferIsView, NumberCtor, NumberIsInteger, NumberIsFinite, MathFloor, MathRound, MathMax, MathMin, MathImul, StringCtor, JSONStringify, StructuredClone, ErrorCtor, MapPrototypeGet, MapPrototypeSet, MapPrototypeHas, MapPrototypeDelete, MapPrototypeKeys, MapIteratorNext, SetPrototypeGetSize, SetPrototypeValues, SetIteratorNext, TypedArrayPrototypeGetLength, TypedArrayPrototypeGetToStringTag, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
 
 
 //快速評估核心:「項目之事件帳本 + 於各決策時點只憑過去資訊挑子集(可另給逐訊號之執行規則)+ 往後視窗之結果彙整」
@@ -114,6 +114,102 @@ let statOf = (xs) => {
 }
 
 let r4 = (x) => Math.round(x * 10000) / 10000
+
+//listOf, 把模組傳入之陣列複製成評估器自有之陣列(規則 R-EV-38、R-EV-35 ②): 只用擷取之參照、不經迭代器(Array.from / TypedArray.from 會動態查找 Array.prototype[Symbol.iterator] 等可被改寫之方法)
+//  Array 讀其 length 與各自有之索引(元素不取值; 洞不沿原型鏈取值 —— Array.prototype / Object.prototype 上之索引存取子不被觸發; 自有存取子與代理之攔截函式於此段執行, 同選項之 getter);
+//  定型陣列以內部槽判定(排除 DataView 與偽造之類陣列物件; 已分離者長度為 0); maxLen(≥ 0 時)為長度上限 —— 超過者不複製(形狀錯誤之超長輸入不逐索引讀取)
+//  arrayOnly 為真時只收 Array(不收定型陣列)
+//  非陣列、length 非非負整數、超過上限、或讀取拋錯(已撤銷之代理、拋錯之存取子; 跨套件規格 V11: 讀取拋錯即無效)⇒ null
+//  api.replaceNull 之 onlyGroups / onlyDecisions / grp、api.summarize 之 vals / vals.thirds、api.simulate 之各層陣列(與 idListOf)共用
+let listOf = (v, maxLen = -1, arrayOnly = false) => {
+    try {
+        let isTa = TypedArrayPrototypeGetToStringTag(v) !== undefined
+        if ((isTa && arrayOnly) || (!isTa && !ArrayIsArray(v))) {
+            return null
+        }
+        let len = isTa ? TypedArrayPrototypeGetLength(v) : v.length
+        if (!NumberIsInteger(len) || len < 0 || (maxLen >= 0 && len > maxLen)) {
+            return null
+        }
+        let out = []
+        for (let i = 0; i < len; i++) {
+            pushOwn(out, isTa || ObjectHasOwn(v, i) ? v[i] : undefined)
+        }
+        return out
+    }
+    catch (err) {
+        return null
+    }
+}
+
+//idListOf, 擴充診斷 simulate 之選集(各決策之元素)之 ids / group 之複本: Array、定型陣列(listOf)、Set(以擷取之 values 與迭代器 next 依插入序走訪; 不經 Set.prototype[Symbol.iterator]); 其他種類 ⇒ null
+//  (挑選函數之回傳值之複本沿用原寫法 Array.from, 見 pickOutOf; 其較寬之可接受種類〔其他可迭代物、類陣列〕不在此收)
+let idListOf = (v) => {
+    if (v !== null && typeof v === 'object' && isBrand(SetPrototypeGetSize, v)) {
+        let out = []
+        let it = SetPrototypeValues(v)
+        for (let x = SetIteratorNext(it); !x.done; x = SetIteratorNext(it)) {
+            pushOwn(out, x.value)
+        }
+        return out
+    }
+    return listOf(v)
+}
+
+//strictPickOutOf, 擴充診斷 simulate 之選集元素(一次決策之選集)之複本(排程第 497 項): 只收陣列、定型陣列、Set, 或 { ids, group? }(ids / group 同); 只用擷取之參照(不經迭代器), 讀取拋錯(存取子、已撤銷之代理)視為無效
+//  物件之 tag 欄於 simulate 不採用(重放之 tag 由 tagsByPhase 或成品給)⇒ 不讀取、不快照(其存取子 / 不可複製之值不影響結果)
+//  回傳恆帶自有之 bad 欄(合法者為 null; 呼叫端讀自有欄, 不沿原型鏈): 'sel'(元素為 null / undefined, 或元素本身〔非物件形式〕不是上列三種)、'ids'(物件形式之 ids 缺、讀取拋錯或種類不合)、'group'(物件形式之 group 讀取拋錯或種類不合);
+//    形狀不合者不於此拋 —— 由呼叫端於比對內建物件之後依位置拋 V19 之錯(其下之 normSel 於其後才執行)
+//  合法者回 { bad: null, viaObj(物件形式), arr, garr, tag: null, explicitGroup(物件形式且明給 group) }(同 pickOutOf 之形狀)
+let strictPickOutOf = (out) => {
+    if (out === null || out === undefined) {
+        return { bad: 'sel' }
+    }
+    let ids = out
+    let group = null
+    let viaObj = false
+    if (!isArr(out) && !ArrayBufferIsView(out) && !isBrand(SetPrototypeGetSize, out) && typeof out === 'object') {
+        viaObj = true
+        ids = readOpt(out, 'ids')
+        if (ids === undefined || ids === null || ids === READ_ERR) {
+            return { bad: 'ids' }
+        }
+        let g = readOpt(out, 'group')
+        if (g === READ_ERR) {
+            return { bad: 'group' }
+        }
+        group = g === undefined || g === null ? null : g
+    }
+    let arr = idListOf(ids)
+    if (arr === null) {
+        return { bad: viaObj ? 'ids' : 'sel' }
+    }
+    let garr = group === null ? null : idListOf(group)
+    if (group !== null && garr === null) {
+        return { bad: 'group' }
+    }
+    return { bad: null, viaObj, arr, garr, tag: null, explicitGroup: group !== null }
+}
+
+//readOpt, 讀選項之鍵(或以數字讀陣列之索引); 讀取拋錯(存取子、已撤銷之代理)⇒ 回一個非陣列之哨兵(其後之 listOf / 型別檢查視為形狀不合 ⇒ 比對之後拋 invalid, 不直接透傳)
+let READ_ERR = ObjectFreeze({})
+let readOpt = (o, key) => {
+    try {
+        return o[key]
+    }
+    catch (err) {
+        return READ_ERR
+    }
+}
+//isArr, Array.isArray 之安全版: 已撤銷之代理拋 TypeError ⇒ 視為非陣列(形狀不合)
+let isArr = (v) => {
+    try {
+        return ArrayIsArray(v)
+    }
+    catch (err) {
+        return false
+    }
+}
 
 
 /**
@@ -359,7 +455,12 @@ let makeEvaluator = (L, cfg = {}) => {
     //pickOutOf, 收下 pick(或擴充診斷 simulate 之元素)之回傳值 —— 第一段: 只讀取並複製成評估器自有之資料(只用擷取之參照; 此段可能執行模組之存取子與迭代器)
     //  回 { arr(序號之陣列), garr(group 之陣列或 null), tag(快照), explicitGroup(物件形式且明給 group) }; 第二段 normSel 於比對內建物件之後才執行
     //  Set 以內部欄位辨識(不經 instanceof); ids / group 經 Array.from(與原寫法之 [...Set] 相同之迭代次序)
-    let pickOutOf = (out) => {
+    //  strict(擴充診斷 simulate 之元素用; 排程第 497 項)改由模組層之 strictPickOutOf 處理(ids / group 之複本不經迭代器、讀取拋錯視為無效、不讀物件之 tag 欄; 其他種類回 { bad }, 由呼叫端於比對內建物件之後依位置拋錯)
+    //  挑選函數之回傳值(strict 為假; runPick)沿用原寫法之 Array.from(其可接受之種類較寬: 其他可迭代物、類陣列; 該路徑之迭代器問題不在本項, 見 state 之待裁示)
+    let pickOutOf = (out, strict = false) => {
+        if (strict) {
+            return strictPickOutOf(out)
+        }
         if (out === null || out === undefined) {
             throw new ErrorCtor('pick 回傳 null / undefined(須回傳序號陣列或 { ids, tag })')
         }
@@ -381,13 +482,14 @@ let makeEvaluator = (L, cfg = {}) => {
         return { arr, garr, tag: snapTag(tag), explicitGroup: group !== null }
     }
     //normSel, 第二段: 驗證並正規化(已比對內建物件之後; 輸入為 pickOutOf 之回傳)
-    let normSel = (px) => {
+    //  where(選配; 擴充診斷 simulate 之元素用, 如 'selsByPhase[0][2]'): 給者之錯誤訊息改為 V19、V20(invalid <位置>…: must be …; 不帶輸入值); 未給者(挑選函數之回傳值)維持原中文訊息
+    let normSel = (px, where = null) => {
         let arr = px.arr
         let garr = px.garr
         let tag = px.tag
         if (garr !== null) {
             if (garr.length !== arr.length) {
-                throw new Error(`pick 回傳之 group 須與 ids 等長(ids ${arr.length} 個、group ${garr.length} 個)`)
+                throw new Error(where === null ? `pick 回傳之 group 須與 ids 等長(ids ${arr.length} 個、group ${garr.length} 個)` : `invalid ${where}.group: must have the same number of entries as ${where}.ids`)
             }
         }
         //descOf, 錯誤訊息用之值之描述: 物件不轉字串(不執行模組之 toString; 此段已在比對內建物件之後)
@@ -396,13 +498,13 @@ let makeEvaluator = (L, cfg = {}) => {
         for (let i = 0; i < arr.length; i++) {
             let v = arr[i]
             if (!Number.isInteger(v) || v < 0 || v >= n) {
-                throw new Error(`pick 回傳含不合法之序號: ${descOf(v)}(須為 0 ~ ${n - 1} 之整數)`)
+                throw new Error(where === null ? `pick 回傳含不合法之序號: ${descOf(v)}(須為 0 ~ ${n - 1} 之整數)` : `invalid ${where}${px.viaObj ? '.ids' : ''}[${i}]: must be an integer from 0 to ${n - 1}`)
             }
             let g = 0
             if (garr) {
                 g = garr[i]
                 if (!Number.isInteger(g) || g < 0 || g >= N_GROUP) {
-                    throw new Error(`pick 回傳之 group 含不合法之值: ${descOf(g)}(須為 0 ~ ${N_GROUP - 1} 之整數)`)
+                    throw new Error(where === null ? `pick 回傳之 group 含不合法之值: ${descOf(g)}(須為 0 ~ ${N_GROUP - 1} 之整數)` : `invalid ${where}.group[${i}]: must be an integer from 0 to ${N_GROUP - 1}`)
                 }
             }
             if (!seen.has(v)) {
@@ -1798,6 +1900,8 @@ let makeEvaluator = (L, cfg = {}) => {
         //  api 全為唯讀之複本與函數 —— 擴充診斷拿不到帳本、也改不了 S、階梯、selHash 與任何既有欄; 單一診斷拋錯或輸出過大只記 error, 不影響評估
         //    n、meta、nullDraws、phases[{ phase, bars, sels, tags }](成品之逐決策選集之複本)、obs{ mean, byPhase, thirds }
         //    simulate(selsByPhase, tagsByPhase?, opts?) → { mean, byPhase, thirds, bySide, byGroup }: 以成品之執行規則重放另一組選集(各相位之決策數須與成品相同)
+        //      selsByPhase: 各相位一個陣列, 其元素為一次決策之選集 —— 陣列、定型陣列或 Set(序號), 或 { ids, group?, tag? }(ids / group 同為陣列、定型陣列或 Set); 其他種類(可迭代物、類陣列、原始值)拒收
+        //        複本只用擷取之參照(不經可被改寫之迭代器; 排程第 497 項); 形狀不合者於比對內建物件之後拋 invalid selsByPhase… / invalid tagsByPhase… / invalid opts.accept / invalid opts.orderSalt(V19、V20: 不帶輸入值)
         //      opts.orderSalt(選配; 整數; 規則 R-EV-32): 只換「同一進場棒之多個訊號之先後」之次序(見 ordTieOf); 0 或未給 = 成品本身之次序
         //        選集、ctx.meta.tie 與執行規則皆不變 —— 量「持倉上限擋單時誰先得席位」對績效之影響(下單率低之成品其 S 之雜訊帶寬); 無執行規則(全收)者不受影響
         //      byGroup[{ group, seats, orders, pnl, winRate }]: 該次重放依子帳之席數、下單數與損益(定義同 metrics.op.byGroup; 規則 R-EV-33)
@@ -1805,6 +1909,7 @@ let makeEvaluator = (L, cfg = {}) => {
         //        其「同選集、換執行規則」之配對(中性、同比例隨機放行之安慰劑)可寫成擴充診斷; 未給 = 成品之執行規則(行為不變)
         //      bySide{ long, short }{ orders, pnl, winRate }: 該次重放之兩側下單數與損益(各相位平均; 同 metrics.op.bySide 之定義)
         //    replaceNull({ grp?, nGroups?, actDays?, half?, draws?, onlyGroups?, onlyDecisions? }) → { draws, mean, sd, p, z, excess, thirdsMean }: 配對隨機替換(組預設 = 方向; 活躍度預設 = 累計進場數, actDays > 0 改為近期)
+        //      grp(選配): 陣列或定型陣列(長度 = 策略數 n; 元素依 Int32 轉型後須為 0 ~ nGroups - 1 之整數)、nGroups(給 grp 時須為正整數); 複本只用擷取之參照(排程第 497 項); 不合者拋 invalid opt.grp / invalid opt.nGroups(V19、V20)
         //      只替換一部分之席(選配; 規則 R-EV-38; 兩者可並用; null / undefined 視同未給; 皆未給時行為與回傳逐位不變):
         //        onlyGroups: [g…](子帳 0 ~ 3; 見 phases[].groups; 元素依 iseint): 只把所列子帳之席做配對隨機替換, 其餘席原樣(未分帳之決策其席皆屬子帳 0)
         //          —— 合成內每條線之挑選內容 = 成品 − 只換該線之均; 成品未分帳者回 { applicable: false, reason }(不重放、不拋錯)
@@ -1815,7 +1920,7 @@ let makeEvaluator = (L, cfg = {}) => {
         //          某一個為全部(所列子帳涵蓋成品之全部子帳、或遮罩全為真)時等同只給另一個; 兩者皆為全部(或另一個未給)時, 各抽之選集與既有欄與未給時逐位相同
         //          成品未分帳而給 onlyGroups 者只回 { applicable: false, reason }(不帶其餘新欄); 鄰域內無未用之策略時該席從缺(同既有寫法)
         //        參數不合者拋錯, 訊息依跨套件規格 V19、V20: invalid opt.onlyGroups(或 onlyDecisions, 帶索引時 [i] / [i][k]): must be …(不帶輸入值)
-        //    sideGroups()、geoGroups(nTp, nSl) → { grp, nGroups }; summarize(vals) → 同上之統計; rand(k) → 亂數產生器(與成品、既有虛無之亂數互不相干)
+        //    sideGroups()、geoGroups(nTp, nSl) → { grp, nGroups }; summarize(vals) → 同上之統計(vals 為陣列或定型陣列, 選配之 vals.thirds 同; 複本只用擷取之參照, 不合者拋 invalid vals / invalid vals.thirds); rand(k) → 亂數產生器(與成品、既有虛無之亂數互不相干)
         //    market(bar, nBack?)、factor(ki, bar, nBack?)、series(name, bar, nBack?)(規則 R-EV-36): 棒序 < bar 之最近 nBack 根之 K 線 / 因子 / 外部序列之值(複本; 由舊至新; nBack 預設 180)
         //      取值與 ctx.market / ctx.factor / ctx.series 於決策棒 bar 之呼叫逐位相同(同一份實作); bar 須為 0 ~ K 棒數之整數(否則拋錯; 訊息不帶輸入值), 名稱見 meta.keyNames / meta.seriesNames
         //      用途: 依「各決策之決策棒以前之行情 / 因子 / 外部序列狀態」把成品之選集分組後以 simulate 重放(各狀態之獨立重放: 持倉簿各自起算, 不保證相加為成品之損益, 執行規則依持倉簿狀態時尤然)
@@ -1862,48 +1967,120 @@ let makeEvaluator = (L, cfg = {}) => {
                 let ge = v.filter((x) => x >= ob).length
                 return { draws: v.length, mean: r4(s.mean), sd: r4(s.sd), p: r4((1 + ge) / (1 + v.length)), z: s.sd > 0 ? r4((ob - s.mean) / s.sd) : 0, excess: r4(ob - s.mean), ...(th ? { thirdsMean: th.map(r4) } : {}) }
             }
+            //primList, 把複製後之陣列之元素取值(物件元素以 Number() 轉數字; 此段執行模組之 valueOf, 於比對之前; 同原 Array.from(v, prim))
+            //  元素之取值拋錯(元素之 valueOf 拋錯、Symbol)⇒ 無效(null; V11), 不透傳
+            let primList = (a) => {
+                try {
+                    let out = []
+                    for (let i = 0; i < a.length; i++) {
+                        pushOwn(out, prim(a[i]))
+                    }
+                    return out
+                }
+                catch (err) {
+                    return null
+                }
+            }
+            //summarize(vals): vals 為陣列或定型陣列(選配之 vals.thirds 同); 複製只用擷取之參照(listOf; 排程第 497 項: 原 Array.from 經可被改寫之迭代器), 形狀不合者記下、比對之後才拋 V19 之錯(不帶輸入值)
             let summarize = (v) => {
-                let a = ArrayFrom(v, prim)
-                let th0 = v.thirds
-                let th = th0 ? ArrayFrom(th0, prim) : null
+                let a = listOf(v)
+                let th0 = a === null ? undefined : readOpt(v, 'thirds')
+                let th = listOf(th0) //thirds 未給(假值)者 listOf 回 null = 未給; 給了而種類不合者亦為 null, 由其後之 th0 判別
+                if (a !== null) {
+                    a = primList(a)
+                }
+                if (th !== null) {
+                    th = primList(th)
+                }
                 guardExt('ext')
+                if (a === null) {
+                    throw new ErrorCtor('invalid vals: must be an array or typed array')
+                }
+                if (th0 && th === null) {
+                    throw new ErrorCtor('invalid vals.thirds: must be an array or typed array')
+                }
                 return summarizeOf(a, th)
             }
             let simScratch = null
             let simulate = (selsByPhase, tagsByPhase = null, sOpt = null) => {
-                //第一段: 讀參數(只用擷取之參照); 檢查之先後與錯誤訊息同原寫法
-                if (!ArrayIsArray(selsByPhase) || selsByPhase.length !== runs.length) {
-                    throw new ErrorCtor('simulate: 須給與成品相同相位數之選集陣列')
-                }
+                //第一段: 讀參數(只用擷取之參照; 讀取拋錯之存取子 / 代理以 readOpt 記為無效); 檢查之先後同原寫法(selsByPhase → opts.accept → opts.orderSalt → 各相位); 訊息依跨套件規格〈輸入參數之檢測機制〉§6 V19(invalid <名稱>: must be <種類>)、V20(不帶輸入值; 只帶位置與期望)
+                //  bad: 形狀不合之第一處之訊息 —— **所有形狀之檢查皆只記下、比對內建物件之後才拋**(排程第 497 項: 不因形狀錯誤而跳過比對; 原結構檢查於比對之前直接拋); 發現後不再讀其後之參數(同原「拋出即止」)
+                //  複本只用擷取之參照(listOf、idListOf、pickOutOf 之 strict; 原 Array.from 經可被改寫之迭代器); 各陣列之 length 只讀一次(listOf 內; 不另先讀)
+                let bad = null
                 let acc = accept
-                let oAccept = sOpt !== null && sOpt !== undefined ? sOpt.accept : undefined
-                if (oAccept !== undefined && oAccept !== null) {
-                    if (typeof oAccept !== 'function') {
-                        throw new ErrorCtor('simulate: opts.accept 須為函數 (sig, book) => 布林')
-                    }
-                    acc = oAccept
-                }
-                let oSalt = sOpt !== null && sOpt !== undefined ? sOpt.orderSalt : undefined
                 let salt = null
-                if (oSalt !== undefined && oSalt !== null) {
-                    if (!NumberIsInteger(oSalt)) {
-                        throw new ErrorCtor('simulate: opts.orderSalt 須為整數(0 = 成品本身之次序)')
-                    }
-                    salt = oSalt
-                }
                 let pxsAll = []
                 let tgsAll = []
-                for (let i = 0; i < runs.length; i++) {
-                    let ph = selsByPhase[i]
-                    if (!ArrayIsArray(ph) || ph.length !== runs[i].bars.length) {
-                        throw new ErrorCtor('simulate: 各相位之決策數須與成品相同')
+                if (!isArr(selsByPhase) || readOpt(selsByPhase, 'length') !== runs.length) {
+                    bad = 'invalid selsByPhase: must be an array with one entry per phase of phases[]'
+                }
+                if (bad === null) {
+                    let oAccept = sOpt !== null && sOpt !== undefined ? readOpt(sOpt, 'accept') : undefined
+                    if (oAccept !== undefined && oAccept !== null) {
+                        if (typeof oAccept !== 'function') {
+                            bad = 'invalid opts.accept: must be a function (sig, book) => boolean'
+                        }
+                        else {
+                            acc = oAccept
+                        }
                     }
+                }
+                if (bad === null) {
+                    let oSalt = sOpt !== null && sOpt !== undefined ? readOpt(sOpt, 'orderSalt') : undefined
+                    if (oSalt !== undefined && oSalt !== null) {
+                        if (!NumberIsInteger(oSalt)) {
+                            bad = 'invalid opts.orderSalt: must be an integer (0 for the order of the product itself)'
+                        }
+                        else {
+                            salt = oSalt
+                        }
+                    }
+                }
+                for (let i = 0; bad === null && i < runs.length; i++) {
+                    let nd = runs[i].bars.length
                     //內部陣列以 pushOwn 定義自有元素(push 之 [[Set]] 會觸發原型上同名索引之 setter)
-                    pushOwn(pxsAll, ArrayFrom(ph, (x) => pickOutOf(x)))
-                    let tp = tagsByPhase ? tagsByPhase[i] : undefined
-                    pushOwn(tgsAll, tagsByPhase && ArrayIsArray(tp) ? ArrayFrom(tp, (t) => snapTag(t)) : null)
+                    let items = listOf(readOpt(selsByPhase, i), nd, true)
+                    if (items === null || items.length !== nd) {
+                        bad = `invalid selsByPhase[${i}]: must be an array with one entry per decision of phases[${i}]`
+                        break
+                    }
+                    let pxs = []
+                    for (let k = 0; k < nd; k++) {
+                        let px = pickOutOf(items[k], true)
+                        if (px.bad !== null && bad === null) {
+                            bad = px.bad === 'sel'
+                                ? `invalid selsByPhase[${i}][${k}]: must be an array, a typed array or a Set of strategy indexes, or an object with ids`
+                                : `invalid selsByPhase[${i}][${k}].${px.bad}: must be an array, a typed array or a Set`
+                        }
+                        pushOwn(pxs, px)
+                    }
+                    pushOwn(pxsAll, pxs)
+                    //tagsByPhase(選配): 某相位為陣列者逐元素取快照(snapTag; 不可結構化複製者記為無效, 比對之後才拋); 非陣列(含讀取拋錯)者沿用成品之 tag; 已發現形狀不合者不再讀(拋出即止)
+                    let tp = tagsByPhase && bad === null ? readOpt(tagsByPhase, i) : undefined
+                    let tgs = null
+                    if (tagsByPhase && isArr(tp)) {
+                        let tItems = listOf(tp)
+                        if (tItems === null) {
+                            bad = `invalid tagsByPhase[${i}]: must be an array`
+                        }
+                        else {
+                            tgs = []
+                            try {
+                                for (let j = 0; j < tItems.length; j++) {
+                                    pushOwn(tgs, snapTag(tItems[j]))
+                                }
+                            }
+                            catch (err) {
+                                bad = `invalid tagsByPhase[${i}]: must be an array of structured-cloneable data (no functions, symbols or shared memory)`
+                            }
+                        }
+                    }
+                    pushOwn(tgsAll, tgs)
                 }
                 guardExt('ext')
+                if (bad !== null) {
+                    throw new ErrorCtor(bad)
+                }
                 //第二段: 已比對內建物件
                 let ordKey = salt === null || salt === 0 ? null : ordTieOf(salt)
                 //兩側與子帳歸因: strat / bar 為 simWindows 計數用之暫存(內容不取用), side / grp 於本次重放之各相位累加
@@ -1916,7 +2093,7 @@ let makeEvaluator = (L, cfg = {}) => {
                     //分帳: 元素為 { ids, group } 者**一律照用其 group(含全為 0 = 全部歸子帳 0)**; 未給 group 者才依席次序沿用成品同一決策之分帳(成品未分帳則無)
                     //  (規則 R-EV-27: 原以「group 全為 0 ⇒ 視為未給」而改套成品之分帳 ⇒ 只留子帳 0 之席單獨重放時, 各席被依席次序套上成品之分帳、上限錯用, 寫不成逐帳歸因之擴充診斷)
                     let ss = pxsAll[i].map((px, k) => {
-                        let o = normSel(px); return o.grp || px.explicitGroup ? o.sel : inheritGroups(r.sels[k], o.sel)
+                        let o = normSel(px, `selsByPhase[${i}][${k}]`); return o.grp || px.explicitGroup ? o.sel : inheritGroups(r.sels[k], o.sel)
                     })
                     let tg = tgsAll[i] || r.tags
                     let nd = r.bars.length
@@ -1933,48 +2110,41 @@ let makeEvaluator = (L, cfg = {}) => {
                 let sideOf = (o) => ({ orders: r4(sc.side[o] / nP), pnl: r4(sc.side[o + 1] / nP), winRate: sc.side[o + 2] > 0 ? r4(sc.side[o + 3] / sc.side[o + 2]) : 0 })
                 return { mean: byPhase.reduce((a, v) => a + v, 0) / byPhase.length, byPhase, thirds: os.every((o) => o.t3) ? [0, 1, 2].map((g) => os.reduce((a, o) => a + o.t3[g], 0) / os.length) : null, bySide: { long: sideOf(0), short: sideOf(4) }, byGroup: groupRowsOf(sc.grp, ssAll, nP) }
             }
-            //listOf, 把模組傳入之陣列複製成評估器自有之陣列(規則 R-EV-38): 只用擷取之參照、不經迭代器(Array.from 會動態查找 Array.prototype[Symbol.iterator] 等可被改寫之方法)
-            //  Array 讀其 length 與各自有之索引(元素不取值; 洞不沿原型鏈取值 —— Array.prototype / Object.prototype 上之索引存取子不被觸發; 自有存取子與代理之攔截函式於此段執行, 同選項之 getter);
-            //  定型陣列以內部槽判定(排除 DataView 與偽造之類陣列物件; 已分離者長度為 0); maxLen(≥ 0 時)為長度上限 —— 超過者不複製(形狀錯誤之超長輸入不逐索引讀取)
-            //  非陣列、length 非非負整數、超過上限、或讀取拋錯(已撤銷之代理、拋錯之存取子; 跨套件規格 V11: 讀取拋錯即無效)⇒ null
-            let listOf = (v, maxLen = -1, arrayOnly = false) => {
-                try {
-                    let isTa = TypedArrayPrototypeGetToStringTag(v) !== undefined
-                    if ((isTa && arrayOnly) || (!isTa && !ArrayIsArray(v))) {
-                        return null
-                    }
-                    let len = isTa ? TypedArrayPrototypeGetLength(v) : v.length
-                    if (!NumberIsInteger(len) || len < 0 || (maxLen >= 0 && len > maxLen)) {
-                        return null
-                    }
-                    let out = []
-                    for (let i = 0; i < len; i++) {
-                        pushOwn(out, isTa || ObjectHasOwn(v, i) ? v[i] : undefined)
-                    }
-                    return out
-                }
-                catch (err) {
-                    return null
-                }
-            }
-            //readOpt, 讀選項之鍵; 讀取拋錯(存取子)⇒ 回一個非陣列之哨兵(其後之 listOf 視為形狀不合 ⇒ 比對之後拋 invalid, 不直接透傳)
-            let READ_ERR = ObjectFreeze({})
-            let readOpt = (o, key) => {
-                try {
-                    return o[key]
-                }
-                catch (err) {
-                    return READ_ERR
-                }
-            }
+            //(listOf、readOpt 已移至模組層: 與 api.summarize、api.simulate 與 pickOutOf 之 strict 共用)
+            const REPLACE_GRP_MSG = 'invalid opt.grp: must be an array or typed array with one integer from 0 to opt.nGroups - 1 per strategy (api.n entries)'
             let replaceNull = (o = {}) => {
                 //第一段: 讀參數(各欄只讀一次; 其後之判斷皆先以 Number.isInteger / isFinite 篩選, 不對物件取值)
-                let oGrp = o.grp
-                let grp = oGrp ? TypedArrayFrom(Int32ArrayCtor, oGrp) : null
-                let nGroups = oGrp ? o.nGroups : 2
-                let oDraws = o.draws
-                let oHalf = o.half
-                let oAct = o.actDays
+                //  grp(排程第 497 項: 原 TypedArray.from 經可被改寫之迭代器): 只以擷取之參照複製(listOf: 長度超過策略數者不複製), 元素再依 Int32 轉型寫入評估器自有之 Int32Array(同原 Int32Array.from 之轉型; 物件元素之 valueOf 於此段執行);
+                //  種類不合(非陣列 / 定型陣列、讀取拋錯)者記為 false, 比對內建物件之後才拋 invalid opt.grp(不直接透傳)
+                //  各鍵以 readOpt 讀(讀取拋錯之存取子 / 代理 ⇒ 記為無效而不透傳: grp、nGroups 於比對之後拋 invalid; 其餘選項沿用「不合者用預設」); opt 為 null 者記下、比對之後拋 invalid opt
+                let optNull = o === null
+                if (optNull) {
+                    o = {}
+                }
+                let oGrp = readOpt(o, 'grp')
+                let grp = null
+                if (oGrp) {
+                    let li = listOf(oGrp, n)
+                    if (li === null) {
+                        grp = false
+                    }
+                    else {
+                        grp = new Int32ArrayCtor(li.length)
+                        try {
+                            for (let i = 0; i < li.length; i++) {
+                                grp[i] = li[i]
+                            }
+                        }
+                        catch (err) {
+                            grp = false //元素之轉型拋錯(元素之 valueOf 拋錯、Symbol、BigInt)⇒ 無效(V11), 不透傳
+                        }
+                    }
+                }
+                let nGroups = oGrp ? readOpt(o, 'nGroups') : 2
+                let oDraws = readOpt(o, 'draws')
+                let oHalf = readOpt(o, 'half')
+                let oAct = readOpt(o, 'actDays')
+                //讀取拋錯之 draws / half / actDays 為非整數 / 非有限數之哨兵 ⇒ 沿用「不合者用預設」(nullGroupActOf 以 Number.isFinite 篩 actDays)
                 //onlyGroups / onlyDecisions(規則 R-EV-38): 此段只以擷取之參照(listOf: 不經迭代器)複製成評估器自有之陣列(元素不取值; 形狀不合者記為 false / null, 於比對之後才拋錯)
                 let oOnlyG = readOpt(o, 'onlyGroups')
                 let onlyG = oOnlyG === undefined || oOnlyG === null ? null : (listOf(oOnlyG) || false)
@@ -1992,10 +2162,22 @@ let makeEvaluator = (L, cfg = {}) => {
                     }
                 }
                 guardExt('ext')
-                let g = grp ? { grp, nGroups } : { grp: (nullSideActOf([], null, 0, 0), sideGrp), nGroups: 2 }
-                if (g.grp.length !== n || !Number.isInteger(g.nGroups) || g.nGroups < 1 || g.grp.some((x) => x < 0 || x >= g.nGroups)) {
-                    throw new Error('replaceNull: grp 須為長度 n、值在 0 ~ nGroups-1 之陣列')
+                if (optNull) {
+                    throw new Error('invalid opt: must be an object')
                 }
+                //grp / nGroups(使用者給 grp 者): 訊息依 V19、V20(原為中文之 replaceNull: grp 須為…; 排程第 497 項); 先 grp 之種類與長度、再 nGroups、最後 grp 之值域(值域依 nGroups)
+                if (grp === false || (grp !== null && grp.length !== n)) {
+                    throw new Error(REPLACE_GRP_MSG)
+                }
+                if (grp !== null) {
+                    if (!Number.isInteger(nGroups) || nGroups < 1) {
+                        throw new Error('invalid opt.nGroups: must be a positive integer')
+                    }
+                    if (grp.some((x) => x < 0 || x >= nGroups)) {
+                        throw new Error(REPLACE_GRP_MSG)
+                    }
+                }
+                let g = grp ? { grp, nGroups } : { grp: (nullSideActOf([], null, 0, 0), sideGrp), nGroups: 2 }
                 //只替換一部分之席: 形狀之檢查先於「未分帳」之判定; 訊息依跨套件規格〈輸入參數之檢測機制〉§6 V19(invalid <名稱>: must be <描述>)、V20(不帶輸入值; 只帶位置與期望)
                 //  onlyGroups: 非空之陣列或定型陣列, 元素為 0 ~ N_GROUP-1 之整數(wsemi iseint: 安全整數之數字或其數字字串; 通過者以 Number 轉為數字); 未列之子帳之席原樣
                 //  onlyDecisions: 各相位一個陣列或定型陣列(與該相位之決策數等長), 元素為布林或 0 / 1(只此四值; 不互轉他種真假值); 遮罩外之決策給空選集

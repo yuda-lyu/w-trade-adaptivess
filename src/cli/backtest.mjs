@@ -19,7 +19,7 @@ import { gradeOf } from '../domain/backtestGrade.mjs'
 //  旗標: 七相位等效年化之平均 > rule.meanMin 且最差相位 > rule.worstPhaseMin, 且換亂數種子之複製版(共 backtest.replicas 次重放)皆然 ⇒ pass;
 //        未達 pass 者: 分級啟用(backtest.grade.enabled; 預設)時依「對訊號量相當之隨機挑」分為 above / mixed / level / below(src/domain/backtestGrade.mjs), 否則 fail
 //  輸出: 私有根 backtest/<name>.json(完整數字 + 參照 + 分段); 標準輸出末行「BACKTEST_FLAG <旗標>」
-//  離開碼: 0 完成 / 2 挑選模組問題 / 3 挑選函數執行錯誤 / 4 未授權 / 5 帳本不一致
+//  離開碼: 0 完成 / 2 挑選模組問題 / 3 挑選函數執行錯誤 / 4 未授權 / 5 帳本不一致(全期帳本與評估帳本之訓練期進場數不同, 或評估帳本無法載入 / 不合核對之前提)
 if (process.env.ARSI_HARNESS !== '1') {
     console.log('g_backtest.mjs 只供迴圈使用(回測期數字不對 agent 揭露); 節點與做夢任務請用 g_eval.mjs')
     process.exit(4)
@@ -62,19 +62,60 @@ let time0Ms = Date.parse(`${L.meta.time0}Z`)
 let barOf = (iso) => Math.round((Date.parse(`${iso}Z`) - time0Ms) / barMs)
 let trainEndBar = barOf(st.periods.train.end)
 let btStartBar = barOf(st.periods.backtest.start)
-//訓練期之進場數(靜態欄; 不含回測期)並與訓練期帳本核對
-let ntStatic = ntStaticOf(L, trainEndBar)
+//訓練期之進場數(靜態欄; 不含回測期)並與評估帳本核對(排程第 496 項)
+//  評估帳本(settings.eval.ledgerDir; g_build 之標準產物)涵蓋訓練期與回測期(終點為回測期終點), 其 off.u32 為全期計數 —— 不是訓練期之進場數, 不可拿來核對;
+//  改以評估帳本自身於同一個訓練期終點之進場數(ntStaticOf; 棒序依其自身之 time0 與每棒小時數換算)與全期帳本逐策略比對: 兩者由同一策略庫建出時,
+//  訓練期以前之進場相同(進場只依該棒以前之資訊; 終點不同只影響其後之訂單)⇒ 數量逐策略相等; 策略數或任一策略之計數不同即拒絕(請以同一策略庫重建兩者)
+//  (g_build --train 之訓練期帳本為核對或診斷用之選配產物, 標準流程不保證存在, 故不以它為依據)
+//  核對之前提(任一不成立即拒絕, 離開碼 5): 兩帳本皆載得入、time0 / barHours 有效且訓練期終點落在其棒序內、off 欄之長度 = 策略數 + 1(損毀者之 off 欄使計數為缺值)、
+//    兩帳本皆涵蓋訓練期終點(nBars 為整數且 ≥ 界線: 短於界線之帳本其計數相同亦不代表期間完整; nBars 缺值者亦拒收)、全期帳本涵蓋回測期起點(nBars > 回測期起點之棒序; 否則重放無決策而旗標無意義)、策略數相同;
+//    兩帳本由同一策略庫建出且起點(time0)相同或其前無進場(ntStaticOf 自帳本起點計數)
+let ntStatic = null
 {
-    let b = fs.readFileSync(path.join(st.eval.ledgerDir, 'off.u32'))
-    let offT = new Uint32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength))
-    let bad = offT.length !== L.n + 1 ? -2 : -1
+    let Le = null
+    try {
+        Le = loadLedger(st.eval.ledgerDir)
+    }
+    catch (err) {
+        if (isIntegrityError(err)) {
+            PI.ConsoleLog(`ERROR ${err.message}`)
+            process.exit(3)
+        }
+        console.log('ERROR 評估帳本無法載入(缺檔或損毀; 核對全期帳本與評估帳本之訓練期進場數需要它); 請先 node g_build.mjs 建評估帳本')
+        process.exit(5)
+    }
+    let barMsE = Le.meta.barHours * 3600000
+    let trainEndE = Math.round((Date.parse(`${st.periods.train.end}Z`) - Date.parse(`${Le.meta.time0}Z`)) / barMsE)
+    let reason = null
+    if (!(barMs > 0 && Number.isFinite(barMs) && barMsE > 0 && Number.isFinite(barMsE) && Number.isFinite(time0Ms) && Number.isFinite(Date.parse(`${Le.meta.time0}Z`)))) {
+        reason = 'time0 或 barHours 無效'
+    }
+    else if (!(Number.isInteger(trainEndBar) && trainEndBar >= 0 && Number.isInteger(trainEndE) && trainEndE >= 0)) {
+        reason = '訓練期終點不在帳本之棒序範圍內'
+    }
+    else if (Le.off.length !== Le.n + 1 || L.off.length !== L.n + 1) {
+        reason = 'off 欄之長度與策略數不符'
+    }
+    else if (!(Number.isInteger(Le.nBars) && Le.nBars >= trainEndE && Number.isInteger(L.nBars) && L.nBars >= trainEndBar)) {
+        reason = '帳本未涵蓋訓練期終點' //nBars 缺值或非整數者(無 px.f64 之舊格式帳本不驗 meta.nBars)亦拒收
+    }
+    else if (!(L.nBars > btStartBar)) {
+        reason = '全期帳本未涵蓋回測期起點' //重放只取決策棒落在回測期者; 全期帳本止於回測期起點或更早者無決策, 其旗標無意義
+    }
+    if (reason !== null) {
+        console.log(`ERROR 全期帳本與評估帳本不合核對之前提(${reason}); 請以同一策略庫重建兩者`)
+        process.exit(5)
+    }
+    ntStatic = ntStaticOf(L, trainEndBar)
+    let ntEval = ntStaticOf(Le, trainEndE)
+    let bad = Le.n !== L.n ? -2 : -1
     for (let s = 0; s < L.n && bad === -1; s++) {
-        if (offT[s + 1] - offT[s] !== ntStatic[s]) {
+        if (ntEval[s] !== ntStatic[s]) {
             bad = s
         }
     }
     if (bad !== -1) {
-        console.log(`ERROR 全期帳本與訓練期帳本不一致(策略數或訓練期進場數不同; 位置 ${bad}); 請以同一策略庫重建兩者`)
+        console.log(`ERROR 全期帳本與評估帳本之訓練期進場數不一致(${bad === -2 ? '策略數不同' : `策略序號 ${bad} 之訓練期進場數不同`}); 請以同一策略庫重建兩者`)
         process.exit(5)
     }
 }

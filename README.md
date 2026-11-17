@@ -113,10 +113,10 @@ node node_modules/w-trade-adaptivess/src/tools/initProject.mjs --root .
 
 ## 3. 評估器與挑選模組之合約
 
-- 建帳本:`node g_build.mjs`(由 `source.libraryRoot` 之策略庫與 K 線,產生各策略之進出場與每單位損益;止於回測期終點).
+- 建帳本:`node g_build.mjs`(由 `source.libraryRoot` 之策略庫與 K 線,產生各策略之進出場與每單位損益;止於回測期終點).回測期旗標(`g_backtest.mjs`)另以全期帳本(私有根;須與評估帳本由同一策略庫建出)重放,啟動時核對兩者於訓練期終點以前之進場數逐策略一致(以評估帳本自身之 `ntStaticOf` 與全期帳本比對,不把評估帳本之 `off.u32` 差值〔全期計數〕當作訓練期之進場數);策略數或任一策略之計數不同、評估帳本無法載入、兩帳本之時間座標或 `off` 欄無效、帳本未涵蓋訓練期終點者即拒絕(離開碼 5).
 - 外部序列(選配):策略庫以外、屬標的自身之序列,由專案備成與因子檔同格式之檔 `<名>.json` = `[{ time, value }]`(`time` 為 K 棒之開盤時間,與 K 線同一字串格式;缺值之棒不列),置於 `settings.source.seriesDir`;建帳本時對位到 K 棒並於帳本終點截斷(`ser.f64`、`meta.seriesNames`),挑選函數以 `ctx.series(name, nBack)` 取決策棒以前之值(不含決策棒).序列之值視為於其標記之棒收盤時已得知,得知較晚者須由使用端標在其後之棒(見合約).名稱限英文字母起首之英數與底線(至多 32 字);檔名以底線起首者略過.未設定者不建入,既有結果不變(帳本鍵不因此改變).
 - 評估:`node g_eval.mjs --pick <模組.mjs> --mode quick|full [--out <結果.json>]`.挑選函數自帳本起點連續執行,只有落在評估期之決策計入績效.
-- 成員重抽:`node g_eval.mjs --pick <模組.mjs> --mode full --member <鹽>:<0|1>` 只把策略庫之一半(依各策略之同分次鍵與鹽之雜湊切半;`0` 甲半、`1` 乙半;鹽為 0 ~ 4294967295 之整數,十進位或 `0x` 十六進位)交給同一個模組,檢驗其內容是否依賴特定成員;結果另記 `member`、不是正本,格式不合離開碼 2.API 為 `memberLedger(L, salt, half)`(`src/eval/ledger.mjs`;回重新編號之半庫帳本,其 `srcIdx` 使評估器沿用各策略於全庫之同分次鍵;`salt`、`half` 為整數〔依 `iseint`,數字字串亦收;`0x` 十六進位寫法只於命令列解析〕),其後照常 `ntStaticOf` 與 `makeEvaluator`.
+- 成員重抽:`node g_eval.mjs --pick <模組.mjs> --mode full --member <鹽>:<0|1>` 只把策略庫之一半(依各策略之同分次鍵與鹽之雜湊切半;`0` 甲半、`1` 乙半;鹽為 0 ~ 4294967295 之整數,十進位或 `0x` 十六進位)交給同一個模組,檢驗其內容是否依賴特定成員;結果另記 `member`、不是正本,格式不合離開碼 2.API 為 `memberLedger(L, salt, half)`(聚合入口 `WTradeAdaptivess.memberLedger`,亦可自 `src/eval/ledger.mjs` 深層取用;回重新編號之半庫帳本,其 `srcIdx` 使評估器沿用各策略於全庫之同分次鍵;`salt`、`half` 為整數〔依 `iseint`,數字字串亦收;`0x` 十六進位寫法只於命令列解析〕),其後照常 `ntStaticOf` 與 `makeEvaluator`.
 - 直接以 API 單獨使用評估器(`makeEvaluator(L, cfg)`):須明給訓練期之界線 —— `L.ntStatic = ntStaticOf(L, 訓練期之終點棒序)`(**評估帳本涵蓋訓練期與回測期,界線為訓練期之終點棒序〔依帳本之 `time0` 與每棒小時數自 `settings.periods.train.end` 換算〕,不可給 `L.nBars`**;只有全為訓練期之帳本〔如 `g.mjs` 之合成帳本〕才給 `ntStaticOf(L, L.nBars)`),`ctx.meta.ntAll` 只計訓練期之進場數;未給(或型態、長度不合)者拋 `invalid L.ntStatic: must be …`,**不回退為帳本全期之進場數**(帳本涵蓋訓練期以後者,回退會把其後之資訊帶進該欄).命令列(`g_eval.mjs`、`g_backtest.mjs`)自設定之訓練期終點給界線,行為不變.`loadLedger` 對 K 線欄 `px.f64`(有此檔者)核對長度 = 5 × K 棒數,不符拋 `invalid px.f64: must be …(請重建帳本)`(舊帳本無此檔者 `px` 為 null,取用 `ctx.market` 時拋「帳本無 K 線欄」).
 - 挑選模組之形狀、`ctx` 之每個介面(`stat`、`orders`、`entryDays` / `entryBars`、`exitDays` / `exitBars`、`market`、`factor`、`series`、`meta`、`state`、`rand`)、`accept(sig, book)`、分帳、輸出之讀法與擴充診斷之寫法,全部寫在合約 `contract/pick-contract.md`(專案內為 `docs/pick-contract.md`).
 - 判讀:`S = 0.7 × 七相位平均 + 0.3 × 最差相位`;階梯 1 ~ 3 與否決見 `src/eval/score.mjs` 檔頭.
@@ -152,7 +152,7 @@ npm test
 | 測試檔 | 案例數 | 範圍 |
 |---|---|---|
 | `unit-evalCore.test.mjs` | 37 | 評估核心:無前視、執行規則、各虛無、歸因、擴充診斷之介面 |
-| `unit-evalIntegrity.test.mjs` | 41 | 評估器之狀態不受模組之寫入影響:交出之物件為複本或凍結(改寫 `ctx.prev` / `ctx.meta` / `book` / `tag` 結果不變)、內建物件被改即 `EVAL_INTEGRITY`(挑選函數、`accept`、擴充診斷、模組頂層與延後執行之程式、延遲讀取帳本欄)、ctx 之各函數與逐訊號模擬不經可被改寫之方法;擴充診斷之資料存取(`api.market` / `factor` / `series`)與 `simulate` 等需比對之 api 函數同樣於入口比對(含 `api.replaceNull` 之 `onlyGroups` / `onlyDecisions`);含命令列之載入處 |
+| `unit-evalIntegrity.test.mjs` | 42 | 評估器之狀態不受模組之寫入影響:交出之物件為複本或凍結(改寫 `ctx.prev` / `ctx.meta` / `book` / `tag` 結果不變)、內建物件被改即 `EVAL_INTEGRITY`(挑選函數、`accept`、擴充診斷、模組頂層與延後執行之程式、延遲讀取帳本欄)、ctx 之各函數與逐訊號模擬不經可被改寫之方法;擴充診斷之資料存取(`api.market` / `factor` / `series`)與 `simulate` 等需比對之 api 函數同樣於入口比對(含 `api.replaceNull` 之 `onlyGroups` / `onlyDecisions`);`api.simulate` / `api.summarize` / `api.replaceNull`(`grp`)之複本不經可被改寫之迭代器(替身於 Array / 定型陣列 / `Set` / 陣列迭代器 / `Set` 迭代器之迭代方法,13 種呼叫 × 8 種替身逐組核對);含命令列之載入處 |
 | `unit-extData.test.mjs` | 14 | 擴充診斷之資料存取:`api.market` / `api.factor` / `api.series` 之取值與 `ctx` 之同名介面逐位相同、只含棒序 < `bar` 者、`nBack` 之各種寫法、`bar` / `ki` / `name` 之檢查與訊息(不帶輸入值)、帳本缺欄、回傳為複本、api 九個函數之函數物件凍結且每個診斷各一份、不改既有數字、依狀態分組重放之用法 |
 | `unit-extReplacePart.test.mjs` | 18 | 擴充診斷之 `api.replaceNull` 只替換一部分之席(`onlyGroups`、`onlyDecisions`):皆未給時回傳不變、「全部」時與未給 / 只給另一個逐位相同、逐席核對(dense 帳本,由訊號還原各抽之選集:未列子帳之席原樣、席數與子帳不變、替換者不重複)、遮罩外之決策無訊號且配對之成品值 = 成品只留遮罩內決策之重放、獨立重算(各抽之選集交 `simulate` 重放,核對均 / 標準差 / p / z / excess / 損益 / 三等分段)、未分帳 ⇒ 不適用、參數之檢查與訊息(V19;不帶輸入值)、形狀以內部槽判定而不經迭代器、重入、不改既有數字與 `selHash` |
 | `unit-guard.test.mjs` | 31 | 架構邊界(含子行程隱藏視窗之守門與其自驗);agent 操作紀錄之掃描與禁區 |
@@ -166,15 +166,16 @@ npm test
 | `unit-frontierTransient.test.mjs` | 4 | 額度失敗不消耗前緣重試之接縫:真 `w-recursi` + 真領域,只把派工換成假的;額度用盡 ⇒ 前緣提案維持 `proposed`、`retries` 不增、`transients` 逐輪加一,一般失敗照舊計 `retries` 至封存 |
 | `unit-dispatchQuota.test.mjs` | 26 | 派工之額度處置(派工套件以替身注入):結果帶 `quota`、用量門檻(全域與各角色)、錯誤輸出留存與遮罩、起跑前之備援探測與 `retryAt` |
 | `unit-quotaCli.test.mjs` | 6 | 額度處置之接線:以命令列程式於合成專案根實跑(替身派工套件),驗起跑前與連跑時之探測、事件 `skipped` 之 `retryAt`、門檻經領域層傳到派工器、`tools/quota.mjs --probe` |
-| `unit-package.test.mjs` | 11 | 發布面、依賴、專案根之錨點、`initProject`、去識別(本機路徑、內網主機名與位址之通則檢查與其自驗);於 npm 包內(無 `.git` 亦無 `.gitignore`)略過 `.gitignore` 之列項檢查、掃描範圍改為包內全部文字檔 |
+| `unit-package.test.mjs` | 12 | 發布面、依賴、聚合入口之站點全集(76 鍵:函數 60、常數 16;`memberLedger` 併入)、專案根之錨點、`initProject`、去識別(本機路徑、內網主機名與位址之通則檢查與其自驗);於 npm 包內(無 `.git` 亦無 `.gitignore`)略過 `.gitignore` 之列項檢查、掃描範圍改為包內全部文字檔 |
 | `unit-toolbox.test.mjs` | 7 | 共用工具區之機械檢查 |
 | `unit-briefTrials.test.mjs` | 6 | 任務書條款之隨機對照 |
 | `unit-claimKey.test.mjs` | 8 | 驗證類方向之主張鍵;探索類方向與既有節點同臂同起點時另帶區分用之鍵(含已執行者逐字重提之略過);輪末摘要「方向未入前緣」各行 |
 | `unit-pickLoader.test.mjs` | 4 | 挑選模組之靜態檢查與載入 |
 | `unit-pickStore.test.mjs` | 11 | 共同儲存區;挑選模組載入時(含延後執行之程式)改了內建物件 ⇒ 中止更新(不寫任何檔、拋 `EVAL_INTEGRITY`;命令列工具離開碼 3);同行程前次已被改者入口即中止 |
 | `unit-loaderRewrite.test.mjs` | 10 | 載入器(`loadPick`、`loadExt`)之匯入快取鍵 = 本次所讀原始碼之內容雜湊:同一路徑連續寫入不同內容(以 `utimes` 把修改時間釘成同一值,不依賴計時)各載入一次,每次執行到的皆為該次寫入之內容;內容相同者共用同一份模組、實體檔不同者各有其模組;A → B → A;讀檔與匯入之間來源檔被改動 ⇒ `PICK_CHANGED` / `EXT_CHANGED` 且該鍵不再被信任(重讀不到、匯入失敗者亦然;經實體路徑與目錄連結路徑一致);因完整性錯誤被拒者還原內建物件後同內容再載入仍被拒;CRLF 與 BOM 不誤判 |
-| `unit-memberLedger.test.mjs` | 16 | 成員重抽(`memberLedger`、`L.srcIdx`、`g_eval.mjs --member`;含空半庫、已結單欄之獨立重算、失敗之結果檔與評估紀錄之 `member`、旗標重複):`tieBaseOf` 與原寫法逐值相同、兩半互補且各欄(含每策略 3 值之 `cls`、段長不一之進場規則欄)與全庫逐位相同、逐棒之欄共用、半庫上之評估器所見(`ctx.n`、`tie`、`ntAll`)、「全庫限半庫」與「半庫帳本」之評估結果逐值相同(含持倉上限下之同棒次序)、半庫內再切、參數與 `L.srcIdx` 之檢查(訊息不帶輸入值)、入口比對內建物件、命令列之標記(結果檔、評估紀錄含失敗者、畫面)與格式不合之離開碼 2 |
-| `unit-evalCli.test.mjs` | 3 | 命令列對 `L.ntStatic` 之接線:`g_eval.mjs` 兩條路徑(帳本涵蓋回測期 / 只涵蓋訓練期)與 `g_backtest.mjs`(全期帳本)實跑,`ctx.meta.ntAll` 只計訓練期之進場數 |
+| `unit-memberLedger.test.mjs` | 18 | 成員重抽(`memberLedger`、`L.srcIdx`、`g_eval.mjs --member`;含空半庫、已結單欄之獨立重算、失敗之結果檔與評估紀錄之 `member`、旗標重複):`tieBaseOf` 與原寫法逐值相同、兩半互補且各欄(含每策略 3 值之 `cls`、段長不一之進場規則欄)與全庫逐位相同、逐棒之欄共用、半庫上之評估器所見(`ctx.n`、`tie`、`ntAll`)、「全庫限半庫」與「半庫帳本」之評估結果逐值相同(含持倉上限下之同棒次序)、半庫內再切、參數與 `L.srcIdx` 之檢查(訊息不帶輸入值)、入口比對內建物件、命令列之標記(結果檔、評估紀錄含失敗者、畫面)與格式不合之離開碼 2;`memberLedger` 與聚合入口之 JSDoc `@example` 取出實跑(R-PKG-7) |
+| `unit-evalCli.test.mjs` | 10 | 命令列對 `L.ntStatic` 之接線:`g_eval.mjs` 兩條路徑(帳本涵蓋回測期 / 只涵蓋訓練期)與 `g_backtest.mjs`(標準配置:評估帳本 = 全期帳本之前綴)實跑,`ctx.meta.ntAll` 只計訓練期之進場數;`g_backtest.mjs` 之帳本一致性核對(以評估帳本自身之訓練期進場數與全期帳本逐策略比對):標準配置不誤報、評估帳本之訓練期進場數少一筆 / 多一筆 / 策略數不同皆拒絕(離開碼 5)、全期帳本與評估帳本同終點不誤報、評估帳本之 `time0` 或棒長(`barHours`)不同(同一時刻之進場)不誤報、評估帳本無法載入(缺檔 / 缺 `meta`)與核對之前提不合(`off` 欄長度、`time0` / `barHours` 無效含負棒長、帳本未涵蓋訓練期終點)皆明確訊息與離開碼 5 |
+| `unit-extApiInput.test.mjs` | 16 | 擴充診斷之 `api.simulate` / `api.summarize` / `api.replaceNull`(`grp`)之輸入:複本之可接受種類(陣列、定型陣列、`Set`、物件形式)之結果逐位相同、其他種類拒收、錯誤訊息依 V19、V20(英文、指明名稱與期望、帶索引、不帶輸入值;讀取拋錯者無效而不透傳)、形狀不合者於比對內建物件之後才拋、檢查之先後、挑選函數之回傳值之可接受種類不變(迭代器之偵測見 `unit-evalIntegrity`)、選集內容之錯誤依 V19(帶索引、不帶值)、讀取拋錯與元素轉型拋錯視為無效而不透傳、結構檢查與 `replaceNull(null)` 亦於比對之後才拋、錯誤之優先序與邊界 |
 | `unit-ledgerReal.test.mjs` | 3 | 真實帳本與官方回測逐張一致(本機無策略庫與帳本時略過) |
 | `unit-archiveDocs.test.mjs` | 2 | 指引文件之自動整理 |
 | `unit-guides.test.mjs` | 2 | 寫法守則 |

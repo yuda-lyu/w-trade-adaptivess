@@ -94,6 +94,27 @@ describe('套件:發布面與依賴', function () {
             assert.equal(typeof WTradeAdaptivess[k], 'function', k)
         }
     })
+
+    it('聚合入口之站點全集(R-PKG-7;排程第 500 項):76 鍵(函數 60、常數 16);memberLedger 併入且與 ledger.mjs 之匯出為同一實體;tieBaseOf、isSrcIdx 不併入(以 ESM 深層路徑取用)', async () => {
+        let keys = Object.keys(WTradeAdaptivess)
+        assert.equal(keys.length, 76)
+        assert.equal(keys.filter((k) => typeof WTradeAdaptivess[k] === 'function').length, 60)
+        assert.equal(keys.filter((k) => typeof WTradeAdaptivess[k] !== 'function').length, 16)
+        let ledgerMod = await import('../src/eval/ledger.mjs')
+        assert.equal(WTradeAdaptivess.memberLedger, ledgerMod.memberLedger)
+        assert.equal(typeof WTradeAdaptivess.memberLedger, 'function')
+        //聚合入口之每個鍵 = 其來源模組之同名匯出(與各模組之匯出為同一實體): 評估器相關者逐一核對
+        assert.equal(WTradeAdaptivess.loadLedger, ledgerMod.loadLedger)
+        assert.equal(WTradeAdaptivess.loadIds, ledgerMod.loadIds)
+        for (let k of ['tieBaseOf', 'isSrcIdx']) {
+            assert.equal(k in WTradeAdaptivess, false, `${k} 不併入聚合入口`)
+            assert.equal(typeof ledgerMod[k], 'function', `${k} 仍可由深層路徑取用`)
+        }
+        //每個函數鍵於其定義處有 JSDoc 之 @example(R-PKG-7): memberLedger 之 JSDoc 含 @example
+        let src = fs.readFileSync(path.join(FD_ROOT, 'src', 'eval', 'ledger.mjs'), 'utf8')
+        let jd = /\/\*\*((?:(?!\*\/)[\s\S])*?)\*\/\s*let memberLedger = /.exec(src)
+        assert(jd && /@param \{Object\} L/.test(jd[1]) && /@returns/.test(jd[1]) && /@example/.test(jd[1]), 'memberLedger 之 JSDoc 含 @param、@returns、@example')
+    })
 })
 
 describe('套件:專案根之錨點與專案接入', function () {

@@ -1023,6 +1023,132 @@ describe('evalCore 內建物件之完整性(R-EV-35 ②):被改即評估失敗(E
         }
     })
 
+    it('api.simulate / api.summarize / api.replaceNull(grp)之複本不經可被改寫之迭代器(排程第 497 項):裝上「呼叫一次即自我還原」之替身於 Array / 定型陣列 / Set / 陣列迭代器 / Set 迭代器之迭代方法後呼叫 ⇒ 替身未被呼叫、該次呼叫拋 EVAL_INTEGRITY(where = ext)、評估失敗', () => {
+        //R-EV-38 / R-EV-35 ②: 既有之 simulate(各相位之選集陣列與其元素之 ids / group、tagsByPhase)、summarize(vals 與 vals.thirds)、replaceNull(grp)原以 Array.from / TypedArray.from 複製模組傳入之陣列,
+        //  會動態查找 Array.prototype[Symbol.iterator] 等可被改寫之方法 ⇒ 替身執行一次後自我還原即逃過比對(外審 wta160 第 2 輪 N2); 複本改為只用擷取之參照與索引讀寫(同 onlyGroups / onlyDecisions 之 listOf)
+        let ARR_ITER_PROTO = Object.getPrototypeOf([][Symbol.iterator]())
+        let SET_ITER_PROTO = Object.getPrototypeOf(new Set().values())
+        let selsOf = (api, f) => api.phases.map((p) => p.sels.map(f))
+        //各呼叫: 參數於替身裝上之前建好(建參數本身會用到迭代器), 回傳「呼叫 api」之函數
+        let calls = {
+            simulateArrays: (api) => {
+                let a = selsOf(api, (s) => Array.from(s))
+                return () => api.simulate(a)
+            },
+            simulateTyped: (api) => {
+                let a = selsOf(api, (s) => Int32Array.from(s))
+                return () => api.simulate(a)
+            },
+            simulateSets: (api) => {
+                let a = selsOf(api, (s) => new Set(s))
+                return () => api.simulate(a)
+            },
+            simulateObjects: (api) => {
+                let a = selsOf(api, (s) => ({ ids: Array.from(s), group: Array.from(s, (v, i) => i % 2), tag: 1 }))
+                return () => api.simulate(a)
+            },
+            simulateObjectsTyped: (api) => {
+                let a = selsOf(api, (s) => ({ ids: Int32Array.from(s), group: Uint8Array.from(s, (v, i) => i % 2) }))
+                return () => api.simulate(a)
+            },
+            simulateObjectsSets: (api) => {
+                //group 為 Set 時成員去重(0 ~ 3 至多 4 個值)⇒ ids 取各決策之前 2 個(group 與 ids 須等長)
+                let a = selsOf(api, (s) => {
+                    let ids = new Set(Array.from(s).slice(0, 2))
+                    return { ids, group: new Set([0, 1].slice(0, ids.size)) }
+                })
+                return () => api.simulate(a)
+            },
+            simulateTags: (api) => {
+                let a = selsOf(api, (s) => Array.from(s))
+                let tg = api.phases.map((p) => p.sels.map((s, k) => k % 3))
+                return () => api.simulate(a, tg)
+            },
+            summarizeArray: () => {
+                let v = [1, 2, 3, 4]
+                return (api) => api.summarize(v)
+            },
+            summarizeTyped: () => {
+                let v = Float64Array.from([1, 2, 3, 4])
+                return (api) => api.summarize(v)
+            },
+            summarizeThirds: () => {
+                let v = Object.assign([1, 2, 3, 4], { thirds: [1, 2, 3] })
+                return (api) => api.summarize(v)
+            },
+            summarizeThirdsTyped: () => {
+                let v = Object.assign(Float64Array.from([1, 2, 3, 4]), { thirds: Float64Array.from([1, 2, 3]) })
+                return (api) => api.summarize(v)
+            },
+            replaceNullGrpArray: (api) => {
+                let o = { grp: Array.from({ length: api.n }, (v, i) => i % 2), nGroups: 2, draws: 2 }
+                return () => api.replaceNull(o)
+            },
+            replaceNullGrpTyped: (api) => {
+                let o = { grp: Int32Array.from({ length: api.n }, (v, i) => i % 3), nGroups: 3, draws: 2 }
+                return () => api.replaceNull(o)
+            },
+        }
+        let targets = [
+            [Array.prototype, Symbol.iterator], [Array.prototype, 'values'], [ARR_ITER_PROTO, 'next'],
+            [TA_PROTO, Symbol.iterator], [TA_PROTO, 'values'],
+            [Set.prototype, Symbol.iterator], [Set.prototype, 'values'], [SET_ITER_PROTO, 'next'],
+        ]
+        //未被改時照常(各呼叫皆成功)
+        let okRes = ev.evalPolicy(pickGrouped, {
+            ...EXT_BASE,
+            ext: [{
+                name: 'ok',
+                fn: (api) => {
+                    let r = {}
+                    for (let [nm, mk] of Object.entries(calls)) {
+                        let v = mk(api)(api)
+                        r[nm] = v !== null && typeof v === 'object'
+                    }
+                    return r
+                },
+            }],
+        })
+        assert(Object.keys(calls).every((nm) => okRes.ext.ok[nm] === true), JSON.stringify(okRes.ext.ok))
+        for (let [nm, mk] of Object.entries(calls)) {
+            for (let [o, k] of targets) {
+                let called = 0
+                let inner = null
+                let err = keep([[o, k]], () => integrityOf(() => ev.evalPolicy(pickGrouped, {
+                    ...EXT_BASE,
+                    ext: [{
+                        name: 'it',
+                        fn: (api) => {
+                            let call = mk(api)
+                            let orig = o[k]
+                            o[k] = function (...args) {
+                                called++
+                                o[k] = orig
+                                return Reflect.apply(orig, this, args)
+                            }
+                            try {
+                                call(api)
+                            }
+                            catch (e) {
+                                inner = e
+                            }
+                            finally {
+                                o[k] = orig
+                            }
+                            return { text: 'x' }
+                        },
+                    }],
+                })))
+                let w = `${nm} × ${o === Array.prototype ? 'Array.prototype' : (o === Set.prototype ? 'Set.prototype' : (o === TA_PROTO ? '%TypedArray%.prototype' : '迭代器原型'))}.${String(k)}`
+                assert.equal(called, 0, `${w}: 替身未被呼叫`)
+                assert.equal(inner && inner.code, 'EVAL_INTEGRITY', `${w}: 入口比對`)
+                assert.equal(inner.where, 'ext', w)
+                assert(inner.items.join('|').includes(String(k)), `${w}: ${inner.items}`)
+                assert.equal(err && err.code, 'EVAL_INTEGRITY', `${w}: 評估失敗`)
+            }
+        }
+    })
+
     it('api.replaceNull 之 onlyGroups / onlyDecisions:稀疏陣列之洞不沿原型鏈取值(Array.prototype[0] 之「取值一次即自我還原」存取子未被呼叫 ⇒ 拋 EVAL_INTEGRITY);複製拋錯(已撤銷之代理、拋錯之存取子)時內建物件已被改而不改回者仍拋 EVAL_INTEGRITY(比對不被跳過)', () => {
         //R-EV-38 / R-EV-35 ②: v[i] 對洞會沿原型鏈找值 ⇒ 觸發 Array.prototype 上之索引存取子, 替身自我還原即逃過比對; 改以自有索引才取值
         let calls = {
