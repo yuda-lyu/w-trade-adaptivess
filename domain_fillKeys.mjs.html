@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>domain/fillKeys.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#CROSS_COLUMNS">CROSS_COLUMNS</a></li><li><a href="global.html#CROSS_FIELD_DEFS">CROSS_FIELD_DEFS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EVAL_VERSION">EVAL_VERSION</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#FILL_DIR">FILL_DIR</a></li><li><a href="global.html#FILL_NO_RETRY_KINDS">FILL_NO_RETRY_KINDS</a></li><li><a href="global.html#FILL_SCHEMA">FILL_SCHEMA</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#MUTABLE_SNAPS">MUTABLE_SNAPS</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#OUT_SATURATED_NOTE">OUT_SATURATED_NOTE</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#POSTFIT_HEAD">POSTFIT_HEAD</a></li><li><a href="global.html#SIGNS_CLAUSE">SIGNS_CLAUSE</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#VIOL">VIOL</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#adoptError">adoptError</a></li><li><a href="global.html#alignSeries">alignSeries</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#argStrOf">argStrOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#bodyOf">bodyOf</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#bytesAs">bytesAs</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkIntrinsics">checkIntrinsics</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#copyAll">copyAll</a></li><li><a href="global.html#copyRange">copyRange</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#crossOf">crossOf</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#diagsOf">diagsOf</a></li><li><a href="global.html#evaluatorFpOf">evaluatorFpOf</a></li><li><a href="global.html#extRowOf">extRowOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#fillDocOf">fillDocOf</a></li><li><a href="global.html#fillFileOf">fillFileOf</a></li><li><a href="global.html#fillLinesOf">fillLinesOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#handOut">handOut</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#integrityError">integrityError</a></li><li><a href="global.html#isCapitalError">isCapitalError</a></li><li><a href="global.html#isIntegrityError">isIntegrityError</a></li><li><a href="global.html#isMutableSnap">isMutableSnap</a></li><li><a href="global.html#isSrcIdx">isSrcIdx</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#loadExt">loadExt</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#memberLedger">memberLedger</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#normUnit">normUnit</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#ntStaticOf">ntStaticOf</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#pickHashOf">pickHashOf</a></li><li><a href="global.html#planFill">planFill</a></li><li><a href="global.html#planGateOf">planGateOf</a></li><li><a href="global.html#postfitFileOf">postfitFileOf</a></li><li><a href="global.html#postfitInfoOf">postfitInfoOf</a></li><li><a href="global.html#postfitLineOf">postfitLineOf</a></li><li><a href="global.html#postfitOfFill">postfitOfFill</a></li><li><a href="global.html#postfitRowOf">postfitRowOf</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readFill">readFill</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#registryOf">registryOf</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#roundOkOf">roundOkOf</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#safeJson">safeJson</a></li><li><a href="global.html#sameKey">sameKey</a></li><li><a href="global.html#sameUnit">sameUnit</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#signsMentionOf">signsMentionOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tieBaseOf">tieBaseOf</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#unitKeyOf">unitKeyOf</a></li><li><a href="global.html#unitNotionalOf">unitNotionalOf</a></li><li><a href="global.html#violationMark">violationMark</a></li><li><a href="global.html#violationSince">violationSince</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">domain/fillKeys.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import fs from 'fs'
+import path from 'path'
+import crypto from 'crypto'
+import { fileURLToPath } from 'url'
+import { FILL_DIR } from './fillPlan.mjs'
+import { EVAL_VERSION } from './evalVersion.mjs'
+
+//附算與補算之快取之鍵之來源(規則 R-REC-34; 讀檔者集中於此, 計畫本身在 fillPlan.mjs 為純函數)
+//  pickHashOf     成品檔之內容雜湊(位元組之 sha256 前 20 字)
+//  evaluatorFpOf  評估器之指紋 = 本套件之評估器原始碼(src/eval/*.mjs 與 src/cli/eval.mjs; 檔名與內容)、評估帳本之鍵(&lt;eval.ledgerDir>/meta.json 之 key)、
+//                 研究用本金(帳本之 meta.unit 之 uIni 之原值; 基礎單位開啟者才併入, 規則 R-EV-43: 不入帳本鍵而改變評估之成敗)、
+//                 影響數字之設定(periods 與 eval 中 timeoutSec、ledgerDir 以外之各鍵)、評估器版本(EVAL_VERSION; 單一定義在 evalVersion.mjs)之 sha256 前 20 字 —— 任一改變 ⇒ 附算與補算之值過時
+//                 (只改迴圈、任務書或其他非評估器之檔之升版不使之過時; 評估器所匯入之其他套件之改版不在指紋內 —— 該情形調高 EVAL_VERSION;
+//                  共同儲存區之重產〔pickStore.mjs〕亦呼叫本函數取得同一個指紋, 標示 current 與附算同一判準)
+//  diagsOf        共用工具區 metrics/ 之各擴充診斷之名與內容雜湊
+//  fillFileOf / postfitFileOf  補算檔 / 求解窗後段之完整結果檔之路徑(狀態根之 fill/&lt;節點 id>.json / .postfit.json; agent 不可寫之處)
+//  readFill       補算檔(無、讀不到、節點 id 不合或檔內之 nodeId 不符者為 null; 節點工作夾內之同名檔一律不讀)
+
+//SRC, 套件之 src 夾: 本檔以 ESM 深層路徑載入時位於 src/domain(上一層即 src); 打包進主入口(dist/*.umd.js)時上一層為套件根 ⇒ 先找上一層之 eval/, 無則找上一層之 src/eval/
+let SRC = ((up) => [up, path.join(up, 'src')].find((d) => fs.existsSync(path.join(d, 'eval'))) || up)(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'))
+
+let h20 = (buf) => crypto.createHash('sha256').update(buf).digest('hex').slice(0, 20)
+
+/**
+ * 成品檔之內容雜湊(位元組之 sha256 前 20 字)
+ *
+ * @param {Buffer|String} buf 輸入成品檔之內容
+ * @returns {String} 回傳雜湊字串
+ * @example
+ * pickHashOf(fs.readFileSync('pick.mjs'))
+ */
+let pickHashOf = (buf) => h20(buf)
+
+//evalSrcFiles, 評估器原始碼之檔(相對於套件之 src; 依名排序); 讀不到即拋錯(指紋不得因讀檔失敗而靜默變寬)
+let FP_ERR = (what) => new Error(`invalid evaluator fingerprint: must read ${what}`)
+let evalSrcFiles = () => {
+    let out
+    try {
+        out = fs.readdirSync(path.join(SRC, 'eval')).filter((f) => /\.mjs$/i.test(f)).sort().map((f) => `eval/${f}`)
+    }
+    catch (err) {
+        throw FP_ERR('the evaluator source (eval/)')
+    }
+    return [...out, 'cli/eval.mjs']
+}
+
+/**
+ * 評估器之指紋(評估器原始碼、評估器版本 EVAL_VERSION、評估帳本之鍵、研究用本金、影響數字之設定;任一改變則不同;附算與共同儲存區之重產共用此函數)
+ * 原始碼以整檔之位元組計(註解之改動亦使之改變 —— 寧可多算);評估器原始碼或評估帳本之 meta.json 讀不到者拋 invalid evaluator fingerprint: must read …(不靜默略過)
+ *
+ * @param {Object} st 輸入設定物件(讀取 st.eval、st.periods;缺者視同 null)
+ * @returns {String} 回傳 'ev-' 起首之指紋字串
+ * @example
+ * evaluatorFpOf(getSettings()) // => 'ev-…'
+ */
+let evaluatorFpOf = (st) => {
+    let src = evalSrcFiles().map((rel) => {
+        try {
+            return [rel, h20(fs.readFileSync(path.join(SRC, rel)))]
+        }
+        catch (err) {
+            throw FP_ERR(`the evaluator source (${rel})`)
+        }
+    })
+    let ev = st &amp;&amp; st.eval &amp;&amp; typeof st.eval === 'object' ? st.eval : null
+    let ledgerKey = null
+    let uIni
+    if (ev &amp;&amp; typeof ev.ledgerDir === 'string') {
+        let m
+        try {
+            m = JSON.parse(fs.readFileSync(path.join(ev.ledgerDir, 'meta.json'), 'utf8'))
+        }
+        catch (err) {
+            throw FP_ERR('the key of the evaluation ledger (meta.json)')
+        }
+        ledgerKey = m &amp;&amp; typeof m.key === 'string' ? m.key : null
+        //研究用本金: 取原值(帳本建置時已正規化為數值; 本模組不檢查其合法性 —— 不合者由評估器於載入帳本時拒絕; 寫法不同之同值至多多算一次)
+        uIni = m &amp;&amp; m.unit &amp;&amp; typeof m.unit === 'object' &amp;&amp; !Array.isArray(m.unit) ? m.unit.uIni : undefined
+    }
+    let evNum = ev ? Object.fromEntries(Object.keys(ev).filter((k) => k !== 'timeoutSec' &amp;&amp; k !== 'ledgerDir').sort().map((k) => [k, ev[k]])) : null
+    let periods = st &amp;&amp; st.periods ? st.periods : null
+    return `ev-${h20(JSON.stringify({ src, evalVersion: EVAL_VERSION, ledgerKey, eval: evNum, periods, ...(uIni === undefined ? {} : { uIni }) }))}`
+}
+
+/**
+ * 共用工具區 metrics/ 之各擴充診斷之名與內容雜湊
+ *
+ * @param {String} toolboxDir 輸入共用工具區之路徑
+ * @returns {Array&lt;Object>} 回傳 [{ name, hash }](依名排序;無此夾為空陣列)
+ * @example
+ * diagsOf('rsi/toolbox') // => [{ name: 'lineContent', hash: '…' }, …]
+ */
+let diagsOf = (toolboxDir) => {
+    let dir = path.join(toolboxDir, 'metrics')
+    let files = []
+    try {
+        files = fs.readdirSync(dir).filter((f) => /\.mjs$/i.test(f)).sort()
+    }
+    catch (err) {}
+    return files.map((f) => ({ name: f.replace(/\.mjs$/i, ''), hash: h20(fs.readFileSync(path.join(dir, f))) }))
+}
+
+//ID_OK, 可作為檔名之節點 id(防路徑穿越)
+let ID_OK = /^[A-Za-z0-9_-]{1,128}$/
+
+/**
+ * 補算檔之路徑(狀態根之 fill/&lt;節點 id>.json)
+ *
+ * @param {String} stateRoot 輸入狀態根(settings.rsi.root)
+ * @param {String} nodeId 輸入節點 id
+ * @returns {String} 回傳路徑
+ * @example
+ * fillFileOf('rsi', 'n1')
+ */
+let fillFileOf = (stateRoot, nodeId) => path.join(stateRoot, FILL_DIR, `${nodeId}.json`)
+
+/**
+ * 求解窗後段之完整結果檔之路徑(狀態根之 fill/&lt;節點 id>.postfit.json)
+ *
+ * @param {String} stateRoot 輸入狀態根(settings.rsi.root)
+ * @param {String} nodeId 輸入節點 id
+ * @returns {String} 回傳路徑
+ * @example
+ * postfitFileOf('rsi', 'n1')
+ */
+let postfitFileOf = (stateRoot, nodeId) => path.join(stateRoot, FILL_DIR, `${nodeId}.postfit.json`)
+
+/**
+ * 讀補算檔(狀態根之 fill/&lt;節點 id>.json;節點工作夾內之同名檔一律不讀)
+ *
+ * @param {String} stateRoot 輸入狀態根(settings.rsi.root)
+ * @param {String} nodeId 輸入節點 id
+ * @returns {Object|null} 回傳補算檔之內容;無、讀不到、節點 id 不合或檔內之 nodeId 與之不符者為 null
+ * @example
+ * readFill('rsi', 'n1')
+ */
+let readFill = (stateRoot, nodeId) => {
+    if (typeof nodeId !== 'string' || !ID_OK.test(nodeId)) {
+        return null
+    }
+    try {
+        let o = JSON.parse(fs.readFileSync(fillFileOf(stateRoot, nodeId), 'utf8'))
+        return o &amp;&amp; typeof o === 'object' &amp;&amp; !Array.isArray(o) &amp;&amp; o.nodeId === nodeId ? o : null
+    }
+    catch (err) {
+        return null
+    }
+}
+
+export { pickHashOf, evaluatorFpOf, diagsOf, readFill, fillFileOf, postfitFileOf }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Wed Nov 18 2026 22:33:01 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>
