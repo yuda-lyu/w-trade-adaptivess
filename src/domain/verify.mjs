@@ -275,6 +275,112 @@ let stripSearchPatterns = (cmd) => {
     })
     return segs.join('').replace(/\u0001(\d+)\u0002/g, (_, i) => quoted[Number(i)]) // eslint-disable-line no-control-regex
 }
+//inlinePartsOf, 把指令內 node -e / --eval / -p / --print 之內嵌腳本中「比對內容用」之字樣分出來: 回 { text(去掉這些字樣後之指令), removed(被去掉之片段) }
+//  做夢 agent 會以內嵌腳本掃描日誌自檢(例: node -e "... { k1: /g_backtest/g } ..."): 比對式內之字樣不是存取
+//  只去三種: ①正規式字面值 ②比對函數(includes、indexOf、lastIndexOf、startsWith、endsWith、match、matchAll、search、split、replace、replaceAll、RegExp)之字串引數 ③腳本內之註解
+//  **其他字串照留**(fs.readFileSync('…')、spawn('…') 之路徑是實際之存取; 陣列或變數內之字樣無從判定用途, 寧可多報); 內嵌腳本以外之引號內容照查(被引號包住之路徑仍是路徑)
+//  **被去掉之片段內含禁區字樣者不得不列**: scanTrace 改列為待核對(inlineNotes; 不計為觸及禁區)
+//  **不變式**: 原指令(只去搜尋樣式)命中之每個禁區字樣, 必在「觸及禁區」或「待核對」之一 —— 內嵌腳本之語法無從完全判定, 故 scanTrace 以原指令之比對結果為上界, 不依賴片段之切法
+//  只認 node 之選項位置(腳本路徑之前)之 -e / --eval / -p / --print: node x.mjs -e "…" 之 -e 是腳本自己之選項, 其引號內容不是內嵌腳本
+//  帶引數之選項, 其引數不得以 - 起首(解法唯一; 否則畸形之指令會使判定式指數回溯)
+let INLINE_NODE = /(\bnode(?:\.exe)?["']?(?:\s+(?:(?:-r|--require|--import|--loader|--experimental-loader)\s+(?!-)\S+|(?!-e\s|-p\s|-pe\s|--eval\s|--print\s)-\S*))*\s+(?:-e|--eval|-p|--print|-pe)\s+)("(?:[^"\\]|\\[\s\S])*"|'[^']*')/gi
+let MATCH_CALL = /(?:\.(?:includes|indexOf|lastIndexOf|startsWith|endsWith|match|matchAll|search|split|replace|replaceAll)|\bRegExp)\s*\(\s*$/
+let REGEX_PREV = /(?:^|[(,=:[!&|?{};\n]|=>|\b(?:return|typeof|case|in|of|delete|void|instanceof|new|yield|await|else|do))\s*$/
+let maskInlineScript = (s) => {
+    let n = s.length
+    let out = ''
+    let removed = []
+    let i = 0
+    while (i < n) {
+        let c = s[i]
+        //字串以外之反斜線: 連同下一字元原樣保留(\/\/、\/* 不是註解之開頭)
+        if (c === '\\') {
+            out += s.slice(i, i + 2)
+            i += 2
+            continue
+        }
+        if (c === '/' && s[i + 1] === '/') {
+            let e = i
+            while (e < n && s[e] !== '\n') {
+                e++
+            }
+            removed.push(s.slice(i, e))
+            i = e
+            continue
+        }
+        if (c === '/' && s[i + 1] === '*') {
+            let e = s.indexOf('*/', i + 2)
+            let end = e < 0 ? n : e + 2
+            removed.push(s.slice(i, end))
+            i = end
+            continue
+        }
+        if (c === '\'' || c === '"' || c === '`') {
+            let j = i + 1
+            while (j < n && s[j] !== c) {
+                j += s[j] === '\\' ? 2 : 1
+            }
+            if (MATCH_CALL.test(out.slice(-32))) {
+                removed.push(s.slice(i, j + 1))
+                out += `${c}${c}`
+            }
+            else {
+                out += s.slice(i, j + 1)
+            }
+            i = j + 1
+            continue
+        }
+        if (c === '/' && REGEX_PREV.test(out.slice(-12))) {
+            let j = i + 1
+            let inClass = false
+            let closed = false
+            while (j < n && s[j] !== '\n') {
+                if (s[j] === '\\') {
+                    j += 2
+                    continue
+                }
+                if (s[j] === '[') {
+                    inClass = true
+                }
+                else if (s[j] === ']') {
+                    inClass = false
+                }
+                else if (s[j] === '/' && !inClass) {
+                    closed = true
+                    break
+                }
+                j++
+            }
+            if (closed) {
+                j++
+                while (j < n && /[a-z]/i.test(s[j])) {
+                    j++
+                }
+                removed.push(s.slice(i, j))
+                out += '/ /'
+                i = j
+                continue
+            }
+        }
+        out += c
+        i++
+    }
+    return { text: out, removed }
+}
+let inlinePartsOf = (cmd) => {
+    let removed = []
+    let text = String(cmd).replace(INLINE_NODE, (m, head, q) => {
+        let body = q.slice(1, -1)
+        //外層為雙引號者先還原殼層之跳脫(\" \\ \$ \`)
+        let r = maskInlineScript(q[0] === '"' ? body.replace(/\\(["\\$`])/g, '$1') : body)
+        removed.push(...r.removed)
+        //外層為雙引號者: 分析時還原之 \" 於重組時跳脫回去(原本文內不可能有裸 "; 否則重組後之引號配對錯位, 其後之 stripSearchPatterns 〔去 grep 之樣式等〕失準 ⇒ 多報)
+        return head + q[0] + (q[0] === '"' ? r.text.replace(/"/g, '\\"') : r.text) + q[0]
+    })
+    return { text, removed }
+}
+//stripInlinePatterns, 去掉指令內內嵌腳本之比對字樣後之指令(inlinePartsOf 之 text)
+let stripInlinePatterns = (cmd) => inlinePartsOf(cmd).text
 /**
  * 掃 agent 之工具呼叫輸入(指令、檔案路徑,不掃工具輸出)與其所寫之程式檔,找出觸及禁區、寫到允許範圍外、存取其他節點工作夾等問題(詳見檔內上方說明)
  *
@@ -290,7 +396,7 @@ let stripSearchPatterns = (cmd) => {
  * @param {String} [opt.fileHits='issue'] 輸入程式檔含禁區字樣之記法('issue' 列為問題、'note' 另列待核對),預設'issue'
  * @param {Boolean} [opt.nodeRules=false] 輸入是否套用節點專用規則,預設false
  * @param {Boolean|null} [opt.planRule=null] 輸入是否查「規劃先於評估」,預設null(同 nodeRules)
- * @returns {Object} 回傳 { issues, note, nEvals, fileNotes, planAfterEval }
+ * @returns {Object} 回傳 { issues, note, nEvals, fileNotes, inlineNotes, planAfterEval }(inlineNotes:做夢之內嵌腳本之比對式、比對函數之引數或註解內含禁區字樣者,不計為觸及禁區、列出待核對;每項為「禁區名(內嵌腳本之比對式): 指令片段」)
  * @example
  * let r = scanTrace({ workDir: './rsi/work/node1', attempt: 1, privateRoot: './private', nodeRules: true })
  */
@@ -307,9 +413,15 @@ let scanTrace = ({ workDir, attempt, logFile = null, privateRoot, root = null, w
     }
     let hits = new Map()
     let fileMap = new Map()
+    let inlineMap = new Map()
+    //hasPat, 每次自頭比對(專案另加之字樣可帶 g 旗標, 其 lastIndex 不得跨次沿用)
+    let hasPat = (re, s) => {
+        re.lastIndex = 0
+        return re.test(s)
+    }
     let test = (s, where, to = hits) => {
         for (let [re, label] of pats) {
-            if (re.test(s)) {
+            if (hasPat(re, s)) {
                 let k = `${label}(${where})`
                 if (!to.has(k)) {
                     to.set(k, String(s).replace(/\s+/g, ' ').slice(0, 160))
@@ -356,7 +468,20 @@ let scanTrace = ({ workDir, attempt, logFile = null, privateRoot, root = null, w
                             continue
                         }
                         if (k === 'command') {
-                            test(stripSearchPatterns(v), '指令或路徑')
+                            let ip = inlinePartsOf(v)
+                            let kept = stripSearchPatterns(ip.text)
+                            test(kept, '指令或路徑')
+                            for (let frag of ip.removed) {
+                                test(frag, '內嵌腳本之比對式', inlineMap)
+                            }
+                            //以原指令之比對結果為上界: 原指令命中而去掉比對式後未命中之字樣(例: 字樣跨越被去掉之片段之邊界)一律列待核對
+                            let raw = stripSearchPatterns(v)
+                            for (let [re, label] of pats) {
+                                let kk = `${label}(內嵌腳本之比對式)`
+                                if (hasPat(re, raw) && !hasPat(re, kept) && !inlineMap.has(kk)) {
+                                    inlineMap.set(kk, raw.replace(/\s+/g, ' ').slice(0, 160))
+                                }
+                            }
                             continue
                         }
                     }
@@ -496,7 +621,7 @@ let scanTrace = ({ workDir, attempt, logFile = null, privateRoot, root = null, w
     if (planAfterEval) {
         issues.push(`規劃於評估後才寫: 節點文件(node.json)首次寫入為第 ${firstDoc} 個工具呼叫, 第一次完整評估為第 ${firstFull} 個(任務書 §6「先寫規劃再評估」)`)
     }
-    return { issues, note, nEvals, fileNotes: [...fileMap.keys()], planAfterEval }
+    return { issues, note, nEvals, fileNotes: [...fileMap.keys()], inlineNotes: [...inlineMap.entries()].map(([k, s]) => `${k}: ${s}`), planAfterEval }
 }
 
 //evalLines, 工作夾之 .evals.log 之各列(原文); 無此檔回 null
@@ -1022,5 +1147,5 @@ let extSurfaceOf = (m) => {
 let EXT_FLAG_HEAD = '提示(擴充診斷 '
 let extFlagIssue = (f) => `${EXT_FLAG_HEAD}${f.name}): ${f.text}(共用工具區之擴充診斷所列;不否決,由審計判定)`
 
-export { makeVerify, scanTrace, deniedHalt, stripSearchPatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, runNodeProc, shortShareOf, sideFlowIssue, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD }
+export { makeVerify, scanTrace, deniedHalt, stripSearchPatterns, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, runNodeProc, shortShareOf, sideFlowIssue, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD }
 export default makeVerify

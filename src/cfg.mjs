@@ -94,6 +94,28 @@ let argOf = (key, def = undefined) => {
     return /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v
 }
 
+//argStrOf, 命令列 --key value 之原字串(不轉型; id 類參數用 —— 全數字之 id 前綴經 argOf 會被轉成數值)
+/**
+ * 讀取命令列 --key value 參數之原字串(不做數值轉型);只有旗標無值時回傳 true
+ *
+ * @param {String} key 輸入參數名稱(不含 --)
+ * @param {*} [def=undefined] 輸入未給該參數時之預設回傳值,預設undefined
+ * @returns {*} 回傳參數之原字串或 true,未給則回傳 def
+ * @example
+ * let only = argStrOf('only', null)
+ */
+let argStrOf = (key, def = undefined) => {
+    let i = process.argv.indexOf(`--${key}`)
+    if (i < 0) {
+        return def
+    }
+    let v = process.argv[i + 1]
+    if (v === undefined || v.startsWith('--')) {
+        return true
+    }
+    return v
+}
+
 /**
  * 讀取 JSON 檔; 檔案不存在或解析失敗時回傳預設值
  *
@@ -127,4 +149,4 @@ let writeJson = (fp, obj) => {
 }
 
 
-export { FD_ROOT, P, tms, isoOf, getSettings, argOf, readJson, writeJson }
+export { FD_ROOT, P, tms, isoOf, getSettings, argOf, argStrOf, readJson, writeJson }

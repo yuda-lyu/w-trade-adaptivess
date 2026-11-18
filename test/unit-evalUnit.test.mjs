@@ -1543,6 +1543,8 @@ describe('領域接線與聚合入口(envKey 之研究用本金、聚合入口�
             backtest: { ...base.backtest, enabled: false },
             rsi: { ...base.rsi, root: path.join(root, 'rsi') },
             records: { nodeDir: path.join(root, 'rsi/records/nodes'), dreamDir: path.join(root, 'rsi/records/dreams'), trashDir: path.join(root, 'rsi/records/trash'), workDir: path.join(root, 'rsi/work'), toolboxDir: path.join(root, 'rsi/toolbox') },
+            //資源閘關閉: 參考設定之門檻依全機負載而定, 測試之成敗不得隨機器之負載而變
+            resources: {},
         }
         fs.mkdirSync(path.join(root, 'rsi', 'toolbox', 'metrics'), { recursive: true })
         fs.mkdirSync(path.join(root, 'arms'), { recursive: true })

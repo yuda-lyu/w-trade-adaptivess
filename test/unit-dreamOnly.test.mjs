@@ -167,14 +167,15 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
             //取值方式:修改前之 texts.mjs 與現行之 texts.mjs 於同一組設定與同一組輸入下產出任務書(dreamBrief)與範本(dreamTemplate),
             //  兩者逐字相等(路徑字樣正規化後)才取現行輸出之雜湊記於此;任務書依設定之期間與合約而定 ⇒ 設定(settings.json)或任務書之一般文字有意改動時,
             //  須重取並於變更說明列出理由(此案之用意:任何未經說明之一般文字改動皆會使本案轉紅)
+            //  重取之理由(共用工具區之擴充診斷例外): 做夢任務書多列一句「metrics/ 之擴充診斷可同名修正,改後由迴圈或補算工具重算」與檔頭註解以外之改寫會被還原
             //任務書內寫有本套件程式夾之相對路徑(codeRootRel;套件夾內為 src):測試於他處執行(例:變異用之複本)時正規化為 src
             let codeRoot = path.relative(st.FD_ROOT, path.join(FD_ROOT, 'src')).replace(/\\/g, '/')
             let sha = (s) => crypto.createHash('sha256').update(s.split(codeRoot).join('src')).digest('hex').slice(0, 16)
             let node2 = { ...node, nodeId: 'n2', arms: ['B14_pitKey'], type: 'verify', issues: ['問題甲'], from: { round: 3, arms: ['B14_pitKey'], base: null, claimKey: 'abcd1234' } }
             let cases = [
-                ['一個節點', ctx([node]), '16bb44177876bef1'],
-                ['零個節點(防呆)', ctx([]), '70d9d58d804a4992'],
-                ['兩個節點、重做、失敗者', { ...ctx([node, node2], { failed: [{ nodeId: 'f1234567', arms: ['A01_nt'], error: '錯誤' }] }), reworkedIds: ['abcdef1234'] }, '3d56b8fb8a4c1daf'],
+                ['一個節點', ctx([node]), 'd19e36ddb3be9072'],
+                ['零個節點(防呆)', ctx([]), 'cf365e6f9331cade'],
+                ['兩個節點、重做、失敗者', { ...ctx([node, node2], { failed: [{ nodeId: 'f1234567', arms: ['A01_nt'], error: '錯誤' }] }), reworkedIds: ['abcdef1234'] }, 'a740ddc2a44b3898'],
                 ['無共用工具區', ctx([node], { toolbox: null }), 'ffd6627dad42eb97'],
             ]
             for (let [name, c, want] of cases) {
@@ -818,6 +819,72 @@ module.exports = {
             let r3 = runCli(dir, ['--mode', 'round', '--dream-only', '--file', path.join(dir, 'why.txt')])
             assert.equal(r3.events[r3.events.length - 1].reason, 'dream-only-busy', r3.out)
             assert(/待重審之節點 1 個/.test(r3.events[r3.events.length - 1].stopped))
+        })
+
+        it('補做夢之路徑(R-REC-34 之附算):輪末鉤子之附算記於該輪 ROUND.json 之 hook.fill 與 round-done 事件之 fill(與一般輪次同)', () => {
+            let dir = mkProject('redreamFill', { emptyPlan: true })
+            seedState(dir, (P) => {
+                let id = putExecutedIn(P, ['A01_nt'], 1)
+                //附算之對象: 有正本之數字與成品(本合成專案無評估入口之進入檔 ⇒ 附算之評估失敗, 仍記於 fill)
+                P.rsi.store.updateNode(id, (x) => {
+                    x.raw = { metrics: { selHash: 'sel-0', ext: {}, op: { eqYr: { mean: 1.5, min: -0.5, byPhase: [1, 2] }, monthlyOrders: { mean: 90 }, peakHold: { max: 20 }, winRate: 0.4 } }, issues: [] }
+                    x.score = { S: 1, ladder: 0, flags: { vetoed: false, why: [] } }
+                })
+                let wd = path.join(dir, 'rsi', 'work', id)
+                fs.mkdirSync(wd, { recursive: true })
+                fs.writeFileSync(path.join(wd, 'pick.mjs'), 'export default function pick(ctx) {\n    return [0]\n}\n', 'utf8')
+            })
+            //第 1 輪之節點已入樹而做夢未交付(無做夢文件)⇒ 起跑時先補做夢; 該輪之 ROUND.json 已在
+            fs.mkdirSync(path.join(dir, 'rsi', 'rounds', 'r001'), { recursive: true })
+            fs.writeFileSync(path.join(dir, 'rsi', 'rounds', 'r001', 'ROUND.json'), JSON.stringify({ round: 1, hook: null }), 'utf8')
+            let r = runCli(dir, ['--mode', 'round'])
+            assert.equal(r.status, 0, `${r.out}\n${fs.readFileSync(path.join(dir, 'rsi', 'rounds', 'r001', 'ROUND.json'), 'utf8').slice(0, 1500)}`)
+            let rd = r.events.find((e) => e.event === 'round-done' && e.recovered === true)
+            assert(rd && rd.round === 1, JSON.stringify(r.events))
+            assert(rd.fill && rd.fill.n === 1, JSON.stringify(rd))
+            let R = JSON.parse(fs.readFileSync(path.join(dir, 'rsi', 'rounds', 'r001', 'ROUND.json'), 'utf8'))
+            assert(R.redream && R.redream.delivered === true, JSON.stringify(R.redream))
+            assert.deepEqual(R.hook.fill, rd.fill)
+        })
+
+        //一般輪次之主路徑(src/cli/rsi.mjs 之輪次結束處: ROUND.json 之 hook 與 round-done 事件之寫出; 一般輪次與只做夢輪次共用同一段, 補做夢為另一處 —— 見上一案)
+        //  Gitea #178 §7 第 5 點之主控裁定: 一般輪次之 round-done 事件與 ROUND.json 之 fill 欄須有子行程之案
+        it('一般輪次之主路徑(--mode round --dream-only):輪末鉤子之附算記於 ROUND.json 之 hook.fill 與 round-done 事件之 fill(同值、含待重試與失敗之個數);無附算作為者兩處皆不帶 fill', () => {
+            let seedExecuted = (dir) => seedState(dir, (P) => {
+                let id = putExecutedIn(P, ['A01_nt'], 1)
+                P.rsi.store.updateNode(id, (x) => {
+                    x.raw = { metrics: { selHash: 'sel-0', ext: {}, op: { eqYr: { mean: 1.5, min: -0.5, byPhase: [1, 2] }, monthlyOrders: { mean: 90 }, peakHold: { max: 20 }, winRate: 0.4 } }, issues: [] }
+                    x.score = { S: 1, ladder: 0, flags: { vetoed: false, why: [] } }
+                })
+                let wd = path.join(dir, 'rsi', 'work', id)
+                fs.mkdirSync(wd, { recursive: true })
+                fs.writeFileSync(path.join(wd, 'pick.mjs'), 'export default function pick(ctx) {\n    return [0]\n}\n', 'utf8')
+                //第 1 輪已有做夢文件(不觸發補做夢)與輪夾
+                P.records.putDreamDoc({ round: 1, createdAt: new Date().toISOString(), agent: null, scope: { nodes: [id], reworked: [] }, audits: [{ nodeId: id, trust: 'trusted', action: 'accept', evidence: [], issues: [] }], synthesis: null, guidance: null, docsUpdated: [], harness: null })
+                fs.mkdirSync(path.join(dir, 'rsi', 'rounds', 'r001'), { recursive: true })
+            })
+            //有附算之作為: 來源為輪末之待重試 ⇒ 輪末鉤子對該節點附算(本合成專案無評估入口之進入檔 ⇒ 評估失敗, 仍記於 fill)
+            let dir = mkProject('roundFill', { emptyPlan: true })
+            seedExecuted(dir)
+            let id = fs.readdirSync(path.join(dir, 'rsi', 'work'))[0]
+            fs.writeFileSync(path.join(dir, 'rsi', 'fill_state.json'), JSON.stringify({ schema: 'arsi.fillState/1', evaluator: 'x', registry: null, retry: [{ id, n: 1, last: '前次之失敗', source: 'round' }] }), 'utf8')
+            let r = runCli(dir, ['--mode', 'round', '--dream-only', '--file', path.join(dir, 'why.txt')])
+            assert.equal(r.status, 0, r.out)
+            let rd = r.events.find((e) => e.event === 'round-done' && e.recovered !== true)
+            assert(rd && rd.dreamOnly === true && rd.ok === true, JSON.stringify(r.events))
+            let R = JSON.parse(fs.readFileSync(path.join(dir, 'rsi', 'rounds', `r${String(rd.round).padStart(3, '0')}`, 'ROUND.json'), 'utf8'))
+            assert(rd.fill && rd.fill.n === 1 && rd.fill.failed === 1 && rd.fill.retry === 1 && rd.fill.backlog && typeof rd.fill.sec === 'number', JSON.stringify(rd))
+            assert.deepEqual(R.hook.fill, rd.fill, 'ROUND.json 之 hook.fill 與事件之 fill 同值')
+            assert(R.hook.lines.some((l) => l.startsWith('附算(')), '一頁摘要之列')
+            //無附算之作為(樹上無已執行之節點、無待重試)⇒ 兩處皆不帶 fill
+            let dir2 = mkProject('roundNoFill', { emptyPlan: true })
+            let r2 = runCli(dir2, ['--mode', 'round', '--dream-only', '--file', path.join(dir2, 'why.txt')])
+            assert.equal(r2.status, 0, r2.out)
+            let rd2 = r2.events.find((e) => e.event === 'round-done')
+            assert(rd2 && rd2.dreamOnly === true, JSON.stringify(r2.events))
+            assert.equal('fill' in rd2, false)
+            let R2 = JSON.parse(fs.readFileSync(path.join(dir2, 'rsi', 'rounds', `r${String(rd2.round).padStart(3, '0')}`, 'ROUND.json'), 'utf8'))
+            assert.equal('fill' in R2.hook, false)
         })
     })
 })

@@ -428,7 +428,7 @@ console.log('做夢方向之處置:', JSON.stringify((Pj.records.getDreamDoc(rou
                         info.same && n3.score.S === s0 && n3.raw.metrics.selHash === h0 && !!n3.raw.metrics.ext.fakeDiag &&
                         !!d3 && d3.harness.notes.some((s) => String(s).includes(`補算擴充診斷:${nm}`)) && strip(d3.harness.raw.metrics.ext[nm]) === strip(orig) &&
                         rf2.results.length === 0 &&
-                        !fs.existsSync(path.join(st.records.workDir, x0.id, 'harness_extfill.json'))
+                        !(fs.existsSync(path.join(st.rsi.root, 'fill')) && fs.readdirSync(path.join(st.rsi.root, 'fill')).some((f) => f.includes('.tmp-')))
                 }
                 finally {
                     fs.rmSync(path.join(fdM, `${nm}.mjs`), { force: true })

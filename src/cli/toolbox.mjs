@@ -1,7 +1,7 @@
 import path from 'path'
 import { getSettings } from '../cfg.mjs'
 import { createToolbox } from '../arsi/toolbox.mjs'
-import { makeToolboxRules } from '../domain/toolboxRules.mjs'
+import { makeToolboxRules, TB_BASELINE } from '../domain/toolboxRules.mjs'
 import { backtestCfg } from '../domain/backtestCfg.mjs'
 import { setGuardExtra, guardExtraOf } from '../domain/verify.mjs'
 
@@ -14,7 +14,7 @@ let st = getSettings()
 setGuardExtra(guardExtraOf(st)) //專案另加之禁區字樣(與迴圈之機械檢查同一組)
 let dir = st.records.toolboxDir || path.join(st.rsi.root, 'toolbox')
 let rules = makeToolboxRules({ privateRoot: backtestCfg(st).privateRoot })
-let tb = createToolbox({ dir, indexSeed: rules.indexSeed, checkFile: rules.checkFile, checkIndex: rules.checkIndex })
+let tb = createToolbox({ dir, indexSeed: rules.indexSeed, checkFile: rules.checkFile, checkIndex: rules.checkIndex, codeOf: rules.codeOf, baselineFile: path.join(st.rsi.root, TB_BASELINE) })
 tb.ensure() //索引尚不存在時以初始內容建立(與迴圈於做夢前所做者相同)
 let r = tb.inspect()
 let relDir = path.relative(st.FD_ROOT, dir).replace(/\\/g, '/')

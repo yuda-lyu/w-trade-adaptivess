@@ -137,7 +137,7 @@ if (dream) {
     }
     let tr = dream.harness && dream.harness.trace
     P('')
-    P(`做夢之操作稽核:${tr && (tr.issues || []).length ? `**${tr.issues.length} 項** —— ${tr.issues.map((s) => String(s).slice(0, 120)).join(';')}` : '0 項'}${dream.harness && dream.harness.toolbox ? `;共用工具區:${dream.harness.toolbox.ok ? '檢查通過' : '有問題'}(還原 ${(dream.harness.toolbox.reverted || []).length} 檔)` : ''};做夢耗時 ${dream.agent && dream.agent.durationSec ? dream.agent.durationSec : '—'} 秒`)
+    P(`做夢之操作稽核:${tr && (tr.issues || []).length ? `**${tr.issues.length} 項** —— ${tr.issues.map((s) => String(s).slice(0, 120)).join(';')}` : '0 項'}${tr && (tr.inlineNotes || []).length ? `;待核對 ${tr.inlineNotes.length} 處(內嵌腳本之比對式含禁區字樣,不計為觸及禁區):${tr.inlineNotes.map((s) => String(s).slice(0, 80)).join('、')}` : ''}${dream.harness && dream.harness.toolbox ? `;共用工具區:${dream.harness.toolbox.ok ? '檢查通過' : '有問題'}(還原 ${(dream.harness.toolbox.reverted || []).length} 檔)` : ''};做夢耗時 ${dream.agent && dream.agent.durationSec ? dream.agent.durationSec : '—'} 秒`)
 }
 else {
     P('(做夢文件尚未產生)')

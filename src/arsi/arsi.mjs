@@ -294,8 +294,9 @@ let createArsi = ({ records, dispatch, verify, texts, hooks = {}, workDir, artif
 
     //applyDream, 把做夢文件之審計結果寫回節點文件, 並經注入之 actions 執行處置
     //  actions: { accept(nodeId, audit), rework(nodeId, audit) → { ok, note }, remove(nodeId, audit) → { ok, note }, propose(direction) → { ok, note } }(皆可 async)
-    let applyDream = async ({ doc, actions }) => {
-        let applied = { accepted: [], rework: [], deleted: [], proposals: [], skipped: [] }
+    //  appliedExtra(選配): 專案附記於做夢文件 harness.applied 之鍵(物件; 不得覆寫上列之鍵)
+    let applyDream = async ({ doc, actions, appliedExtra = null }) => {
+        let applied = { ...(appliedExtra || {}), accepted: [], rework: [], deleted: [], proposals: [], skipped: [] }
         let scope = new Set((doc.scope && doc.scope.nodes) || [])
         for (let a of doc.audits || []) {
             if (!scope.has(a.nodeId)) {

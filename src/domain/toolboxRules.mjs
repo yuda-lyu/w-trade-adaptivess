@@ -15,10 +15,14 @@ import { FD_ROOT } from '../cfg.mjs'
 //             ⇒ 改不了 S、階梯、selHash 與任何既有欄。機械檢查另以範例挑選模組實際試跑一次(逾時或拋錯即不合)
 //  各檔另查: 語法(node --check)、禁區字樣(與操作掃描同一組)
 //  索引: 須有「## 依情境找工具」一節(一列一個情境:「遇到什麼情況 → 用哪個檔」), 且每個工具檔都出現在該節內 —— agent 不必讀程式碼即知何時用哪個工具
-//  makeToolboxRules({ privateRoot }) → { dirs, checkFile({ rel, abs, src }) → [問題字串], checkIndex({ text, files }) → [問題字串], indexSeed }
+//  已發布之檔之改寫: codeOf({ rel, src }) = 檔頭註解以外之本體(bodyOf; 只比對 .mjs; 其餘檔與 metrics/ 第一層之檔回 null 不比對), 由 createToolbox 之規則 ⑤ 使用
+//    metrics/ 第一層之擴充診斷例外(評估器只載入第一層; 其子夾之檔照常比對): 成品不得匯入(靜態規則), 同名修正不影響既有成品; 改後由迴圈或補算工具重算
+//  makeToolboxRules({ privateRoot }) → { dirs, checkFile({ rel, abs, src }) → [問題字串], checkIndex({ text, files }) → [問題字串], codeOf({ rel, src }) → 字串或 null, indexSeed }
 let TB_DIRS = ['snippets', 'templates', 'diag', 'metrics']
 let TB_BUILTIN = /^(node:)?(fs|path|url|os|util|crypto|assert)(\/promises)?$/
 let TB_TRIGGER = '## 依情境找工具'
+//TB_BASELINE, 已發布之檔之比對基準檔(狀態根之下; 迴圈於做夢前之快照時寫入, 自檢入口 g_toolbox.mjs 讀取)
+let TB_BASELINE = 'toolbox_baseline.json'
 let TB_SEED = [
     '# 共用工具區(索引)',
     '',
@@ -43,13 +47,55 @@ let TB_SEED = [
 ].join('\n')
 
 /**
+ * 取得檔頭註解以外之本體(比對「已發布之檔是否被改寫」用;本體逐字比對,不解析字串或正規式)
+ * 檔頭 = 檔案開頭連續之整行,每行須為空行、以 // 起首之行,或區塊註解之行(區塊註解須起於行首、以其後第一個結束符為止,且結束符之後至行尾只有空白;跨多行者中間各行皆屬檔頭);第一個不合之行起至檔尾皆為本體(shebang 與 'use strict' 屬本體)
+ * 正規化只做:去 BOM;CRLF、單獨之 CR、U+2028、U+2029 視為換行;各行去行尾空白;去檔尾之空行
+ *
+ * @param {String} src 輸入原始碼
+ * @returns {String} 回傳正規化後之本體
+ * @example
+ * bodyOf('// 說明\n\nlet a = 1  \r\n\n')
+ * // => 'let a = 1'
+ */
+let bodyOf = (src) => {
+    let lines = String(src).replace(/^\uFEFF/, '').split(/\r\n|[\r\n\u2028\u2029]/)
+    let i = 0
+    while (i < lines.length) {
+        let t = lines[i].trim()
+        if (t === '' || t.startsWith('//')) {
+            i++
+            continue
+        }
+        if (!t.startsWith('/*')) {
+            break
+        }
+        //區塊註解: 找其後第一個結束符(可跨行); 找不到、或結束符之後還有內容 ⇒ 此行起為本體
+        let k = i
+        let e = lines[k].indexOf('*/', lines[k].indexOf('/*') + 2)
+        while (e < 0 && k + 1 < lines.length) {
+            k++
+            e = lines[k].indexOf('*/')
+        }
+        if (e < 0 || lines[k].slice(e + 2).trim() !== '') {
+            break
+        }
+        i = k + 1
+    }
+    let body = lines.slice(i).map((l) => l.replace(/\s+$/, ''))
+    while (body.length > 0 && body[body.length - 1] === '') {
+        body.pop()
+    }
+    return body.join('\n')
+}
+
+/**
  * 建立共用工具區之專案規則(逐檔內容檢查、索引格式與初始內容)
  *
  * checkFile 會以子行程執行 node --check,metrics 類另會以範例挑選模組試跑。
  *
  * @param {Object} opt 輸入設定物件
  * @param {String} opt.privateRoot 輸入私有根路徑,供禁區字樣檢查
- * @returns {Object} 回傳 { dirs, checkFile, checkIndex, indexSeed }:dirs 為工具區子夾名;checkFile({ rel, abs, src }) 與 checkIndex({ text, files }) 回傳問題字串陣列;indexSeed 為索引初始文字
+ * @returns {Object} 回傳 { dirs, checkFile, checkIndex, codeOf, indexSeed }:dirs 為工具區子夾名;checkFile({ rel, abs, src }) 與 checkIndex({ text, files }) 回傳問題字串陣列;codeOf({ rel, src }) 回傳已發布之檔之比對內容(不比對者為 null);indexSeed 為索引初始文字
  * @example
  * let rules = makeToolboxRules({ privateRoot: './private' })
  * let issues = rules.checkIndex({ text: rules.indexSeed, files: [] })
@@ -125,8 +171,10 @@ let makeToolboxRules = ({ privateRoot }) => {
         let miss = files.filter((f) => !sec.includes(f))
         return miss.length ? [`「依情境找工具」一節未涵蓋 ${miss.length} 個檔: ${miss.slice(0, 6).join('、')}${miss.length > 6 ? ' …' : ''}`] : []
     }
-    return { dirs: TB_DIRS, checkFile, checkIndex, indexSeed: TB_SEED }
+    //codeOf, 已發布之檔之改寫之比對內容(只比對 .mjs; 文件、資料檔與 metrics/ 第一層之擴充診斷不比對)
+    let codeOf = ({ rel: r, src }) => (/\.mjs$/i.test(r) && !/^metrics\/[^/]+$/.test(r) ? bodyOf(src) : null)
+    return { dirs: TB_DIRS, checkFile, checkIndex, codeOf, indexSeed: TB_SEED }
 }
 
 
-export { makeToolboxRules, TB_DIRS, TB_SEED, TB_TRIGGER }
+export { makeToolboxRules, bodyOf, TB_DIRS, TB_SEED, TB_TRIGGER, TB_BASELINE }

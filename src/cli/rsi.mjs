@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
-import { getSettings, argOf, writeJson } from '../cfg.mjs'
+import { getSettings, argOf, argStrOf, writeJson } from '../cfg.mjs'
 import { peekRound } from '../engineApi.mjs'
 import { makeProject } from '../domain/domain.mjs'
 import { roundName } from '../arsi/records.mjs'
@@ -34,6 +34,9 @@ let FP_DIGEST = fileURLToPath(new URL('../tools/roundDigest.mjs', import.meta.ur
 //                                             --only 只重跑指名之節點(只增輸出之改動後補算新欄用; 數字會變之改版須全樹)
 //  node g_rsi.mjs --mode extfill [--ext <診斷名,…>] [--only <id 前綴,…>] [--force] [--null N]   擴充診斷之補算: 共用工具區新增或改寫擴充診斷後, 為既有節點補上其值
 //                                             (只併入該診斷之輸出, 不動數字與分數; 選集指紋與正本不同者不併入; 規則 R-REC-27)
+//  node g_rsi.mjs --mode fill [--dry] [--only <id 前綴,…>] [--force] [--no-postfit] [--ext <診斷名,…> | none] [--null N] [--par N]
+//                                             附算與補算(規則 R-REC-34): 求解窗後段之值與所缺或已過時之擴充診斷(佐證; 不動數字、分數、階梯; 存於狀態根之 fill/);
+//                                             輪末鉤子只算本輪之節點與待重試者, 其餘以此補齊; 與輪次共用同一把鎖(離開碼 3 = 有輪次或另一次重算執行中)
 //  node g_rsi.mjs --mode frontier [--close <臂+臂> --why <理由>]   列出前緣; 主代理把尚未執行之提案結案
 //  node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why <理由> [--base <起點 id>] [--claim <主張鍵>]
 //                                             主控通過新臂後, 把做夢暫掛於既有臂之未執行方向改掛新臂(規則 R-ARM-4; 只改臂之歸屬)
@@ -66,6 +69,26 @@ let cliInt = (k) => {
     return Number.isInteger(v) && v >= 1 ? v : null
 }
 let P = makeProject(st, { run: { nodesPerRound: cliInt('nodes') || cliInt('arms'), parallelNodes: cliInt('parallel') || cliInt('workers'), roundsPerRun: cliInt('rounds') } })
+//onlyOf, --only <id 前綴,…> 之解析(reverify / extfill / fill 共用): 取原字串(argStrOf; 全數字之前綴經數值轉型會使清單為空、範圍靜默擴為全樹);
+//  未給 ⇒ null(全部); 給了而無值、前綴不足 6 碼、或未命中任何已執行之節點 ⇒ 印原因、離開碼 2(於取鎖與任何寫入之前呼叫); 命中者印其數
+let onlyOf = () => {
+    let v = argStrOf('only', null)
+    if (v === null) {
+        return null
+    }
+    let list = typeof v === 'string' ? v.split(',').map((x) => x.trim()).filter((x) => x.length > 0) : []
+    if (!list.length || list.some((x) => x.length < 6)) {
+        console.log('--only 須給節點 id 前綴(至少 6 碼;逗號分隔)')
+        process.exit(2)
+    }
+    let hit = P.rsi.store.listIndex().filter((x) => x.status === 'executed' && list.some((p) => x.id.startsWith(p)))
+    if (!hit.length) {
+        console.log(`--only 未命中任何已執行之節點(${list.join(', ')});未執行`)
+        process.exit(2)
+    }
+    console.log(`--only 命中已執行之節點 ${hit.length} 個`)
+    return list
+}
 let { rsi } = P
 rsi.init()
 
@@ -219,7 +242,8 @@ else if (mode === 'round') {
             }
             catch (err) {}
             if (old) {
-                writeJson(fpRound, { ...old, hook: { failed: hookFailed, errors: (hk && hk.errors) || [], lines, dream: (hk && hk.dream) || null }, redream: { at: new Date().toISOString(), wallMin, delivered }, ...(quotaNow ? { quota: { before: quotaPrev, after: quotaNow } } : {}) })
+                //補做夢之輪末鉤子之附算(規則 R-REC-34): 與一般輪次同, 有附算者記於 hook.fill 與事件
+                writeJson(fpRound, { ...old, hook: { failed: hookFailed, errors: (hk && hk.errors) || [], lines, dream: (hk && hk.dream) || null, ...(hk && hk.fill ? { fill: hk.fill } : {}) }, redream: { at: new Date().toISOString(), wallMin, delivered }, ...(quotaNow ? { quota: { before: quotaPrev, after: quotaNow } } : {}) })
                 try {
                     spawnSync(process.execPath, [FP_DIGEST, String(pd.round), '--out'], { cwd: st.FD_ROOT, windowsHide: true, timeout: 120000, stdio: 'ignore' })
                 }
@@ -238,7 +262,7 @@ else if (mode === 'round') {
                 ev({ event: 'run-failed', round: pd.round, reason: 'redream', error: ((hk && hk.errors) || []).join(';').slice(0, 300) })
                 process.exit(1)
             }
-            ev({ event: 'round-done', round: pd.round, ok: !hookFailed, recovered: true, wallMin, hookFailed, summary: old ? relOf(fpRound) : null, ...(quotaNow ? { quota: quotaNow } : {}) })
+            ev({ event: 'round-done', round: pd.round, ok: !hookFailed, recovered: true, wallMin, hookFailed, summary: old ? relOf(fpRound) : null, ...(hk && hk.fill ? { fill: hk.fill } : {}), ...(quotaNow ? { quota: quotaNow } : {}) })
             P.log(`===== 補做夢完成: ${roundName(pd.round)}(${wallMin} 分)=====`)
             P.setStatus({ redream: null })
             if (hookFailed) {
@@ -318,7 +342,7 @@ else if (mode === 'round') {
                 let m = n.raw && n.raw.metrics; return { id: n.id, status: n.status, arms: n.spec.arms, S: n.score ? n.score.S : null, ladder: n.score ? n.score.ladder : null, eqYrMean: m && m.op ? m.op.eqYr.mean : null, eqYrMin: m && m.op ? m.op.eqYr.min : null, excess: m && m.null ? m.null.excess : null, nullP: m && m.null ? m.null.p : null, vetoed: !!(n.score && n.score.flags && n.score.flags.vetoed), error: n.status === 'executed' ? null : String((n.notes && (n.notes.error || n.notes.why)) || '').split('\n')[0].slice(0, 200) }
             }),
             summary: { nExecuted: sm.nExecuted, nError: sm.nError, nRejected: sm.nRejected, ladders: sm.ladders, period: 'backtest', best },
-            hook: res.hook ? { failed: res.hook.failed === true, errors: res.hook.errors || [], lines: res.hook.lines || [], dream: res.hook.dream || null } : null,
+            hook: res.hook ? { failed: res.hook.failed === true, errors: res.hook.errors || [], lines: res.hook.lines || [], dream: res.hook.dream || null, ...(res.hook.fill ? { fill: res.hook.fill } : {}) } : null,
             resources,
         }
         //額度之輪末快照(規則 R-RUN-5): 與本輪開始時對照 = 本輪之耗用; 查詢失敗即略過
@@ -346,7 +370,7 @@ else if (mode === 'round') {
         }
         catch (err) {}
         //事件: 本輪結束(ok = 有節點執行成功且輪末回調未失敗; 只做夢輪次 = 做夢已交付且輪末回調未失敗 —— runner.mjs 之 roundOkOf)
-        ev({ event: 'round-done', round: res.round, ok: roundOkOf({ dreamOnly: !!dreamOnly, nExecuted: sm.nExecuted || 0, hookFailed: !!(out.hook && out.hook.failed), delivered: !!(out.hook && out.hook.dream) }), ...(dreamOnly ? { dreamOnly: true } : {}), wallMin: out.wallMin, nExecuted: sm.nExecuted || 0, nError: sm.nError || 0, hookFailed: out.hook ? out.hook.failed === true : null, best: best ? { id: best.id, S: best.S } : null, summary: res.fd ? relOf(path.join(res.fd, 'ROUND.json')) : null, ...(quotaNow ? { quota: quotaNow } : {}) })
+        ev({ event: 'round-done', round: res.round, ok: roundOkOf({ dreamOnly: !!dreamOnly, nExecuted: sm.nExecuted || 0, hookFailed: !!(out.hook && out.hook.failed), delivered: !!(out.hook && out.hook.dream) }), ...(dreamOnly ? { dreamOnly: true } : {}), wallMin: out.wallMin, nExecuted: sm.nExecuted || 0, nError: sm.nError || 0, hookFailed: out.hook ? out.hook.failed === true : null, best: best ? { id: best.id, S: best.S } : null, summary: res.fd ? relOf(path.join(res.fd, 'ROUND.json')) : null, ...(out.hook && out.hook.fill ? { fill: out.hook.fill } : {}), ...(quotaNow ? { quota: quotaNow } : {}) })
         lock.beat()
         P.setStatus({ stage: 'round-done', wallMin: out.wallMin, hookFailed: out.hook ? out.hook.failed : null, resources })
         P.log(`===== ${roundName(res.round)} 結束: 執行 ${sm.nExecuted} / 錯誤 ${sm.nError};階梯 ${JSON.stringify(sm.ladders || {})};回測期 S ${out.nodes.map((n) => (n.S === null ? '—' : n.S)).join(' / ')}${best ? `;本輪最高 ${best.id.slice(0, 8)} S ${best.S}(七相位均 ${best.eqYrMean}、最差相位 ${best.eqYrMin}、對隨機挑之超額 ${best.excess}${typeof best.compShare === 'number' ? `;組成對照之超額 ${best.compExcess}、p ${best.compP}、組成可重現 ${Math.round(best.compShare * 100)}%` : ''})` : ''};${out.wallMin} 分 =====`)
@@ -420,6 +444,8 @@ else if (mode === 'reverify') {
         console.log('用法: node g_rsi.mjs --mode reverify --why "<評估器改了什麼>" [--keep-flags]')
         process.exit(2)
     }
+    //--only <id 前綴,…>: 只重跑指名之節點(只增輸出之改動後補算少數節點之新欄; 數字會變之改版不得用 —— 樹上會混有新舊數字); 於取鎖與重掃之前解析(onlyOf)
+    let only = onlyOf()
     //與輪次共用同一把鎖(R-RUN-4): 重算會改寫樹與節點文件, 不得與輪次並行; 排程器於重算期間觸發之起跑亦因此不啟動
     let lockV = acquireRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
     if (!lockV.ok) {
@@ -429,19 +455,17 @@ else if (mode === 'reverify') {
     process.on('exit', () => lockV.release())
     P.migrateDocs()
     console.log(`依現行規則重掃操作紀錄而有變動之節點文件: ${P.rescanTraces()} 份`)
-    //--only <id 前綴,…>: 只重跑指名之節點(只增輸出之改動後補算少數節點之新欄; 數字會變之改版不得用 —— 樹上會混有新舊數字)
-    let onlyArg = argOf('only', null)
-    let only = typeof onlyArg === 'string' && onlyArg ? onlyArg.split(',').map((s) => s.trim()).filter((s) => s.length > 0) : null
-    if (only && only.some((s) => s.length < 6)) {
-        console.log('--only 之節點 id 前綴至少 6 碼')
-        process.exit(2)
-    }
     let r = await P.reverifyAll({ why, keepFlags: argOf('keep-flags', false) === true, only })
     console.log(`重跑 ${r.length} 個節點:${r.map((x) => `${x.nodeId.slice(0, 8)} ${x.ok ? `S ${x.before} → ${x.S}、階梯 ${x.ladderBefore} → ${x.ladder}${x.flag ? `、檢定旗標 ${x.flag}` : ''}` : `失敗`}`).join(';')}`)
 }
 else if (mode === 'extfill') {
     //擴充診斷之補算(規則 R-REC-27): 共用工具區新增或改寫擴充診斷後, 為既有節點補上其值(看板值、提示、量尺之子集隨之生效); 只併入該診斷之輸出, 不動數字與分數
     //  --ext <診斷名,…>(預設 = metrics/ 之全部)、--only <id 前綴,…>、--force(已有者亦重算)、--null N(所補之診斷不使用虛無時可給 1 以省時間; 用到虛無者不得縮減)
+    //--only 於取鎖之前解析(onlyOf: 原字串、命中數、0 個即拒絕)
+    let only = onlyOf()
+    let list = (k) => {
+        let v = argStrOf(k, null); return typeof v === 'string' && v ? v.split(',').map((s) => s.trim()).filter((s) => s.length > 0) : null
+    }
     //與輪次共用同一把鎖(R-RUN-4): 補算會改寫樹與節點文件, 不得與輪次並行
     let lockV = acquireRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
     if (!lockV.ok) {
@@ -449,14 +473,6 @@ else if (mode === 'extfill') {
         process.exit(3)
     }
     process.on('exit', () => lockV.release())
-    let list = (k) => {
-        let v = argOf(k, null); return typeof v === 'string' && v ? v.split(',').map((s) => s.trim()).filter((s) => s.length > 0) : null
-    }
-    let only = list('only')
-    if (only && only.some((s) => s.length < 6)) {
-        console.log('--only 之節點 id 前綴至少 6 碼')
-        process.exit(2)
-    }
     let nullArg = argOf('null', null)
     let r
     try {
@@ -468,8 +484,67 @@ else if (mode === 'extfill') {
     }
     let okN = r.results.filter((x) => x.ok)
     let bad = r.results.filter((x) => !x.ok)
-    console.log(`補算擴充診斷(${r.names.join('、')}):已執行節點 ${r.nNodes} 個;補入 ${okN.length} 個、失敗 ${bad.length} 個、其餘已有值${bad.length ? `;失敗: ${bad.map((x) => `${x.nodeId.slice(0, 8)} ${x.error}`).join(';').slice(0, 1200)}` : ''}`)
-    process.exit(bad.length ? 5 : 0)
+    console.log(`補算擴充診斷(${r.names.join('、')}):已執行節點 ${r.nNodes} 個;補入 ${okN.length} 個、失敗 ${bad.length} 個、其餘已有值${bad.length ? `;失敗: ${bad.map((x) => `${x.nodeId.slice(0, 8)} ${x.error}`).join(';').slice(0, 1200)}` : ''}${r.stateError ? `;**附算之狀態檔未寫成**(${r.stateError})` : ''}`)
+    process.exit(bad.length || r.stateError ? 5 : 0)
+}
+else if (mode === 'fill') {
+    //附算與補算(規則 R-REC-34): 全樹(或 --only 所指)之求解窗後段之值與所缺或已過時之擴充診斷 —— 輪末只算本輪之節點與待重試者, 其餘(第一次補齊、評估器改版後、做夢改寫 metrics/ 後)以此補齊
+    //  已算者不重算(快取之鍵 = 成品之內容雜湊 + 評估器之指紋 + 診斷之內容雜湊); 每個成品算完即寫入 ⇒ 中斷後再跑即續; 結束後重產看板與共同儲存區
+    //  --only <id 前綴,…>、--force(本次範圍內者 —— 給 --only 者為所指者、未給者為全樹 —— 不論是否現行皆重算)、--no-postfit(只補擴充診斷)、--ext <診斷名,…> | none(預設 = metrics/ 之全部)、--null N(只作用於擴充診斷, 同 extfill)、--par N(併行數; 預設 settings.rsi.fillParallel 或 3)
+    //  --dry: 只列待算之計畫(不評估、不寫任何檔); 離開碼 0 = 全部成功、5 = 有失敗(失敗者記為待重試)、2 = 參數不合、3 = 有輪次或另一次重算執行中
+    let list = (k) => {
+        let v = argStrOf(k, null); return typeof v === 'string' && v ? v.split(',').map((s) => s.trim()).filter((s) => s.length > 0) : null
+    }
+    //--only: 原字串、命中數、0 個即拒絕(onlyOf)
+    let only = onlyOf()
+    let extArg = list('ext')
+    let ext = extArg ? (extArg.length === 1 && extArg[0] === 'none' ? false : extArg) : true
+    let nullArg = argOf('null', null)
+    let parArg = argOf('par', null)
+    let targets = only ? P.rsi.store.listIndex().filter((x) => x.status === 'executed' && only.some((p) => x.id.startsWith(p))).map((x) => x.id) : null
+    //par: 原值交 P.fillParOf 檢測(跨套件規格 K3、K4、K7: 無效者用預設、數字字串轉型、上限 8; 檢測之值即使用之值)
+    let opt = { targets, postfit: !process.argv.includes('--no-postfit'), ext, force: argOf('force', false) === true, nullDraws: Number.isInteger(nullArg) && nullArg > 0 ? nullArg : null, par: parArg }
+    //optLine, 命令列解析後之選項(--dry 與實跑皆印; 使維護者看到旗標實際解析成什麼): 範圍、求解窗後段、擴充診斷、強制重算、虛無抽數、併行
+    let optLine = `選項(解析後):範圍 ${targets ? `${targets.length} 個節點(--only)` : '全樹'};求解窗後段 ${opt.postfit ? '算' : '不算(--no-postfit)'};擴充診斷 ${ext === true ? '全部' : (ext === false ? '不補(--ext none)' : ext.join('、'))};強制重算 ${opt.force ? '是' : '否'};虛無抽數 ${opt.nullDraws === null ? '依設定' : opt.nullDraws};併行 ${P.fillParOf(opt.par)}`
+    if (process.argv.includes('--dry')) {
+        try {
+            let p = P.fillPlanOf(opt)
+            console.log(optLine)
+            console.log(`附算之計畫(--dry;未評估、未寫檔):待算 ${p.tasks.length} 個成品(求解窗後段 ${p.tasks.filter((t) => t.postfit).length}、擴充診斷 ${p.tasks.reduce((s, t) => s + t.ext.length, 0)} 項);現行 ${p.nCurrent} 個${p.skipped.length ? `;略過 ${p.skipped.length} 個(${p.skipped.join('、').slice(0, 300)})` : ''}`)
+            for (let t of p.tasks.slice(0, 200)) {
+                console.log(`- ${t.nodeId.slice(0, 8)}:${[t.postfit ? '求解窗後段' : null, t.ext.length ? `擴充診斷 ${t.ext.join('、')}` : null].filter(Boolean).join(';')}`)
+            }
+        }
+        catch (err) {
+            console.log(`未執行: ${String((err && err.message) || err).split('\n')[0]}`)
+            process.exit(2)
+        }
+        process.exit(0)
+    }
+    //與輪次共用同一把鎖(R-RUN-4): 附算會改寫樹與節點文件, 不得與輪次並行
+    let lockV = acquireRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
+    if (!lockV.ok) {
+        console.log(`未執行: 有輪次或另一次重算執行中(pid ${lockV.pid};自 ${lockV.startedAt});等它結束再補算`)
+        process.exit(3)
+    }
+    process.on('exit', () => lockV.release())
+    let r
+    try {
+        //每完成一個成品即更新鎖之心跳: 全樹補齊可能逾鎖之逾時(預設 6 小時), 其間起輪不致誤判為卡住
+        r = await P.fill({ ...opt, onEach: () => lockV.beat() })
+    }
+    catch (err) {
+        console.log(`未執行: ${String((err && err.message) || err).split('\n')[0]}`)
+        process.exit(2)
+    }
+    let bad = r.results.filter((x) => x.postfit === 'failed' || x.ext.failed.length > 0)
+    console.log(optLine)
+    console.log(`附算與補算:待算 ${r.plan.nTasks} 個成品、現行 ${r.plan.nCurrent} 個;併行 ${r.par};${Math.round(r.sec)} 秒${r.store ? `;共同儲存區 ${r.store.ok ? `已重產(${r.store.n} 個)` : `**未能重產**(${r.store.error})`}` : ''}`)
+    for (let l of r.lines) {
+        console.log(l)
+    }
+    //離開碼 5 = 有失敗(含狀態檔未寫成: 已算之結果照常保留, 待重試與登錄未更新)
+    process.exit(bad.length || r.stateError ? 5 : 0)
 }
 else if (mode === 'frontier') {
     //列出前緣; 或結案: node g_rsi.mjs --mode frontier --close A02_ntPit[+B14_pitKey] --why "<理由>" [--claim <主張鍵>]

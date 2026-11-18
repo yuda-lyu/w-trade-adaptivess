@@ -11,8 +11,11 @@ import crypto from 'crypto'
 //    ② 已發布之檔不得刪除(要淘汰請於索引註記; 被刪者還原)—— 既有之成品與文件可能引用它
 //    ③ 逐檔之內容檢查由專案注入: checkFile({ rel, abs, src }) → [問題字串](空 = 合格); 例: 語法、不得觸及之路徑、可用之匯入
 //    ④ 索引(indexFile)須存在, 且每個檔之相對路徑都出現在索引內(不合只列為問題, 不還原: 由下一次擴建補上)
-//  createToolbox({ dir, indexFile, indexSeed, exts, maxFileBytes, maxFiles, checkFile })
+//    ⑤ 已發布之檔之內容不得改寫(選配; 專案注入 codeOf 時才檢查): codeOf({ rel, src }) → 比對用之字串(null = 此檔不比對); 快照與現況之結果不同 ⇒ 還原並寫明理由(比對內容相同者 ⇒ 照留)
+//       既有之成品抄自舊版, 同名改寫會使其說明與實作不符 ⇒ 要改行為請另存新檔名
+//  createToolbox({ dir, indexFile, indexSeed, exts, maxFileBytes, maxFiles, checkFile, codeOf, baselineFile })
 //    indexSeed: 索引不存在時寫入之初始內容(選配)
+//    baselineFile: 比對基準檔之路徑(選配; 與 codeOf 併用): snapshot() 寫入各檔之程式碼雜湊, 供另一行程之 inspect() 自檢時比對(讀不到 ⇒ 自檢不比對; check 一律以記憶體內之快照為準, 不讀此檔)
 //  回 { dir, indexFile, ensure(), list(), snapshot(), diff(snap), check(snap), inspect(), restoreFile(snap, rel) }
 //    inspect()  → { ok, files[{ rel, bytes, problems[] }], issues[] }(唯讀之自檢: 同一套規則檢查現有之全部檔, 不還原)
 //    list()     → [{ rel(以 / 分隔之相對路徑), bytes, hash }]
@@ -34,6 +37,8 @@ import crypto from 'crypto'
  * @param {Number} [opt.maxFiles=200] 輸入總檔數上限,預設200
  * @param {Function} [opt.checkFile=null] 輸入逐檔內容檢查函數,形式 ({ rel, abs, src }) → 問題字串陣列,預設null
  * @param {Function} [opt.checkIndex=null] 輸入索引格式檢查函數,形式 ({ text, files }) → 問題字串陣列,預設null
+ * @param {Function} [opt.codeOf=null] 輸入比對用之程式碼函數,形式 ({ rel, src }) → 字串或 null(null = 此檔不比對),預設null(不檢查已發布之檔之改寫)
+ * @param {String} [opt.baselineFile=null] 輸入比對基準檔之路徑(供另一行程之 inspect 比對),預設null
  * @returns {Object} 回傳物件,含屬性 dir、indexFile,與方法 ensure(建立資料夾與初始索引)、list(列出檔案 rel、bytes、hash)、snapshot(留快照)、diff(snap)(相對快照之 added、changed、removed)、check(snap)(機械檢查並還原不合之檔)、inspect(唯讀自檢全部現有檔)、restoreFile(snap, rel)(還原單檔)
  * @example
  * let tb = createToolbox({ dir: './toolbox', indexSeed: '# 共用工具索引\n' })
@@ -41,11 +46,26 @@ import crypto from 'crypto'
  * // ...做夢 agent 擴建...
  * let res = tb.check(snap)
  */
-let createToolbox = ({ dir, indexFile = 'README.md', indexSeed = null, exts = ['.mjs', '.md', '.json', '.txt'], maxFileBytes = 200 * 1024, maxFiles = 200, checkFile = null, checkIndex = null }) => {
+let createToolbox = ({ dir, indexFile = 'README.md', indexSeed = null, exts = ['.mjs', '.md', '.json', '.txt'], maxFileBytes = 200 * 1024, maxFiles = 200, checkFile = null, checkIndex = null, codeOf = null, baselineFile = null }) => {
     if (!dir) {
         throw new Error('createToolbox: 須給 dir')
     }
     let hashOf = (buf) => crypto.createHash('sha1').update(buf).digest('hex').slice(0, 12)
+    let REWRITE_WHY = '已發布之檔於檔頭註解以外之內容不得改寫(要改行為請另存新檔名,如 _v2;檔頭註解可改);索引內對該檔之說明請一併復原'
+
+    //codeHashOf, 比對用之程式碼之雜湊(未注入 codeOf、此檔不比對、或 codeOf 拋錯 ⇒ null: 不比對)
+    let codeHashOf = (rel, buf) => {
+        if (typeof codeOf !== 'function') {
+            return null
+        }
+        try {
+            let c = codeOf({ rel, src: buf.toString('utf8') })
+            return typeof c === 'string' ? hashOf(Buffer.from(c, 'utf8')) : null
+        }
+        catch (err) {
+            return null
+        }
+    }
 
     //walk, 列出資料夾內之全部檔(遞迴; 略過以 . 開頭者); 回 [{ rel, abs }](依 rel 排序)
     let walk = () => {
@@ -89,7 +109,23 @@ let createToolbox = ({ dir, indexFile = 'README.md', indexSeed = null, exts = ['
 
     let snapshot = () => {
         ensure()
-        return { at: new Date().toISOString(), files: Object.fromEntries(walk().map((f) => [f.rel, fs.readFileSync(f.abs)])) }
+        let snap = { at: new Date().toISOString(), files: Object.fromEntries(walk().map((f) => [f.rel, fs.readFileSync(f.abs)])) }
+        //比對基準檔(供另一行程之自檢; 寫入失敗不影響快照)
+        if (baselineFile && typeof codeOf === 'function') {
+            try {
+                let codes = {}
+                for (let [rel, buf] of Object.entries(snap.files)) {
+                    let h = rel === indexFile ? null : codeHashOf(rel, buf)
+                    if (h !== null) {
+                        codes[rel] = h
+                    }
+                }
+                fs.mkdirSync(path.dirname(baselineFile), { recursive: true })
+                fs.writeFileSync(baselineFile, JSON.stringify({ at: snap.at, codes }, null, 1), 'utf8')
+            }
+            catch (err) {}
+        }
+        return snap
     }
 
     let diff = (snap) => {
@@ -182,6 +218,16 @@ let createToolbox = ({ dir, indexFile = 'README.md', indexSeed = null, exts = ['
             if (rel === indexFile) {
                 continue
             }
+            //規則 ⑤: 已發布之檔被改寫(比對內容相同者兩邊之雜湊相同 ⇒ 續走其餘檢查)
+            if (d.changed.includes(rel)) {
+                let h0 = codeHashOf(rel, snap.files[rel])
+                let h1 = codeHashOf(rel, fs.readFileSync(path.join(dir, ...rel.split('/'))))
+                if (h0 !== null && h1 !== null && h0 !== h1) {
+                    restoreFile(snap, rel)
+                    reverted.push({ rel, why: `${REWRITE_WHY};已還原` })
+                    continue
+                }
+            }
             let probs = fileProblems(rel)
             if (probs.length) {
                 restoreFile(snap, rel)
@@ -194,9 +240,25 @@ let createToolbox = ({ dir, indexFile = 'README.md', indexSeed = null, exts = ['
     }
 
     //inspect, 自檢(唯讀; 不還原、不改任何檔): 以與 check 相同之規則檢查**現有之全部檔**; 供擴建者於交付前自行確認
+    //  已發布之檔之改寫(規則 ⑤): 與比對基準檔(最近一次 snapshot 所寫)比對; 無基準檔或讀不到 ⇒ 不比對
     //  回 { ok, files[{ rel, bytes, problems[] }], issues[] }
     let inspect = () => {
-        let files = walk().filter((f) => f.rel !== indexFile).map((f) => ({ rel: f.rel, bytes: fs.statSync(f.abs).size, problems: fileProblems(f.rel) }))
+        let base = {}
+        if (baselineFile && typeof codeOf === 'function') {
+            try {
+                let o = JSON.parse(fs.readFileSync(baselineFile, 'utf8'))
+                base = o && o.codes && typeof o.codes === 'object' && !Array.isArray(o.codes) ? o.codes : {}
+            }
+            catch (err) {
+                base = {}
+            }
+        }
+        let rewriteOf = (f) => {
+            let h0 = Object.prototype.hasOwnProperty.call(base, f.rel) ? base[f.rel] : null
+            let h1 = h0 === null ? null : codeHashOf(f.rel, fs.readFileSync(f.abs))
+            return h0 !== null && h1 !== null && h0 !== h1 ? [`${REWRITE_WHY};交付後會被還原`] : []
+        }
+        let files = walk().filter((f) => f.rel !== indexFile).map((f) => ({ rel: f.rel, bytes: fs.statSync(f.abs).size, problems: [...rewriteOf(f), ...fileProblems(f.rel)] }))
         let issues = indexIssues()
         return { ok: files.every((f) => f.problems.length === 0) && issues.length === 0, files, issues }
     }

@@ -1,0 +1,389 @@
+//附算與補算之計畫與寫入內容(規則 R-REC-34; 純函數: 不讀寫檔、不起行程、不取時刻 —— 時刻、雜湊與評估之結果皆由呼叫端給)
+//  兩種值(皆為佐證, 不改 S、階梯、選集指紋與正本之結果檔 harness_full.json):
+//    postfit  求解窗後段之值(評估器之 --period postfit; 規則 R-EV-41): 所留 / 所捨之席、所留之席之組成對照之超額 / z / p、前段 / 後段之超額 / z / p;
+//             評估器另帶近期活躍度版之組成對照(afterFit.sideActRecent)者一併帶出(有則帶、無則不帶)
+//    ext      擴充診斷(共用工具區 metrics/)之補算(規則 R-REC-27): 只補所缺或已過時之診斷
+//  每個成品之附算 / 補算之結果另存於狀態根之 fill/<節點 id>.json(fillDocOf 之結果; agent 不可寫之處 —— 節點之工作夾內之同名檔一律不讀), 以「快取之鍵」判定是否過時:
+//    鍵 = { pick: 成品檔之內容雜湊, evaluator: 評估器之指紋, diag?: 該診斷檔之內容雜湊(只 ext)} —— 成品重做、評估器改版、診斷改寫 ⇒ 鍵不同 ⇒ 重算
+//  擴充診斷之正本值(完整評估所得之 raw.metrics.ext[名])之是否過時以「診斷之登錄」判定: 登錄 = { <名>: { hash, since } }(since = 迴圈首次見到此雜湊之時刻;
+//    第一次建立登錄時 since 為 null = 既有之正本值皆視為現行); 正本之評估時刻早於 since 者視為過時(該診斷於其後被改寫)
+//  呼叫端(迴圈之輪末、補算工具)依 planFill 之 tasks 執行評估(以參數注入), 以 fillDocOf 產生補算檔之內容、以 postfitRowOf / postfitLineOf 產生共同儲存區與節點文件之值
+
+/**
+ * 補算檔之結構版本字串
+ *
+ * @type {String}
+ */
+let FILL_SCHEMA = 'arsi.fill/1'
+/**
+ * 補算檔與求解窗後段之完整結果檔所在之夾(狀態根之下;agent 不可寫之處):補算檔 = <夾>/<節點 id>.json、完整結果檔(評估器 --period postfit 之輸出原樣;最近一次成功者)= <夾>/<節點 id>.postfit.json
+ * 節點之工作夾內之同名檔一律不讀(工作夾為節點 agent 可寫之處;其內容不得作為迴圈之值之來源)
+ *
+ * @type {String}
+ */
+let FILL_DIR = 'fill'
+/**
+ * 節點文件之摘要列中, 求解窗後段一列之開頭字樣(重算時以此取代舊列)
+ *
+ * @type {String}
+ */
+let POSTFIT_HEAD = '求解窗後段(佐證;非正本):'
+/**
+ * 不入待重試之失敗之分類:config(參數或設定不合)、capital(持倉超過研究用本金)、integrity(內建物件被改)、reverify(選集指紋與正本不同;屬重驗)—— 重跑結果相同,重試無益
+ *
+ * @type {Array<String>}
+ */
+let FILL_NO_RETRY_KINDS = ['config', 'capital', 'integrity', 'reverify']
+
+let isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
+let isStr = (v) => typeof v === 'string' && v.length > 0
+let fin = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+
+//sameKey, 兩個快取之鍵是否相同(比 pick、evaluator、diag、nulls 四鍵; 缺鍵視同 null; nulls = 擴充診斷之補算所用之虛無抽數〔未縮減者無此鍵〕)
+/**
+ * 判定兩個快取之鍵是否相同(比對 pick、evaluator、diag、nulls 四鍵;缺鍵視同 null)
+ *
+ * @param {Object} a 輸入快取之鍵
+ * @param {Object} b 輸入快取之鍵
+ * @returns {Boolean} 回傳是否相同
+ * @example
+ * sameKey({ pick: 'a', evaluator: 'e' }, { pick: 'a', evaluator: 'e', diag: null }) // => true
+ */
+let sameKey = (a, b) => {
+    if (!isObj(a) || !isObj(b)) {
+        return false
+    }
+    let v = (o, k) => (o[k] === undefined ? null : o[k])
+    return v(a, 'pick') === v(b, 'pick') && v(a, 'evaluator') === v(b, 'evaluator') && v(a, 'diag') === v(b, 'diag') && v(a, 'nulls') === v(b, 'nulls')
+}
+
+//registryOf, 診斷之登錄之更新: 雜湊相同者沿用其 since; 新增或改寫者 since = now; 前次無登錄(null)⇒ 全部 since 為 null(既有之正本值皆視為現行); 已移除之診斷不留
+/**
+ * 更新擴充診斷之登錄(各診斷之內容雜湊與首次見到之時刻)
+ *
+ * @param {Object|null} prev 輸入前次之登錄 { <名>: { hash, since } },第一次為 null
+ * @param {Array<Object>} diags 輸入共用工具區現有之診斷 [{ name, hash }]
+ * @param {String} now 輸入此刻(ISO 字串)
+ * @returns {Object} 回傳新登錄 { <名>: { hash, since } }(依名排序)
+ * @example
+ * registryOf(null, [{ name: 'a', hash: 'h1' }], '2026-01-01T00:00:00Z') // => { a: { hash: 'h1', since: null } }
+ */
+let registryOf = (prev, diags, now) => {
+    let out = {}
+    let first = !isObj(prev)
+    for (let x of [...diags].sort((p, q) => (p.name < q.name ? -1 : p.name > q.name ? 1 : 0))) {
+        let o = !first && isObj(prev[x.name]) ? prev[x.name] : null
+        out[x.name] = o && o.hash === x.hash ? { hash: x.hash, since: o.since === undefined ? null : o.since } : { hash: x.hash, since: first ? null : now }
+    }
+    return out
+}
+
+//extCurrent, 一個成品之某診斷是否為現行: 樹上有其值(extNames; 看板、提示與子集讀此處)且「補算檔有同鍵之值, 或正本之評估時刻不早於該診斷之 since」
+//  樹上無其值者一律須補(補算檔有同鍵之值而樹上被移除者亦然: 以樹為準)
+let extCurrent = (n, name, key, reg) => {
+    if (!(Array.isArray(n.extNames) && n.extNames.includes(name))) {
+        return false
+    }
+    let f = isObj(n.fill) && isObj(n.fill.ext) && isObj(n.fill.ext[name]) ? n.fill.ext[name] : null
+    if (f && sameKey(f.key, key) && isObj(f.value)) {
+        return true
+    }
+    let since = reg[name] ? reg[name].since : null
+    return since === null || (isStr(n.evaluatedAt) && n.evaluatedAt >= since)
+}
+
+//planFill, 待算清單: 各成品之 postfit 是否須算、哪些擴充診斷須補
+/**
+ * 依樹與工作夾之現況求附算與補算之待算清單(純函數)
+ *
+ * 每個成品之 postfit 於補算檔無同鍵之值時須算;各擴充診斷於「補算檔無同鍵之值,且正本無現行之值」時須補(見 registryOf)。
+ * targets 為 null 者全部成品皆入待算;給陣列者只有其中之成品入待算,其餘之須算者計入 backlog(待補算;不執行)。
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {Array<Object>} opt.nodes 輸入各成品之現況 [{ id, pickHash, evaluatedAt(正本之評估時刻,ISO 字串或 null), extNames(正本之 raw.metrics.ext 中為物件之診斷名), fill(補算檔之內容或 null), selHash?(正本之選集指紋;補算檔之 postfit.canon.selHash 與之不同者須重算) }]
+ * @param {Array<Object>} [opt.diags=[]] 輸入共用工具區現有之擴充診斷 [{ name, hash }]
+ * @param {Object|null} [opt.registry=null] 輸入前次之診斷之登錄,第一次為 null
+ * @param {String} opt.evaluator 輸入評估器之指紋
+ * @param {String} opt.now 輸入此刻(ISO 字串;只用於登錄之 since)
+ * @param {Array<String>|null} [opt.targets=null] 輸入本次要執行之成品 id,null 為全部
+ * @param {Boolean} [opt.postfit=true] 輸入是否計畫 postfit
+ * @param {Boolean|Array<String>} [opt.ext=true] 輸入是否計畫擴充診斷之補算;給陣列者只計畫其中之診斷(須為 diags 內之名)
+ * @param {Boolean} [opt.force=false] 輸入是否不論是否現行皆重算(只作用於 targets 內之成品)
+ * @param {Object|null} [opt.forced=null] 輸入前次強制重算而失敗、須續為強制重算者 { <節點 id>: { postfit?: true, ext?: [診斷名] } }(狀態檔之待重試所記;只作用於 targets 內之成品與本次所計畫之項目:所列之項目不論是否現行皆重算,直至成功),預設null
+ * @param {Integer|null} [opt.nullDraws=null] 輸入擴充診斷之補算所用之虛無抽數(縮減者;正整數),預設null(未縮減)—— 併入擴充診斷之鍵(nulls),與所存之鍵不同者須補
+ * @returns {Object} 回傳 { tasks: [{ nodeId, postfit, ext: [名], keys: { postfit, ext: { <名>: 鍵 } }, [forced: { postfit, ext: [名] }] }], backlog: { postfit: [id], ext: { <名>: [id] } }, registry, nCurrent }(forced = 該任務內因強制(force 或 forced)而計畫之項目;無者不帶此鍵)
+ * @example
+ * let p = planFill({ nodes: [{ id: 'a1', pickHash: 'p', evaluatedAt: null, extNames: [], fill: null }], evaluator: 'e', now: '2026-01-01T00:00:00Z' })
+ * p.tasks[0].postfit // => true
+ */
+let planFill = (opt) => {
+    if (!isObj(opt)) {
+        throw new Error('invalid opt: must be an object')
+    }
+    let nodes = opt.nodes
+    if (!Array.isArray(nodes)) {
+        throw new Error('invalid opt.nodes: must be an array')
+    }
+    let diags = opt.diags === undefined || opt.diags === null ? [] : opt.diags
+    if (!Array.isArray(diags) || diags.some((x) => !isObj(x) || !isStr(x.name) || !isStr(x.hash))) {
+        throw new Error('invalid opt.diags: must be an array of { name, hash }')
+    }
+    if (!isStr(opt.evaluator)) {
+        throw new Error('invalid opt.evaluator: must be a non-empty string')
+    }
+    if (!isStr(opt.now)) {
+        throw new Error('invalid opt.now: must be a non-empty string')
+    }
+    let targets = opt.targets === undefined ? null : opt.targets
+    if (targets !== null && !Array.isArray(targets)) {
+        throw new Error('invalid opt.targets: must be an array or null')
+    }
+    let wantPf = opt.postfit !== false
+    let extOpt = opt.ext === undefined ? true : opt.ext
+    let allNames = diags.map((x) => x.name).sort()
+    let names
+    if (extOpt === true) {
+        names = allNames
+    }
+    else if (extOpt === false) {
+        names = []
+    }
+    else if (Array.isArray(extOpt)) {
+        let bad = extOpt.filter((s) => !allNames.includes(s))
+        if (bad.length) {
+            throw new Error('invalid opt.ext: must name existing diagnostics')
+        }
+        names = [...new Set(extOpt)].sort()
+    }
+    else {
+        throw new Error('invalid opt.ext: must be a boolean or an array')
+    }
+    let force = opt.force === true
+    let forced = opt.forced === undefined || opt.forced === null ? {} : opt.forced
+    if (!isObj(forced)) {
+        throw new Error('invalid opt.forced: must be an object or null')
+    }
+    let nd = opt.nullDraws === undefined || opt.nullDraws === null ? null : opt.nullDraws
+    if (nd !== null && !(Number.isInteger(nd) && nd > 0)) {
+        throw new Error('invalid opt.nullDraws: must be a positive integer or null')
+    }
+    let registry = registryOf(opt.registry === undefined ? null : opt.registry, diags, opt.now)
+    let hashOf = Object.fromEntries(diags.map((x) => [x.name, x.hash]))
+    let tset = targets === null ? null : new Set(targets)
+    let tasks = []
+    let backlog = { postfit: [], ext: Object.fromEntries(names.map((nm) => [nm, []])) }
+    let nCurrent = 0
+    for (let n of [...nodes].sort((p, q) => (p.id < q.id ? -1 : p.id > q.id ? 1 : 0))) {
+        if (!isObj(n) || !isStr(n.id) || !isStr(n.pickHash)) {
+            throw new Error('invalid opt.nodes: each must have id and pickHash')
+        }
+        let inT = tset === null || tset.has(n.id)
+        let fz = force && inT
+        //前次強制重算而失敗者(forced): 所列之項目續為強制重算(只作用於 targets 內之成品; 形狀不合之項視為未列)
+        let fo = inT && isObj(forced[n.id]) ? forced[n.id] : null
+        let foPf = !!(fo && fo.postfit === true)
+        let foExt = fo && Array.isArray(fo.ext) ? fo.ext : []
+        let kPf = { pick: n.pickHash, evaluator: opt.evaluator }
+        let fPf = isObj(n.fill) && isObj(n.fill.postfit) ? n.fill.postfit : null
+        let needPf = wantPf && (fz || foPf || !(fPf && sameKey(fPf.key, kPf) && isObj(fPf.row) && canonOk(fPf, isStr(n.selHash) ? n.selHash : null)))
+        let kExt = {}
+        let needExt = []
+        let forcedExt = []
+        for (let nm of names) {
+            let k = { pick: n.pickHash, evaluator: opt.evaluator, diag: hashOf[nm], ...(nd !== null ? { nulls: nd } : {}) }
+            let fzNm = fz || foExt.includes(nm)
+            if (fzNm || !extCurrent(n, nm, k, registry)) {
+                needExt.push(nm)
+                kExt[nm] = k
+                if (fzNm) {
+                    forcedExt.push(nm)
+                }
+            }
+        }
+        if (!needPf && !needExt.length) {
+            nCurrent++
+            continue
+        }
+        if (inT) {
+            let forcedPf = needPf && (fz || foPf)
+            tasks.push({ nodeId: n.id, postfit: needPf, ext: needExt, keys: { postfit: needPf ? kPf : null, ext: kExt }, ...(forcedPf || forcedExt.length ? { forced: { postfit: forcedPf, ext: forcedExt } } : {}) })
+        }
+        else {
+            if (needPf) {
+                backlog.postfit.push(n.id)
+            }
+            for (let nm of needExt) {
+                backlog.ext[nm].push(n.id)
+            }
+        }
+    }
+    return { tasks, backlog, registry, nCurrent }
+}
+
+//pick3, 一組對照之 { excess, z, p }(缺者 null)
+let pick3 = (o) => (isObj(o) ? { excess: fin(o.excess), z: fin(o.z), p: fin(o.p) } : null)
+
+//postfitRowOf, 評估器 --period postfit 之結果檔 → 共同儲存區與節點文件之值(原值, 不改寫); 不是求解窗後段之結果者拋錯
+/**
+ * 由評估器 --period postfit 之結果檔取出求解窗後段之值(原值;只取所列之鍵)
+ *
+ * @param {Object} o 輸入結果檔之內容(讀取 ok、period、metrics.afterFit、metrics.nullSideAct、metrics.selHash)
+ * @returns {Object} 回傳 { from, to, seatsKept, seatsDropped, comp: { excess, z, p }, halves: [{ from, to, excess, z, p }] | null, selHash, [recent: { comp, halves }] }
+ * @example
+ * let row = postfitRowOf(JSON.parse(fs.readFileSync('pf.json', 'utf8')))
+ */
+let postfitRowOf = (o) => {
+    if (!isObj(o) || o.ok !== true || !isObj(o.metrics) || !isObj(o.metrics.afterFit) || !isObj(o.period) || o.period.name !== 'postfit') {
+        throw new Error('invalid result: must be an ok result of --period postfit')
+    }
+    let af = o.metrics.afterFit
+    let halves = Array.isArray(af.halves) ? af.halves.map((h) => ({ from: isStr(h.from) ? h.from : null, to: isStr(h.to) ? h.to : null, ...(pick3(h.sideAct) || { excess: null, z: null, p: null }) })) : null
+    let row = {
+        from: isStr(o.period.start) ? o.period.start : null,
+        to: isStr(o.period.end) ? o.period.end : null,
+        seatsKept: fin(af.seatsKept),
+        seatsDropped: fin(af.seatsDropped),
+        comp: pick3(o.metrics.nullSideAct),
+        halves,
+        selHash: isStr(o.metrics.selHash) ? o.metrics.selHash : null,
+    }
+    //近期活躍度版之組成對照(評估器有此欄者; 有則帶、無則不帶)
+    let hasRecent = af.sideActRecent !== undefined || (Array.isArray(af.halves) && af.halves.some((h) => isObj(h) && h.sideActRecent !== undefined))
+    if (hasRecent) {
+        row.recent = { comp: pick3(af.sideActRecent), halves: Array.isArray(af.halves) ? af.halves.map((h) => pick3(h.sideActRecent)) : null }
+    }
+    return row
+}
+
+//fmt, 數字 → 字串(超額帶號、一位小數; z 兩位; p 四位); null → —
+let sgn = (v) => (v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}`)
+let f2 = (v) => (v === null ? '—' : v.toFixed(2))
+let f4 = (v) => (v === null ? '—' : String(Number(v.toFixed(4))))
+let cmp3 = (c) => (c ? `${sgn(c.excess)}(z ${f2(c.z)}、p ${f4(c.p)})` : '未算')
+
+//postfitLineOf, 求解窗後段之值 → 節點文件之摘要列(以 POSTFIT_HEAD 開頭)
+/**
+ * 求解窗後段之值轉為節點文件之摘要列
+ *
+ * @param {Object} row 輸入 postfitRowOf 之結果
+ * @returns {String} 回傳以 POSTFIT_HEAD 開頭之一列
+ * @example
+ * postfitLineOf(row) // => '求解窗後段(佐證;非正本):所留之席 27 / 所捨 13;…'
+ */
+let postfitLineOf = (row) => {
+    let hv = Array.isArray(row.halves) && row.halves.length === 2 ? `;前段 ${cmp3(row.halves[0])} / 後段 ${cmp3(row.halves[1])}` : ';不分段'
+    let rc = row.recent ? `;近 90 日活躍度版 ${cmp3(row.recent.comp)}${Array.isArray(row.recent.halves) && row.recent.halves.length === 2 ? `(前段 ${cmp3(row.recent.halves[0])} / 後段 ${cmp3(row.recent.halves[1])})` : ''}` : ''
+    let seats = (v) => (v === null ? '—' : String(Number(v.toFixed(2))))
+    return `${POSTFIT_HEAD}所留之席 ${seats(row.seatsKept)} / 所捨 ${seats(row.seatsDropped)}(每次決策之平均);所留之席之組成對照之超額 ${cmp3(row.comp)}${hv}${rc};不入 S、階梯與看板之排序`
+}
+
+//fillDocOf, 補算檔之新內容: 前次之內容(或 null)+ 本次之結果(postfit: { key, row }; ext: { <名>: { key, value } }); 同名者以本次取代, 其餘照留
+/**
+ * 產生補算檔(狀態根之 fill/<節點 id>.json)之新內容(純函數)
+ *
+ * @param {Object|null} prev 輸入前次之內容,無則 null(結構版本不同者視同 null)
+ * @param {Object} opt 輸入本次之結果
+ * @param {String} opt.nodeId 輸入節點 id
+ * @param {String} opt.at 輸入此刻(ISO 字串)
+ * @param {Object} [opt.postfit] 輸入 { key, row }
+ * @param {Object} [opt.ext] 輸入 { <名>: { key, value } }
+ * @returns {Object} 回傳 { schema, nodeId, postfit: { key, at, row } | null, ext: { <名>: { key, at, value } } }(ext 依名排序)
+ * @example
+ * fillDocOf(null, { nodeId: 'a1', at: '2026-01-01T00:00:00Z', postfit: { key, row } })
+ */
+let fillDocOf = (prev, { nodeId, at, postfit = undefined, ext = undefined }) => {
+    let p = isObj(prev) && prev.schema === FILL_SCHEMA && prev.nodeId === nodeId ? prev : null
+    let ex = { ...(p && isObj(p.ext) ? p.ext : {}) }
+    if (isObj(ext)) {
+        for (let nm of Object.keys(ext)) {
+            ex[nm] = { key: ext[nm].key, at, value: ext[nm].value }
+        }
+    }
+    let exSorted = Object.fromEntries(Object.keys(ex).sort().map((k) => [k, ex[k]]))
+    return {
+        schema: FILL_SCHEMA,
+        nodeId,
+        postfit: isObj(postfit) ? { key: postfit.key, at, row: postfit.row, ...(isObj(postfit.canon) ? { canon: postfit.canon } : {}) } : (p && isObj(p.postfit) ? p.postfit : null),
+        ext: exSorted,
+    }
+}
+
+//canonOk, 補算檔之求解窗後段之值所記之正本之選集指紋(canon.selHash)與現況之正本之選集指紋是否相容: 兩者皆有而不同 ⇒ 否(此段之值與正本出自不同代之評估); 任一缺(較早之補算檔、無正本之指紋)⇒ 是
+let canonOk = (f, canonSel) => !(isObj(f.canon) && isStr(f.canon.selHash) && isStr(canonSel) && f.canon.selHash !== canonSel)
+
+//postfitOfFill, 補算檔 → 現行之求解窗後段之值(鍵與現況相同、且所記之正本之選集指紋與現況相容者; 否則 null)
+/**
+ * 由補算檔取出現行之求解窗後段之值(鍵與現況相同、且所記之正本之選集指紋與現況相容者才回傳)
+ *
+ * @param {Object|null} fill 輸入補算檔之內容
+ * @param {Object} key 輸入現況之鍵 { pick, evaluator }
+ * @param {String|null} [canonSel=null] 輸入現況之正本之選集指紋,預設null(不核)
+ * @returns {Object|null} 回傳 { at, row } 或 null
+ * @example
+ * postfitOfFill(fill, { pick: 'p', evaluator: 'e' })
+ */
+let postfitOfFill = (fill, key, canonSel = null) => {
+    let f = isObj(fill) && fill.schema === FILL_SCHEMA && isObj(fill.postfit) ? fill.postfit : null
+    return f && sameKey(f.key, key) && isObj(f.row) && canonOk(f, canonSel) ? { at: f.at, row: f.row } : null
+}
+
+//postfitInfoOf, 補算檔 → 共同儲存區之 postfit 欄: 成品之雜湊相符者取其值(原值)另帶 at 與 current(評估器之指紋亦相符、且所記之正本之選集指紋與現況相容 = 現行;
+//  不符 = 評估器改版後或正本重算後尚未重算); 成品之雜湊不符(成品已重做)、無值者為 null
+/**
+ * 由補算檔取出共同儲存區之 postfit 欄(成品之雜湊相符者才有;另帶 at 與 current)
+ *
+ * @param {Object|null} fill 輸入補算檔之內容
+ * @param {Object} key 輸入現況之鍵 { pick, evaluator }
+ * @param {String|null} [canonSel=null] 輸入現況之正本之選集指紋,預設null(不核)
+ * @returns {Object|null} 回傳 { ...row, at, current } 或 null
+ * @example
+ * postfitInfoOf(fill, { pick: 'p', evaluator: 'e' })
+ */
+let postfitInfoOf = (fill, key, canonSel = null) => {
+    let f = isObj(fill) && fill.schema === FILL_SCHEMA && isObj(fill.postfit) ? fill.postfit : null
+    if (!f || !isObj(f.key) || !isObj(f.row) || !isObj(key) || f.key.pick !== key.pick) {
+        return null
+    }
+    return { ...f.row, at: isStr(f.at) ? f.at : null, current: f.key.evaluator === key.evaluator && canonOk(f, canonSel) }
+}
+
+//fillLinesOf, 一次附算 / 補算之結果 → 一頁摘要之列(輪末)與命令列之輸出
+/**
+ * 一次附算或補算之結果轉為摘要之列
+ *
+ * @param {Object} r 輸入 { tasks(計畫之 tasks), results: [{ nodeId, postfit: 'ok' | 'failed' | null, ext: { ok: [名], failed: [名] }, error, kind }], backlog, sec, skipped: [字串], source('round' = 輪末之附算;其餘 = 命令列之補算), retryInfo(執行後之待重試 [{ id, n, last, source, [force] }]; 輪末之摘要據以列「來源為命令列之待重試」之個數) }
+ * @param {Object} [opt={}] 輸入設定物件
+ * @param {String} [opt.cmd='node g_rsi.mjs --mode fill'] 輸入補齊待補算之指令(列於待補算之後)
+ * @returns {Array<String>} 回傳摘要之列(0 ~ 2 列;無待算亦無待補算者為空陣列)
+ * @example
+ * fillLinesOf({ tasks: [], results: [], backlog: { postfit: [], ext: {} }, sec: 0 }) // => []
+ */
+let fillLinesOf = (r, { cmd = 'node g_rsi.mjs --mode fill' } = {}) => {
+    let out = []
+    let res = Array.isArray(r.results) ? r.results : []
+    if (res.length) {
+        let pfOk = res.filter((x) => x.postfit === 'ok').length
+        let pfBad = res.filter((x) => x.postfit === 'failed').length
+        let exOk = res.reduce((s, x) => s + (x.ext && Array.isArray(x.ext.ok) ? x.ext.ok.length : 0), 0)
+        let exBad = res.reduce((s, x) => s + (x.ext && Array.isArray(x.ext.failed) ? x.ext.failed.length : 0), 0)
+        //重試之列只列暫時性之失敗(重跑結果相同之失敗與須重驗者不入待重試, 呼叫端另列); 重試之時機依本次之來源: 輪末之失敗 ⇒ 下一次輪末, 命令列之失敗 ⇒ 再執行補算工具時
+        let bad = res.filter((x) => (x.postfit === 'failed' || (x.ext && Array.isArray(x.ext.failed) && x.ext.failed.length)) && !FILL_NO_RETRY_KINDS.includes(x.kind))
+        out.push(`附算(求解窗後段與擴充診斷;佐證,不改 S):${res.length} 個成品;求解窗後段 成功 ${pfOk}${pfBad ? `、**失敗 ${pfBad}**` : ''};擴充診斷 補入 ${exOk} 項${exBad ? `、**失敗 ${exBad} 項**` : ''};${Math.round(r.sec || 0)} 秒${bad.length ? `;失敗者(${r.source === 'round' ? '下一次輪末重試' : '再執行補算工具時重試'}):${bad.map((x) => `${String(x.nodeId).slice(0, 8)}${x.error ? `(${String(x.error).split('\n')[0].slice(0, 80)})` : ''}`).join('、').slice(0, 300)}` : ''}`)
+    }
+    let bl = r.backlog || { postfit: [], ext: {} }
+    let nPf = Array.isArray(bl.postfit) ? bl.postfit.length : 0
+    let exParts = Object.keys(bl.ext || {}).filter((nm) => bl.ext[nm].length).map((nm) => `${nm} ${bl.ext[nm].length} 個`)
+    if (nPf || exParts.length) {
+        out.push(`待補算之成品(不在本次之範圍;以 \`${cmd}\` 補齊,可中斷續跑):求解窗後段 ${nPf} 個${exParts.length ? `;擴充診斷 ${exParts.join('、')}` : ''}`)
+    }
+    //輪末(source 'round')另列「來源為命令列之待重試」之個數: 輪末只自動重試來源為輪末者, 命令列之補算所留者須再執行補算工具才會重試(其中帶強制者重試時仍為強制重算); 升版前之待重試紀錄(無來源欄)一律視為命令列
+    if (r.source === 'round' && Array.isArray(r.retryInfo)) {
+        let nCli = r.retryInfo.filter((x) => x && x.source !== 'round').length
+        if (nCli) {
+            out.push(`待重試而來源為命令列者 ${nCli} 個(輪末不自動重試;以 \`${cmd}\` 重試)`)
+        }
+    }
+    return out
+}
+
+export { planFill, registryOf, sameKey, postfitRowOf, postfitLineOf, fillDocOf, postfitOfFill, postfitInfoOf, fillLinesOf, FILL_SCHEMA, FILL_DIR, POSTFIT_HEAD, FILL_NO_RETRY_KINDS }
