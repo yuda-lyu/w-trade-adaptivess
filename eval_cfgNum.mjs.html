@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>eval/cfgNum.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#CROSS_COLUMNS">CROSS_COLUMNS</a></li><li><a href="global.html#CROSS_FIELD_DEFS">CROSS_FIELD_DEFS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EVAL_VERSION">EVAL_VERSION</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#FILL_DIR">FILL_DIR</a></li><li><a href="global.html#FILL_NO_RETRY_KINDS">FILL_NO_RETRY_KINDS</a></li><li><a href="global.html#FILL_SCHEMA">FILL_SCHEMA</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#MUTABLE_SNAPS">MUTABLE_SNAPS</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#OUT_SATURATED_NOTE">OUT_SATURATED_NOTE</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#POSTFIT_HEAD">POSTFIT_HEAD</a></li><li><a href="global.html#SIGNS_CLAUSE">SIGNS_CLAUSE</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#VIOL">VIOL</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#adoptError">adoptError</a></li><li><a href="global.html#alignSeries">alignSeries</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#argStrOf">argStrOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#bodyOf">bodyOf</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#bytesAs">bytesAs</a></li><li><a href="global.html#cadenceOf">cadenceOf</a></li><li><a href="global.html#cfgNumLoose">cfgNumLoose</a></li><li><a href="global.html#cfgNumOf">cfgNumOf</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkEvalSettings">checkEvalSettings</a></li><li><a href="global.html#checkIntrinsics">checkIntrinsics</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#configMsgOf">configMsgOf</a></li><li><a href="global.html#copyAll">copyAll</a></li><li><a href="global.html#copyRange">copyRange</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#crossOf">crossOf</a></li><li><a href="global.html#dateOf">dateOf</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#diagsOf">diagsOf</a></li><li><a href="global.html#evalCfgNumsOf">evalCfgNumsOf</a></li><li><a href="global.html#evalNumsOf">evalNumsOf</a></li><li><a href="global.html#evaluatorFpOf">evaluatorFpOf</a></li><li><a href="global.html#extRowOf">extRowOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#fillDocOf">fillDocOf</a></li><li><a href="global.html#fillFileOf">fillFileOf</a></li><li><a href="global.html#fillLinesOf">fillLinesOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#gridCheck">gridCheck</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#handOut">handOut</a></li><li><a href="global.html#horizonsOf">horizonsOf</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#integrityError">integrityError</a></li><li><a href="global.html#isCapitalError">isCapitalError</a></li><li><a href="global.html#isIntegrityError">isIntegrityError</a></li><li><a href="global.html#isMutableSnap">isMutableSnap</a></li><li><a href="global.html#isSrcIdx">isSrcIdx</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#libSizeText">libSizeText</a></li><li><a href="global.html#loadExt">loadExt</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#memberLedger">memberLedger</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#normBarHours">normBarHours</a></li><li><a href="global.html#normUnit">normUnit</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#ntStaticOf">ntStaticOf</a></li><li><a href="global.html#nullDrawsOf">nullDrawsOf</a></li><li><a href="global.html#nullFloorText">nullFloorText</a></li><li><a href="global.html#objOf">objOf</a></li><li><a href="global.html#onBarGrid">onBarGrid</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#periodAt">periodAt</a></li><li><a href="global.html#periodLenText">periodLenText</a></li><li><a href="global.html#phaseCountOf">phaseCountOf</a></li><li><a href="global.html#phaseText">phaseText</a></li><li><a href="global.html#pickHashOf">pickHashOf</a></li><li><a href="global.html#planFill">planFill</a></li><li><a href="global.html#planGateOf">planGateOf</a></li><li><a href="global.html#postfitFileOf">postfitFileOf</a></li><li><a href="global.html#postfitInfoOf">postfitInfoOf</a></li><li><a href="global.html#postfitLineOf">postfitLineOf</a></li><li><a href="global.html#postfitOfFill">postfitOfFill</a></li><li><a href="global.html#postfitRowOf">postfitRowOf</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readFill">readFill</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#registryOf">registryOf</a></li><li><a href="global.html#renderContract">renderContract</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#roundOkOf">roundOkOf</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#safeJson">safeJson</a></li><li><a href="global.html#sameKey">sameKey</a></li><li><a href="global.html#sameUnit">sameUnit</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#signsMentionOf">signsMentionOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tieBaseOf">tieBaseOf</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#trainFromBarOf">trainFromBarOf</a></li><li><a href="global.html#unitKeyOf">unitKeyOf</a></li><li><a href="global.html#unitNotionalOf">unitNotionalOf</a></li><li><a href="global.html#violationMark">violationMark</a></li><li><a href="global.html#violationSince">violationSince</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">eval/cfgNum.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import isenum from 'wsemi/src/isenum.mjs'
+
+
+//設定之數值之取值(規則 R-EV-44): 評估器(evalCore.mjs)、任務書與合約之參考版(src/domain/factsText.mjs、src/tools/initProject.mjs)與命令列共用 ⇒ 檢測之值即使用之值(輸入參數之檢測機制 K4)
+//  影響評估之數字(warmupDays、cadenceDays、nullDraws、actBins、sideActHalf)屬決定資料口徑之設定: 給了而無效即拒絕, 不退回預設(同規格 §11〈決定資料口徑之 opt〉);
+//  未給(undefined 或 null)取預設; 數字字串收受並轉為數值(K7); 數字原樣(逐位不變)
+//  只匯入 wsemi 之 isenum
+
+//CFG_KINDS, 數值之種類: [訊息所用之種類描述, 值域之判定]
+//  訊息依 V19(invalid &lt;名稱>: must be &lt;種類描述>), 不帶輸入值(V20)
+let CFG_KINDS = {
+    nonNegNum: ['a non-negative number', (x) => x >= 0],
+    posNum: ['a positive number', (x) => x > 0],
+    nonNegInt: ['a non-negative integer', (x) => Number.isSafeInteger(x) &amp;&amp; x >= 0],
+    posInt: ['a positive integer', (x) => Number.isSafeInteger(x) &amp;&amp; x >= 1],
+    //分層數: 評估器以 Uint8Array 存各項所屬之層號(0 ~ 層數 − 1) ⇒ 至多 256 層(超過者層號溢位而靜默算錯)
+    binCount: ['an integer from 1 to 256', (x) => Number.isSafeInteger(x) &amp;&amp; x >= 1 &amp;&amp; x &lt;= 256],
+}
+
+/**
+ * 設定之數值之取值:未給(undefined 或 null)為預設值;數字與數字字串(wsemi isenum;十進位寫法之有限數)轉為數值後須合種類(CFG_KINDS);其餘(布林、陣列、物件、非數字字串、NaN、±Infinity、BigInt)與超出值域者拋 invalid &lt;where>: must be &lt;種類描述>
+ * 數字之輸入原樣回傳(逐位不變);數字字串轉為數值(例:'32' → 32),免得以字串參與運算(`1 + '32'` 為字串相接)
+ *
+ * @param {*} v 輸入設定之值
+ * @param {*} def 輸入未給時之預設值
+ * @param {String} where 輸入錯誤訊息所用之位置名稱(如 eval.nullDraws、cfg.nullDraws、opt.nullDraws)
+ * @param {String} kind 輸入種類,nonNegNum、posNum、nonNegInt、posInt、binCount(1 ~ 256 之整數)其一
+ * @returns {*} 回傳所用之值(未給者為 def,不再檢測)
+ * @example
+ * cfgNumOf('32', 64, 'eval.nullDraws', 'nonNegInt')
+ * // => 32
+ * cfgNumOf(undefined, 64, 'eval.nullDraws', 'nonNegInt')
+ * // => 64
+ */
+let cfgNumOf = (v, def, where, kind) => {
+    let k = CFG_KINDS[kind]
+    if (!k) {
+        throw new Error(`invalid kind: must be one of ${Object.keys(CFG_KINDS).join(', ')}`)
+    }
+    if (v === undefined || v === null) {
+        return def
+    }
+    let x = typeof v === 'number' ? v : (typeof v === 'string' &amp;&amp; isenum(v) ? Number(v) : NaN)
+    if (!(Number.isFinite(x) &amp;&amp; k[1](x))) {
+        throw new Error(`invalid ${where}: must be ${k[0]}`)
+    }
+    return x
+}
+
+
+/**
+ * 寬鬆之數值取值(只供合約之參考版寫出硬上限與判讀之門檻之數字;不屬影響評估之數字,評估器不經它):有限數字、數字字串取其數值,其餘回 null(呼叫端用參考版所寫之值)
+ *
+ * @param {*} v 輸入設定之值
+ * @returns {Number|null} 回傳數值或 null
+ * @example
+ * cfgNumLoose('12')
+ * // => 12
+ */
+let cfgNumLoose = (v) => {
+    let x = typeof v === 'number' ? v : (typeof v === 'string' &amp;&amp; isenum(v) ? Number(v) : NaN)
+    return Number.isFinite(x) ? x : null
+}
+
+//EVAL_NUMS, 影響評估之數字: 鍵 → [未給之預設, 種類]; 評估器、設定之預檢、命令列、任務書與合約之參考版共用(單一定義)
+let EVAL_NUMS = {
+    warmupDays: [180, 'nonNegNum'],
+    cadenceDays: [7, 'posNum'],
+    nullDraws: [64, 'nonNegInt'],
+    actBins: [10, 'binCount'],
+    sideActHalf: [50, 'nonNegInt'],
+}
+
+/**
+ * 影響評估之數字之取值與檢測(不含「日數 × 每日棒數須為整數」之檢查, 該檢查需帳本之每日棒數, 見 barGrid.mjs 之 evalNumsOf):
+ * warmupDays、cadenceDays、nullDraws、actBins、sideActHalf 依 EVAL_NUMS 逐一以 cfgNumOf 取值;給了而無效者拋 invalid &lt;who>.&lt;鍵>: must be …(不帶輸入值)
+ *
+ * @param {Object} ev 輸入評估之設定(settings.eval 或 makeEvaluator 之 cfg;可為 null 或 undefined)
+ * @param {String} [who='eval'] 輸入錯誤訊息所用之物件名稱,預設'eval'
+ * @returns {Object} 回傳 { warmupDays, cadenceDays, nullDraws, actBins, sideActHalf }(皆為數值)
+ * @example
+ * evalCfgNumsOf({ nullDraws: '32' })
+ * // => { warmupDays: 180, cadenceDays: 7, nullDraws: 32, actBins: 10, sideActHalf: 50 }
+ */
+let evalCfgNumsOf = (ev, who = 'eval') => {
+    let e = ev &amp;&amp; typeof ev === 'object' ? ev : {}
+    let out = {}
+    for (let [k, [def, kind]] of Object.entries(EVAL_NUMS)) {
+        //每個鍵只讀一次(檢查之值即使用之值)
+        out[k] = cfgNumOf(e[k], def, `${who}.${k}`, kind)
+    }
+    return out
+}
+
+
+export { cfgNumOf, cfgNumLoose, CFG_KINDS, EVAL_NUMS, evalCfgNumsOf }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Thu Nov 19 2026 07:19:10 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>
