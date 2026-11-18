@@ -14,6 +14,8 @@ import buildLedger from '../eval/ledgerBuild.mjs'
 //  基礎單位(選配; 規則 R-EV-43): settings.source.unit = { rule: { stepSize, minQty, minNotional, asOf?, source? }, buffer = 0.1, uIni } 有給者, 帳本另存每根棒之基礎單位名義並記交易規則(入帳本鍵);
 //    單一策略之全期最大同時持倉名義只記錄(輸出之 unitStat: 最大者與其策略、超過 uIni 之隻數 nStrategyOverUIni; 有超過者另列一行 WARN, 帳本照寫出、離開碼 0);
 //    設定不合者不寫出(離開碼 2); 未給(或 null)⇒ 帳本與未加入本功能時逐位相同
+//  每根之時長(規則 R-EV-44): settings.source.barHours 須整除 24 小時(未給為 4); 策略檔帶 settings.intervalSec 者須等於 barHours × 3600;
+//    選配之 settings.source.seriesOffGridMax(0 ~ 1)= 外部序列對不到棒之比例上限(超過即不建); 不合者皆不寫出、離開碼 2
 let st = getSettings()
 let limit = argOf('limit', 0)
 let train = argOf('train', false) === true
@@ -36,9 +38,16 @@ try {
         limit: train ? 0 : limit,
         seriesDir: typeof st.source.seriesDir === 'string' && st.source.seriesDir ? P(st.source.seriesDir) : null,
         ...(unit !== null ? { unit } : {}),
+        ...(st.source.seriesOffGridMax !== undefined && st.source.seriesOffGridMax !== null ? { seriesOffGridMax: st.source.seriesOffGridMax } : {}),
     })
 }
 catch (err) {
+    //每根之時長、策略檔之每根秒數之宣告、外部序列對不到棒之比例(規則 R-EV-44): 不寫出, 離開碼 2(設定之鍵名改為 source.*)
+    let m = String(err && err.message)
+    if (/^invalid (barHours|seriesOffGridMax|series |settings\.intervalSec)/.test(m)) {
+        console.log(`ERROR ${m.replace(/^invalid (barHours|seriesOffGridMax)/, 'invalid source.$1')}`)
+        process.exit(2)
+    }
     //基礎單位之設定不合(含收盤價不合; 規則 R-EV-43): 不寫出, 離開碼 2; 其他錯誤照舊拋出
     if (unit !== null && /^invalid (unit|close)\b/.test(String(err && err.message))) {
         console.log(`ERROR ${err.message.replace(/^invalid unit/, 'invalid source.unit')}`)

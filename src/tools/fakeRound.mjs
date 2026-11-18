@@ -7,7 +7,7 @@ import { spawnSync } from 'child_process'
 import { getSettings, FD_ROOT, P } from '../cfg.mjs'
 import { peekRound, nextLayerId, makePaths, readArmExtensions } from '../engineApi.mjs'
 import { writeJson } from '../engineProtocol.mjs'
-import { makeProject } from '../domain/domain.mjs'
+import { makeProjectOrExit } from '../domain/domain.mjs'
 import { decideArgsOf } from '../domain/armCatalog.mjs'
 
 let st = getSettings()
@@ -141,7 +141,7 @@ if (realExt) {
     fs.mkdirSync(fakeGov.governance, { recursive: true })
     writeJson(fakeGov.govExtensions, { layers: realExt.layers.map(strip), arms: realExt.arms.map(strip) })
 }
-let P0 = makeProject(st, { dispatch, catalogFile: fpCatOut })
+let P0 = makeProjectOrExit(st, { dispatch, catalogFile: fpCatOut })
 let g0 = P0.rsi.governance
 let fakeLayer = nextLayerId(P0.catalog)
 g0.propose({ round: 0, from: '假主控', items: [{ kind: 'layer', title: '假新層', mechanism: '驗擴充' }, { kind: 'new', layer: fakeLayer, title: '假新臂', mechanism: '假機制之中性描述' }] })
@@ -154,7 +154,7 @@ let decideFake = (id, o) => {
 }
 decideFake('P001', { desc: '驗擴充' })
 let fakeArm = decideFake('P002', { name: 'fakeNew' }).item.decision.ref
-let Pj = makeProject(st, { dispatch, catalogFile: fpCatOut })
+let Pj = makeProjectOrExit(st, { dispatch, catalogFile: fpCatOut })
 Pj.rsi.init()
 let round = peekRound(Pj.rsi.paths)
 let res = await Pj.rsi.auto({ by: 'fake', protocol: { round }, arms: 3, novelty: 3, workers: 3, noDream: true })

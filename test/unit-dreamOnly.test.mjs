@@ -107,7 +107,8 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
     describe('做夢任務書與做夢文件之文字', function () {
         let st0 = getSettings()
         let st = { ...st0, rsi: { ...st0.rsi, guides: false } }
-        let texts = makeTexts({ st, FD_ROOT: st.FD_ROOT })
+        //策略隻數明給(規則 R-REC-36: 任務書之隻數改由帳本產生; 此夾具無帳本 ⇒ 明給 7 萬隻, 使下方釘死之雜湊仍為修改前之同一份文字)
+        let texts = makeTexts({ st, FD_ROOT: st.FD_ROOT, nStrategies: 70000 })
         let toolbox = { dir: 'rsi/toolbox', index: 'rsi/toolbox/README.md', indexName: 'README.md', nTools: 3 }
         let node = { nodeId: 'n1', arms: ['A04_act'], base: null, S: -12.3, worst: -30.1, excess: 8.2, ladder: 0, vetoed: false, claimedS: -12.3, nEvals: 6, nFull: 4, nFullSel: 4, issues: [], from: null, type: 'explore', docMd: 'd.md', workDir: 'rsi/work/n1' }
         let ctx = (nodes, extra = {}) => ({ round: 9, nodeIds: nodes.map((n) => n.nodeId), reworkedIds: [], workDir: path.join(st.records.workDir, 'dream_r009'), context: { nodes, failed: [], refs: [], prevDirections: [], maxDirections: 7, extra: '2. 更新文件', toolbox, ...extra } })
@@ -170,7 +171,14 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
             //  重取之理由(共用工具區之擴充診斷例外): 做夢任務書多列一句「metrics/ 之擴充診斷可同名修正,改後由迴圈或補算工具重算」與檔頭註解以外之改寫會被還原
             //任務書內寫有本套件程式夾之相對路徑(codeRootRel;套件夾內為 src):測試於他處執行(例:變異用之複本)時正規化為 src
             let codeRoot = path.relative(st.FD_ROOT, path.join(FD_ROOT, 'src')).replace(/\\/g, '/')
-            let sha = (s) => crypto.createHash('sha256').update(s.split(codeRoot).join('src')).digest('hex').slice(0, 16)
+            //做夢任務書於彙整之節新增一句(規則 R-REC-37:預先核對之設計取捨不得以求解窗後段為判準);雜湊取去掉該句之後之全文 ⇒ 其餘文字仍與釘死之值逐字相同,該句另斷言恰出現一次
+            //  該句附所指之處: 已有共同儲存區者為其 postfit 欄, 尚無者為節點文件之附算列(本夾具尚無共同儲存區)
+            let PRE_CHECK = '  - **預先核對(跑前登錄)之設計取捨不得以求解窗後段(節點文件摘要之「求解窗後段(佐證;非正本)」一列)為判準**:此段只於設計定案後附報(否則該段對該設計即非獨立之佐證)。'
+            let sha = (s) => {
+                let ls = s.split('\n')
+                assert.equal(ls.filter((x) => x === PRE_CHECK).length, 1, '新增之一句恰出現一次')
+                return crypto.createHash('sha256').update(ls.filter((x) => x !== PRE_CHECK).join('\n').split(codeRoot).join('src')).digest('hex').slice(0, 16)
+            }
             let node2 = { ...node, nodeId: 'n2', arms: ['B14_pitKey'], type: 'verify', issues: ['問題甲'], from: { round: 3, arms: ['B14_pitKey'], base: null, claimKey: 'abcd1234' } }
             let cases = [
                 ['一個節點', ctx([node]), 'd19e36ddb3be9072'],

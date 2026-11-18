@@ -5,7 +5,7 @@ import path from 'path'
 import { spawnSync } from 'child_process'
 import { isBuiltin } from 'module'
 import WTradeAdaptivess from '../src/WTradeAdaptivess.mjs'
-import { initProject, shimOf, MARK, CLIS } from '../src/tools/initProject.mjs'
+import { initProject, renderContract, shimOf, MARK, CLIS } from '../src/tools/initProject.mjs'
 import { makeTmp, FD_ROOT } from './tools/synthLedger.mjs'
 
 
@@ -166,6 +166,8 @@ describe('套件:專案根之錨點與專案接入', function () {
         fs.writeFileSync(path.join(root, 'tools', 'waitEvent.mjs'), '//專案原有之工具\n')
         fs.writeFileSync(path.join(root, 'tools', 'mine.mjs'), '//專案自有\n')
         fs.writeFileSync(path.join(root, 'settings.json'), '{"name":"mine"}')
+        //合約之參考版依專案之設定產出(規則 R-REC-36; 本例之設定未給求解窗與保留期之起點 ⇒ 該兩處為通稱)
+        let refC = renderContract(read('contract/pick-contract.md'), { settings: { name: 'mine' } })
         let dry = initProject({ root, dry: true })
         assert(dry.written.includes('g_rsi.mjs') && !fs.existsSync(path.join(root, 'g_rsi.mjs')), 'dry 只列出、不寫')
         let r1 = initProject({ root })
@@ -181,7 +183,7 @@ describe('套件:專案根之錨點與專案接入', function () {
         assert(tool.includes('path.resolve(path.dirname(fileURLToPath(import.meta.url)), \'..\')') && tool.includes('await import(\'w-trade-adaptivess/src/tools/fakeRound.mjs\')'))
         assert(!fs.existsSync(path.join(root, 'tools', 'initProject.mjs')), '本工具自身不產生進入檔')
         assert.equal(fs.readFileSync(path.join(root, 'tools', 'mine.mjs'), 'utf8'), '//專案自有\n')
-        assert.equal(fs.readFileSync(path.join(root, 'docs', 'pick-contract.md'), 'utf8'), read('contract/pick-contract.md'))
+        assert.equal(fs.readFileSync(path.join(root, 'docs', 'pick-contract.md'), 'utf8'), refC)
         assert.equal(fs.readFileSync(path.join(root, 'arms', 'base.json'), 'utf8'), read('arms/base.json'))
         assert(fs.existsSync(path.join(root, 'examples', 'pick_example.mjs')))
         //每個套件工具皆有進入檔
@@ -196,9 +198,9 @@ describe('套件:專案根之錨點與專案接入', function () {
         let r2 = initProject({ root })
         assert.deepEqual([r2.written, r2.differs], [['docs/pick-contract.pkg.md'], ['docs/pick-contract.md']])
         assert.equal(fs.readFileSync(path.join(root, 'docs', 'pick-contract.md'), 'utf8'), '專案之合約(含自己之數值)')
-        assert.equal(fs.readFileSync(path.join(root, 'docs', 'pick-contract.pkg.md'), 'utf8'), read('contract/pick-contract.md'))
+        assert.equal(fs.readFileSync(path.join(root, 'docs', 'pick-contract.pkg.md'), 'utf8'), refC)
         assert.equal(fs.readFileSync(path.join(root, 'arms', 'base.json'), 'utf8'), '{"mine":true}')
-        fs.writeFileSync(path.join(root, 'docs', 'pick-contract.md'), read('contract/pick-contract.md'))
+        fs.writeFileSync(path.join(root, 'docs', 'pick-contract.md'), refC)
         assert.deepEqual(initProject({ root }).differs, [])
         assert(!fs.existsSync(path.join(root, 'docs', 'pick-contract.pkg.md')))
         //force: 覆寫非本工具所產生之進入檔

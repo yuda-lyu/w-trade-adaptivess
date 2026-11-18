@@ -772,11 +772,13 @@ let shortShareOf = (m) => {
     }
     return Math.round((b.short.orders / (b.long.orders + b.short.orders)) * 1000) / 1000
 }
+//sideFlowCfgOf, 判讀所用之設定(內建值 SIDE_FLOW 與 settings.score.sideFlow 之合併); 看板之說明(domain.mjs)取同一份基準(規則 R-REC-36: 不寫死某一策略庫之實測值)
+let sideFlowCfgOf = (cfg = null) => ({ ...SIDE_FLOW, ...(cfg || {}), baseShort: { ...SIDE_FLOW.baseShort, ...((cfg && cfg.baseShort) || {}) } })
 let sideFlowIssue = (bt, tr, cfg = null) => {
     if (typeof bt !== 'number' || typeof tr !== 'number') {
         return null
     }
-    let c = { ...SIDE_FLOW, ...(cfg || {}), baseShort: { ...SIDE_FLOW.baseShort, ...((cfg && cfg.baseShort) || {}) } }
+    let c = sideFlowCfgOf(cfg)
     let up = bt >= c.baseShort.backtest * c.hi && tr >= c.baseShort.train * c.hi
     let dn = bt <= c.baseShort.backtest * c.lo && tr <= c.baseShort.train * c.lo
     if (!up && !dn) {
@@ -1147,5 +1149,5 @@ let extSurfaceOf = (m) => {
 let EXT_FLAG_HEAD = '提示(擴充診斷 '
 let extFlagIssue = (f) => `${EXT_FLAG_HEAD}${f.name}): ${f.text}(共用工具區之擴充診斷所列;不否決,由審計判定)`
 
-export { makeVerify, scanTrace, deniedHalt, stripSearchPatterns, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, runNodeProc, shortShareOf, sideFlowIssue, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD }
+export { makeVerify, scanTrace, deniedHalt, stripSearchPatterns, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, runNodeProc, shortShareOf, sideFlowIssue, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD }
 export default makeVerify

@@ -6,6 +6,7 @@ import { writeFileAtomic, sha } from '../engineProtocol.mjs'
 import { getSettings, readJson, writeJson, FD_ROOT } from '../cfg.mjs'
 import { scoreOf } from '../eval/score.mjs'
 import { normUnit } from '../eval/unit.mjs'
+import { checkEvalSettings, configMsgOf } from '../eval/barGrid.mjs'
 import { createFileRecords, roundName, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_LABELS, ARM_KINDS, ARM_LABELS, CLAIM_VERDICTS } from '../arsi/records.mjs'
 import { proposalOf } from './armCatalog.mjs'
 import { buildPickStore } from './pickStore.mjs'
@@ -18,7 +19,8 @@ import { makeDispatch } from '../arsi/dispatchers.mjs'
 import { createResourceMonitor } from '../arsi/resources.mjs'
 import { resolveRunConfig } from '../arsi/runner.mjs'
 import { makeTexts, GUIDE, guideText, OUT_SATURATED_NOTE } from './texts.mjs'
-import { makeVerify, summaryOf, notesOf, scanTrace, shortShareOf, sideFlowIssue, extSurfaceOf, extFlagIssue, runNodeProc, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD } from './verify.mjs'
+import { nullDrawsOf, nullFloorText } from './factsText.mjs'
+import { makeVerify, summaryOf, notesOf, scanTrace, shortShareOf, sideFlowIssue, sideFlowCfgOf, extSurfaceOf, extFlagIssue, runNodeProc, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD } from './verify.mjs'
 import { makeToolboxRules, TB_BASELINE } from './toolboxRules.mjs'
 import { archiveExperience, archiveFeedback } from './archiveDocs.mjs'
 import { activeTrial, assignTrial, variantFallback } from './briefTrials.mjs'
@@ -180,6 +182,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
     if (!ledgerMeta) {
         throw new Error(`缺訂單帳本 ${st.eval.ledgerDir}(請先 node g_build.mjs)`)
     }
+    //設定之預檢(規則 R-EV-44): 評估時必被拒絕之設定(期間之界線與 eval.fitEnd 不在帳本之棒格線上、eval.trainFromStart 不合)於組裝時即拒絕 —— 免得整輪之派工皆因設定而失敗
+    checkEvalSettings(st, ledgerMeta)
     //EVAL_VERSION 之單一定義在 ./evalVersion.mjs(附算 / 補算之評估器之指紋與共同儲存區之 current 標示共用; 規則 R-REC-34)
     //envKey, 評估環境之鍵(帳本鍵 + 評估器版本): 基礎單位開啟者(帳本帶 meta.unit; 規則 R-EV-43)另併入研究用本金 —— 其不入帳本鍵(不改每單之名義),
     //  但改變研究用本金之檢查之結果 ⇒ 改了須重算; 未開啟者逐位不變
@@ -749,9 +753,11 @@ let makeProject = (st = getSettings(), inject = {}) => {
         L.push('')
         L.push(`**全部數字皆為回測期(${pBt})之評估結果**(策略庫沒見過之期間;每個決策只憑決策棒以前之資訊)。目標:S 更高且各相位皆為正。S = 0.7 × 等效年化之七相位平均 + 0.3 × 最差相位;階梯 0 ~ 3 見任務書之判準。`)
         L.push('')
-        L.push('不同選集大小與持倉上限之 S 不能直接比(虛無均隨之變動);判斷挑法有沒有內容請看**超額**(等效年化之七相位平均 − 同劑量虛無均 = 比同樣條件之隨機挑好多少)與 z。虛無 p 於 64 抽之下限為 0.0154。')
+        L.push('不同選集大小與持倉上限之 S 不能直接比(虛無均隨之變動);判斷挑法有沒有內容請看**超額**(等效年化之七相位平均 − 同劑量虛無均 = 比同樣條件之隨機挑好多少)與 z。虛無 p 於 ' + `${nullDrawsOf(st.eval)} 抽之下限為 ${nullFloorText(nullDrawsOf(st.eval))}。`)
         L.push('')
-        L.push('「同訊號量超額」= 與訊號量相當之隨機選集比;「同活躍度超額」= 與活躍度分層相同之隨機選集比(兩者皆於選集之每隻訊號數偏離全體隨機逾 10% 時才有,「—」表示訊號量與全體隨機相當)。「下單之做空比例」= 做空單 ÷ 全部下單(訓練期之診斷 / 回測期;全體隨機約 0.22 / 0.16):席次之做多比例正常而兩期皆遠高(或遠低)於隨機者,下單流量偏在一側 —— 是兩側活躍度不對稱所致之組成,不是挑選內容。「換種子與同分次序之 S」= 迴圈同時換亂數種子與同分次序(ctx.meta.tie、同一進場棒之訊號先後)重放之 S:含隨機抽取或主鍵大量同分之成品其結果隨之波動,與主分數相差很大者主分數不可靠;「—」= 第一次重放之選集與 S 皆與主分數相同,不依賴兩者。其右一欄 = 正本與各次重放之平均(S;組成對照之超額 / 近期活躍度之組成對照之超額):**判定量會隨抽取而變之成品,以這個平均判內容,不以單抽**。')
+        //全體隨機之基準(規則 R-REC-36): 取判讀所用之同一份設定(settings.score.sideFlow 與內建值之合併), 不寫死某一策略庫之實測值
+        let sfBase = sideFlowCfgOf(st.score && st.score.sideFlow).baseShort
+        L.push('「同訊號量超額」= 與訊號量相當之隨機選集比;「同活躍度超額」= 與活躍度分層相同之隨機選集比(兩者皆於選集之每隻訊號數偏離全體隨機逾 10% 時才有,「—」表示訊號量與全體隨機相當)。「下單之做空比例」= 做空單 ÷ 全部下單(訓練期之診斷 / 回測期;全體隨機約 ' + `${sfBase.train} / ${sfBase.backtest}` + '):席次之做多比例正常而兩期皆遠高(或遠低)於隨機者,下單流量偏在一側 —— 是兩側活躍度不對稱所致之組成,不是挑選內容。「換種子與同分次序之 S」= 迴圈同時換亂數種子與同分次序(ctx.meta.tie、同一進場棒之訊號先後)重放之 S:含隨機抽取或主鍵大量同分之成品其結果隨之波動,與主分數相差很大者主分數不可靠;「—」= 第一次重放之選集與 S 皆與主分數相同,不依賴兩者。其右一欄 = 正本與各次重放之平均(S;組成對照之超額 / 近期活躍度之組成對照之超額):**判定量會隨抽取而變之成品,以這個平均判內容,不以單抽**。')
         L.push('')
         L.push('**「組成對照」= 同側同活躍度虛無**:把選集之每一隻換成同方向、活躍度名次相鄰之隨機一隻。「可重現」= 該隨機替換之等效年化 ÷ 成品之等效年化:接近 100% 表示成品之績效來自「方向 × 活躍度」之組成,不是挑中了哪幾隻(0% = 組成是逆風)。**「幾何對照」**再匹配該側內之止盈 / 止損三等分(只供判讀、不入階梯)。**有無挑選內容,以這兩欄之超額與 p 判讀**;標「*」者其每隻訊號數與做多比例皆與全體隨機相近(組成對照不入階梯 1)。')
         L.push('')
@@ -2420,5 +2426,21 @@ let makeProject = (st = getSettings(), inject = {}) => {
 }
 
 
-export { makeProject, outwardNoteOf, unproposedNoteOf, prevDirectionOf, signsMentionOf, OUT_CHECK_MIN }
+//makeProjectOrExit, 命令列與工具之入口用(g_rsi.mjs 與 tools/ 之 searchMap、briefPreview、armInactive、armDecide、fakeRound; 規則 R-EV-44):
+//  組裝時之設定預檢不合(invalid eval.… / invalid periods.…)⇒ 印 ERROR <訊息>、離開碼 2(不印堆疊; 同 g_eval.mjs); 其他錯誤照舊拋出
+let makeProjectOrExit = (st, inject = {}) => {
+    try {
+        return makeProject(st, inject)
+    }
+    catch (err) {
+        let msg = configMsgOf(err)
+        if (msg !== null) {
+            console.log(`ERROR ${msg}`)
+            process.exit(2)
+        }
+        throw err
+    }
+}
+
+export { makeProject, makeProjectOrExit, outwardNoteOf, unproposedNoteOf, prevDirectionOf, signsMentionOf, OUT_CHECK_MIN }
 export default makeProject

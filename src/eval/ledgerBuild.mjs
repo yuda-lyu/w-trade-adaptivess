@@ -3,7 +3,9 @@ import path from 'path'
 import crypto from 'crypto'
 import genKLinesTpSl from 'w-trade-backtest/src/genKLinesTpSl.mjs'
 import settleOrderPnl from 'w-trade-backtest/src/settleOrderPnl.mjs'
+import isenum from 'wsemi/src/isenum.mjs'
 import { normUnit, unitKeyOf } from './unit.mjs'
+import { normBarHours } from './barGrid.mjs'
 
 
 //訂單帳本之建置: 把策略庫之每隻策略於 [數據起點, endTime) 之逐張訂單(進場棒、出場棒、每單位損益)一次算出並存成緊湊二進位
@@ -20,6 +22,9 @@ import { normUnit, unitKeyOf } from './unit.mjs'
 //    單一策略之峰值名義(只記錄, 不設門檻、不中止): 每隻策略於帳本全期之最大同時持倉名義(其單於 [進場棒, 出場棒) 持倉; 未結者持倉至期末);
 //      meta.unitStat 記其最大者與其策略、超過 uIni 之隻數(恰等於者不算)與峰值最高之至多 10 隻之檔名; 記錄列一行最大者與隻數(超過者 0 亦列)—— 研究用本金之「超過即中止」只施於挑選後之持倉組合(評估器; 見 ./evalCore.mjs)
 //    未給 ⇒ 帳本之各檔與鍵與未加入本功能時逐位相同(重建於同一資料夾時移除舊之 unit.f64)
+//  每根之時長(規則 R-EV-44): barHours 須整除 24 小時(每日棒數為整數; 例 1、2、4、6、12、24), 不合者於讀任何檔之前拋錯; 數字字串通過即轉為數值;
+//    策略檔帶 settings.intervalSec(每根秒數之宣告)者須等於 barHours × 3600, 不合者拋錯(不寫出; 防混入另一週期之策略); 未帶者不檢
+//    外部序列對不到棒之比例上限 seriesOffGridMax(選配; 0 ~ 1): 給者, 任一序列之「時間落在帳本範圍內而對不到棒之開盤時間」之列占比超過即拋錯(不寫出); 未給 ⇒ 只記錄(行為不變)
 /**
  * 帳本格式版本號, 併入帳本鍵(meta.key)之雜湊與 meta.version
  *
@@ -146,18 +151,29 @@ let alignSeries = (arr, kpTimeInd, n, stat = null) => {
  * @param {String} opt.keyOhlc 輸入K線檔鍵名(讀取 libraryRoot/ohlc/<keyOhlc>.json)
  * @param {String} opt.endTime 輸入截止時間字串(無時區, 不含)
  * @param {String} opt.outDir 輸入帳本輸出資料夾路徑
- * @param {Number} [opt.barHours=4] 輸入每根K棒小時數,預設4
+ * @param {Number} [opt.barHours=4] 輸入每根K棒小時數(須整除 24 小時; 數字或數字字串; 不合者於讀任何檔之前拋 invalid barHours…),預設4
  * @param {Integer} [opt.limit=0] 輸入只取前幾隻策略(0為全部),預設0
  * @param {String} [opt.seriesDir=null] 輸入外部序列資料夾路徑(選配; 其下每個 <名>.json 為一條序列 [{ time, value }], time 為K棒之開盤時間, 檔名以底線起首者略過; 名稱須英文字母起首、其後英數或底線、至多32字),預設null(不建入; 資料夾不存在者亦不建入並於記錄註明)
  * @param {Object} [opt.unit=null] 輸入基礎單位之設定(選配; 規則 R-EV-43){ rule: { stepSize, minQty, minNotional, asOf?, source? }, buffer = 0.1, uIni }: 給者另存每根棒之基礎單位名義(unit.f64)、meta.unit 與 meta.unitStat, 交易規則與緩衝入帳本鍵; 單一策略之全期最大同時持倉名義只記錄(最大者與超過 uIni 之隻數; 不拋錯、照寫出); 不合者拋 invalid unit…之錯誤,預設null(不啟用; 帳本與未加入本功能時逐位相同)
+ * @param {Number} [opt.seriesOffGridMax=null] 輸入外部序列對不到棒之比例上限(0 ~ 1; 數字或數字字串; 選配; 規則 R-EV-44): 給者, 任一序列之時間落在帳本範圍內而對不到棒之列之占比超過即拋 invalid series…(不寫出); 不合者於讀任何檔之前拋 invalid seriesOffGridMax…,預設null(只記錄; 行為不變)
  * @param {Function} [opt.log=console.log] 輸入記錄函數,預設console.log
  * @returns {Promise<Object>} 回傳Promise,resolve為帳本 meta 物件(含 version、key、endTime、time0、nBars、nStrategies、nOrders、nUnsettled、keyNames、seriesNames 等; 給 unit 者另含 unit、unitStat)
  * @example
  * let meta = await buildLedger({ libraryRoot: './data/library', keyOhlc: 'BTCUSDT_4h', endTime: '2024-01-01T00:00:00', outDir: './data/ledger/eval' })
  */
-let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, limit = 0, seriesDir = null, unit = null, log = console.log }) => {
+let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, limit = 0, seriesDir = null, unit = null, seriesOffGridMax = null, log = console.log }) => {
 
     let t0 = Date.now()
+    //每根之時長與外部序列之門檻(規則 R-EV-44): 先於讀任何檔檢查; barHours 通過即轉為數值(其後一律用轉換值)
+    barHours = normBarHours(barHours, 'barHours')
+    let barSec = Math.round(barHours * 3600)
+    let offGridMax = null
+    if (seriesOffGridMax !== undefined && seriesOffGridMax !== null) {
+        offGridMax = isenum(seriesOffGridMax, { min: 0, max: 1 }) ? Number(seriesOffGridMax) : NaN
+        if (!(offGridMax >= 0 && offGridMax <= 1)) {
+            throw new Error('invalid seriesOffGridMax: must be a number from 0 to 1')
+        }
+    }
     //基礎單位之設定(規則 R-EV-43): 先於讀任何檔檢查(不合者不耗時)
     let nu = normUnit(unit, 'unit')
     //每根棒之名義之函數(回測套件之 calcBaseUnitQuantity): 給了 unit 才動態匯入 ⇒ 未給者不依賴之; 相依之回測套件不含此函數(或其所匯入之相依缺漏)者拋 invalid unit…(不留載入失敗之堆疊; 原錯誤保留於 err.cause)
@@ -279,6 +295,22 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
                     log(`注意: 外部序列 ${seriesNames[i]}: ${notes.join('; ')}`)
                 }
             }
+            //對不到棒之比例上限(規則 R-EV-44; 給了 seriesOffGridMax 者): 占比 = offGrid ÷(matched + offGrid)—— 只計時間落在帳本範圍內之列(終點以後、起點以前者不計)
+            //  於寫出之前拋錯(不留半份帳本); 例: 每根 4 小時之序列餵給每根 1 日之帳本, 每日只對到 1 列(占比約 5/6)
+            //  時間落在帳本範圍內之列為 0 者(分母 0; 整條序列皆在帳本之外或為空)亦拒絕 —— 給了門檻即要求序列確實對位到本帳本
+            //  (覆蓋率不在本檢查: 較粗之序列餵給較細之帳本〔例: 每日之序列給每根 4 小時之帳本〕其列皆對得到棒, 占比為 0, 而多數棒為缺值)
+            if (offGridMax !== null) {
+                for (let i = 0; i < seriesNames.length; i++) {
+                    let s = stats[i]
+                    let den = s.matched + s.offGrid
+                    if (den === 0) {
+                        throw new Error(`invalid series ${seriesNames[i]}: must have rows within the ledger (required by seriesOffGridMax)`)
+                    }
+                    if (s.offGrid / den > offGridMax) {
+                        throw new Error(`invalid series ${seriesNames[i]}: off-grid rows exceed seriesOffGridMax (${s.offGrid} of ${den} rows within the ledger; time must be the bar open time in the same string format as the K lines)`)
+                    }
+                }
+            }
         }
     }
 
@@ -328,6 +360,11 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
             throw new Error(`${files[si]}: mode ${md}`)
         }
         let st = s.settings || {}
+        //每根秒數之宣告(規則 R-EV-44): 有帶者須等於 barHours × 3600(數字或數字字串); 未帶者不檢
+        let isec = st.intervalSec
+        if (isec !== undefined && isec !== null && !(isenum(isec) && Number(isec) === barSec)) {
+            throw new Error(`invalid settings.intervalSec of strategy ${files[si]}: must equal barHours * 3600`)
+        }
         let rtp = st.rTakeProfit
         let rsl = st.rStopLoss
         let fee = typeof st.rFee === 'number' ? st.rFee : 0.0005

@@ -5,6 +5,8 @@ import { getSettings, argOf } from '../cfg.mjs'
 import { loadLedger, memberLedger } from '../eval/ledger.mjs'
 import { makeEvaluator, ntStaticOf, isCapitalError } from '../eval/evalCore.mjs'
 import { normUnit, sameUnit } from '../eval/unit.mjs'
+import { trainFromBarOf, gridCheck, checkEvalSettings, evalNumsOf, periodAt, configMsgOf } from '../eval/barGrid.mjs'
+import { cfgNumOf } from '../eval/cfgNum.mjs'
 import { loadPick, loadExt } from '../eval/pickLoader.mjs'
 import { P as PI, pushOwn, safeJson, assertIntrinsics, isIntegrityError } from '../eval/intrinsics.mjs'
 import { scoreOf } from '../eval/score.mjs'
@@ -16,9 +18,11 @@ import { createResourceMonitor } from '../arsi/resources.mjs'
 //    挑選函數自帳本起點(暖機後之第一個決策)連續執行到回測期終點, 每個決策只看得到決策棒以前之資訊;
 //    只有決策棒落在回測期者計入績效、新鮮度、虛無與選集統計(持倉簿自回測期起點為空)。ctx.meta.ntAll 只計訓練期之進場數(策略庫之靜態屬性)
 //  node g_eval.mjs --pick <挑選模組.mjs> [--mode quick|full] [--period backtest|train|postfit] [--out <結果.json>] [--null N] [--phases 0,3] [--ref <參考模組.mjs>[,<參考模組2.mjs>…]]
+//  --null N: 虛無抽數(非負整數; 覆寫設定之 eval.nullDraws); 給了而不是非負整數(含無值、非數字)⇒ 印 invalid --null: must be a non-negative integer、離開碼 2(規則 R-EV-44; 不靜默忽略)
+//  設定不合(影響評估之數字 warmupDays、cadenceDays、nullDraws、actBins、sideActHalf 給了而無效;期間之界線缺或不在棒格線上;eval.fitEnd、eval.trainFromStart 不合)⇒ 印 ERROR invalid …、離開碼 2
 //    quick: 相位 0 與 3、地平線 7 日、不算虛無(數秒; 迭代用)
 //    full : 七相位、全部地平線、同劑量虛無 64 抽(交付用; 結果之 selHash 為選集序列之指紋)
-//    --period train: 改看訓練期內之決策(診斷用; 訓練期是策略庫之求解期 = 樣本內, 不計入判讀)
+//    --period train: 改看訓練期內之決策(診斷用; 訓練期是策略庫之求解期 = 樣本內, 不計入判讀); 自帳本之第一個決策起, 設定 eval.trainFromStart 為 true 者改自訓練期起點起(規則 R-EV-44)
 //    --period postfit(規則 R-EV-41; 診斷用; **此結果不是正本**): 求解窗後段 —— 只計決策棒落在「帳本內最早之求解窗終點棒之次一根 ~ 回測期起點(不含)」之決策,
 //           且每個決策只留選集中「求解窗終點棒早於該決策棒」之席(評估器之 fitEndBar 逐席判定; 設定 eval.fitEnd)
 //           挑選函數照常自帳本起點連續執行(ctx.prev、ctx.state 為其完整之選集); 輸出所留之席之等效年化、組成對照(同側同活躍度; 只換所留之席)之超額與 p、下單數,
@@ -65,9 +69,22 @@ if (!['backtest', 'train', 'postfit'].includes(periodArg)) {
 //  --ref(重疊率以完整之選集定義)、--ext-test(擴充診斷以完整之選集為前提)不併用; 迴圈之重放改帳本 / 評估起點之環境變數不併用(此段之終點固定為回測期起點)
 //  --ext-test 與其他期間之併用維持現狀(不在本規則範圍)
 let isPostfit = periodArg === 'postfit'
+//--null N(虛無抽數; 規則 R-EV-44): 給了(含無值或非數字)而不是非負整數 ⇒ 不評估(離開碼 2; 決定資料口徑之 opt 不退回預設、不靜默忽略); 未給 ⇒ 依模式與設定
+let nullArg = argOf('null', null)
+if (nullArg !== null && !(typeof nullArg === 'number' && Number.isSafeInteger(nullArg) && nullArg >= 0)) {
+    console.log('invalid --null: must be a non-negative integer')
+    process.exit(2)
+}
 if (isPostfit) {
-    let nullArg0 = argOf('null', null)
-    let nDraws = typeof nullArg0 === 'number' ? nullArg0 : (mode === 'full' ? (st.eval.nullDraws === undefined ? 64 : st.eval.nullDraws) : 0)
+    let nullArg0 = nullArg
+    let nDraws = 0
+    try {
+        nDraws = nullArg0 !== null ? nullArg0 : (mode === 'full' ? cfgNumOf(st.eval && st.eval.nullDraws, 64, 'eval.nullDraws', 'nonNegInt') : 0)
+    }
+    catch (err) {
+        console.log(`ERROR ${err.message}`)
+        process.exit(2)
+    }
     let bad = null
     if (argOf('ref', null) !== null) {
         bad = 'cannot be combined with --ref'
@@ -213,7 +230,7 @@ if (st.resources && process.env.ARSI_HARNESS !== '1') {
 //  ARSI_EVAL_FROM 改評估起點(保留期之起點); 節點與做夢之任務不使用(其操作紀錄含 ARSI_HARNESS 即被稽核列出), 其數字不對 agent 揭露
 let harnessEnv = process.env.ARSI_HARNESS === '1'
 let ledgerDir = harnessEnv && process.env.ARSI_LEDGER_DIR ? path.resolve(process.env.ARSI_LEDGER_DIR) : st.eval.ledgerDir
-let evalFrom = harnessEnv && process.env.ARSI_EVAL_FROM ? process.env.ARSI_EVAL_FROM : st.periods.backtest.start
+let evalFrom = harnessEnv && process.env.ARSI_EVAL_FROM ? process.env.ARSI_EVAL_FROM : periodAt(st, 'backtest', 'start')
 //讀帳本前比對內建物件(挑選模組已載入; 其延後執行之程式可能於上方之 await 期間才執行): 讀帳本與建評估器為同步, 其間不會再執行模組之程式
 checkOrFail('before-ledger')
 let Lfull = loadLedger(ledgerDir)
@@ -271,6 +288,27 @@ if (member) {
 let barMs = L.meta.barHours * 3600000
 let time0Ms = Date.parse(`${L.meta.time0}Z`)
 let barOf = (iso) => Math.round((Date.parse(`${iso}Z`) - time0Ms) / barMs)
+//設定不合(規則 R-EV-44: 期間之界線與 eval.fitEnd 不在帳本之棒格線上、eval.trainFromStart 不合)⇒ 印 ERROR invalid …、離開碼 2(於評估之前; 不記評估紀錄);
+//  給 --out 者寫失敗之結果檔 { ok: false, code: 'CONFIG_INVALID', error }(同 SOURCE_UNIT_INVALID 之寫法)
+let configExit = (err) => {
+    let msg = configMsgOf(err)
+    if (msg !== null) {
+        console.log(`ERROR ${msg}`)
+        if (fpOut && fpOut !== true) {
+            writeJson(path.resolve(fpOut), { ok: false, ...memberInfo(), error: msg, code: 'CONFIG_INVALID' })
+        }
+        process.exit(2)
+    }
+    throw err
+}
+//  檢查 = 迴圈組裝專案時之預檢(checkEvalSettings): 缺 periods.train / periods.backtest 亦為 invalid periods.…(不是 TypeError); 並含影響評估之數字(暖機日數、決策間隔、虛無抽數、活躍度分層數、名次寬度; 給了而無效即拒絕)
+try {
+    checkEvalSettings(st, L.meta)
+    gridCheck(evalFrom, L.meta, harnessEnv && process.env.ARSI_EVAL_FROM ? 'ARSI_EVAL_FROM' : 'periods.backtest.start')
+}
+catch (err) {
+    configExit(err)
+}
 let trainEndBar = barOf(st.periods.train.end)
 let btStartBar = barOf(evalFrom)
 if (periodArg === 'backtest' && btStartBar >= L.nBars) {
@@ -279,8 +317,23 @@ if (periodArg === 'backtest' && btStartBar >= L.nBars) {
 }
 //靜態欄 ctx.meta.ntAll: 只計訓練期之進場數(策略庫之屬性; 不含訓練期以後之資訊); makeEvaluator 要求明給訓練期之界線
 //  帳本只涵蓋訓練期者(終點 ≤ 訓練期之終點)其值 = 帳本全期之進場數(進場棒皆小於帳本之 K 棒數)
-L.ntStatic = ntStaticOf(L, trainEndBar)
+//  eval.trainFromStart(選配; 規則 R-EV-44): true ⇒ 計數與 --period train 之決策皆以訓練期起點為下界(帳本之資料起點早於訓練期起點者用之); 未給 ⇒ 自帳本起點(行為不變)
+//    下界為第 0 根(帳本起點 = 訓練期起點, 或更晚)者與未給者相同(不設下界 ⇒ 結果檔逐位相同)
+let trainFrom = null
+try {
+    trainFrom = trainFromBarOf(st, L.meta, trainEndBar)
+}
+catch (err) {
+    configExit(err)
+}
+if (trainFrom === 0) {
+    trainFrom = null
+}
+L.ntStatic = trainFrom === null ? ntStaticOf(L, trainEndBar) : ntStaticOf(L, trainEndBar, trainFrom)
 let win = periodArg === 'train' ? { toBar: trainEndBar } : { fromBar: btStartBar }
+if (periodArg === 'train' && trainFrom !== null) {
+    win = { fromBar: trainFrom, toBar: trainEndBar }
+}
 //亂數種子: 預設 settings.eval.seed; --seed 只在迴圈之重放(ARSI_HARNESS=1)時生效
 let seedArg = argOf('seed', null)
 let seed = st.eval.seed === undefined ? 1 : st.eval.seed
@@ -303,16 +356,23 @@ if (tieArg !== null) {
         console.log('--tie-salt 只供迴圈之重放使用,已忽略(沿用正本之同分次序)')
     }
 }
-let ev = makeEvaluator(L, tieSalt !== 0 ? { ...st.eval, tieSalt } : st.eval)
+let ev
+try {
+    ev = makeEvaluator(L, tieSalt !== 0 ? { ...st.eval, tieSalt } : st.eval)
+}
+catch (err) {
+    configExit(err)
+}
 let phasesArg = argOf('phases', null)
+//設定之數值(evalNumsOf; 上方之預檢已通過): 決策間隔、虛無抽數取轉型後之數值(數字字串之設定不以字串進入 opt; 規則 R-EV-44)
+let evNums = evalNumsOf(st.eval, L.barsPerDay, 'eval')
 let opt = mode === 'full'
-    ? { phases: st.eval.phases, horizons: st.eval.horizons, nullDraws: st.eval.nullDraws }
-    : { phases: [0, 3], horizons: [st.eval.cadenceDays], nullDraws: 0 }
+    ? { phases: st.eval.phases, horizons: st.eval.horizons, nullDraws: evNums.nullDraws }
+    : { phases: [0, 3], horizons: [evNums.cadenceDays], nullDraws: 0 }
 if (phasesArg !== null && phasesArg !== true) {
     opt.phases = String(phasesArg).split(',').map((x) => Number(x))
 }
-let nullArg = argOf('null', null)
-if (typeof nullArg === 'number') {
+if (nullArg !== null) {
     opt.nullDraws = nullArg
 }
 //求解窗後段(--period postfit; 規則 R-EV-41): 起 = 評估器之 fitEndBar 之最小者(0 以上)之次一根(終點棒本身在求解窗內); 終 = 回測期起點(設定之回測期, 不含; 不取環境變數)
@@ -354,7 +414,7 @@ let extList = []
 let extLoadErrors = []
 //  載入器 loadExt 在 src/eval/pickLoader.mjs(與挑選模組之 loadPick 同處、同一種匯入快取鍵)
 if (typeof extTest === 'string' && extTest) {
-    opt = { phases: [0, 3], horizons: [st.eval.cadenceDays], nullDraws: 8 }
+    opt = { phases: [0, 3], horizons: [evNums.cadenceDays], nullDraws: 8 }
     try {
         //await 恢復後先比對(其間模組之延後程式可能已改), 再以 pushOwn 收集
         let ex = await loadExt(extTest)

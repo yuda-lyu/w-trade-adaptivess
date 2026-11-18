@@ -3,7 +3,7 @@ import path from 'path'
 import { getSettings, argOf, FD_ROOT } from '../cfg.mjs'
 import { peekRunLock } from '../arsi/runner.mjs'
 import { ARM_LABELS, armProposalLine } from '../arsi/records.mjs'
-import { makeProject } from '../domain/domain.mjs'
+import { makeProjectOrExit } from '../domain/domain.mjs'
 import { decideArgsOf } from '../domain/armCatalog.mjs'
 
 //臂目錄之提案之審定(主控用; 規則 R-ARM-2): 節點與做夢「提」, 主控「審」; 經引擎之治理(rsi.governance.decide)寫入 <狀態根>/governance/
@@ -21,7 +21,7 @@ import { decideArgsOf } from '../domain/armCatalog.mjs'
 //  不合(參數不足、審定後之目錄不合等)⇒ 提案帳與擴充檔皆不變(引擎於寫入前試建目錄)
 let st = getSettings()
 //本工具不派工 ⇒ 換上不派工之派工器(不讀派工用之金鑰)
-let P = makeProject(st, { dispatch: async () => ({ ok: false, error: 'tools/armDecide.mjs 不派工' }) })
+let P = makeProjectOrExit(st, { dispatch: async () => ({ ok: false, error: 'tools/armDecide.mjs 不派工' }) })
 let gov = P.rsi.governance
 let fpLedgerMd = P.rsi.paths.govProposalsMd
 let textOf = (key) => {

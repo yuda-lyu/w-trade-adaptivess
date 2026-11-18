@@ -1,14 +1,14 @@
 import fs from 'fs'
 import path from 'path'
 import { getSettings } from '../cfg.mjs'
-import { makeProject } from '../domain/domain.mjs'
+import { makeProjectOrExit } from '../domain/domain.mjs'
 import { makeTexts } from '../domain/texts.mjs'
 
 //預覽下一輪之節點任務書大小(處理要點 §7: 節點任務書逾 15 KB 即整併): 以前緣內「無起點」之提案產生任務書, 列總位元組數與各節之位元組數
 //  node tools/briefPreview.mjs [--out <資料夾>]      --out: 另把任務書寫到該資料夾(請給 tmp/ 下之路徑)
 //  只處理無起點者: 有起點之任務會建立工作夾並複製起點之成品(那是派工時才該發生之事)
 let st = getSettings()
-let P = makeProject(st, {})
+let P = makeProjectOrExit(st, {})
 P.rsi.init()
 let texts = makeTexts({ st, FD_ROOT: st.FD_ROOT })
 let iOut = process.argv.indexOf('--out')

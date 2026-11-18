@@ -7,6 +7,7 @@ import { loadPick } from '../eval/pickLoader.mjs'
 import { P as PI, assertIntrinsics, isIntegrityError } from '../eval/intrinsics.mjs'
 import { backtestCfg } from '../domain/backtestCfg.mjs'
 import { gradeOf } from '../domain/backtestGrade.mjs'
+import { trainFromBarOf, gridCheck, checkEvalSettings, periodAt, configMsgOf } from '../eval/barGrid.mjs'
 
 
 //回測期旗標(只供迴圈與主代理使用; 節點 agent 與做夢 agent 不得執行, 其輸出之數字不得揭露給 agent)
@@ -19,7 +20,7 @@ import { gradeOf } from '../domain/backtestGrade.mjs'
 //  旗標: 七相位等效年化之平均 > rule.meanMin 且最差相位 > rule.worstPhaseMin, 且換亂數種子之複製版(共 backtest.replicas 次重放)皆然 ⇒ pass;
 //        未達 pass 者: 分級啟用(backtest.grade.enabled; 預設)時依「對訊號量相當之隨機挑」分為 above / mixed / level / below(src/domain/backtestGrade.mjs), 否則 fail
 //  輸出: 私有根 backtest/<name>.json(完整數字 + 參照 + 分段); 標準輸出末行「BACKTEST_FLAG <旗標>」
-//  離開碼: 0 完成 / 2 挑選模組問題 / 3 挑選函數執行錯誤 / 4 未授權 / 5 帳本不一致(全期帳本與評估帳本之訓練期進場數不同, 或評估帳本無法載入 / 不合核對之前提)
+//  離開碼: 0 完成 / 2 挑選模組問題或設定不合(期間之界線、eval.trainFromStart、eval.fitEnd; 規則 R-EV-44)/ 3 挑選函數執行錯誤 / 4 未授權 / 5 帳本不一致(全期帳本與評估帳本之訓練期進場數不同, 或評估帳本無法載入 / 不合核對之前提)
 if (process.env.ARSI_HARNESS !== '1') {
     console.log('g_backtest.mjs 只供迴圈使用(回測期數字不對 agent 揭露); 節點與做夢任務請用 g_eval.mjs')
     process.exit(4)
@@ -60,8 +61,21 @@ let L = loadLedger(bt.ledgerDir)
 let barMs = L.meta.barHours * 3600000
 let time0Ms = Date.parse(`${L.meta.time0}Z`)
 let barOf = (iso) => Math.round((Date.parse(`${iso}Z`) - time0Ms) / barMs)
-let trainEndBar = barOf(st.periods.train.end)
-let btStartBar = barOf(st.periods.backtest.start)
+//設定之預檢(規則 R-EV-44; 與 g_eval.mjs、迴圈組裝專案時同一組 checkEvalSettings): 期間之界線(缺 periods.train / periods.backtest 亦為 invalid periods.…, 不是 TypeError)、eval.fitEnd、eval.trainFromStart、
+//  影響評估之數字(暖機日數、決策間隔、虛無抽數、活躍度分層數、名次寬度)不合 ⇒ 印 ERROR invalid …、離開碼 2(未寫任何檔)
+try {
+    checkEvalSettings(st, L.meta)
+}
+catch (err) {
+    let msg = configMsgOf(err)
+    if (msg === null) {
+        throw err
+    }
+    console.log(`ERROR ${msg}`)
+    process.exit(2)
+}
+let trainEndBar = barOf(periodAt(st, 'train', 'end'))
+let btStartBar = barOf(periodAt(st, 'backtest', 'start'))
 //訓練期之進場數(靜態欄; 不含回測期)並與評估帳本核對(排程第 496 項)
 //  評估帳本(settings.eval.ledgerDir; g_build 之標準產物)涵蓋訓練期與回測期(終點為回測期終點), 其 off.u32 為全期計數 —— 不是訓練期之進場數, 不可拿來核對;
 //  改以評估帳本自身於同一個訓練期終點之進場數(ntStaticOf; 棒序依其自身之 time0 與每棒小時數換算)與全期帳本逐策略比對: 兩者由同一策略庫建出時,
@@ -85,7 +99,7 @@ let ntStatic = null
         process.exit(5)
     }
     let barMsE = Le.meta.barHours * 3600000
-    let trainEndE = Math.round((Date.parse(`${st.periods.train.end}Z`) - Date.parse(`${Le.meta.time0}Z`)) / barMsE)
+    let trainEndE = Math.round((Date.parse(`${periodAt(st, 'train', 'end')}Z`) - Date.parse(`${Le.meta.time0}Z`)) / barMsE)
     let reason = null
     if (!(barMs > 0 && Number.isFinite(barMs) && barMsE > 0 && Number.isFinite(barMsE) && Number.isFinite(time0Ms) && Number.isFinite(Date.parse(`${Le.meta.time0}Z`)))) {
         reason = 'time0 或 barHours 無效'
@@ -106,8 +120,26 @@ let ntStatic = null
         console.log(`ERROR 全期帳本與評估帳本不合核對之前提(${reason}); 請以同一策略庫重建兩者`)
         process.exit(5)
     }
-    ntStatic = ntStaticOf(L, trainEndBar)
-    let ntEval = ntStaticOf(Le, trainEndE)
+    //eval.trainFromStart(選配; 規則 R-EV-44): 兩帳本各以自身之 time0 與每棒小時數換算訓練期起點之棒序, 作為計數之下界; 未給 ⇒ 自帳本起點(行為不變); 設定不合 ⇒ 離開碼 2
+    //  期間之界線(換算為棒序者: 訓練期終點於兩帳本、回測期起點、分級分段所用之回測期終點)須落在帳本之棒格線上(規則 R-EV-44; 同 g_eval.mjs)⇒ 不合者離開碼 2
+    //  下界為第 0 根(帳本起點 = 訓練期起點)者與未給者相同(ntStaticOf 之 fromBar 為 0 時與未給同一路徑)
+    let fromL = null
+    let fromE = null
+    try {
+        //全期帳本(L)之訓練期終點、回測期起點已由上方之預檢核對; 此處核對評估帳本(Le)之訓練期終點與分級分段所用之回測期終點
+        gridCheck(periodAt(st, 'train', 'end'), Le.meta, 'periods.train.end')
+        if (bt.grade.enabled && bt.nullDraws > 0) {
+            gridCheck(periodAt(st, 'backtest', 'end'), L.meta, 'periods.backtest.end')
+        }
+        fromL = trainFromBarOf(st, L.meta, trainEndBar)
+        fromE = trainFromBarOf(st, Le.meta, trainEndE)
+    }
+    catch (err) {
+        console.log(`ERROR ${err.message}`)
+        process.exit(2)
+    }
+    ntStatic = fromL === null ? ntStaticOf(L, trainEndBar) : ntStaticOf(L, trainEndBar, fromL)
+    let ntEval = fromE === null ? ntStaticOf(Le, trainEndE) : ntStaticOf(Le, trainEndE, fromE)
     let bad = Le.n !== L.n ? -2 : -1
     for (let s = 0; s < L.n && bad === -1; s++) {
         if (ntEval[s] !== ntStatic[s]) {
@@ -120,7 +152,19 @@ let ntStatic = null
     }
 }
 L.ntStatic = ntStatic
-let ev = makeEvaluator(L, st.eval)
+//eval.fitEnd 不在帳本之棒格線上等設定不合(規則 R-EV-44)⇒ 離開碼 2(未寫任何檔)
+let ev
+try {
+    ev = makeEvaluator(L, st.eval)
+}
+catch (err) {
+    let msg = configMsgOf(err)
+    if (msg !== null) {
+        console.log(`ERROR ${msg}`)
+        process.exit(2)
+    }
+    throw err
+}
 let accept = typeof pk.accept === 'function' ? pk.accept : null
 //亂數種子: 預設 settings.eval.seed; --seed N 可覆寫(主代理校準參照用: 同一模組換種子看等級之分佈)
 let seedArg = argOf('seed', null)

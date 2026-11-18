@@ -7,7 +7,7 @@ import { EVAL_VERSION } from './evalVersion.mjs'
 
 //附算與補算之快取之鍵之來源(規則 R-REC-34; 讀檔者集中於此, 計畫本身在 fillPlan.mjs 為純函數)
 //  pickHashOf     成品檔之內容雜湊(位元組之 sha256 前 20 字)
-//  evaluatorFpOf  評估器之指紋 = 本套件之評估器原始碼(src/eval/*.mjs 與 src/cli/eval.mjs; 檔名與內容)、評估帳本之鍵(<eval.ledgerDir>/meta.json 之 key)、
+//  evaluatorFpOf  評估器之指紋 = 本套件之評估器原始碼(src/eval/*.mjs〔不含只用於建帳本之 ledgerBuild.mjs〕與 src/cli/eval.mjs; 檔名與內容)、評估帳本之鍵(<eval.ledgerDir>/meta.json 之 key)、
 //                 研究用本金(帳本之 meta.unit 之 uIni 之原值; 基礎單位開啟者才併入, 規則 R-EV-43: 不入帳本鍵而改變評估之成敗)、
 //                 影響數字之設定(periods 與 eval 中 timeoutSec、ledgerDir 以外之各鍵)、評估器版本(EVAL_VERSION; 單一定義在 evalVersion.mjs)之 sha256 前 20 字 —— 任一改變 ⇒ 附算與補算之值過時
 //                 (只改迴圈、任務書或其他非評估器之檔之升版不使之過時; 評估器所匯入之其他套件之改版不在指紋內 —— 該情形調高 EVAL_VERSION;
@@ -31,12 +31,16 @@ let h20 = (buf) => crypto.createHash('sha256').update(buf).digest('hex').slice(0
  */
 let pickHashOf = (buf) => h20(buf)
 
+//EVAL_FP_SKIP, src/eval/ 內不屬評估器之檔(不入指紋; 規則 R-REC-34、R-EV-44): 建帳本之 ledgerBuild.mjs —— 評估器(src/cli/eval.mjs 與其匯入之 src/eval/ 各檔)不匯入它(測試以匯入鏈核對);
+//  只改建帳本之升版不使附算與補算之值過時(帳本之內容改變者經帳本鍵 meta.key 併入指紋)
+let EVAL_FP_SKIP = ['ledgerBuild.mjs']
+
 //evalSrcFiles, 評估器原始碼之檔(相對於套件之 src; 依名排序); 讀不到即拋錯(指紋不得因讀檔失敗而靜默變寬)
 let FP_ERR = (what) => new Error(`invalid evaluator fingerprint: must read ${what}`)
 let evalSrcFiles = () => {
     let out
     try {
-        out = fs.readdirSync(path.join(SRC, 'eval')).filter((f) => /\.mjs$/i.test(f)).sort().map((f) => `eval/${f}`)
+        out = fs.readdirSync(path.join(SRC, 'eval')).filter((f) => /\.mjs$/i.test(f) && !EVAL_FP_SKIP.includes(f)).sort().map((f) => `eval/${f}`)
     }
     catch (err) {
         throw FP_ERR('the evaluator source (eval/)')

@@ -1,7 +1,7 @@
 import path from 'path'
 import { getSettings, argOf } from '../cfg.mjs'
 import { peekRunLock } from '../arsi/runner.mjs'
-import { makeProject } from '../domain/domain.mjs'
+import { makeProjectOrExit } from '../domain/domain.mjs'
 
 //節點之「未作用之臂」之補記(主控用; 規則 R-REC-20): 指派之臂中, 交付版未作用者(試過後關閉, 或交付版所做的不屬該臂之定義)
 //  平時由節點自報(code.inactiveArms)、做夢之審計定案(audits[].inactiveArms → 樹之 evidence.inactiveArms); 本工具只供主控補記:
@@ -12,7 +12,7 @@ import { makeProject } from '../domain/domain.mjs'
 //  只寫樹上該節點之 evidence.inactiveArms(附出處與理由)並重產看板與搜尋地圖; S、階梯、選集指紋不變(變了即報錯)
 //  輪次進行中不得執行(看板與載體於輪中由迴圈讀寫)
 let st = getSettings()
-let P = makeProject(st, {})
+let P = makeProjectOrExit(st, {})
 P.rsi.init()
 let executed = () => P.rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => P.rsi.store.getNode(r.id)).filter(Boolean)
 

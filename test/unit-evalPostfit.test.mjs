@@ -711,7 +711,7 @@ describe('命令列之 --period postfit(求解窗後段;規則 R-EV-41)', functi
 })
 
 describe('任務書不提求解窗後段(規則 R-EV-41:任務書不列此選項)', function () {
-    it('節點與做夢之任務書皆不含 postfit / afterFit 字樣', () => {
+    it('節點任務書不含 postfit / afterFit / 求解窗後段;做夢任務書只有一句提及(規則 R-REC-37;指共同儲存區之 postfit 欄,不含選項 --period postfit 與 afterFitOnly)', () => {
         let st0 = getSettings()
         let st = { ...st0, rsi: { ...st0.rsi, guides: false } }
         let texts = makeTexts({ st, FD_ROOT: st.FD_ROOT })
@@ -721,7 +721,27 @@ describe('任務書不提求解窗後段(規則 R-EV-41:任務書不列此選項
         let db = texts.dreamBrief({ round: 1, nodeIds: ['n1'], reworkedIds: [], workDir: path.join(st.records.workDir, 'dream_r001'), context: { nodes: [{ nodeId: 'n1', arms: ['A04_act'], base: null, S: -12.3, worst: -30.1, excess: 8.2, ladder: 0, vetoed: false, claimedS: -12.3, nEvals: 6, nFull: 4, nFullSel: 4, issues: [], from: null, type: 'explore', docMd: 'd.md', workDir: 'rsi/work/n1' }], failed: [], refs: [], prevDirections: [], maxDirections: 7, extra: '2. 更新文件', toolbox } })
         for (let s of [nb, db]) {
             assert(s.length > 1000)
-            assert(!/postfit|afterFit|求解窗後段/.test(s))
+            assert(!/--period postfit|afterFit/.test(s), '不列選項名')
+        }
+        assert(!/postfit|求解窗後段/.test(nb), '節點任務書不提')
+        //做夢任務書只有一句提及(規則 R-REC-37:預先核對之設計取捨不得以求解窗後段為判準;不列選項名與用法)
+        //  句內附所指之處: 尚無共同儲存區(總表)者指節點文件之附算列(不提共同儲存區;R-REC-25),已有者指其 postfit 欄
+        let pre = (ref) => `  - **預先核對(跑前登錄)之設計取捨不得以求解窗後段(${ref})為判準**:此段只於設計定案後附報(否則該段對該設計即非獨立之佐證)。`
+        let hits = db.split('\n').filter((x) => /求解窗後段|postfit/.test(x))
+        assert.deepEqual(hits, [pre('節點文件摘要之「求解窗後段(佐證;非正本)」一列')], '尚無共同儲存區')
+        assert(!db.includes('共同儲存'))
+        let root1 = path.join(FD_ROOT, 'test', '_tmp', `briefs_store_${process.pid}`)
+        fs.mkdirSync(path.join(root1, 'picks'), { recursive: true })
+        try {
+            fs.writeFileSync(path.join(root1, 'picks', 'INDEX.md'), '# 總表\n', 'utf8')
+            let t1 = makeTexts({ st: { ...st, rsi: { ...st.rsi, root: root1 } }, FD_ROOT: st.FD_ROOT })
+            let nb1 = t1.nodeBrief({ workDir: path.join(st.records.workDir, 'nodeX'), task: { goal: 'g', type: 'explore', claim: null, arms: [arm], base: null, refs: [], direction: null, toolbox }, round: 7, nodeId: 'nodeX', attempt: 1 })
+            let db1 = t1.dreamBrief({ round: 1, nodeIds: ['n1'], reworkedIds: [], workDir: path.join(st.records.workDir, 'dream_r001'), context: { nodes: [{ nodeId: 'n1', arms: ['A04_act'], base: null, S: -12.3, worst: -30.1, excess: 8.2, ladder: 0, vetoed: false, claimedS: -12.3, nEvals: 6, nFull: 4, nFullSel: 4, issues: [], from: null, type: 'explore', docMd: 'd.md', workDir: 'rsi/work/n1' }], failed: [], refs: [], prevDirections: [], maxDirections: 7, extra: '2. 更新文件', toolbox } })
+            assert.deepEqual(db1.split('\n').filter((x) => /求解窗後段|postfit/.test(x)), [pre('共同儲存區之 `postfit` 欄')], '已有共同儲存區')
+            assert(!/postfit|求解窗後段/.test(nb1) && !/--period postfit|afterFit/.test(db1), '節點任務書不提;不列選項名')
+        }
+        finally {
+            fs.rmSync(root1, { recursive: true, force: true })
         }
     })
 })

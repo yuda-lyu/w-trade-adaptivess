@@ -1,0 +1,216 @@
+import isenum from 'wsemi/src/isenum.mjs'
+import { evalCfgNumsOf } from './cfgNum.mjs'
+
+
+//每根 K 棒之時長與時刻格線(規則 R-EV-44): 每根時長須整除 24 小時(每日棒數為整數), 設定之時刻須落在帳本之棒格線上
+//  只含檢查與換算(只匯入 wsemi 之 isenum); 建帳本(ledgerBuild.mjs)、評估器(evalCore.mjs)、命令列與 initProject 共用
+//  錯誤訊息依 invalid <位置>: must be …(不帶輸入值)
+
+/**
+ * 檢查並正規化每根 K 棒之小時數: 須為正有限數(數字或數字字串), 且整除 24 小時(以分鐘計: 1440 可被每根之分鐘數整除, 每根之分鐘數為正整數); 通過即回傳數值, 否則拋錯
+ * 例: 1、2、3、4、6、8、12、24(以及 0.5、0.25 等)通過; 5、7、48、168 不通過
+ *
+ * @param {*} v 輸入每根 K 棒之小時數
+ * @param {String} [where='barHours'] 輸入錯誤訊息所用之位置名稱,預設'barHours'
+ * @returns {Number} 回傳每根 K 棒之小時數(數值)
+ * @example
+ * let h = normBarHours(24)
+ * // => 24
+ */
+let normBarHours = (v, where = 'barHours') => {
+    let h = isenum(v, { gt: 0 }) ? Number(v) : NaN
+    let m = h * 60
+    let mi = Math.round(m)
+    if (!(Number.isFinite(h) && mi >= 1 && Math.abs(m - mi) < 1e-9 && 1440 % mi === 0)) {
+        throw new Error(`invalid ${where}: must be a positive number of hours that divides 24 (e.g. 1, 2, 4, 6, 12 or 24)`)
+    }
+    return h
+}
+
+/**
+ * 時刻字串(無時區; 與 K 線之 time 同一約定)是否落在帳本之棒格線上: 以同一假想時區 Z 解析, 與 time0 之差為每根毫秒數之整數倍
+ *
+ * @param {*} t 輸入時刻字串
+ * @param {Number} time0Ms 輸入帳本第一根之毫秒數(Date.parse(`${time0}Z`))
+ * @param {Number} barMs 輸入每根之毫秒數
+ * @returns {Boolean} 回傳是否落在格線上(非字串、無法解析者為 false)
+ * @example
+ * let ok = onBarGrid('2020-01-08T00:00:00', Date.parse('2020-01-01T00:00:00Z'), 86400000)
+ * // => true
+ */
+let onBarGrid = (t, time0Ms, barMs) => {
+    if (typeof t !== 'string') {
+        return false
+    }
+    let ms = Date.parse(`${t}Z`)
+    return Number.isFinite(ms) && Number.isFinite(time0Ms) && barMs > 0 && (ms - time0Ms) % barMs === 0
+}
+
+
+/**
+ * 訓練期之計數下界(規則 R-EV-44; 設定 eval.trainFromStart): 為 true 時回傳訓練期起點(settings.periods.train.start)於帳本之棒序(早於帳本起點者為 0), 供 ntStaticOf 之 fromBar 與 --period train 之評估起點;
+ * 未給(undefined / null)或 false 回傳 null(不設下界; 與未加入本設定時相同)
+ * 不合者拋錯(不帶輸入值): 非布林 ⇒ invalid eval.trainFromStart; 起點不在帳本之棒格線上 ⇒ invalid periods.train.start(…bar grid…); 起點晚於訓練期終點 ⇒ invalid periods.train.start(…not be later…)
+ *
+ * @param {Object} st 輸入設定物件(讀 st.eval.trainFromStart、st.periods.train.start)
+ * @param {Object} meta 輸入帳本之 meta(讀 time0、barHours)
+ * @param {Integer} trainEndBar 輸入訓練期之終點棒序
+ * @returns {Integer|null} 回傳下界之棒序(0 以上),或 null(不設下界)
+ * @example
+ * let f = trainFromBarOf({ eval: { trainFromStart: true }, periods: { train: { start: '2020-07-01T00:00:00' } } }, { time0: '2019-07-01T00:00:00', barHours: 24 }, 1000)
+ * // => 366
+ */
+let trainFromBarOf = (st, meta, trainEndBar) => {
+    let v = st && st.eval ? st.eval.trainFromStart : undefined
+    if (v === undefined || v === null || v === false) {
+        return null
+    }
+    if (v !== true) {
+        throw new Error('invalid eval.trainFromStart: must be a boolean')
+    }
+    let t = st.periods && st.periods.train ? st.periods.train.start : undefined
+    let time0Ms = Date.parse(`${meta.time0}Z`)
+    let barMs = meta.barHours * 3600000
+    if (!onBarGrid(t, time0Ms, barMs)) {
+        throw new Error('invalid periods.train.start: must be a time on the bar grid of the ledger (required by eval.trainFromStart)')
+    }
+    let f = Math.max(0, Math.round((Date.parse(`${t}Z`) - time0Ms) / barMs))
+    if (!(f <= trainEndBar)) {
+        throw new Error('invalid periods.train.start: must not be later than periods.train.end (required by eval.trainFromStart)')
+    }
+    return f
+}
+
+
+/**
+ * 設定之時刻(期間之界線等)須落在帳本之棒格線上(規則 R-EV-44):不在格線上(含無法解析、非字串)者拋 invalid <where>: must be a time on the bar grid of the ledger;
+ * 帳本之 time0 或每棒小時數本身無效者不檢(交由呼叫端既有之處置)
+ *
+ * @param {*} t 輸入時刻字串
+ * @param {Object} meta 輸入帳本之 meta(讀 time0、barHours)
+ * @param {String} where 輸入錯誤訊息所用之位置名稱(如 periods.train.end)
+ * @returns {undefined} 無回傳值
+ * @example
+ * gridCheck('2020-07-01T00:00:00', { time0: '2020-01-01T00:00:00', barHours: 24 }, 'periods.train.end')
+ */
+let gridCheck = (t, meta, where) => {
+    let time0Ms = Date.parse(`${meta && meta.time0}Z`)
+    let barMs = meta ? meta.barHours * 3600000 : NaN
+    if (!(Number.isFinite(time0Ms) && barMs > 0 && Number.isFinite(barMs))) {
+        return
+    }
+    if (!onBarGrid(t, time0Ms, barMs)) {
+        throw new Error(`invalid ${where}: must be a time on the bar grid of the ledger`)
+    }
+}
+
+/**
+ * 評估之設定之預檢(規則 R-EV-44;迴圈組裝專案時用, 與 g_eval.mjs、g_backtest.mjs 之檢查同一組):期間之界線(periods.train.end、periods.backtest.start;缺 periods 或其下之段亦為 invalid periods.…, 不是 TypeError)與求解窗(eval.fitEnd 各側)須落在帳本之棒格線上、eval.trainFromStart 須合法、
+ * 影響評估之數字(eval.warmupDays、cadenceDays、nullDraws、actBins、sideActHalf)給了而無效即拒絕(evalNumsOf);
+ * 不合者拋 invalid …(訊息同 g_eval.mjs);帳本之 time0 或每棒小時數本身無效者不檢
+ *
+ * @param {Object} st 輸入設定物件
+ * @param {Object} meta 輸入評估帳本之 meta(讀 time0、barHours)
+ * @returns {undefined} 無回傳值
+ * @example
+ * checkEvalSettings(st, ledgerMeta)
+ */
+let checkEvalSettings = (st, meta) => {
+    let time0Ms = Date.parse(`${meta && meta.time0}Z`)
+    let barMs = meta ? meta.barHours * 3600000 : NaN
+    if (!(Number.isFinite(time0Ms) && barMs > 0 && Number.isFinite(barMs))) {
+        return
+    }
+    //缺 periods / periods.train / periods.backtest(或非物件)者視同界線未給 ⇒ 拋 invalid periods.…(設定錯誤; 不是 TypeError)
+    let tr = objOf(periodsOf(st).train)
+    gridCheck(tr.end, meta, 'periods.train.end')
+    gridCheck(periodAt(st, 'backtest', 'start'), meta, 'periods.backtest.start')
+    //期間之另兩端(訓練期起點、回測期終點): 任務書與評估結果之標示取其日期、回測期長度取其日數差 ⇒ 須為可解析之時刻字串(缺者否則於組裝任務書時以 TypeError 結束); 不要求在棒格線上(只有 eval.trainFromStart 與 g_backtest.mjs 之分級才要求,見其各處)
+    for (let [seg, end] of [['train', 'start'], ['backtest', 'end']]) {
+        let v = periodAt(st, seg, end)
+        if (!(typeof v === 'string' && Number.isFinite(Date.parse(`${v}Z`)))) {
+            throw new Error(`invalid periods.${seg}.${end}: must be a time string (the same format as the K lines)`)
+        }
+    }
+    let fe = st && st.eval && st.eval.fitEnd && typeof st.eval.fitEnd === 'object' ? st.eval.fitEnd : {}
+    for (let side of ['long', 'short']) {
+        if (fe[side] && !onBarGrid(fe[side], time0Ms, barMs)) {
+            throw new Error(`invalid eval.fitEnd.${side}: must be a time on the bar grid of the ledger (the open time of a bar, in the same string format as the K lines)`)
+        }
+    }
+    trainFromBarOf(st, meta, Math.round((Date.parse(`${tr.end}Z`) - time0Ms) / barMs))
+    //影響評估之數字(暖機日數、決策間隔、虛無抽數、活躍度分層數、名次寬度)給了而無效 ⇒ 拒絕(與 makeEvaluator 同一函數 evalNumsOf)
+    evalNumsOf(st && st.eval, Math.round(24 / meta.barHours), 'eval')
+}
+
+
+/**
+ * 影響評估之數字之取值與檢測(規則 R-EV-44;評估器 makeEvaluator、設定之預檢 checkEvalSettings 與命令列共用 ⇒ 檢測之值即使用之值):
+ * warmupDays(暖機日數;預設 180)、cadenceDays(決策間隔日數;預設 7)須為非負 / 正數且與每日棒數之積為整數(轉為棒序後須為整數);
+ * nullDraws(虛無抽數;預設 64;0 = 不算虛無)須為非負整數;actBins(活躍度分層數;預設 10)須為 1 ~ 256 之整數(評估器以 Uint8Array 存層號);sideActHalf(名次寬度;預設 50)須為非負整數;
+ * 未給(undefined 或 null)取預設;數字字串收受並轉為數值;給了而無效者拋 invalid <who>.<鍵>: must be …(不帶輸入值)
+ *
+ * @param {Object} ev 輸入評估之設定(settings.eval 或 makeEvaluator 之 cfg;可為 null 或 undefined)
+ * @param {Number} bpd 輸入每日棒數(帳本之 barsPerDay)
+ * @param {String} [who='eval'] 輸入錯誤訊息所用之物件名稱(settings.eval 為 eval;makeEvaluator 之 cfg 為 cfg),預設'eval'
+ * @returns {Object} 回傳 { warmupDays, cadenceDays, nullDraws, actBins, sideActHalf }(皆為數值)
+ * @example
+ * evalNumsOf({ cadenceDays: '5' }, 6)
+ * // => { warmupDays: 180, cadenceDays: 5, nullDraws: 64, actBins: 10, sideActHalf: 50 }
+ */
+let evalNumsOf = (ev, bpd, who = 'eval') => {
+    //每個鍵只讀一次、取值之函數與任務書、合約同一(evalCfgNumsOf; 單一定義 EVAL_NUMS)
+    let out = evalCfgNumsOf(ev, who)
+    //日數換成棒序(日數 × 每日棒數)須為整數: 決策棒以此遞增、並作陣列之索引, 小數之棒序使索引落空
+    for (let [k, kind] of [['warmupDays', 'a non-negative'], ['cadenceDays', 'a positive']]) {
+        if (!Number.isInteger(out[k] * bpd)) {
+            throw new Error(`invalid ${who}.${k}: must be ${kind} number of days that is a whole number of bars`)
+        }
+    }
+    return out
+}
+
+/**
+ * 設定物件之安全讀取:非物件(含 null、陣列以外之原始值)回空物件
+ *
+ * @param {*} x 輸入任意值
+ * @returns {Object} 回傳物件
+ * @example
+ * objOf(null)
+ * // => {}
+ */
+let objOf = (x) => (x && typeof x === 'object' ? x : {})
+
+//periodsOf, settings.periods(缺者為空物件)
+let periodsOf = (st) => objOf(st && st.periods)
+
+/**
+ * 期間之界線之安全讀取:settings.periods[<段>][<端>];缺 periods、該段或該端者回 undefined(不是 TypeError;交由 gridCheck 拋 invalid periods.…)
+ *
+ * @param {Object} st 輸入設定物件
+ * @param {String} seg 輸入段名(train、backtest)
+ * @param {String} end 輸入端名(start、end)
+ * @returns {*} 回傳設定之值或 undefined
+ * @example
+ * periodAt({}, 'train', 'end')
+ * // => undefined
+ */
+let periodAt = (st, seg, end) => objOf(periodsOf(st)[seg])[end]
+
+/**
+ * 設定不合之錯誤之訊息(命令列與工具之入口用):invalid cfg.<鍵> 改為 invalid eval.<鍵>(makeEvaluator 以 cfg 稱設定,使用者看到之位置為 settings.eval);
+ * 屬設定不合者(invalid eval.…、invalid periods.…、invalid ARSI_EVAL_FROM、invalid opt.nullDraws、invalid --null)回改寫後之訊息,其餘回 null(照舊拋出)
+ *
+ * @param {*} err 輸入錯誤
+ * @returns {String|null} 回傳訊息或 null
+ * @example
+ * configMsgOf(new Error('invalid cfg.nullDraws: must be a non-negative integer'))
+ * // => 'invalid eval.nullDraws: must be a non-negative integer'
+ */
+let configMsgOf = (err) => {
+    let msg = String((err && err.message) || err).replace(/^invalid cfg\./, 'invalid eval.')
+    return /^invalid (eval\.|periods\.|ARSI_EVAL_FROM|opt\.nullDraws|--null)/.test(msg) ? msg : null
+}
+
+
+export { normBarHours, onBarGrid, trainFromBarOf, gridCheck, checkEvalSettings, evalNumsOf, periodAt, configMsgOf }

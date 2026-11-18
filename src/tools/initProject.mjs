@@ -1,6 +1,9 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { normBarHours } from '../eval/barGrid.mjs'
+import { evalCfgNumsOf, cfgNumLoose } from '../eval/cfgNum.mjs'
+import { phaseCountOf, phaseText, horizonsOf, periodLenText, dateOf } from '../domain/factsText.mjs'
 
 
 //把本套件接到一個專案根: 建立或更新進入檔與參考檔(安裝或升版後執行一次)
@@ -14,6 +17,11 @@ import { fileURLToPath } from 'url'
 //    合約含專案自己之數值(各期間、求解窗、標的)⇒ 由專案維護; 已存在而與套件之參考版不同時不覆寫, 另把參考版寫為 docs/pick-contract.pkg.md 並列出 ——
 //    升版後請比對兩者, 把參考版新增或更動之條文併入專案之合約(合併後可刪 .pkg.md)
 //  不動: 狀態根(rsi/)、資料(data/)、專案自有之文件與其他檔
+//  每根之時長(規則 R-REC-36)= --bar-hours 或專案既有之 settings.json 之 source.barHours(兩者皆給而不同即拒絕;皆無為 4;不合者拒絕, 未寫任何檔)
+//    全新專案根之參考設定: 每根 4 小時者原樣複製, 其他者 source.barHours 為該值(其餘逐字不變)⇒ 重複執行同一指令為冪等
+//  合約之參考版依每根之時長與專案之設定產出(renderContract): 週期之字句、期間、保留期起點、回測期長度、求解窗、決策間隔、暖機、地平線、虛無抽數、判讀之門檻、硬上限等皆取自設定
+//    (專案既有之 settings.json; 全新專案根為本次所寫之參考設定; 既有而不是合法之 JSON 者只依每根之時長);每根 4 小時且設定之值與參考版相同 ⇒ 與套件之 contract/pick-contract.md 逐字相同
+//  --bar-hours <h>: 每根 K 棒之小時數(須整除 24;例 24 = 日線)
 //  --dry: 只列出將寫入之檔, 不寫
 //  回傳(initProject 函數): { root, written[], kept[], skipped[], differs[] }
 let FD_PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -53,23 +61,203 @@ let shimOf = (spec, up) => [
     '',
 ].join('\n')
 
+//CONTRACT_CYCLE / CONTRACT_FACTS, 合約參考版(contract/pick-contract.md; 每根 4 小時、參考設定之數值之寫法)之錨點與改寫(規則 R-REC-36): [錨點, 恰出現之次數, 改寫函數]
+//  CONTRACT_CYCLE: 與每根之時長有關之字句(每根不為 4 小時者改寫); CONTRACT_FACTS: 屬使用端之事實(期間、保留期起點、回測期長度、求解窗、決策間隔、暖機、地平線、虛無抽數、門檻、硬上限、活躍度分層、名次寬度、資源閘之等待),一律以設定之值改寫
+//  錨點之次數不合即拋(參考版之文字改動而未同步此表者, 由測試抓到; 不靜默留下另一個策略庫之字句); 設定之值與參考版所寫者相同 ⇒ 改寫後逐字相同
+let CONTRACT_CYCLE = [
+    ['決策棒序號(4 小時一根)', 1, ({ h }) => `決策棒序號(${h} 小時一根)`],
+    ['`Math.floor(棒序號 ÷ 每日棒數)` = 日序號(4 小時棒 ⇒ 每日 6 根;', 1, ({ h, bpd }) => `\`Math.floor(棒序號 ÷ 每日棒數)\` = 日序號(${h} 小時棒 ⇒ 每日 ${bpd} 根;`],
+    ['供日內層級之進場時刻結構(進場時段、進場棒在當日之位置)與以進場棒之價為準之計算', 1, ({ bpd, a }) => (bpd > 1 ? a : '供以進場棒之價為準之計算(每日只有 1 根,無日內之進場時刻結構)')],
+    ['供出場側之棒層級結構(出場棒之時段、出場棒之價量狀態)', 1, ({ bpd, a }) => (bpd > 1 ? a : '供出場側之棒層級結構(出場棒之價量狀態;每日只有 1 根,無日內之時段)')],
+    ['、`barsPerDay`(6)', 1, ({ bpd }) => `、\`barsPerDay\`(${bpd})`],
+    ['`lastEntryAgo`(距最近一次進場之 K 棒數;', 1, ({ h }) => `\`lastEntryAgo\`(距最近一次進場之 K 棒數〔每根 ${h} 小時〕;`],
+    ['`nBack` 預設 180,超過已有之棒數者只給到數據起點', 2, ({ h }) => `\`nBack\` 預設 180〔根;每根 ${h} 小時 ⇒ 約 ${Math.round(180 * h / 24 * 100) / 100} 日〕,超過已有之棒數者只給到數據起點`],
+    ['成本(每次決策;以約 900 個因子、33 萬個條件之策略庫為例)', 1, () => '成本(每次決策;以每根 4 小時、約 900 個因子、33 萬個條件之策略庫為例;成本約與 K 棒數成正比)'],
+    ['`nBack` 預設 180,取整', 1, ({ h }) => `\`nBack\` 預設 180〔根;每根 ${h} 小時〕,取整`],
+]
+//sideText, 求解窗之寫法(只給一側者只寫該側; 皆未給者回 null)
+let fitSidesOf = (f) => (f.l && f.s ? `做多策略之求解窗止於 ${f.l},做空止於 ${f.s}` : (f.l ? `做多策略之求解窗止於 ${f.l}` : (f.s ? `做空策略之求解窗止於 ${f.s}` : null)))
+let CONTRACT_FACTS = [
+    //相位數(eval.phases 之長度; 規則 R-REC-36): 先於其他錨點改寫(其後之錨點之文字不含「七相位」之字樣), 三種寫法皆為參考版所寫(七個起始相位、七個相位、七相位 × 6 處); 「既有七欄」不是相位, 不在其內
+    ['七個起始相位', 1, (v) => v.ph('個起始相位')],
+    ['七個相位', 1, (v) => v.ph('個相位')],
+    ['七相位', 6, (v) => v.ph('相位')],
+    ['- 每 7 日決策一次;', 1, (v) => `- 每 ${v.cad} 日決策一次;`],
+    ['(日)各跑一遍取平均。第一個決策日在數據起點後 180 日(暖機)。', 1, (v) => `(日)各跑一遍取平均。第一個決策日在數據起點後 ${v.warm} 日(暖機)。`],
+    ['回傳之策略於其後 7 日內的每個進場訊號', 1, (v) => `回傳之策略於其後 ${v.cad} 日內的每個進場訊號`],
+    ['訓練期(2022-07-01 ~ 2025-10-06)= 策略庫之求解期', 1, (v) => `訓練期(${v.trS} ~ ${v.trE})= 策略庫之求解期`],
+    ['(做多策略之求解窗止於 2025-04-08,做空止於 2025-10-06)', 1, (v) => (fitSidesOf(v.fit) ? `(${fitSidesOf(v.fit)})` : '')],
+    ['**回測期(2025-10-06 ~ 2026-07-31)= 評估期**', 1, (v) => `**回測期(${v.btS} ~ ${v.btE})= 評估期**`],
+    ['2026-08-01 以後之資料不提供', 1, (v) => (v.ho ? `${v.ho} 以後之資料不提供` : '回測期以後之資料不提供')],
+    ['回測期只有約 10 個月', 1, (v) => `回測期只有${v.btLen}`],
+    ['做多 = 2025-04-08、做空 = 2025-10-06 所對應之棒序號', 1, (v) => (v.fit.l && v.fit.s ? `做多 = ${v.fit.l}、做空 = ${v.fit.s} 所對應之棒序號` : (v.fit.l || v.fit.s ? `${v.fit.l ? `做多 = ${v.fit.l}` : `做空 = ${v.fit.s}`} 所對應之棒序號(另一側為 -1)` : '設定 `eval.fitEnd` 所對應之棒序號(未設定者為 -1)'))],
+    ['硬限制:**月均單 ≤ 400、最大同時持倉 ≤ 50**', 1, (v) => `硬限制:**月均單 ≤ ${v.lim.monthlyOrders}、最大同時持倉 ≤ ${v.lim.peakHold}**`],
+    ['相位 0 與 3、7 日地平線、不算虛無', 1, (v) => `相位 0 與 3、${v.cad} 日地平線、不算虛無`],
+    ['1/3/7/14/30 日新鮮度、同劑量虛無 64 抽', 1, (v) => `${v.hz.join('/')} 日新鮮度、同劑量虛無 ${v.draws} 抽`],
+    ['選集於其後 1 / 3 / 7 / 14 / 30 日內之等效年化', 1, (v) => `選集於其後 ${v.hz.join(' / ')} 日內之等效年化`],
+    ['重複 64 次', 1, (v) => `重複 ${v.draws} 次`],
+    ['1 = `S ≥ 15` 且各虛無(同劑量;有算時另含同訊號量、同活躍度、同側同活躍度)之 `p ≤ 0.05`;2 = 各地平線之新鮮度皆 ≥ 10 且最差相位 ≥ 5;3 = 月均單 ≤ 300 且最大同時持倉 ≤ 30。', 1, (v) => `1 = \`S ≥ ${v.sc.S}\` 且各虛無(同劑量;有算時另含同訊號量、同活躍度、同側同活躍度)之 \`p ≤ 0.05\`;2 = 各地平線之新鮮度皆 ≥ ${v.sc.freshMin} 且最差相位 ≥ ${v.sc.worstPhaseMin};3 = 月均單 ≤ ${v.sc.monthlyOrders} 且最大同時持倉 ≤ ${v.sc.peakHold}。`],
+    //虛無之 p 之門檻(上一列改寫後之 5 處; 同一值)
+    ['p ≤ 0.05', 5, (v) => `p ≤ ${v.sc.nullP}`],
+    ['分為 10 層', 1, (v) => `分為 ${v.bins} 層`],
+    //活躍度分層之另一處(同活躍度虛無之說明)
+    ['只分 10 層', 1, (v) => `只分 ${v.bins} 層`],
+    ['名次 ±50 名內', 1, (v) => `名次 ±${v.half} 名內`],
+    ['每個決策視窗(7 日)之訊號數', 1, (v) => `每個決策視窗(${v.cad} 日)之訊號數`],
+    ['至多約 90 秒', 1, (v) => `至多約 ${v.wait} 秒`],
+    //時間字串之格式例(以訓練期起點之日期為例)
+    ['(如 `2022-07-01T00:00:00`;', 1, (v) => `(如 \`${v.trS}T00:00:00\`;`],
+]
+
+//factsOf, 合約所寫之使用端之事實(取自設定): 決策間隔、暖機、地平線、虛無抽數、活躍度分層、名次寬度、資源閘之等待未給者 = 評估器之預設(即參考版所寫之值);
+//  期間、判讀之門檻、硬上限為必要之設定(建帳本、評估與判讀皆讀), 缺者照參考版所寫; 求解窗與保留期之起點為選配, 未給者不寫日期
+//  數值之取值與其使用處同一規則: eval、score 之各值依評估器之 cfgNumOf(數字字串轉為數值; 判讀與硬上限以數值比較); resources 之等待依資源閘(只收數字)
+let factsOf = (st) => {
+    let s = st && typeof st === 'object' ? st : {}
+    let pe = s.periods && typeof s.periods === 'object' ? s.periods : {}
+    let tr = pe.train && typeof pe.train === 'object' ? pe.train : {}
+    let bt = pe.backtest && typeof pe.backtest === 'object' ? pe.backtest : {}
+    let ev = s.eval && typeof s.eval === 'object' ? s.eval : {}
+    let sc = s.score && typeof s.score === 'object' ? s.score : {}
+    //影響評估之數字(暖機日數、決策間隔、虛無抽數、活躍度分層數、名次寬度): 與評估器同一函數(evalCfgNumsOf); 未給 = 預設; 給了而無效 ⇒ 拋 invalid eval.<鍵>(不寫出任何檔)
+    let en = evalCfgNumsOf(ev, 'eval')
+    //其餘(硬上限、判讀之門檻): 數字或數字字串取其數值, 其餘為參考版所寫之值
+    let num = (x, def) => {
+        let v = cfgNumLoose(x)
+        return v === null ? def : v
+    }
+    let numOnly = (x, def) => (typeof x === 'number' && Number.isFinite(x) ? x : def)
+    let fe = ev.fitEnd && typeof ev.fitEnd === 'object' ? ev.fitEnd : {}
+    let lim = ev.limits && typeof ev.limits === 'object' ? ev.limits : {}
+    let rs = s.resources && typeof s.resources === 'object' ? s.resources : {}
+    let btS = typeof bt.start === 'string' ? bt.start : '2025-10-06T00:00:00'
+    let btE = typeof bt.end === 'string' ? bt.end : '2026-07-31T00:00:00'
+    return {
+        cad: en.cadenceDays,
+        ph: (tail) => phaseText(phaseCountOf(ev), tail),
+        warm: en.warmupDays,
+        trS: dateOf(tr.start) || '2022-07-01',
+        trE: dateOf(tr.end) || '2025-10-06',
+        btS: dateOf(btS),
+        btE: dateOf(btE),
+        btLen: periodLenText(btS, btE),
+        //保留期之起點為選配之設定(同共同儲存區之說明): 未給者不寫日期
+        ho: dateOf(pe.holdoutFrom),
+        //求解窗為選配之設定: 未給者不寫日期(合約改為「設定 eval.fitEnd 所對應…」之通稱)
+        fit: { l: dateOf(fe.long), s: dateOf(fe.short) },
+        lim: { monthlyOrders: num(lim.monthlyOrders, 400), peakHold: num(lim.peakHold, 50) },
+        hz: horizonsOf(ev),
+        draws: en.nullDraws,
+        sc: {
+            S: num(sc.ladder1 && sc.ladder1.S, 15),
+            nullP: num(sc.ladder1 && sc.ladder1.nullP, 0.05),
+            freshMin: num(sc.ladder2 && sc.ladder2.freshMin, 10),
+            worstPhaseMin: num(sc.ladder2 && sc.ladder2.worstPhaseMin, 5),
+            monthlyOrders: num(sc.ladder3 && sc.ladder3.monthlyOrders, 300),
+            peakHold: num(sc.ladder3 && sc.ladder3.peakHold, 30),
+        },
+        bins: en.actBins,
+        half: en.sideActHalf,
+        wait: numOnly(rs.evalMaxWaitSec, 90),
+    }
+}
+
+/**
+ * 依每根 K 棒之時長與專案之設定產出合約之參考版(規則 R-REC-36):套件之參考版為每根 4 小時、參考設定之數值之寫法;
+ * barHours 不為 4 者改寫與週期有關之字句(每根時長、每日棒數、ctx.meta.barsPerDay、nBack 之換算、lastEntryAgo 之單位;每日 1 根者另改日內時刻結構之用途);
+ * 屬使用端之事實(期間、保留期起點、回測期長度、求解窗、決策間隔、暖機、地平線、虛無抽數、判讀之門檻、硬上限、活躍度分層、名次寬度、資源閘之等待)一律以 settings 之值改寫(未給之項為參考版所寫之值);
+ * 每根 4 小時且設定之值與參考版所寫者相同(或未給 settings)者與參考版逐字相同;錨點之出現次數與預期不合者拋錯(參考版改動而未同步)
+ *
+ * @param {String} ref 輸入合約之參考版全文(contract/pick-contract.md)
+ * @param {Object} [opt={}] 輸入設定物件,預設{}
+ * @param {Number} [opt.barHours=4] 輸入每根 K 棒之小時數(須整除 24),預設4
+ * @param {Object} [opt.settings=null] 輸入專案之設定(settings.json 之內容;讀 periods、eval、score、resources),預設null(只依 barHours 改寫)
+ * @returns {String} 回傳合約之全文
+ * @example
+ * let text = renderContract(ref, { barHours: 24 })
+ */
+let renderContract = (ref, { barHours = 4, settings = null } = {}) => {
+    let h = normBarHours(barHours, 'barHours')
+    let bpd = Math.round(24 / h)
+    let out = ref
+    let apply = (rules, v) => {
+        for (let [a, cnt, f] of rules) {
+            let parts = out.split(a)
+            if (parts.length - 1 !== cnt) {
+                throw new Error(`renderContract: the reference contract must contain the anchor ${JSON.stringify(a.slice(0, 24))} exactly ${cnt} time(s)`)
+            }
+            out = parts.join(f({ ...v, a }))
+        }
+    }
+    if (h !== 4) {
+        apply(CONTRACT_CYCLE, { h, bpd })
+    }
+    if (settings) {
+        apply(CONTRACT_FACTS, factsOf(settings))
+    }
+    return out
+}
+
+//refSettingsOf, 寫入全新專案根之參考設定(只在不存在時; 套件之 settings.json): 每根 4 小時者原樣(逐位相同), 其他者只改 source.barHours 之值(其餘逐字不變)
+let refSettingsOf = (text, h) => {
+    if (h === 4) {
+        return text
+    }
+    let re = /("barHours"\s*:\s*)4(?=\s*[,}\r\n])/g
+    let n = (text.match(re) || []).length
+    if (n !== 1) {
+        throw new Error('initProject: the reference settings.json must contain "barHours": 4 exactly once')
+    }
+    let out = text.replace(re, `$1${h}`)
+    if (JSON.parse(out).source.barHours !== h) {
+        throw new Error('initProject: the reference settings.json must have source.barHours')
+    }
+    return out
+}
+
 /**
  * 把本套件接到一個專案根: 建立或更新進入檔與參考檔(安裝或升版後執行一次)
  * 各檔之覆寫規則見檔頭說明; 專案根不可為套件夾本身, 否則拋錯
+ * 每根之時長 = opt.barHours > 專案既有之 settings.json 之 source.barHours > 4;兩處皆給而不同、或不合者拋錯(未寫任何檔)
+ * 全新專案根(無 settings.json)之參考設定之 source.barHours = 每根之時長(4 小時者原樣複製);合約之參考版依每根之時長與專案之設定(既有者,否則為所寫之參考設定)產出(renderContract)
  *
  * @param {Object} [opt={}] 輸入設定物件,預設{}
  * @param {String} [opt.root] 輸入專案根路徑,未給時取環境變數 ARSI_ROOT,再無則取行程工作目錄
  * @param {Boolean} [opt.dry=false] 輸入是否只列出將寫入之檔而不實際寫入,預設false
  * @param {Boolean} [opt.force=false] 輸入是否覆寫已存在而非本工具所產生之進入檔,預設false
+ * @param {Number|String} [opt.barHours] 輸入每根 K 棒之小時數(須整除 24),預設未給(取專案既有之設定,再無為 4)
  * @returns {Object} 回傳 { root(專案根絕對路徑), written(已寫入或將寫入之相對路徑陣列), kept(未變之相對路徑陣列), skipped(因非本工具所產生而未覆寫者), differs(合約與參考版不同者) }
  * @example
  * let r = initProject({ root: './myproj', dry: true })
  */
-let initProject = ({ root, dry = false, force = false } = {}) => {
+let initProject = ({ root, dry = false, force = false, barHours } = {}) => {
     let fdRoot = path.resolve(root || process.env.ARSI_ROOT || process.cwd())
     if (path.resolve(fdRoot) === FD_PKG) {
         throw new Error('專案根不可為套件夾本身(套件夾已自帶進入檔與參考檔)')
     }
+    //合約之參考版與參考設定(規則 R-REC-36): 先於寫任何檔決定每根之時長(不合者拋錯, 未寫任何檔)
+    let fpSt = path.join(fdRoot, 'settings.json')
+    let hasSt = fs.existsSync(fpSt)
+    let projSt = null
+    if (hasSt) {
+        try {
+            projSt = JSON.parse(fs.readFileSync(fpSt, 'utf8'))
+        }
+        catch (err) {
+            projSt = null
+        }
+    }
+    let stSrc = projSt && typeof projSt === 'object' && projSt.source && typeof projSt.source === 'object' ? projSt.source : {}
+    let hOpt = barHours === undefined || barHours === null ? null : normBarHours(barHours, 'barHours')
+    let hSt = stSrc.barHours === undefined || stSrc.barHours === null ? null : normBarHours(stSrc.barHours, 'source.barHours')
+    if (hOpt !== null && hSt !== null && hOpt !== hSt) {
+        throw new Error('invalid barHours: must equal source.barHours of settings.json')
+    }
+    let h = hOpt !== null ? hOpt : (hSt !== null ? hSt : 4)
+    let refSettingsText = refSettingsOf(fs.readFileSync(path.join(FD_PKG, 'settings.json'), 'utf8'), h)
+    //合約所依之設定: 專案既有者; 全新專案根為本次所寫之參考設定; 既有而讀不到(非合法 JSON)者只依每根之時長
+    let stForContract = hasSt ? projSt : JSON.parse(refSettingsText)
+    let refContract = renderContract(fs.readFileSync(path.join(FD_PKG, 'contract', 'pick-contract.md'), 'utf8'), { barHours: h, settings: stForContract })
     let written = []
     let kept = []
     let skipped = []
@@ -107,7 +295,7 @@ let initProject = ({ root, dry = false, force = false } = {}) => {
     //合約: 專案維護; 不存在才寫, 與參考版不同者另寫參考版供比對
     let differs = []
     {
-        let ref = fs.readFileSync(path.join(FD_PKG, 'contract', 'pick-contract.md'), 'utf8')
+        let ref = refContract
         let fpC = path.join(fdRoot, 'docs', 'pick-contract.md')
         let fpSide = path.join(fdRoot, 'docs', 'pick-contract.pkg.md')
         if (!fs.existsSync(fpC)) {
@@ -126,16 +314,20 @@ let initProject = ({ root, dry = false, force = false } = {}) => {
     }
     copy('examples/pick_example.mjs', 'examples/pick_example.mjs')
     copy('arms/base.json', 'arms/base.json', { onlyIfAbsent: true })
-    copy('settings.json', 'settings.json', { onlyIfAbsent: true })
+    //參考設定(只在不存在時): 每根 4 小時者原樣, 其他者 source.barHours 為本次之每根時長(規則 R-REC-36)
+    put('settings.json', refSettingsText, { onlyIfAbsent: true })
     return { root: fdRoot, written, kept, skipped, differs }
 }
 
 //直接執行時(非被匯入): 依命令列執行並列出結果
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     let i = process.argv.indexOf('--root')
+    //--bar-hours <h>: 其後無值(或為另一個旗標)者視為無效之值(拋 invalid barHours, 未寫任何檔), 不當成未給
+    let ib = process.argv.indexOf('--bar-hours')
+    let bv = ib > 0 ? process.argv[ib + 1] : undefined
     let r
     try {
-        r = initProject({ root: i > 0 ? process.argv[i + 1] : null, dry: process.argv.includes('--dry'), force: process.argv.includes('--force') })
+        r = initProject({ root: i > 0 ? process.argv[i + 1] : null, dry: process.argv.includes('--dry'), force: process.argv.includes('--force'), ...(ib > 0 ? { barHours: bv === undefined || bv.startsWith('--') ? '' : bv } : {}) })
     }
     catch (err) {
         console.log(`未執行: ${String((err && err.message) || err)}`)
@@ -145,5 +337,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 }
 
 
-export { initProject, shimOf, MARK, CLIS }
+export { initProject, renderContract, shimOf, MARK, CLIS }
 export default initProject

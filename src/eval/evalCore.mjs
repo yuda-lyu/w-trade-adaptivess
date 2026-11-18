@@ -3,6 +3,8 @@ import iseint from 'wsemi/src/iseint.mjs'
 import { P, copyRange, copyAll, pushOwn, assertIntrinsics, violationMark, violationSince, isIntegrityError, integrityError, adoptError, snapData, handOut, isMutableSnap, isBrand } from './intrinsics.mjs'
 import { tieBaseOf, isSrcIdx } from './ledger.mjs'
 import { normUnit } from './unit.mjs'
+import { onBarGrid, evalNumsOf } from './barGrid.mjs'
+import { cfgNumOf } from './cfgNum.mjs'
 
 const { ObjectFreeze, ObjectSeal, ObjectHasOwn, ReflectApply, ArrayFrom, ArrayIsArray, ArrayPrototypeJoin, ArrayBufferIsView, NumberCtor, NumberIsInteger, NumberIsFinite, MathFloor, MathRound, MathMax, MathMin, MathImul, StringCtor, JSONStringify, StructuredClone, ErrorCtor, MapPrototypeGet, MapPrototypeSet, MapPrototypeHas, MapPrototypeDelete, MapPrototypeKeys, MapIteratorNext, SetPrototypeGetSize, SetPrototypeValues, SetIteratorNext, TypedArrayPrototypeGetLength, TypedArrayPrototypeGetToStringTag, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
 
@@ -65,9 +67,11 @@ let lowerBound = (arr, lo, hi, v) => {
  * makeEvaluator 要求呼叫端以此明給訓練期界線(L.ntStatic = ntStaticOf(L, trainEndBar)): ctx.meta.ntAll 只計訓練期之進場, 不含訓練期以後之資訊
  * 帳本全為訓練期者(無回測期、保留期之資料)給 L.nBars; **帳本涵蓋訓練期以後者(命令列之評估帳本含回測期、回測期重放之全期帳本)須給訓練期之終點棒序, 不可給 L.nBars**(否則訓練期以後之進場數被帶進 ctx.meta.ntAll)
  * 入口先比對受保護之內建物件(規則 R-EV-35 ②; 被改拋 code 為 EVAL_INTEGRITY 之錯誤); trainEndBar 之檢查依 wsemi iseint(安全整數之數字或其數字字串; 錯誤訊息不帶輸入值)
+ * fromBar(選配; 規則 R-EV-44): 計數之下界(訓練期之起點棒序; 進場棒 ≥ 此值者才計入)—— 帳本之資料起點早於訓練期起點者(因子之暖機)用之; 未給(undefined / null)或 0 ⇒ 自帳本起點計數, 結果與未加入本參數時逐位相同
  *
  * @param {Object} L 輸入由 loadLedger 取得之帳本物件
  * @param {Integer} trainEndBar 輸入訓練期之終點棒序(0 以上之整數; 進場棒小於此值者計入; 大於等於 L.nBars 者為全期)
+ * @param {Integer} [fromBar] 輸入計數之下界(0 以上且不大於 trainEndBar 之整數; 進場棒大於等於此值者計入),預設未給(自帳本起點)
  * @returns {Int32Array} 回傳長度為 L.n 之陣列, 第 s 個為策略 s 於訓練期之進場數
  * @example
  * let st = getSettings()
@@ -77,15 +81,23 @@ let lowerBound = (arr, lo, hi, v) => {
  * L.ntStatic = ntStaticOf(L, trainEndBar)
  * let ev = makeEvaluator(L, { warmupDays: 180, cadenceDays: 7 })
  */
-let ntStaticOf = (L, trainEndBar) => {
+let ntStaticOf = (L, trainEndBar, fromBar) => {
     assertIntrinsics('ledger-load')
     let b = iseint(trainEndBar) ? NumberCtor(trainEndBar) : NaN
     if (!(b >= 0)) {
         throw new ErrorCtor('invalid trainEndBar: must be a non-negative integer')
     }
+    //f, 計數之下界(規則 R-EV-44): 未給者為 0(自帳本起點; 原寫法)
+    let f = 0
+    if (fromBar !== undefined && fromBar !== null) {
+        f = iseint(fromBar) ? NumberCtor(fromBar) : NaN
+        if (!(f >= 0 && f <= b)) {
+            throw new ErrorCtor('invalid fromBar: must be an integer from 0 to trainEndBar')
+        }
+    }
     let nt = new Int32ArrayCtor(L.n)
     for (let s = 0; s < L.n; s++) {
-        nt[s] = lowerBound(L.ent, L.off[s], L.off[s + 1], b) - L.off[s]
+        nt[s] = lowerBound(L.ent, L.off[s], L.off[s + 1], b) - (f > 0 ? lowerBound(L.ent, L.off[s], L.off[s + 1], f) : L.off[s])
     }
     return nt
 }
@@ -248,13 +260,15 @@ let isCapitalError = (err) => err !== null && typeof err === 'object' && capital
  *
  * @param {Object} L 輸入由 loadLedger 取得之帳本物件; 須另給 L.ntStatic(Int32Array, 長度 L.n, 逐策略於訓練期之進場數; 以 ntStaticOf(L, 訓練期之終點棒序) 取得, 帳本全為訓練期者為 ntStaticOf(L, L.nBars)); 未給或型態、長度不合者拋 invalid L.ntStatic: must be … 之錯誤(不回退為全期進場數); 帳本帶基礎單位者另有 L.unitN(Float64Array(nBars); 每根棒之基礎單位名義)與 L.unit(交易規則、緩衝、研究用本金), 兩者須同時給或同時不給(規則 R-EV-43; 給者績效依實際名義計)
  * @param {Object} [cfg={}] 輸入設定物件,預設{}
- * @param {Integer} [cfg.warmupDays=180] 輸入暖機日數,預設180
- * @param {Integer} [cfg.cadenceDays=7] 輸入決策間隔日數,預設7
+ * @param {Number} [cfg.warmupDays=180] 輸入暖機日數(非負數,與每日棒數之積須為整數;數字字串收受並轉為數值;給了而無效者拋 invalid cfg.warmupDays),預設180
+ * @param {Number} [cfg.cadenceDays=7] 輸入決策間隔日數(正數,與每日棒數之積須為整數;同上;無效者拋 invalid cfg.cadenceDays),預設7
  * @param {Integer} [cfg.tieSalt=0] 輸入同分次序之重放鹽值(整數),預設0(正本)
  * @param {Object} [cfg.fitEnd] 輸入各策略求解窗終點之時間字串物件{ long, short }(無時區之時間字串),預設未給
  * @param {Array} [cfg.phases=[0,1,2,3,4,5,6]] 輸入起始相位(日)陣列,evalPolicy未於opt指定時採用,預設[0,1,2,3,4,5,6]
  * @param {Array} [cfg.horizons=[1,3,7,14,30]] 輸入新鮮度地平線(日)陣列,evalPolicy未於opt指定時採用,預設[1,3,7,14,30]
- * @param {Integer} [cfg.nullDraws=64] 輸入虛無重複抽樣次數,evalPolicy未於opt指定時採用,預設64
+ * @param {Integer} [cfg.nullDraws=64] 輸入虛無重複抽樣次數(非負整數,0 = 不算虛無;數字字串收受;無效者拋 invalid cfg.nullDraws),evalPolicy未於opt指定時採用,預設64
+ * @param {Integer} [cfg.actBins=10] 輸入同活躍度虛無之分層數(正整數;無效者拋 invalid cfg.actBins),預設10
+ * @param {Integer} [cfg.sideActHalf=50] 輸入組成對照之名次寬度(非負整數;無效者拋 invalid cfg.sideActHalf),預設50
  * @param {Integer} [cfg.seed=1] 輸入亂數種子,evalPolicy未於opt指定時採用,預設1
  * @returns {Object} 回傳評估器物件, 含方法: evalPolicy(評估一個挑選函數, 回傳完整評估結果), runPick(於一個相位依序呼叫挑選函數), opOf(操作績效), freshOf(新鮮度), nullOf(同劑量虛無), nullActOf(同活躍度虛無), nullSideActOf(同側同活躍度虛無), nullSideGeoOf(同側幾何分組虛無), sideGeoGroups(幾何分組), simWindows(視窗模擬), decisionBars(相位之決策棒), 以及屬性 meta(結構靜態欄)、timeOf(K棒序號轉時間字串)
  * @example
@@ -276,8 +290,10 @@ let makeEvaluator = (L, cfg = {}) => {
     let serNames = Object.freeze(Array.isArray(L.seriesNames) ? L.seriesNames.slice() : [])
     let serIdx = new Map(serNames.map((k, i) => [k, i]))
     let bpd = L.barsPerDay
-    let warmupDays = cfg.warmupDays === undefined ? 180 : cfg.warmupDays
-    let cadenceDays = cfg.cadenceDays === undefined ? 7 : cfg.cadenceDays
+    //影響評估之數字之取值與檢測(evalNumsOf; 與設定之預檢、命令列、任務書、合約之參考版同一函數; 規則 R-EV-44): 未給 = 預設; 數字字串轉為數值; 給了而無效 ⇒ 拒絕(拋 invalid cfg.<鍵>: must be …)
+    let cfgNums = evalNumsOf(cfg, bpd, 'cfg')
+    let warmupDays = cfgNums.warmupDays
+    let cadenceDays = cfgNums.cadenceDays
     let warm = warmupDays * bpd
     let cad = cadenceDays * bpd
     let time0Ms = Date.parse(`${L.meta.time0}Z`)
@@ -415,11 +431,18 @@ let makeEvaluator = (L, cfg = {}) => {
     }
     //fitEndBar, 各策略求解窗之終點棒(靜態; 由 cfg.fitEnd = { long, short }(無時區之時間字串)換算; 未給則為 -1): 此棒以後之訂單才是該策略沒見過之期間所產生
     //  終點落在帳本之後者(例如訓練期帳本內之做空策略)其值 ≥ 帳本之 K 棒數, 表示帳本內尚無求解窗後之訂單
+    //  各側之時刻(有給者)須落在帳本之棒格線上(規則 R-EV-44; 無法解析或不在格線上者拒絕建評估器 —— 原寫法以 Math.round 進位到最近之棒、無法解析者存為 0, 皆不拋錯)
     let fitEndBar = new Int32Array(n).fill(-1)
     if (cfg.fitEnd && typeof cfg.fitEnd === 'object') {
+        let fe = { long: cfg.fitEnd.long, short: cfg.fitEnd.short } //各讀一次(檢查之值即使用之值)
+        for (let side of ['long', 'short']) {
+            if (fe[side] && !onBarGrid(fe[side], time0Ms, barMs)) {
+                throw new ErrorCtor(`invalid cfg.fitEnd.${side}: must be a time on the bar grid of the ledger (the open time of a bar, in the same string format as the K lines)`)
+            }
+        }
         let barOfTime = (t) => (t ? Math.round((Date.parse(`${t}Z`) - time0Ms) / barMs) : -1)
-        let bl = barOfTime(cfg.fitEnd.long)
-        let bs = barOfTime(cfg.fitEnd.short)
+        let bl = barOfTime(fe.long)
+        let bs = barOfTime(fe.short)
         for (let s = 0; s < n; s++) {
             fitEndBar[s] = L.mode[s] > 0 ? bl : bs
         }
@@ -1882,7 +1905,8 @@ let makeEvaluator = (L, cfg = {}) => {
         let accept = typeof opt.accept === 'function' ? opt.accept : null
         let phases = opt.phases || cfg.phases || [0, 1, 2, 3, 4, 5, 6]
         let horizons = opt.horizons || cfg.horizons || [1, 3, 7, 14, 30]
-        let nullDraws = opt.nullDraws === undefined ? (cfg.nullDraws === undefined ? 64 : cfg.nullDraws) : opt.nullDraws
+        //opt.nullDraws: 給了(非 undefined / null)而無效 ⇒ 拒絕(決定資料口徑之 opt 不退回預設); 未給 ⇒ 設定值(makeEvaluator 已檢測)
+        let nullDraws = cfgNumOf(opt.nullDraws, cfgNums.nullDraws, 'opt.nullDraws', 'nonNegInt')
         let seed = opt.seed === undefined ? (cfg.seed === undefined ? 1 : cfg.seed) : opt.seed
         let fromBar = Number.isInteger(opt.fromBar) ? opt.fromBar : null
         let toBar = Number.isInteger(opt.toBar) ? opt.toBar : null
@@ -2029,7 +2053,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 let s2 = statOf(v2)
                 let ge2 = v2.filter((v) => v >= obs).length
                 nulVol = { draws: nullDraws, ratio: r4(ratio), sizeMean: r4(runs2.reduce((a, r) => a + r.sels.reduce((b, x) => b + x.length, 0), 0) / Math.max(1, sizes.length)), mean: r4(s2.mean), sd: r4(s2.sd), p: r4((1 + ge2) / (1 + nullDraws)), z: s2.sd > 0 ? r4((obs - s2.mean) / s2.sd) : 0, excess: r4(obs - s2.mean), sigPerPick: r4(v2.comp.sigPerPick) }
-                let nBins = cfg.actBins === undefined ? 10 : cfg.actBins
+                let nBins = cfgNums.actBins
                 let v3 = nullActOf(runs, accept, nullDraws, seed + 1299709, nBins)
                 let s3 = statOf(v3)
                 let ge3 = v3.filter((v) => v >= obs).length
@@ -2055,7 +2079,7 @@ let makeEvaluator = (L, cfg = {}) => {
             }, 0), 0) / nSlotSel
             let devSig = Math.abs(selSig / nul.sigPerPick - 1) > 0.1
             let devLong = nul.longRatio > 0 && Math.abs(selLong / nul.longRatio - 1) > 0.1
-            let half = cfg.sideActHalf === undefined ? 50 : cfg.sideActHalf
+            let half = cfgNums.sideActHalf
             //share: 組成可重現之比例 = 該虛無之均 ÷ 成品之等效年化(成品為正時才有意義, 否則為 null; 虛無之均為負 = 組成是逆風, 記 0)
             let pack = (v) => {
                 let s = statOf(v)
@@ -2096,7 +2120,7 @@ let makeEvaluator = (L, cfg = {}) => {
         if (afterFit) {
             let ordMean = (os) => r4(os.reduce((a, o) => a + o.nOrders, 0) / Math.max(1, os.length))
             let halves = null
-            let halfSA = cfg.sideActHalf === undefined ? 50 : cfg.sideActHalf
+            let halfSA = cfgNums.sideActHalf
             let RECENT_ACT_DAYS = 90
             //sideRecentOf, 近期活躍度版之組成對照(obsV = 該段所留之席之等效年化; 回同 sideAct 之欄 + actDays)
             let sideRecentOf = (parts, obsV, sd) => {

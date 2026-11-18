@@ -384,7 +384,8 @@ let crossReadme = () => [
     '',
 ]
 
-let readmeText = (storeRel, n, asOf, crossOn = false, fillOn = false) => [
+//  hoFrom, 保留期之起點(settings.periods.holdoutFrom 之日期部分; 規則 R-REC-36: 不寫死期間); 未給者略去括號
+let readmeText = (storeRel, n, asOf, crossOn = false, fillOn = false, hoFrom = null) => [
     '# 共同儲存「自適應挑選策略」區',
     '',
     `> 由迴圈產生(每輪結束與主控審定後重產),**agent 唯讀**。目前 ${n} 個策略。來源 = 各節點之交付版 \`pick.mjs\`(逐位複本)與節點文件內**迴圈以同一評估器重跑**之回測期數字(不是 agent 自報)。`,
@@ -399,7 +400,7 @@ let readmeText = (storeRel, n, asOf, crossOn = false, fillOn = false) => [
     '',
     '## 保留期之正負號',
     '',
-    '- 保留期 = 回測期之後、未用於搜尋之期間(2026-08-01 起)。檢定由主控執行,**數字不提供,只提供正負號**:',
+    `- 保留期 = 回測期之後、未用於搜尋之期間${hoFrom ? `(${hoFrom} 起)` : ''}。檢定由主控執行,**數字不提供,只提供正負號**:`,
     '  - `holdout.perf`:該策略於保留期之績效(七相位等效年化之平均)為正 `+`、為負 `-`、無單或為零 `0`。',
     '  - `holdout.content`:該策略於保留期之挑選內容(內建與近 90 日組成對照之超額之均)為正 `+`、為負 `-`。',
     `  - 未算者為 null(總表顯示「·」)。${asOf ? `目前之檢定所用資料至 ${asOf}。` : '目前尚無任何檢定結果。'}`,
@@ -529,7 +530,7 @@ let buildPickStore = async (st) => {
     }
     L.push('')
     fs.writeFileSync(path.join(dir, 'INDEX.md'), L.join('\n'), 'utf8')
-    fs.writeFileSync(path.join(dir, 'README.md'), readmeText(storeRel, items.length, (hoFile && hoFile.asOf) || null, !!cr, fillOn), 'utf8')
+    fs.writeFileSync(path.join(dir, 'README.md'), readmeText(storeRel, items.length, (hoFile && hoFile.asOf) || null, !!cr, fillOn, st.periods && typeof st.periods.holdoutFrom === 'string' && st.periods.holdoutFrom ? st.periods.holdoutFrom.slice(0, 10) : null), 'utf8')
     //cross: 無 _cross.json ⇒ null; 有而形狀不合 ⇒ { invalid: true, signed: 0, ignored: 0 }(總表不列其欄); 可用 ⇒ { invalid: false, signed〔至少有一個號之策略數〕, ignored〔區內策略之檔內不是號而被忽略之值之數〕}
     let cross = !crExists ? null : (cr ? { invalid: false, signed: cr.signed(), ignored: cr.ignored() } : { invalid: true, signed: 0, ignored: 0 })
     return { dir, n: items.length, copied, skipped, holdoutSigned: items.filter((x) => x.holdout.perf !== null).length, cross }

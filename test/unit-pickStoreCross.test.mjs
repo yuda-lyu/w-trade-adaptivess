@@ -5,6 +5,8 @@ import path from 'path'
 import { spawnSync } from 'child_process'
 import * as PS from '../src/domain/pickStore.mjs'
 import { makeTmp, FD_ROOT } from './tools/synthLedger.mjs'
+//HOLDOUT_FROM, 保留期之起點(說明之日期取自設定; 規則 R-REC-36): 明給與 1.0.17 之說明所寫者相同之日期, 使下方之雜湊仍為同一份輸出
+let HOLDOUT_FROM = '2026-08-01T00:00:00'
 
 
 //共同儲存區之其他標的之正負號(規則 R-REC-30;Gitea #168,使用端提案,純新增)與保留期之守門(同批收嚴):
@@ -41,7 +43,7 @@ describe('共同儲存區:其他標的之正負號(規則 R-REC-30)', function (
     //專案: 4 個策略、做夢之家族歸類、_holdout.json(只含號; ho 可換)
     let mkProj = (t, ho = { [ids[1]]: { perf: '+', content: '-' }, [ids[2]]: { perf: '0', content: null } }) => {
         let d = path.join(t.dir, 'proj')
-        let st = { FD_ROOT: d, rsi: { root: path.join(d, 'rsi') }, records: { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), workDir: path.join(d, 'rsi/work') } }
+        let st = { FD_ROOT: d, rsi: { root: path.join(d, 'rsi') }, records: { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), workDir: path.join(d, 'rsi/work') }, periods: { holdoutFrom: HOLDOUT_FROM } }
         for (let k of Object.keys(st.records)) {
             fs.mkdirSync(st.records[k], { recursive: true })
         }
@@ -258,7 +260,7 @@ describe('共同儲存區:其他標的之正負號(規則 R-REC-30)', function (
     it('區內尚無策略而有可用之 _cross.json:回傳 { invalid: false, signed: 0, ignored: 0 }、總表有欄無列、不拋錯;無策略而無此檔者回傳 cross 為 null', async () => {
         t = makeTmp('pickStoreCross5')
         let d = path.join(t.dir, 'proj')
-        let st = { FD_ROOT: d, rsi: { root: path.join(d, 'rsi') }, records: { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), workDir: path.join(d, 'rsi/work') } }
+        let st = { FD_ROOT: d, rsi: { root: path.join(d, 'rsi') }, records: { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), workDir: path.join(d, 'rsi/work') }, periods: { holdoutFrom: HOLDOUT_FROM } }
         for (let k of Object.keys(st.records)) {
             fs.mkdirSync(st.records[k], { recursive: true })
         }
@@ -360,7 +362,7 @@ describe('共同儲存區:保留期之正負號只收 "+" / "-" / "0"(規則 R-R
     it('buildPickStore:_holdout.json 內不是正負號之值不進入任何產出檔(index.json、info.json、INDEX.md、README.md);holdoutSigned 只計有號者;該檔原樣保留', async () => {
         t = makeTmp('pickStoreHoldoutGuard')
         let d = path.join(t.dir, 'proj')
-        let st = { FD_ROOT: d, rsi: { root: path.join(d, 'rsi') }, records: { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), workDir: path.join(d, 'rsi/work') } }
+        let st = { FD_ROOT: d, rsi: { root: path.join(d, 'rsi') }, records: { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), workDir: path.join(d, 'rsi/work') }, periods: { holdoutFrom: HOLDOUT_FROM } }
         for (let k of Object.keys(st.records)) {
             fs.mkdirSync(st.records[k], { recursive: true })
         }

@@ -3,7 +3,7 @@ import path from 'path'
 import { spawnSync } from 'child_process'
 import { getSettings, argOf, argStrOf, writeJson } from '../cfg.mjs'
 import { peekRound } from '../engineApi.mjs'
-import { makeProject } from '../domain/domain.mjs'
+import { makeProjectOrExit } from '../domain/domain.mjs'
 import { roundName } from '../arsi/records.mjs'
 import { runRounds, acquireRunLock, appendEvent, readEvents, trailingFailures, planGateOf, roundOkOf } from '../arsi/runner.mjs'
 import { checkQuota } from '../arsi/dispatchers.mjs'
@@ -68,7 +68,8 @@ let cliInt = (k) => {
     let v = argOf(k, null)
     return Number.isInteger(v) && v >= 1 ? v : null
 }
-let P = makeProject(st, { run: { nodesPerRound: cliInt('nodes') || cliInt('arms'), parallelNodes: cliInt('parallel') || cliInt('workers'), roundsPerRun: cliInt('rounds') } })
+//組裝時之設定預檢(規則 R-EV-44; 期間之界線、eval.fitEnd、eval.trainFromStart)不合 ⇒ 印 ERROR invalid …、離開碼 2(同 g_eval.mjs; 不取鎖、不記事件)
+let P = makeProjectOrExit(st, { run: { nodesPerRound: cliInt('nodes') || cliInt('arms'), parallelNodes: cliInt('parallel') || cliInt('workers'), roundsPerRun: cliInt('rounds') } })
 //onlyOf, --only <id 前綴,…> 之解析(reverify / extfill / fill 共用): 取原字串(argStrOf; 全數字之前綴經數值轉型會使清單為空、範圍靜默擴為全樹);
 //  未給 ⇒ null(全部); 給了而無值、前綴不足 6 碼、或未命中任何已執行之節點 ⇒ 印原因、離開碼 2(於取鎖與任何寫入之前呼叫); 命中者印其數
 let onlyOf = () => {
