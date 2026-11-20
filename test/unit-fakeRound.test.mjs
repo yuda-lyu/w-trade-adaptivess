@@ -5,6 +5,7 @@ import { spawnSync } from 'child_process'
 import { pathToFileURL } from 'url'
 import { initProject } from '../src/tools/initProject.mjs'
 import { makeTmp, writeSynthLedger, FD_ROOT } from './tools/synthLedger.mjs'
+import { makeFakeRoundCopy } from './tools/fakeRoundCopy.mjs'
 
 
 //tools/fakeRound.mjs 之「量尺之子集與擴充診斷之補算」(規則 R-EV-45 ⑦; 補算之規則 R-REC-27、R-REC-34)
@@ -14,6 +15,9 @@ import { makeTmp, writeSynthLedger, FD_ROOT } from './tools/synthLedger.mjs'
 //    失敗(離開碼 15; 同 1.0.30): ③ 有該檔而第一個節點之值為錯誤(診斷拋錯、載入失敗)④ 有值而補算失敗
 //    通過: ⑤ 有該檔、值正常、補算得同值
 //  「自備假診斷」一項(替身評估; 不依賴共用工具區)於①~⑤ 皆執行
+//  「臂目錄之提案 / 擴充」一項(離開碼 8)與節點之派工次序無關(⑦):
+//    特別之節點(自報可共用之輔助與未作用之臂、提一筆臂目錄之提案者)= 第 1 輪之計畫第 1 個節點 = 做夢範本之第 1 個 = 假做夢之採納者;
+//    實跑時派工次序由派工前之閘(資源閘)之放行次序決定(全機負載高時不定), 計畫次序不變 ⇒ 以 test/tools/fakeRoundCopy.mjs 之複本釘死派工次序(模擬資源閘依另一個次序放行)
 let REAL_DIAG = 'nullRecentAct' //fakeRound 寫死之真實診斷名(既有); 替身檔之內容與使用端無關
 let SKIP_NO_FILE = `正式之共用工具區無此診斷(無 metrics/${REAL_DIAG}.mjs)`
 let SKIP_NO_VALUE = '第一個節點無其值'
@@ -104,6 +108,87 @@ describe('tools/fakeRound.mjs:擴充診斷之補算 —— 略過不計失敗(�
     let MAIN_ERR = '量尺之子集 / 擴充診斷之補算不如預期'
     let PROBE_ERR = '自備假診斷之補算(替身評估)不如預期'
     let PROBE_OK = { probe: true, threw: true, results: [{ ok: true, filled: ['fakeProbe'] }], calls: 1, again: 0 }
+
+    //copyRun, 以 test/tools/fakeRoundCopy.mjs 之複本跑假輪次(複本在 t.dir 之 <name>_copy 夾, 不動 src): order = 第 1 輪之派工次序(計畫序號; 見該檔), edits = 故障注入之改寫
+    //  回 { status, out, err, state(假專案之狀態根), plan(第 1 輪之計畫之節點 id; 取自引擎寫成之 plan.json), dispatched(複本實際之派工次序) }
+    let DISPATCH_HEAD = 'let dispatch = async (role, { prompt, logFile }) => {' //fakeRound 之派工函數之起首(故障注入之錨點; 於原文須恰 1 次, makeFakeRoundCopy 核對)
+    let copyRun = (name, { order = null, edits = [], args = [] } = {}) => {
+        let root = mkRoot(name)
+        let dir = path.join(t.dir, `${name}_copy`)
+        let outFile = path.join(dir, 'fakeRoundCopy.mjs')
+        let orderLog = path.join(dir, 'order.log')
+        makeFakeRoundCopy({ srcFile: path.join(FD_ROOT, 'src', 'tools', 'fakeRound.mjs'), outFile, order, orderLog, edits })
+        let r = spawnSync(process.execPath, [outFile, ...args], { cwd: root, env: { ...process.env, ARSI_ROOT: root }, windowsHide: true, encoding: 'utf8', timeout: 170000 })
+        let state = path.join(root, 'tmp', 'fake', 'rsi')
+        let planFp = path.join(state, 'rounds', 'r001', 'plan.json')
+        if (!fs.existsSync(planFp)) {
+            planFp += '.bak' //故障注入(讀不到計畫之案)於第 1 個節點派工前把 plan.json 改名為 plan.json.bak
+        }
+        let plan = JSON.parse(fs.readFileSync(planFp, 'utf8')).items.map((x) => x.id)
+        let log = fs.existsSync(orderLog) ? fs.readFileSync(orderLog, 'utf8').trim().split('\n') : []
+        return { status: r.status, out: r.stdout, err: r.stderr, state, plan, dispatched: log.filter((l) => l.startsWith('dispatch ')).map((l) => l.split(' ')[1]) }
+    }
+    //臂目錄之提案之三處(規則 R-EV-45 ⑦): 提案者 = 計畫第 1 個節點(做夢範本之第 1 個 = 假做夢之採納者; 第 2 個被重做、第 3 個被刪除)
+    //  ① 提案帳(governance/PROPOSALS.md): 做夢之提案以 sources 涵蓋節點所提者 ⇒ 節點所提者不另記入帳(「〔新臂〕假新機制」恰一列)、出處為提案者、無節點之「再提(<節點 id>)」註記
+    //     (帶 --two 時第 2 輪之做夢再提同樣之提案,該列另有「再提(dream)」,不在此限)
+    //  ② 做夢任務書之「本輪節點之提案」一列: 列提案者(節點 id 前 8 碼), 不列另外兩個節點
+    //  ③ 提案者之節點文件(records/nodes/<id>.md): 列有「臂目錄之提案(由做夢彙整、主控審查)」一行與該提案; 被重做者之文件(其交付不帶提案)無此行、被刪除者之文件不在節點夾(移入回收夾)
+    let PROPOSAL_LINE = '- 臂目錄之提案(由做夢彙整、主控審查):'
+    let assertProposalPlaces = (x) => {
+        let [p1, p2, p3] = x.plan
+        assert(x.plan.length === 3 && new Set(x.plan).size === 3, `鑑別前提: 第 1 輪之計畫為 3 個互異之節點: ${x.plan}`)
+        let ledLines = fs.readFileSync(path.join(x.state, 'governance', 'PROPOSALS.md'), 'utf8').split('\n').filter((l) => l.includes('〔新臂〕假新機制'))
+        assert.equal(ledLines.length, 1, `①〔新臂〕假新機制 恰 1 列(節點所提者不另記入帳): ${ledLines.join('\n')}`)
+        assert(ledLines[0].includes(`(出處:${p1})`) && !x.plan.some((id) => ledLines[0].includes(`再提(${id}`)), `①出處為提案者(計畫第 1 個)、無節點之再提註記: ${ledLines[0]}`)
+        let brief = fs.readFileSync(path.join(x.state, 'work', 'dream_r001', 'brief.md'), 'utf8').split('\n').filter((l) => l.includes('本輪節點之提案'))
+        assert.equal(brief.length, 1, '②做夢任務書之「本輪節點之提案」恰 1 列')
+        assert(brief[0].includes(`\`${p1.slice(0, 8)}\` 〔新臂〕假新機制`) && !brief[0].includes(p2.slice(0, 8)) && !brief[0].includes(p3.slice(0, 8)), `②只列提案者: ${brief[0]}`)
+        let nodeMd = (id) => path.join(x.state, 'records', 'nodes', `${id}.md`)
+        let doc1 = fs.readFileSync(nodeMd(p1), 'utf8')
+        assert(doc1.includes(PROPOSAL_LINE) && doc1.includes('〔新臂〕假新機制'), '③提案者之節點文件列有提案')
+        assert(!fs.readFileSync(nodeMd(p2), 'utf8').includes(PROPOSAL_LINE), '③被重做者之節點文件無提案一行(其重做之交付不帶提案)')
+        assert(!fs.existsSync(nodeMd(p3)), '③被刪除者之節點文件不在節點夾(移入回收夾)')
+    }
+
+    //R-EV-45 ⑦: 特別之節點(臂目錄之提案者)依計畫次序決定、與派工先後無關 —— 範本第 k 個節點最先派工(k = 1、2、3; 其餘依計畫次序)皆離開碼 0 且三處內容如預期
+    //  改前之寫法: 特別之節點 = 「第 1 個被派工者」⇒ k = 2 時為被重做者(節點文件被覆寫)⇒ 離開碼 8(核對所驗之功能並未壞); k = 3 時為被刪除者(其提案不被做夢之提案之 sources 涵蓋 ⇒ 提案帳多一個「再提」註記)
+    for (let k of [1, 2, 3]) {
+        it(`⑦ 範本第 ${k} 個節點最先派工(模擬資源閘依另一個次序放行):離開碼 0、無「不如預期」;提案帳 / 做夢任務書之「本輪節點之提案」/ 提案者之節點文件三處如預期(提案者恆為計畫第 1 個)`, () => {
+            let x = copyRun(`order${k}`, { order: [k] })
+            assert.equal(x.status, 0, `${x.err}\n${x.out.slice(-800)}`)
+            assert(!/不如預期/.test(x.err), x.err)
+            assert.equal(x.dispatched[0], x.plan[k - 1], `鑑別前提: 範本第 ${k} 個節點最先派工: ${x.dispatched} / ${x.plan}`)
+            assert.deepEqual(x.dispatched.slice().sort(), x.plan.slice().sort(), '鑑別前提: 第 1 輪之 3 個節點各派工 1 次')
+            assertProposalPlaces(x)
+        })
+    }
+
+    it('⑦ 範本第 2 個節點最先派工、另帶 --redream --two(補做夢與第 2 輪):離開碼 0;三處如預期', () => {
+        let x = copyRun('order2two', { order: [2], args: ['--redream', '--two'] })
+        assert.equal(x.status, 0, `${x.err}\n${x.out.slice(-800)}`)
+        assert(!/不如預期/.test(x.err), x.err)
+        assert.equal(x.dispatched[0], x.plan[1], `鑑別前提: 範本第 2 個節點最先派工: ${x.dispatched} / ${x.plan}`)
+        assertProposalPlaces(x)
+    })
+
+    it('⑦ 核對不被放寬(故障注入:假節點不提臂目錄之提案):離開碼 8、stderr 為「臂目錄之提案 / 擴充不如預期」且只此一行、無提案之三處皆不成立', () => {
+        //R-EV-45 ⑦: 特別之節點改依計畫次序後, 核對所驗之功能(節點之提案列入做夢任務書、提案者之節點文件列出)壞掉者仍以離開碼 8 回報
+        let x = copyRun('noproposal', { edits: [['...(first ? { armProposals:', '...(false ? { armProposals:']] })
+        assert.equal(x.status, 8, `${x.err}\n${x.out.slice(-800)}`)
+        assert.deepEqual(x.err.split('\n').filter((l) => /不如預期/.test(l)), ['臂目錄之提案 / 擴充不如預期'], x.err)
+        assert(!fs.readFileSync(path.join(x.state, 'work', 'dream_r001', 'brief.md'), 'utf8').includes('本輪節點之提案'), '鑑別前提: 做夢任務書無「本輪節點之提案」')
+        assert(!fs.readFileSync(path.join(x.state, 'records', 'nodes', `${x.plan[0]}.md`), 'utf8').includes(PROPOSAL_LINE), '鑑別前提: 提案者之節點文件無提案一行')
+    })
+
+    it('⑦ 讀不到本輪之計畫(故障注入:第 1 個節點派工前把 plan.json 改名):特別之節點不靜默改以派工次序決定 —— 離開碼非 0', () => {
+        //R-EV-45 ⑦: 特別之節點 = 計畫第 1 個節點; 讀不到計畫即拋錯(planFirstId), 不改以派工次序續行(改前之寫法即以派工次序決定, 不讀計畫 ⇒ 離開碼 0)
+        //  於節點之派工內拋出者被引擎記為該節點之評估錯誤 ⇒ 無成品而於核對之前中止(離開碼 1; 訊息為他處之錯誤而非 planFirstId 之訊息) —— 此處只釘「離開碼非 0」(不為 0)
+        //  故障注入不依賴被測碼之內部寫法(只於派工入口之前插入改名), 改前之發布版同樣可注入(其離開碼 0 ⇒ 此案於發布版為紅)
+        let inject = `${DISPATCH_HEAD}\n    if (role === 'node') {\n        let pf = path.join(Pj.rsi.paths.fdRound(round), 'plan.json')\n        if (fs.existsSync(pf)) {\n            fs.renameSync(pf, \`\${pf}.bak\`)\n        }\n    }`
+        let x = copyRun('noplan', { edits: [[DISPATCH_HEAD, inject]] })
+        assert.notEqual(x.status, 0, `讀不到計畫時不得離開碼 0(不得改以派工次序決定): ${x.out.slice(-400)}`)
+        assert.equal(x.plan.length, 3, `鑑別前提: 引擎已寫成 3 個節點之計畫(改名後由複本讀不到;copyRun 取 plan.json.bak): ${x.plan}`)
+    })
 
     it('① 專案之共用工具區無該診斷之檔:真實診斷之補算略過(輸出標 skipped 與原因;不計失敗)、離開碼 0、無「不如預期」;自備假診斷之補算 probe: true', () => {
         //R-EV-45 ⑦: 略過不計失敗(1.0.30 為離開碼 15); 自備假診斷不依賴共用工具區

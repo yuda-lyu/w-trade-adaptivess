@@ -107,6 +107,34 @@ let M = [
     ['F20', 'src/tools/fakeRound.mjs', [["let srcM = path.join(realToolboxDir, 'metrics', `${nm}.mjs`)", "let srcM = path.join(realRoot, 'toolbox', 'metrics', `${nm}.mjs`)"]], ['unit-fakeRound']],
     ['F21', 'src/tools/fakeRound.mjs', [["let realToolboxDir = st.records.toolboxDir || path.join(realRoot, 'toolbox')", "let realToolboxDir = st.records.toolboxDir || path.join(realRoot, 'toolbox_x')"]], ['unit-fakeRound']],
     ['F22', 'src/tools/fakeRound.mjs', [["let srcM = path.join(realToolboxDir, 'metrics', `${nm}.mjs`)", "let srcM = path.join(fdM, `${nm}.mjs`)"]], ['unit-fakeRound']],
+    //── src/tools/fakeRound.mjs: 特別之節點(臂目錄之提案者、自報可共用之輔助與未作用之臂、用另一份挑選模組者)= 第 1 輪之計畫第 1 個節點, 與派工先後無關(unit-fakeRound ⑦)——
+    //F30: 特別之節點取計畫第 2 個(假做夢之重做者: 節點文件被重做之交付覆寫而無提案一行; 重做之交付不再特別〔firstDone〕)⇒ 殺(離開碼 8); F31: 取計畫第 3 個(假做夢之刪除者: 節點文件移入回收夾; 發布版之寬鬆核對〔節點夾或回收夾任一文件含該行〕不殺此變異, 改後之核對只認節點夾)⇒ 殺
+    //F32: 改回發布版之寫法(第 1 次被呼叫者 = 第 1 個被派工者)⇒ ⑦ 之「第 2 個先派工」兩案殺; F33: 不讀計畫(無特別之節點)⇒ 殺
+    //F34 ~ F36: 特別之節點之三項自報(臂目錄之提案、可共用之輔助、未作用之臂)各自拿掉 ⇒ 殺(離開碼 8、5、10): 三項皆於各種派工次序下被核對
+    //F37、F38: 提案者之節點文件之核對改查 .json(不含該行)/ 改查回收夾 ⇒ 殺; F40: 節點文件之渲染不列提案一行(src/arsi/records.mjs)⇒ 殺(只有提案者之節點文件之核對看得到; 離開碼 8)
+    //F39(equiv): 提案者之節點文件之核對改回發布版之寫法(節點夾或回收夾任一文件含該行)⇒ 於特別之節點 = 計畫第 1 個(採納者)時兩者結果逐位相同(兩者只在特別之節點為被刪除者時有別 —— 見 F31、F41)⇒ 語意等價
+    //F41: F31 + F39(特別之節點為被刪除者 + 寬鬆之核對 ⇒ fakeRound 自身之核對放行)⇒ 由 ⑦ 之三處斷言殺(提案帳之出處與「再提」、做夢任務書列之節點、提案者之節點文件)—— 測試不只倚賴 fakeRound 自身之核對
+    //F42: 派工次序之複本(test/tools/fakeRoundCopy.mjs)不依 order 排序 ⇒ ⑦ 之「鑑別前提: 範本第 k 個節點最先派工」殺
+    //F43(equiv): 拿掉「特別之派工只發生一次」之守衛(firstDone)⇒ 特別之節點 = 計畫第 1 個(採納者; 不被重做、第 2 輪之計畫不含它)時其派工本來就只有一次, 結果逐位相同 ⇒ 語意等價;
+    //  守衛之作用只在「特別之節點被重做」時(計畫次序與範本次序不一致之故障)令提案者之核對失敗(F30), 而不被重做之交付補上提案
+    //F44: F43 + F30(特別之節點為重做者,且重做之交付仍帶提案 ⇒ fakeRound 自身之核對放行)⇒ 由 ⑦ 之三處斷言殺(提案帳之「再提」與出處、做夢任務書列之節點、提案者之節點文件)
+    ['F30', 'src/tools/fakeRound.mjs', [['    return items[0].id\n', '    return items[1].id\n']], ['unit-fakeRound']],
+    ['F31', 'src/tools/fakeRound.mjs', [['    return items[0].id\n', '    return items[2].id\n']], ['unit-fakeRound']],
+    ['F32', 'src/tools/fakeRound.mjs', [['        let first = !firstDone && path.basename(wd) === firstId\n', '        let first = nNodeCalls++ === 0\n'], ['let firstId = null\n', 'let firstId = null\nlet nNodeCalls = 0\n']], ['unit-fakeRound']],
+    ['F33', 'src/tools/fakeRound.mjs', [['            firstId = planFirstId()\n', "            firstId = ''\n"]], ['unit-fakeRound']],
+    ['F34', 'src/tools/fakeRound.mjs', [['...(first ? { armProposals:', '...(false ? { armProposals:']], ['unit-fakeRound']],
+    ['F35', 'src/tools/fakeRound.mjs', [["shareable: first ? [{ file: 'helper.mjs'", "shareable: false ? [{ file: 'helper.mjs'"]], ['unit-fakeRound']],
+    ['F36', 'src/tools/fakeRound.mjs', [["inactiveArms: first ? arms.split(',')", "inactiveArms: false ? arms.split(',')"]], ['unit-fakeRound']],
+    ['F37', 'src/tools/fakeRound.mjs', [["(readOr(path.join(st.records.nodeDir, `${firstId}.md`))", "(readOr(path.join(st.records.nodeDir, `${firstId}.json`))"]], ['unit-fakeRound']],
+    ['F38', 'src/tools/fakeRound.mjs', [["(readOr(path.join(st.records.nodeDir, `${firstId}.md`))", "(readOr(path.join(st.records.trashDir, `${firstId}.md`))"]], ['unit-fakeRound']],
+    ['F39', 'src/tools/fakeRound.mjs', [["        (readOr(path.join(st.records.nodeDir, `${firstId}.md`)) || '').includes('- 臂目錄之提案(由做夢彙整、主控審查):') &&\n", "        [st.records.nodeDir, st.records.trashDir].some((dir) => fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith('.md') && fs.readFileSync(path.join(dir, f), 'utf8').includes('- 臂目錄之提案(由做夢彙整、主控審查):'))) &&\n"]], ['unit-fakeRound'], 'equiv'],
+    ['F40', 'src/arsi/records.mjs', [['    if (d.conclusion && isArr(d.conclusion.armProposals) && d.conclusion.armProposals.length) {\n', '    if (false) {\n']], ['unit-fakeRound']],
+    ['F41', 'src/tools/fakeRound.mjs', [['    return items[0].id\n', '    return items[2].id\n'], ["        (readOr(path.join(st.records.nodeDir, `${firstId}.md`)) || '').includes('- 臂目錄之提案(由做夢彙整、主控審查):') &&\n", "        [st.records.nodeDir, st.records.trashDir].some((dir) => fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith('.md') && fs.readFileSync(path.join(dir, f), 'utf8').includes('- 臂目錄之提案(由做夢彙整、主控審查):'))) &&\n"]], ['unit-fakeRound']],
+    ['F42', 'test/tools/fakeRoundCopy.mjs', [["'        __ord.seq = [...first, ...ids.filter((x) => !first.includes(x))]',", "'        __ord.seq = ids',"]], ['unit-fakeRound']],
+    ['F43', 'src/tools/fakeRound.mjs', [['        let first = !firstDone && path.basename(wd) === firstId\n', '        let first = path.basename(wd) === firstId\n']], ['unit-fakeRound'], 'equiv'],
+    ['F44', 'src/tools/fakeRound.mjs', [['        let first = !firstDone && path.basename(wd) === firstId\n', '        let first = path.basename(wd) === firstId\n'], ['    return items[0].id\n', '    return items[1].id\n']], ['unit-fakeRound']],
+    //F45: 讀不到本輪之計畫時改以派工次序決定(第 1 個被派工者 = 改前之寫法; 不拋錯)⇒ ⑦ 之「讀不到計畫(故障注入)離開碼非 0」殺
+    ['F45', 'src/tools/fakeRound.mjs', [['            firstId = planFirstId()\n', '            firstId = (() => { try { return planFirstId() } catch (err) { return path.basename(wd) } })()\n']], ['unit-fakeRound']],
     //── src/domain/backtest.mjs、domain.mjs、cli/rsi.mjs: 全期帳本未建之說明與訊息不指向不存在之 g_build.mjs --full(unit-fullLedgerHint; 規則 R-EV-45 ⑨)──
     //T01: 共用訊息改回舊字樣 ⇒ ①②③ 殺; T02: validatePending 之出口改回舊字樣 ⇒ ②③ 殺; T03: 命令列說明改回舊字樣 ⇒ ③ 殺;
     //T04: 訊息不註明與評估帳本用同一個起點 ⇒ ①② 殺; T05: 回測期旗標之出口把「未啟用」與「全期帳本未建」對調 ⇒ ① 殺

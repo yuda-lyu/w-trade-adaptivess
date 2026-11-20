@@ -1,5 +1,6 @@
 // 以假 agent 走完整一輪(不耗任何模型額度): 節點派工 → 重跑驗證 → 節點文件 → 入樹 → 做夢(審計: 採納 / 重做 / 刪除;方向含一條不合法者)→ 寫回 → 前緣 → 看板
 //  狀態根與紀錄皆落 tmp/fake(不動正式之 rsi/; 結束後可刪); 用法: node tools/fakeRound.mjs [--two] [--redream]
+//  特別之節點(第 1 輪之計畫第 1 個節點: 用另一份挑選模組、自報可共用之輔助與未作用之臂、提一筆臂目錄之提案)依計畫次序決定, 與節點之派工先後無關(見 firstId 處之說明); 本工具不提供控制派工次序之選項
 //  離開碼: 0 = 全部如預期; 3 改進項之分類、4 前次方向之回顧、5 擴建、6 整體研判 / 驗證類、7 補做夢、8 臂目錄之提案 / 擴充、9 補位載體、10 未作用之臂、11 擴充診斷之看板值、12 前緣改掛、13 已試之修正、14 擴充診斷之 notContent、15 量尺之子集 / 擴充診斷之補算
 //  (規則 R-EV-45 ⑦; 擴充診斷之補算:「真實診斷」一項以正式之共用工具區〔settings.records.toolboxDir, 未給 = <rsi.root>/toolbox; 與評估之子行程之解析相同〕之 metrics/ 內有本檔寫死之診斷名(nullRecentAct)之檔、且第一個節點有其(非錯誤之)值為前提 ——
 //   無該名之檔、或第一個節點無其值(undefined)者該項略過(輸出標 skipped 與原因, 不計為失敗、不影響離開碼); 有該檔而第一個節點之值為錯誤(診斷載入失敗或拋錯)或非 undefined 之假值者為失敗(valueError; 離開碼 15), 有值而補算失敗者亦同;
@@ -26,7 +27,7 @@ st.records = { nodeDir: path.join(root, 'rsi/records/nodes'), dreamDir: path.joi
 st.backtest = { ...(st.backtest || {}), resultDir: path.join(root, 'private-backtest') } //假輪次之回測期結果不與正式者混放(全期帳本仍用正式之私有根)
 
 let example = fs.readFileSync(P('examples', 'pick_example.mjs'), 'utf8')
-//第 1 個節點用「訓練期可過階梯 1」之挑法(近 210 日勝率升冪; 已知回測期 fail), 以走到回測期旗標與否決之路徑
+//特別之節點(見下方 firstId; 計畫第 1 個)用「訓練期可過階梯 1」之挑法(近 210 日勝率升冪; 已知回測期 fail), 以走到回測期旗標與否決之路徑
 let winAsc = `export const meta = { arms: [], params: { lookbackDays: 210, minClosed: 5, take: 40, maxHold: 30 }, desc: '假節點: 近210日勝率(升冪)前40; 同時持倉<30' }
 export default function pick(ctx) {
     let cfg = meta.params
@@ -43,7 +44,22 @@ export function accept(sig, book) {
     return book.open < 30
 }
 `
-let nNodeCalls = 0
+//特別之節點 = 第 1 輪之計畫(plan.json)之第 1 個節點(firstId): 用 winAsc 之挑法、自報可共用之輔助與未作用之臂、提一筆臂目錄之提案; 以計畫次序決定, 與派工先後無關 ——
+//  計畫之次序 = 入樹之次序 = 做夢範本之次序, 假做夢依範本之次序固定處置(第 1 個採納、第 2 個重做、第 3 個刪除) ⇒ 特別之節點恆為採納者: 其節點文件留在節點夾、提案不被覆寫;
+//  實跑時節點之派工先後由派工前之閘(資源閘)之放行次序決定(全機負載高時不定): 若以「第 1 個被派工者」為特別之節點, 它可能是被重做者(重做之交付不帶提案、節點文件被覆寫)
+//  或被刪除者(節點文件移入回收夾), 臂目錄之提案之核對即失敗(離開碼 8; 核對所驗之功能並未壞)
+//  firstId: 第 1 個節點被派工時才自本輪之計畫讀出(引擎於派工之前已寫成 plan.json)
+//  firstDone: 特別之派工只發生一次(同改前之「第 1 次被呼叫者」): 重做與其後之輪次之派工皆不特別 ⇒ 特別之節點若被重做(計畫次序與範本次序不一致時), 其節點文件被覆寫而提案者之核對失敗(離開碼 8; 重做之交付不補提案)
+let firstId = null
+let firstDone = false
+//planFirstId, 本輪(第 1 輪)之計畫之第 1 個節點之 id: 讀 <狀態根>/rounds/rNNN/plan.json 之 items[0]; 讀不到或無節點即拋錯(不靜默改以派工次序決定)
+let planFirstId = () => {
+    let items = JSON.parse(fs.readFileSync(path.join(Pj.rsi.paths.fdRound(round), 'plan.json'), 'utf8')).items || []
+    if (!items.length || typeof items[0].id !== 'string') {
+        throw new Error('fakeRound: 本輪之計畫(plan.json)無節點')
+    }
+    return items[0].id
+}
 //--redream: 第 1 次做夢派工回失敗且不寫 dream.json(模擬額度用盡), 供驗「補做夢」(規則 R-RUN-6)
 let failDream = process.argv.includes('--redream') ? 1 : 0
 let dispatch = async (role, { prompt, logFile }) => {
@@ -54,18 +70,24 @@ let dispatch = async (role, { prompt, logFile }) => {
         let brief = fs.readFileSync(path.join(wd, 'brief.md'), 'utf8')
         let arms = /export const meta = \{ arms: \[([^\]]*)\]/.exec(brief)[1]
         let isRework = /本次為重做/.test(brief)
-        let first = nNodeCalls++ === 0
+        if (firstId === null) {
+            firstId = planFirstId()
+        }
+        let first = !firstDone && path.basename(wd) === firstId
+        if (first) {
+            firstDone = true
+        }
         let src = (first ? winAsc : example).replace(/arms: \[\]/, `arms: [${arms}]`).replace('book.open < 30', isRework ? 'book.open < 20' : 'book.open < 30')
         fs.writeFileSync(path.join(wd, 'pick.mjs'), src, 'utf8')
         spawnSync(process.execPath, [P('g_eval.mjs'), '--pick', path.join(wd, 'pick.mjs'), '--mode', 'full', '--out', path.join(wd, 'result_full.json')], { cwd: FD_ROOT, windowsHide: true })
         let r = JSON.parse(fs.readFileSync(path.join(wd, 'result_full.json'), 'utf8'))
         let doc = {
             plan: { target: '假節點: 驗流程', approach: '套用範例挑選模組', hypotheses: ['流程可走完'] },
-            //第 1 個節點自報一筆可共用之輔助(應列於做夢任務書之「本輪節點自報」)
-            //第 1 個節點另自報「指派之第 1 個臂於交付版未作用」(應預填於做夢範本之該節點審計; 規則 R-REC-20)
+            //特別之節點(計畫第 1 個)自報一筆可共用之輔助(應列於做夢任務書之「本輪節點自報」)
+            //特別之節點另自報「指派之第 1 個臂於交付版未作用」(應預填於做夢範本之該節點審計; 規則 R-REC-20)
             code: { artifact: path.relative(FD_ROOT, path.join(wd, 'pick.mjs')).replace(/\\/g, '/'), files: [], reused: ['g_eval.mjs', 'ctx.stat(180)'], notes: '全部為中性預設', shareable: first ? [{ file: 'helper.mjs', what: '假輔助: 依側配席' }] : [], inactiveArms: first ? arms.split(',').map((s) => s.trim().replace(/'/g, '')).filter(Boolean).slice(0, 1) : [] },
             results: { claimed: { S: r.score.S, ladder: r.score.ladder, eqYrMean: r.metrics.op.eqYr.mean, eqYrMin: r.metrics.op.eqYr.min, monthlyOrders: r.metrics.op.monthlyOrders.mean, peakHold: r.metrics.op.peakHold.max, nullP: r.metrics.null.p, selHash: r.metrics.selHash }, experiments: [{ what: '範例參數', outcome: `S ${r.score.S}` }] },
-            //第 1 個節點另提一筆臂目錄之提案(應列於做夢任務書之「本輪節點之提案」; 做夢之提案以 sources 涵蓋它 ⇒ 不另記入帳)
+            //特別之節點另提一筆臂目錄之提案(應列於做夢任務書之「本輪節點之提案」; 做夢之提案以 sources 涵蓋它 ⇒ 不另記入帳)
             conclusion: { outcome: 'neutral', summary: '假節點', findings: [], limitations: [], nextIdeas: [], ...(first ? { armProposals: [{ kind: 'new', layer: 'A', title: '假新機制', mechanism: '假節點所提: 依假指紋分類' }] } : {}) },
         }
         fs.writeFileSync(path.join(wd, 'node.json'), JSON.stringify(doc, null, 1), 'utf8')
@@ -267,8 +289,9 @@ console.log('做夢方向之處置:', JSON.stringify((Pj.records.getDreamDoc(rou
         readOr(fpCatReal) === catRealBefore &&
         (res.hook.lines || []).some((l) => l.includes('臂目錄之提案:做夢 2 筆(新臂 1、修訂 1)、節點 1 筆;**待主控審 2 筆**')) &&
         h.tally.armProposals.total === 2 && md.includes('- 臂目錄之提案(待主控審查;通過者下一輪加入目錄):') &&
-        //提案之節點(第 1 個派工者)於假審計中可能被判刪除 ⇒ 其文件在回收夾; 兩處都找
-        [st.records.nodeDir, st.records.trashDir].some((dir) => fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith('.md') && fs.readFileSync(path.join(dir, f), 'utf8').includes('- 臂目錄之提案(由做夢彙整、主控審查):'))) &&
+        //提案之節點 = 特別之節點(計畫第 1 個; firstId): 做夢範本之第 1 個、審計為採納 ⇒ 其節點文件留在節點夾且列有提案一行
+        //  (重做者之文件被重做之交付覆寫、刪除者之文件移入回收夾; 特別之節點不會是這兩者 ⇒ 與派工先後無關)
+        (readOr(path.join(st.records.nodeDir, `${firstId}.md`)) || '').includes('- 臂目錄之提案(由做夢彙整、主控審查):') &&
         Pj.selectable.some((a) => a.id === fakeArm) && Pj.layerOfSpec({ arms: [fakeArm, 'A01_nt'] }) === fakeLayer && boardMd.includes(fakeArm) && map.includes(`| ${fakeLayer} 假新層:驗擴充 |`)
     console.log('臂目錄之提案:', JSON.stringify(led.items.map((x) => `${x.id} ${x.kind} ${x.status}`)), '| 假新臂:', fakeArm, '| 供 agent 之目錄:', catOut ? `${catOut.arms.length} 臂` : '未寫出', '| 正式之 arms/catalog.json:', readOr(fpCatReal) === catRealBefore ? '未動' : '**被改寫**', '| hook:', JSON.stringify((res.hook.lines || []).filter((l) => l.includes('臂目錄之提案'))))
     if (!okArm) {
@@ -294,7 +317,7 @@ console.log('做夢方向之處置:', JSON.stringify((Pj.records.getDreamDoc(rou
         console.error('補位載體不如預期')
         process.exitCode = 9
     }
-    //未作用之臂(規則 R-REC-20): 節點任務書要求自報、做夢任務書要求定案; 做夢範本以節點自報預填(只有第 1 個派工之節點自報 1 個);
+    //未作用之臂(規則 R-REC-20): 節點任務書要求自報、做夢任務書要求定案; 做夢範本以節點自報預填(只有特別之節點〔計畫第 1 個〕自報 1 個);
     //  審計所定者記入樹(evidence.inactiveArms)並渲染於做夢文件; 看板之節點一覽與搜尋地圖之譜系標「未作用」; 看板之該臂列「其中交付版未作用 1」而最佳 S 不計它
     let tplD = JSON.parse(fs.readFileSync(path.join(Pj.arsi.dreamWorkDir(round), 'dream.template.json'), 'utf8'))
     let x0 = Pj.rsi.store.getNode(tplD.audits[0].nodeId)
