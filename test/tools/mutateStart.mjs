@@ -184,8 +184,10 @@ let runMocha = (files, extra = []) => spawnSync(process.execPath, [mocha, ...ext
 let guardFiles = (hint) => hint.filter((g) => fs.existsSync(path.join(root, 'test', `${g}.test.mjs`))).map((g) => path.join('test', `${g}.test.mjs`))
 
 //對照(每次執行之第一步; --check 除外): 無變異之複本須全綠 —— 否則「被殺」可能只是複本內之測試本身失敗而非變異之效果
+//  本工具之各變異只跑自己之優先測試(第 4 欄), 故對照須涵蓋守門之測試與所選變異之全部優先測試(其一於對照即失敗 ⇒ 中止, 不會把該測試之無關失敗記為「被殺」;
+//  與 mutateBar.mjs 不同者: 該工具之各變異另跑 GUARDS, 對照失敗之優先測試只使其變異記為 UNDECIDABLE; 本工具之 GUARDS 即各優先測試之全集, 失敗者無從跳過)
 if (!check) {
-    let r = runMocha(guardFiles(GUARDS))
+    let r = runMocha(guardFiles([...new Set([...GUARDS, ...sel.flatMap((x) => x.m[3])])]))
     let m = /(\d+) passing/.exec(`${r.stdout}`)
     console.log(`對照(無變異之複本): ${r.status === 0 ? '全綠' : '失敗(變異之結果不可信,中止)'}${m ? `,${m[1]} 項通過` : ''}`)
     if (r.status !== 0) {

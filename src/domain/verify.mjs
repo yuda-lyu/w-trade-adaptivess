@@ -755,6 +755,9 @@ let summaryOf = (m, trainScore) => [
     { key: 'selHash', label: 'selHash(選集與下單序列之指紋)', value: m.selHash },
 ]
 
+//isHalfOf, 成品自述為半庫版(meta.params.half 為 0 或 1; 共用工具區之 *_half.mjs 樣板): 迴圈之驗證(makeVerify 取評估器回傳之 pickMeta)與補算(rescanSideFlow 取節點工作夾內重放結果檔之 pickMeta)用同一判定,
+//  使補算重產之補充列與迴圈驗證者一致(「半庫版」之說明列); 無 pickMeta 或無此自述者為 false
+let isHalfOf = (pickMeta) => !!(pickMeta && pickMeta.params && (pickMeta.params.half === 0 || pickMeta.params.half === 1))
 //notesOf, 節點文件之補充說明列(領域指標; 全部為評估期 = 回測期之數字)
 //  seedS(選配): 迴圈換亂數種子重放所得之 S(主種子以外者)
 //  train(選配): 迴圈以訓練期之診斷重放所得之選集組成 { longRatio, tags }(只記組成, 不記績效 —— 訓練期之績效不是目標)
@@ -796,11 +799,12 @@ let sideFlowIssue = (bt, tr, cfg = null) => {
  * @param {Object|null} [train=null] 輸入訓練期診斷之選集組成 { longRatio, tags },預設null
  * @param {Array<Object>|null} [replays=null] 輸入各次重放之 { S, comp, recent },預設null
  * @param {Boolean} [half=false] 輸入是否為半庫版,預設false
+ * @param {Object|null} [sideFlow=null] 輸入「下單流量偏一側」之設定(settings.score.sideFlow;「下單之做空比例」一列所附之全體隨機基準取自其與內建值之合併),預設null
  * @returns {Array<String>} 回傳說明列字串陣列
  * @example
  * let lines = notesOf(metrics, [1.1, 1.3], null, null, false)
  */
-let notesOf = (m, seedS = null, train = null, replays = null, half = false) => {
+let notesOf = (m, seedS = null, train = null, replays = null, half = false, sideFlow = null) => {
     let f1 = (x) => (typeof x === 'number' ? x.toFixed(1) : '—')
     let out = []
     if (m.period && m.period.evalFrom) {
@@ -849,7 +853,9 @@ let notesOf = (m, seedS = null, train = null, replays = null, half = false) => {
         out.push(`選集之做多比例: 訓練期(診斷)${train.longRatio} / 回測期 ${m.sel.longRatio};tag 之決策比例(前 4 種): 訓練期 ${tg(train.tags)} / 回測期 ${tg(m.sel.tags)} —— 兩期之側別或狀態比例皆固定於一端者,該規則並未隨當下狀態切換`)
         let sb = shortShareOf(m)
         if (typeof train.shortShare === 'number' && sb !== null) {
-            out.push(`下單之做空比例(做空單 ÷ 全部下單): 訓練期(診斷)${train.shortShare} / 回測期 ${sb};全體隨機約 ${SIDE_FLOW.baseShort.train} / ${SIDE_FLOW.baseShort.backtest} —— 席次之做多比例正常而下單偏在一側者,是兩側活躍度不對稱所致之組成;兩期皆遠高(或遠低)於隨機者,回測期之方向可能經此寫進模組`)
+            //基準與機械判讀(sideFlowIssue)、看板之說明(domain.mjs)取同一份(規則 R-REC-36: 不寫死某一策略庫之實測值)
+            let sfBase = sideFlowCfgOf(sideFlow).baseShort
+            out.push(`下單之做空比例(做空單 ÷ 全部下單): 訓練期(診斷)${train.shortShare} / 回測期 ${sb};全體隨機約 ${sfBase.train} / ${sfBase.backtest} —— 席次之做多比例正常而下單偏在一側者,是兩側活躍度不對稱所致之組成;兩期皆遠高(或遠低)於隨機者,回測期之方向可能經此寫進模組`)
         }
     }
     if (m.fresh) {
@@ -978,7 +984,7 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
         //    只列 S 時看不出「內容」在重放下是否仍在; 單抽之組成對照不足以判內容(全庫隨機之兩組抽取 +1.3 / +11.6), 兩次重放即現成之第二、三抽
         let seedS = []
         let replays = []
-        let isHalf = !!(out.pickMeta && out.pickMeta.params && (out.pickMeta.params.half === 0 || out.pickMeta.params.half === 1))
+        let isHalf = isHalfOf(out.pickMeta)
         {
             let nRep = Number.isInteger(st.eval.replicaSeeds) ? st.eval.replicaSeeds : 0
             let seed0 = st.eval.seed === undefined ? 1 : st.eval.seed
@@ -1092,7 +1098,7 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
             raw: { metrics: out.metrics, selHash: out.metrics.selHash, seedS, replays, ...(train ? { train } : {}) },
             score,
             summary: summaryOf(out.metrics, trainScore),
-            notes: notesOf(out.metrics, seedS, train, replays, isHalf),
+            notes: notesOf(out.metrics, seedS, train, replays, isHalf, st.score && st.score.sideFlow),
             fingerprint: out.metrics.selHash,
             issues,
             checks: { ...(nEvals === null ? {} : { nEvals }), ...(nDist ? { ...nDist, nEvalsNote: `其中完整評估 ${nDist.nFull} 次、相異之選集(selHash)${nDist.nFullSel} 個;只差 tag、只加 --ref 或同一內容重跑者不算新版本` } : {}), ...(tr.note ? { traceNote: tr.note } : {}) },
@@ -1149,5 +1155,5 @@ let extSurfaceOf = (m) => {
 let EXT_FLAG_HEAD = '提示(擴充診斷 '
 let extFlagIssue = (f) => `${EXT_FLAG_HEAD}${f.name}): ${f.text}(共用工具區之擴充診斷所列;不否決,由審計判定)`
 
-export { makeVerify, scanTrace, deniedHalt, stripSearchPatterns, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, runNodeProc, shortShareOf, sideFlowIssue, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD }
+export { makeVerify, scanTrace, deniedHalt, stripSearchPatterns, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, isHalfOf, runNodeProc, shortShareOf, sideFlowIssue, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD }
 export default makeVerify

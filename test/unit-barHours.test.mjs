@@ -818,6 +818,134 @@ describe('文字不寫死策略庫之事實(規則 R-REC-36)', function () {
         assert(!board(null, 32).includes('0.0154'), '不留 64 抽之下限')
     })
 
+    it('節點文件之「下單之做空比例」一列所附之「全體隨機約 …」亦取同一份基準:迴圈之驗證(reverifyAll → verify)與補算(rescanSideFlow)兩個呼叫點皆帶入 settings.score.sideFlow;補算重產之補充列與迴圈之驗證所產者一致(含半庫版之說明列)', function () {
+        this.timeout(600000)
+        //接縫不用替身: 真 w-recursi + 本套件真實之領域(makeProject 之 reverifyAll → verify → 子行程之評估入口; rescanSideFlow 讀工作夾內之重放結果檔); 只有「派工」換成假的(本案不派)
+        //  評估入口以專案根之進入檔起(其設 ARSI_ROOT = 自身所在) ⇒ 整段於子行程內執行(ARSI_ROOT = 合成專案之根)
+        //  pk(選配): 成品之形狀 { half?: 成品自述之 meta.params.half, rand: 成品用 ctx.rand, dropMeta?: 'full' | 'train'(補算前去掉該結果檔之 pickMeta) }; 給了才重放(replicaSeeds 1、虛無 4 抽), 未給者同前(不重放、成品不自述 params)
+        let run = (sideFlow, pk = null) => {
+            let root = path.join(t.dir, `notes_${sideFlow ? 'set' : 'none'}${pk ? `_h${String(JSON.stringify(pk.half)).replace(/\W/g, 'q')}${pk.dropMeta ? `_drop${pk.dropMeta}` : ''}` : ''}`)
+            let ld = path.join(root, 'ledger', 'eval')
+            writeSynthLedger(ld, { n: 60, nBars: 2400, seed: 7 })
+            let base = JSON.parse(fs.readFileSync(path.join(FD_ROOT, 'settings.json'), 'utf8'))
+            let st = {
+                ...base,
+                periods: { train: { start: '2022-07-01T00:00:00', end: '2023-01-17T00:00:00' }, backtest: { start: '2023-02-01T00:00:00', end: '2023-08-05T00:00:00' }, holdoutFrom: '2099-01-01T00:00:00' },
+                source: { libraryRoot: path.join(root, 'nolib'), keyOhlc: 'SYM_4hr', barHours: 4 },
+                eval: { ledgerDir: ld, replicaSeeds: pk ? 1 : 0, ...(pk ? { replicaNullDraws: 4 } : {}), warmupDays: 60, cadenceDays: 7, phases: [0, 3], horizons: [7], nullDraws: 4, seed: 1, limits: { monthlyOrders: 400, peakHold: 50 }, timeoutSec: 900 },
+                score: { ...base.score, ...(sideFlow ? { sideFlow } : {}) },
+                backtest: { ...base.backtest, enabled: false },
+                rsi: { ...base.rsi, root: path.join(root, 'rsi') },
+                records: { nodeDir: path.join(root, 'rsi/records/nodes'), dreamDir: path.join(root, 'rsi/records/dreams'), trashDir: path.join(root, 'rsi/records/trash'), workDir: path.join(root, 'rsi/work'), toolboxDir: path.join(root, 'rsi/toolbox') },
+                //資源閘關閉: 參考設定之門檻依全機負載而定, 測試之成敗不得隨機器之負載而變
+                resources: {},
+            }
+            assert.equal(base.score.sideFlow, undefined, '前提: 套件之參考設定未設 score.sideFlow(未設之案才是內建值)')
+            fs.mkdirSync(path.join(root, 'rsi', 'toolbox', 'metrics'), { recursive: true })
+            fs.mkdirSync(path.join(root, 'arms'), { recursive: true })
+            fs.copyFileSync(path.join(FD_ROOT, 'arms', 'base.json'), path.join(root, 'arms', 'base.json'))
+            fs.writeFileSync(path.join(root, 'settings.json'), JSON.stringify(st), 'utf8')
+            let SRC = pathToFileURL(path.join(FD_ROOT, 'src')).href + '/'
+            fs.writeFileSync(path.join(root, 'g_eval.mjs'), `import path from 'path'\nimport { fileURLToPath } from 'url'\nprocess.env.ARSI_ROOT = path.dirname(fileURLToPath(import.meta.url))\nawait import(${JSON.stringify(SRC + 'cli/eval.mjs')})\n`, 'utf8')
+            fs.writeFileSync(path.join(root, 'child.mjs'), `import fs from 'fs'
+import path from 'path'
+let { getSettings } = await import(${JSON.stringify(SRC + 'cfg.mjs')})
+let { makeProject } = await import(${JSON.stringify(SRC + 'domain/domain.mjs')})
+let { specHash } = await import(${JSON.stringify(SRC + 'engineApi.mjs')})
+let root = process.env.ARSI_ROOT
+let P = makeProject(getSettings(), { dispatch: async () => ({ ok: false, error: 'no dispatch in test' }), gate: null, catalogFile: path.join(root, 'catalog.json') })
+P.rsi.init()
+let arm = P.selectable[0].id
+let spec = { arms: [arm], base: null }
+let id = P.idOf(spec)
+P.rsi.store.putNode({ id, spec, specHash: specHash(spec), status: 'executed', parents: [], round: 1, raw: { attempt: 1 } })
+let wd = path.join(root, 'rsi', 'work', id)
+fs.mkdirSync(wd, { recursive: true })
+let pk = ${JSON.stringify(pk || {})}
+let metaSrc = "{ arms: ['" + arm + "']" + (pk.half === undefined ? '' : ', params: { half: ' + JSON.stringify(pk.half) + ' }') + ' }'
+let shiftSrc = pk.rand ? 'Math.floor(ctx.rand() * ctx.n)' : '0'
+fs.writeFileSync(path.join(wd, 'pick.mjs'), 'export const meta = ' + metaSrc + '\\nexport default function pick(ctx) { let r = ' + shiftSrc + '; return [1, 5, 9, 13, 17, 21, 25].map((s) => (s + ctx.k + r) % ctx.n) }\\nexport function accept(sig, book) { return book.open < 5 }\\n', 'utf8')
+P.records.putNodeDoc({ nodeId: id, round: 1, attempt: 1, status: 'verified', spec, task: { goal: 'g', type: 'explore' }, plan: {}, code: {}, results: { claimed: {} }, conclusion: { outcome: 'neutral', summary: 's' }, harness: { ok: true, summary: [], notes: [], checks: { issues: [] }, score: { S: 0, ladder: 0, flags: { vetoed: false, why: [] } }, raw: {} } })
+let notesOfDoc = () => ((P.records.getNodeDoc(id).harness || {}).notes || []).map(String)
+let lineOf = () => (notesOfDoc().find((s) => s.startsWith('下單之做空比例')) || null)
+let res = {}
+//呼叫點一: 迴圈之驗證(verify 之回傳 notes 經 reverifyAll 寫入節點文件)
+res.rv = await P.reverifyAll({ why: 'wiring' })
+res.a = lineOf()
+res.nA = notesOfDoc()
+//(選配)去掉某一個重放結果檔之 pickMeta: 補算之半庫判定只可取 harness_full.json 者(迴圈所判之同一份資料)
+if (pk.dropMeta) {
+    let fpM = path.join(wd, pk.dropMeta === 'full' ? 'harness_full.json' : 'harness_train.json')
+    let jM = JSON.parse(fs.readFileSync(fpM, 'utf8'))
+    delete jM.pickMeta
+    fs.writeFileSync(fpM, JSON.stringify(jM), 'utf8')
+}
+//呼叫點二: 補算。先把樹上之 raw.train.shortShare 改成他值(使其判為有變動)、節點文件之補充列清空 ⇒ 其後之該列必出自 rescanSideFlow
+P.rsi.store.updateNode(id, (x) => {
+    x.raw = { ...x.raw, train: { ...x.raw.train, shortShare: -1 } }
+})
+let d = P.records.getNodeDoc(id)
+P.records.putNodeDoc({ ...d, harness: { ...d.harness, notes: [] } })
+res.cleared = lineOf()
+res.k = P.rescanSideFlow()
+res.b = lineOf()
+res.nB = notesOfDoc()
+console.log('RESULT ' + JSON.stringify(res))
+`, 'utf8')
+            let env = { ...process.env, ARSI_ROOT: root }
+            for (let k of ['ARSI_HARNESS', 'ARSI_LEDGER_DIR', 'ARSI_EVAL_FROM']) {
+                delete env[k]
+            }
+            let rc = spawnSync(process.execPath, [path.join(root, 'child.mjs')], { cwd: root, env, windowsHide: true, encoding: 'utf8', timeout: 540000, maxBuffer: 64 * 1024 * 1024 })
+            let line = `${rc.stdout}`.split(/\r?\n/).find((l) => l.startsWith('RESULT '))
+            assert(line, `${rc.stdout}\n${rc.stderr}`.slice(-3000))
+            let res = JSON.parse(line.slice(7))
+            assert.equal(res.rv.length, 1)
+            assert.equal(res.rv[0].ok, true, JSON.stringify(res.rv))
+            assert(typeof res.a === 'string', '驗證後之節點文件須有「下單之做空比例」一列(合成帳本兩側皆有下單)')
+            assert.equal(res.cleared, null, '清空後該列不在')
+            assert.equal(res.k, 1, '補算有變動之節點數')
+            assert(typeof res.b === 'string', '補算後之節點文件須有該列')
+            return res
+        }
+        //未設 ⇒ 內建值(與改前逐字相同)
+        let dft = `;全體隨機約 ${SIDE_FLOW.baseShort.train} / ${SIDE_FLOW.baseShort.backtest} ——`
+        let r0 = run(null)
+        assert(r0.a.includes(dft), r0.a)
+        assert(r0.b.includes(dft), r0.b)
+        //「——」與其後之說明與改前逐字相同(基準以外之字一字不差; 改前之原文為固定字面值)
+        let tail = ' 席次之做多比例正常而下單偏在一側者,是兩側活躍度不對稱所致之組成;兩期皆遠高(或遠低)於隨機者,回測期之方向可能經此寫進模組'
+        assert(r0.a.endsWith(dft + tail), `驗證: ${r0.a}`)
+        assert(r0.b.endsWith(dft + tail), `補算: ${r0.b}`)
+        //設了 ⇒ 兩個呼叫點皆為該值, 不留內建值
+        let r1 = run({ baseShort: { backtest: 0.27, train: 0.33 } })
+        assert(r1.a.includes(';全體隨機約 0.33 / 0.27 ——') && !r1.a.includes(dft), `驗證: ${r1.a}`)
+        assert(r1.b.includes(';全體隨機約 0.33 / 0.27 ——') && !r1.b.includes(dft), `補算: ${r1.b}`)
+        //兩個呼叫點所產之該列逐字相同(同一組比例、同一份基準)
+        assert(r1.a.endsWith(`;全體隨機約 0.33 / 0.27 ——${tail}`) && r1.b.endsWith(`;全體隨機約 0.33 / 0.27 ——${tail}`), `設了之 ⇒ 只有基準之數字不同: ${r1.a}`)
+        assert.equal(r1.a, r1.b)
+        assert.equal(r0.a, r0.b)
+        //補算重產之補充列與迴圈之驗證所產者逐列相同(含「半庫版」之說明列): 是否為半庫版取節點工作夾內重放結果檔(harness_full.json)之 pickMeta —— 迴圈所判之同一份資料(成品自述 meta.params.half 為 0 或 1)
+        //  成品用 ctx.rand ⇒ 換亂數種子之重放與正本之選集不同, 有重放之 S(半庫版之說明列只在有重放之 S 時出現; 否則兩處皆不出現而分辨不出補算有沒有帶 half)
+        let isHalfNote = (s) => s.startsWith('半庫版(成品之 meta.params.half 為 0 或 1')
+        let isReplayNote = (s) => s.startsWith('換亂數種子與同分次序之重放')
+        let strip = (ns) => ns.filter((s) => !/以改版後之評估器重跑/.test(s)) //reverifyAll 於首列加之重跑註記(補算保留首列者, 本案之補算前已清空)
+        //  列: [成品自述之 meta.params.half, 迴圈之驗證是否有該列, 補算是否有該列, 補算前去掉哪一個結果檔之 pickMeta]
+        //  half 之判定值只有數字 0 與 1: 字串 '0'、true、2 皆否(寬鬆相等之寫法會把 '0'、true 當半庫版); 補算只取 harness_full.json 之 pickMeta(去掉 harness_train.json 者不影響; 去掉 harness_full.json 者 ⇒ 無從判定 ⇒ 非半庫版)
+        for (let [half, wantA, wantB, dropMeta] of [[0, true, true], [1, true, true], [undefined, false, false], [2, false, false], ['0', false, false], [true, false, false], [0, true, true, 'train'], [0, true, false, 'full']]) {
+            let tag = `meta.params.half = ${JSON.stringify(half)}${dropMeta ? `(補算前去掉 harness_${dropMeta}.json 之 pickMeta)` : ''}`
+            let r = run(null, { half, rand: true, dropMeta })
+            assert(r.nA.some(isReplayNote) && r.nB.some(isReplayNote), `${tag}: 前提: 迴圈有重放之 S(驗證與補算之補充列皆有重放列)`)
+            assert.equal(r.nA.filter(isHalfNote).length, wantA ? 1 : 0, `${tag}: 迴圈之驗證 ${wantA ? '須' : '不得'}有「半庫版」之說明列`)
+            assert.equal(r.nB.filter(isHalfNote).length, wantB ? 1 : 0, `${tag}: 補算 ${wantB ? '須' : '不得'}有「半庫版」之說明列`)
+            assert.deepStrictEqual(strip(r.nB), strip(r.nA).filter((s) => wantA === wantB || !isHalfNote(s)), `${tag}: 補算與迴圈之驗證所產之補充列逐列相同${wantA === wantB ? '' : '(除「半庫版」之說明列)'}`)
+        }
+        //補算之該列與基準亦同(設了基準 + 半庫版: 兩處皆為設定值)
+        let rh = run({ baseShort: { backtest: 0.27, train: 0.33 } }, { half: 0, rand: true })
+        assert(rh.nB.some(isHalfNote) && rh.nB.some((s) => s.includes(';全體隨機約 0.33 / 0.27 ——')), `設了基準 + 半庫版: ${rh.nB.length} 列`)
+        assert.deepStrictEqual(strip(rh.nB), strip(rh.nA), '設了基準 + 半庫版: 補算與迴圈之驗證逐列相同')
+    })
+
     //套件之參考設定(settings.json)與合約之參考版: 兩者所寫之事實相同(合約依設定產出時逐字不變)
     let refText = () => fs.readFileSync(path.join(FD_ROOT, 'contract', 'pick-contract.md'), 'utf8')
     let tplText = () => fs.readFileSync(path.join(FD_ROOT, 'settings.json'), 'utf8')

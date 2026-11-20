@@ -2,7 +2,7 @@ import assert from 'assert'
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
-import { scanTrace, deniedHalt, stripSearchPatterns, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, notesOf, shortShareOf, sideFlowIssue, extSurfaceOf, extFlagIssue, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD } from '../src/domain/verify.mjs'
+import { scanTrace, deniedHalt, stripSearchPatterns, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, notesOf, isHalfOf, shortShareOf, sideFlowIssue, extSurfaceOf, extFlagIssue, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD } from '../src/domain/verify.mjs'
 import { backtestCfg } from '../src/domain/backtestCfg.mjs'
 import { makeTmp, FD_ROOT } from './tools/synthLedger.mjs'
 
@@ -748,6 +748,35 @@ describe('守門:節點 agent 之操作紀錄掃描', function () {
         let ns = notesOf(m, [], { longRatio: 0.66, tags: [], shortShare: 0.728 })
         assert(ns.some((s) => /^下單之做空比例.*訓練期.診斷.0\.728 \/ 回測期 0\.53;全體隨機約 0\.22 \/ 0\.16/.test(s)))
         assert(!notesOf(m, [], { longRatio: 0.66, tags: [] }).some((s) => s.startsWith('下單之做空比例')), '舊紀錄(無 shortShare)不列')
+        //該列所附之基準與機械判讀取同一份(settings.score.sideFlow 與內建值之合併; 規則 R-REC-36): 設定覆寫者隨之、只覆寫一期者另一期取內建值、未給或未覆寫基準者為內建值
+        let lineOf = (cfg) => notesOf(m, [], { longRatio: 0.66, tags: [], shortShare: 0.728 }, null, false, cfg).find((s) => s.startsWith('下單之做空比例'))
+        let set = lineOf({ baseShort: { train: 0.33, backtest: 0.27 } })
+        assert(set.includes(';全體隨機約 0.33 / 0.27 ——') && !set.includes('0.22 / 0.16'), set)
+        assert(lineOf({ baseShort: { train: 0.31 } }).includes(';全體隨機約 0.31 / 0.16 ——'), '只覆寫訓練期')
+        assert(lineOf(null).includes(';全體隨機約 0.22 / 0.16 ——') && lineOf({ hi: 3 }).includes(';全體隨機約 0.22 / 0.16 ——'), '未給或未覆寫基準 ⇒ 內建值')
+        assert.equal(lineOf(undefined), ns.find((s) => s.startsWith('下單之做空比例')), '未給第 6 個參數者與改前逐字相同')
+        //與改前逐字相同: 以改前(未帶第 6 個參數之舊簽章)之原文為固定字面值, 不取被測碼自己之輸出當期望值(含「——」與其後之說明; 基準以外之字一字不差)
+        let tail = ' —— 席次之做多比例正常而下單偏在一側者,是兩側活躍度不對稱所致之組成;兩期皆遠高(或遠低)於隨機者,回測期之方向可能經此寫進模組'
+        assert.equal(ns.find((s) => s.startsWith('下單之做空比例')), `下單之做空比例(做空單 ÷ 全部下單): 訓練期(診斷)0.728 / 回測期 0.53;全體隨機約 0.22 / 0.16${tail}`, '未給設定者之該列與改前逐字相同')
+        assert.equal(set, `下單之做空比例(做空單 ÷ 全部下單): 訓練期(診斷)0.728 / 回測期 0.53;全體隨機約 0.33 / 0.27${tail}`, '設定覆寫者只有基準之數字不同')
+    })
+
+    it('半庫版之判定(isHalfOf):成品自述 meta.params.half 為 0 或 1 者才是半庫版(迴圈之驗證與補算取同一判定);notesOf 於半庫版且有重放之 S 時多一列「半庫版」之說明', () => {
+        //補算(rescanSideFlow)重產之補充列須與迴圈之驗證所產者一致 ⇒ 兩處之半庫版判定取同一函數; 判定值只有 0 與 1(數字), 其餘一律否
+        assert.strictEqual(isHalfOf({ params: { half: 0 } }), true, 'half = 0(甲半)')
+        assert.strictEqual(isHalfOf({ params: { half: 1 } }), true, 'half = 1(乙半)')
+        for (let x of [null, undefined, {}, { arms: ['a'] }, { params: null }, { params: {} }, { params: { half: 2 } }, { params: { half: -1 } }, { params: { half: '0' } }, { params: { half: '1' } }, { params: { half: true } }, { params: { half: null } }, { params: { half: 0.5 } }, { params: { other: 0 } }, 0, 1, 'half']) {
+            assert.strictEqual(isHalfOf(x), false, `${JSON.stringify(x)} 非半庫版`)
+        }
+        let m = { op: { eqYr: { mean: 1, min: 0, byPhase: [1, 0] }, nDecisions: [1], acceptRate: 1, winRate: 0.5, pnl: 2 } }
+        let hl = (ns) => ns.filter((s) => s.startsWith('半庫版'))
+        let on = notesOf(m, [1.1, 1.3], null, null, true)
+        assert.equal(hl(on).length, 1, '半庫版且有重放之 S ⇒ 一列')
+        assert(on.indexOf(hl(on)[0]) < on.findIndex((s) => s.startsWith('換亂數種子與同分次序之重放')), '說明列在重放之 S 列之前')
+        assert.equal(hl(notesOf(m, [1.1, 1.3], null, null, false)).length, 0, '非半庫版 ⇒ 無')
+        assert.equal(hl(notesOf(m, [1.1, 1.3])).length, 0, '未給 half ⇒ 無(與改前相同)')
+        assert.equal(hl(notesOf(m, [], null, null, true)).length, 0, '無重放之 S ⇒ 無')
+        assert.equal(hl(notesOf(m, null, null, null, true)).length, 0, '未給重放之 S ⇒ 無')
     })
 
     it('擴充診斷自帶之看板值與提示(規則 R-REC-21):board / boardLabel 成看板之值與欄名、flag 成迴圈檢查之提示(不否決);出錯或未帶者略過;直線與換行不入表格', () => {

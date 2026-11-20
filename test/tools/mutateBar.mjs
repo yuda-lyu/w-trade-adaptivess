@@ -6,8 +6,11 @@ import { FD_ROOT, FD_TMP } from './synthLedger.mjs'
 
 
 //變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
-//  用法(測試以 quiet-run --lock 執行): node test/tools/mutateBar.mjs [--list] [--check] [--only <id,id…>] [--from <序> --to <序>] [--out <結果.json>]
+//  用法(測試以 quiet-run --lock 執行): node test/tools/mutateBar.mjs [--list] [--check] [--control-only] [--only <id,id…>] [--from <序> --to <序>] [--out <結果.json>]
 //    --check 只核對各變異之錨點(須恰出現一次; all 者至少一次), 不跑測試;未被殺者(survived)為測試之缺口 —— 補測試,不是補斷言(見 sgud/exp 之變異作法)
+//    --control-only 只跑對照(守門之測試與所選變異之優先測試, 不植入變異)並列出所選變異中「無法判定」者, 供不重跑全部變異而盤點分類
+//  對照 = 無變異之複本跑守門之測試(GUARDS; 須全綠, 否則中止)與所選變異之優先測試(不在 GUARDS 內者, 各單獨跑一次):
+//    優先測試於對照即失敗者(複本內之失敗與變異無關, 例: 測試內之規則運算式不合複本之路徑), 其變異記為 UNDECIDABLE(無法判定): 不植入、不記為被殺(否則該測試之無關失敗會被誤記為變異被殺)
 //  複本不含 node_modules(由上層 node_modules 解析); 每個變異跑完還原; 結束刪複本
 let GUARDS = ['unit-evalNums', 'unit-factsResidue', 'unit-evalFingerprint', 'unit-barHours']
 
@@ -88,6 +91,10 @@ let M = [
     ['D02', 'src/domain/domain.mjs', [['        let msg = configMsgOf(err)', '        let msg = null']], ['unit-barHours']],
     ['D03', 'src/domain/domain.mjs', [['${nullDrawsOf(st.eval)} 抽之下限為 ${nullFloorText(nullDrawsOf(st.eval))}。', '64 抽之下限為 0.0154。']], ['unit-barHours']],
     ['D04', 'src/domain/domain.mjs', [['let sfBase = sideFlowCfgOf(st.score && st.score.sideFlow).baseShort', 'let sfBase = { train: 0.22, backtest: 0.16 }']], ['unit-barHours']],
+    ['D05', 'src/domain/domain.mjs', [['notesOf(n.raw.metrics, n.raw.seedS, train, n.raw.replays, isHalfOf(hf.pickMeta), st.score && st.score.sideFlow)', 'notesOf(n.raw.metrics, n.raw.seedS, train, n.raw.replays, isHalfOf(hf.pickMeta))']], ['unit-barHours']],
+    //  D07: 補算之半庫判定改取 harness_train.json 之 pickMeta(須取 harness_full.json 者 —— 迴圈所判之同一份資料)
+    ['D07', 'src/domain/domain.mjs', [['n.raw.replays, isHalfOf(hf.pickMeta), st.score && st.score.sideFlow)', 'n.raw.replays, isHalfOf(ht.pickMeta), st.score && st.score.sideFlow)']], ['unit-barHours']],
+    ['D06', 'src/domain/domain.mjs', [['notesOf(n.raw.metrics, n.raw.seedS, train, n.raw.replays, isHalfOf(hf.pickMeta), st.score && st.score.sideFlow)', 'notesOf(n.raw.metrics, n.raw.seedS, train, n.raw.replays, false, st.score && st.score.sideFlow)']], ['unit-barHours']],
     //── texts.mjs ──
     ['T01', 'src/domain/texts.mjs', [["let ph = (tail) => phaseText(phaseCountOf(ev0), tail)", "let ph = (tail) => phaseText(7, tail)"]], ['unit-factsResidue']],
     ['T02', 'src/domain/texts.mjs', [['let nDraws = nullDrawsOf(ev0)', 'let nDraws = 64']], ['unit-factsResidue']],
@@ -152,11 +159,21 @@ let M = [
     ['L04', 'src/eval/ledgerBuild.mjs', [['                    if (den === 0) {', '                    if (false) {']], ['unit-barHours']],
     ['L05', 'src/eval/ledgerBuild.mjs', [['let barSec = Math.round(barHours * 3600)', 'let barSec = Math.round(barHours * 3600) + 1']], ['unit-barHours']],
     ['L06', 'src/eval/ledgerBuild.mjs', [['        if (!(offGridMax >= 0 && offGridMax <= 1)) {', '        if (false) {']], ['unit-barHours']],
-    ['L07', 'src/cli/build.mjs', [['if (/^invalid (barHours|seriesOffGridMax|series |settings\\.intervalSec)/.test(m)) {', 'if (false) {']], ['unit-barHours']],
+    ['L07', 'src/cli/build.mjs', [['if (/^invalid (barHours|seriesOffGridMax|startTime|series |settings\\.intervalSec)/.test(m)) {', 'if (false) {']], ['unit-barHours']],
     //── pickStore / verify ──
     ['P01', 'src/domain/pickStore.mjs', [['${hoFrom ? `(${hoFrom} 起)` : \'\'}', '(2026-08-01 起)']], ['unit-barHours']],
     ['P02', 'src/domain/pickStore.mjs', [["st.periods && typeof st.periods.holdoutFrom === 'string' && st.periods.holdoutFrom ? st.periods.holdoutFrom.slice(0, 10) : null", "'2026-08-01'"]], ['unit-barHours']],
     ['W01', 'src/domain/verify.mjs', [['let sideFlowCfgOf = (cfg = null) => ({ ...SIDE_FLOW, ...(cfg || {}), baseShort: { ...SIDE_FLOW.baseShort, ...((cfg && cfg.baseShort) || {}) } })', 'let sideFlowCfgOf = (cfg = null) => ({ ...SIDE_FLOW })']], ['unit-barHours']],
+    ['W02', 'src/domain/verify.mjs', [['let sfBase = sideFlowCfgOf(sideFlow).baseShort', 'let sfBase = SIDE_FLOW.baseShort']], ['unit-barHours']],
+    ['W03', 'src/domain/verify.mjs', [['notes: notesOf(out.metrics, seedS, train, replays, isHalf, st.score && st.score.sideFlow),', 'notes: notesOf(out.metrics, seedS, train, replays, isHalf),']], ['unit-barHours']],
+    //半庫版之判定(迴圈之驗證與補算取同一函數 isHalfOf; Gitea #196 之併入項): W04 只認 0、W05 把 0 與 1 以外之值也當半庫版、W06 迴圈之驗證不帶半庫判定、W07 notesOf 不列半庫版之說明列
+    ['W04', 'src/domain/verify.mjs', [['(pickMeta.params.half === 0 || pickMeta.params.half === 1)', '(pickMeta.params.half === 0)']], ['unit-barHours']],
+    ['W05', 'src/domain/verify.mjs', [['(pickMeta.params.half === 0 || pickMeta.params.half === 1)', '(pickMeta.params.half !== undefined)']], ['unit-barHours']],
+    ['W06', 'src/domain/verify.mjs', [['let isHalf = isHalfOf(out.pickMeta)', 'let isHalf = false']], ['unit-barHours']],
+    ['W07', 'src/domain/verify.mjs', [['        if (half) {\n            out.push(\'半庫版(', '        if (false) {\n            out.push(\'半庫版(']], ['unit-barHours']],
+    //  W08 以寬鬆相等判定(字串 '0'、true 也成半庫版); W09 「下單之做空比例」一列之「——」後少一個空格(改前之原文為「—— 席次…」)
+    ['W08', 'src/domain/verify.mjs', [['(pickMeta.params.half === 0 || pickMeta.params.half === 1)', '(pickMeta.params.half == 0 || pickMeta.params.half == 1)']], ['unit-barHours']],
+    ['W09', 'src/domain/verify.mjs', [['${sfBase.backtest} —— 席次之做多比例正常', '${sfBase.backtest} ——席次之做多比例正常']], ['unit-barHours']],
     //── 命令列與工具之接線(改回直接組裝專案) ──
     ['A01', 'src/tools/searchMap.mjs', [['makeProjectOrExit', 'makeProject', true]], ['unit-barHours']],
     ['A02', 'src/tools/briefPreview.mjs', [['makeProjectOrExit', 'makeProject', true]], ['unit-barHours']],
@@ -205,15 +222,37 @@ for (let f of ['settings.json', 'package.json']) {
 let mocha = path.join(FD_ROOT, 'node_modules', 'mocha', 'bin', 'mocha.js')
 
 //對照(每次執行之第一步; --check 除外): 無變異之複本須全綠 —— 否則「被殺」可能只是複本內之測試本身失敗(例:複本之行尾與測試內之規則運算式不合)而非變異之效果
+let runMocha = (files, extra = []) => spawnSync(process.execPath, [mocha, ...extra, '--no-parallel', ...files, '--timeout', '180000'], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 900000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, ARSI_ROOT: '' } })
+let testRel = (g) => path.join('test', `${g}.test.mjs`)
+let testHas = (g) => fs.existsSync(path.join(root, testRel(g)))
+let failOf = (out) => {
+    let fail = /\n\s+1\) ([^\n]+)\n\s+([^\n]+)/.exec(out)
+    return fail ? `${fail[1]} / ${fail[2]}`.slice(0, 140) : out.slice(-200).replace(/\s+/g, ' ')
+}
+let badHint = new Map() //於對照即失敗之優先測試 → 失敗摘要
 if (!check) {
-    let files = GUARDS.filter((g) => fs.existsSync(path.join(root, 'test', `${g}.test.mjs`))).map((g) => path.join('test', `${g}.test.mjs`))
-    let r = spawnSync(process.execPath, [mocha, '--no-parallel', ...files, '--timeout', '180000'], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 900000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, ARSI_ROOT: '' } })
+    let r = runMocha(GUARDS.filter(testHas).map(testRel))
     let m = /(\d+) passing/.exec(`${r.stdout}`)
     console.log(`對照(無變異之複本): ${r.status === 0 ? '全綠' : '失敗(變異之結果不可信,中止)'}${m ? `,${m[1]} 項通過` : ''}`)
     if (r.status !== 0) {
         console.log(`${r.stdout}\n${r.stderr}`.slice(-1500))
         fs.rmSync(root, { recursive: true, force: true })
         process.exit(3)
+    }
+    //所選變異之優先測試(不在守門之內者): 各單獨跑一次, 失敗者其變異記為 UNDECIDABLE
+    for (let g of new Set(sel.flatMap((x) => x.m[3]).filter((x) => !GUARDS.includes(x) && testHas(x)))) {
+        let rg = runMocha([testRel(g)])
+        let mg = /(\d+) passing/.exec(`${rg.stdout}`)
+        if (rg.status !== 0) {
+            badHint.set(g, failOf(`${rg.stdout}\n${rg.stderr}`))
+        }
+        console.log(`對照(優先測試 ${g}): ${rg.status === 0 ? '全綠' : `失敗(以之為優先測試之變異記為 UNDECIDABLE;${badHint.get(g)})`}${mg ? `,${mg[1]} 項通過` : ''}`)
+    }
+    if (args.includes('--control-only')) {
+        let und = sel.filter((x) => x.m[3].some((g) => badHint.has(g)))
+        console.log(`\n僅對照(--control-only): 所選 ${sel.length} 項中 UNDECIDABLE(無法判定) ${und.length} 項${und.length ? `: ${und.map((x) => x.m[0]).join('、')}` : ''}`)
+        fs.rmSync(root, { recursive: true, force: true })
+        process.exit(und.length > 0 ? 1 : 0)
     }
 }
 let results = []
@@ -236,8 +275,14 @@ for (let { m, i } of sel) {
     try {
         //錨點以 LF 比對(複本可能為 CRLF): 先把檔轉為 LF 再套用(複本只供測試, 行尾不影響行為)
         let mutated = apply(normNl(orig), edits, id)
+        let bad = hint.filter((g) => badHint.has(g))
         if (check) {
             o.status = 'anchor-ok'
+        }
+        else if (bad.length) {
+            //優先測試於對照(無變異之複本)即失敗 ⇒ 其於本變異下之失敗無從歸因(可能與變異無關): 不植入、不記為被殺, 記為無法判定
+            o.status = 'UNDECIDABLE'
+            o.by = `優先測試於對照即失敗: ${bad.map((g) => `${g}(${badHint.get(g)})`).join('、')}`.slice(0, 200)
         }
         else {
             fs.writeFileSync(fp, mutated, 'utf8')
@@ -263,8 +308,8 @@ for (let { m, i } of sel) {
 }
 fs.rmSync(root, { recursive: true, force: true })
 let st = (s) => results.filter((x) => x.status === s).length
-console.log(`\n共 ${results.length} 項:killed ${st('killed')}、equivalent(等價變異,預期存活)${st('equivalent')}、SURVIVED ${st('SURVIVED')}、ANCHOR-ERROR ${st('ANCHOR-ERROR')}${check ? `、anchor-ok ${st('anchor-ok')}` : ''}`)
+console.log(`\n共 ${results.length} 項:killed ${st('killed')}、equivalent(等價變異,預期存活)${st('equivalent')}、SURVIVED ${st('SURVIVED')}、UNDECIDABLE(無法判定: 優先測試於對照即失敗,未植入) ${st('UNDECIDABLE')}、ANCHOR-ERROR ${st('ANCHOR-ERROR')}${check ? `、anchor-ok ${st('anchor-ok')}` : ''}`)
 if (argv('out')) {
     fs.writeFileSync(path.resolve(String(argv('out'))), JSON.stringify(results, null, 2), 'utf8')
 }
-process.exit(st('SURVIVED') + st('ANCHOR-ERROR') > 0 ? 1 : 0)
+process.exit(st('SURVIVED') + st('ANCHOR-ERROR') + st('UNDECIDABLE') > 0 ? 1 : 0)
