@@ -5,7 +5,7 @@ import { spawnSync } from 'child_process'
 import { FD_ROOT, FD_TMP } from './synthLedger.mjs'
 
 
-//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
+//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
 //  用法(測試以 quiet-run --lock 執行): node test/tools/mutateBar.mjs [--list] [--check] [--control-only] [--only <id,id…>] [--from <序> --to <序>] [--out <結果.json>]
 //    --check 只核對各變異之錨點(須恰出現一次; all 者至少一次), 不跑測試;未被殺者(survived)為測試之缺口 —— 補測試,不是補斷言(見 sgud/exp 之變異作法)
 //    --control-only 只跑對照(守門之測試與所選變異之優先測試, 不植入變異)並列出所選變異中「無法判定」者, 供不重跑全部變異而盤點分類
@@ -181,6 +181,69 @@ let M = [
     ['A04', 'src/tools/armDecide.mjs', [['makeProjectOrExit', 'makeProject', true]], ['unit-barHours']],
     ['A05', 'src/tools/fakeRound.mjs', [['makeProjectOrExit', 'makeProject', true]], ['unit-barHours']],
     ['A06', 'src/cli/rsi.mjs', [['makeProjectOrExit', 'makeProject', true]], ['unit-barHours']],
+    //── evalCore.mjs: 擴充診斷之 api.fillRandom(規則 R-EV-46)──
+    //  抽法: 側別、名次之匹配(目標取自池)、池之界(只取第 0 ~ k 個決策; 含第 k 個)、決策棒之界(< 與 ≤)、不重複、actDays 之分支、組內名次之基準、鄰域之寬與限同側、池為空之後備、該側無策略之防護、
+    //    鄰域用盡之依序找、逐抽之亂數、排序、從缺之截斷、每決策之標記、方向之分組之建立
+    ['Q01', 'src/eval/evalCore.mjs', [['cn[k * 2 + (j === 0 ? 1 : 0)] = c', 'cn[k * 2 + (j === 0 ? 0 : 1)] = c']], ['unit-extFillRandom']],
+    ['Q02', 'src/eval/evalCore.mjs', [['let t = pn > 0 ? pool[g][Math.floor(rng() * pn)] : Math.floor(rng() * sz)', 'let t = Math.floor(rng() * sz)']], ['unit-extFillRandom']],
+    ['Q03', 'src/eval/evalCore.mjs', [['let pn = wholePool ? poolN[g] : poolEnd[k * nGrp + g]', 'let pn = wholePool ? poolN[g] : poolN[g]']], ['unit-extFillRandom']],
+    ['Q04', 'src/eval/evalCore.mjs', [["            while (e < eh && L.ent[e] < b) {\n                e++\n            }\n            ce[s] = e\n            if (skip) {", "            while (e < eh && L.ent[e] <= b) {\n                e++\n            }\n            ce[s] = e\n            if (skip) {"]], ['unit-extFillRandom']],
+    ['Q05', 'src/eval/evalCore.mjs', [['                            stamp[v] = tick\n                            o[m++] = v', '                            o[m++] = v']], ['unit-extFillRandom']],
+    ['Q06', 'src/eval/evalCore.mjs', [['FILL_HALF, sideGrp, 2, act, ', 'FILL_HALF, sideGrp, 2, 0, ']], ['unit-extFillRandom']],
+    ['Q07', 'src/eval/evalCore.mjs', [['pool[g][poolN[g]++] = pos[sel[i]] - gStart[g]', 'pool[g][poolN[g]++] = pos[sel[i]]']], ['unit-extFillRandom']],
+    ['Q08', 'src/eval/evalCore.mjs', [['let lo = Math.max(g0, g0 + t - half)', 'let lo = Math.max(g0, g0 + t - 3 * half)']], ['unit-extFillRandom']],
+    ['Q09', 'src/eval/evalCore.mjs', [['let hi = Math.min(g0 + sz - 1, g0 + t + half)', 'let hi = g0 + t + half']], ['unit-extFillRandom']],
+    ['Q10', 'src/eval/evalCore.mjs', [[': Math.floor(rng() * sz)', ': sz - 1']], ['unit-extFillRandom']],
+    ['Q11', 'src/eval/evalCore.mjs', [['                        if (sz === 0) {\n                            continue\n                        }\n', '']], ['unit-extFillRandom']],
+    ['Q12', 'src/eval/evalCore.mjs', [['        if (stamp[v] === tick) {\n            //鄰域內多數已被取用: 依序找第一個未用者; 全部用盡則此席從缺\n            v = -1', '        if (false) {\n            //鄰域內多數已被取用: 依序找第一個未用者; 全部用盡則此席從缺\n            v = -1']], ['unit-extFillRandom']],
+    ['Q13', 'src/eval/evalCore.mjs', [['let rng = mulberry32(seed + (d + 1) * 7919 + ri * 104723)\n                let rs = new Array(nd)\n                for (let k = 0; k < nd; k++) {\n                    let ord = ords[k]\n                    let tot = 0', 'let rng = mulberry32(seed + ri * 104723)\n                let rs = new Array(nd)\n                for (let k = 0; k < nd; k++) {\n                    let ord = ords[k]\n                    let tot = 0']], ['unit-extFillRandom']],
+    ['Q14', 'src/eval/evalCore.mjs', [['rs[k] = (m === tot ? o : o.slice(0, m)).sort()', 'rs[k] = (m === tot ? o : o.slice(0, m))']], ['unit-extFillRandom']],
+    ['Q15', 'src/eval/evalCore.mjs', [['rs[k] = (m === tot ? o : o.slice(0, m)).sort()', 'rs[k] = o.sort()']], ['unit-extFillRandom']],
+    ['Q16', 'src/eval/evalCore.mjs', [['                    let m = 0\n                    tick++\n                    for (let g = 0; g < nGrp; g++) {', '                    let m = 0\n                    for (let g = 0; g < nGrp; g++) {']], ['unit-extFillRandom']],
+    ['Q17', 'src/eval/evalCore.mjs', [['                nullSideActOf([], null, 0, 0)\n                return fillGroupActOf', '                return fillGroupActOf']], ['unit-extFillRandom']],
+    ['Q18', 'src/eval/evalCore.mjs', [['let cnt = actBars > 0 ? e - lowerBound(L.ent, L.off[s], e, b - actBars) : e - L.off[s]', 'let cnt = e - L.off[s]']], ['unit-extFillRandom']],
+    ['Q19', 'src/eval/evalCore.mjs', [['                for (let i = 0; i < sel.length; i++) {\n                    let g = grp[sel[i]]\n                    pool[g][poolN[g]++] = pos[sel[i]] - gStart[g]\n                }\n                for (let g = 0; g < nGrp; g++) {\n                    poolEnd[k * nGrp + g] = poolN[g]\n                }', '                for (let g = 0; g < nGrp; g++) {\n                    poolEnd[k * nGrp + g] = poolN[g]\n                }\n                for (let i = 0; i < sel.length; i++) {\n                    let g = grp[sel[i]]\n                    pool[g][poolN[g]++] = pos[sel[i]] - gStart[g]\n                }']], ['unit-extFillRandom']],
+    //  檢測: 外層 / 相位之長度、元素之種類(null、陣列)、opt 之種類(null、原始值)、席數之上下界、iseint、actDays、draws 之上下界與預設、比對之先後、讀取之寫法、複本不經迭代器、
+    //    包裝與凍結、訊息之欄名、發現形狀不合後不再讀
+    ['Q20', 'src/eval/evalCore.mjs', [['if (outer === null || outer.length !== runs.length) {', 'if (outer === null) {']], ['unit-extFillRandom']],
+    ['Q21', 'src/eval/evalCore.mjs', [['                    if (items === null || items.length !== nd) {\n                        bad = `invalid statesByPhase[', '                    if (items === null) {\n                        bad = `invalid statesByPhase[']], ['unit-extFillRandom']],
+    ['Q22', 'src/eval/evalCore.mjs', [["if (x === null || typeof x !== 'object' || isArr(x)) {", "if (x === null || typeof x !== 'object') {"]], ['unit-extFillRandom']],
+    ['Q23', 'src/eval/evalCore.mjs', [["if (x === null || typeof x !== 'object' || isArr(x)) {", "if (typeof x !== 'object' || isArr(x)) {"]], ['unit-extFillRandom']],
+    ['Q24', 'src/eval/evalCore.mjs', [["if (o === null || typeof o !== 'object') {", 'if (o === null) {']], ['unit-extFillRandom']],
+    ['Q25', 'src/eval/evalCore.mjs', [['if (!(c >= 0 && c <= n)) {', 'if (!(c >= 0)) {']], ['unit-extFillRandom']],
+    ['Q26', 'src/eval/evalCore.mjs', [['if (!(c >= 0 && c <= n)) {', 'if (!(c <= n)) {']], ['unit-extFillRandom']],
+    ['Q27', 'src/eval/evalCore.mjs', [['let c = iseint(v) ? NumberCtor(v) : NaN', 'let c = Number.isInteger(v) ? v : NaN']], ['unit-extFillRandom']],
+    ['Q28', 'src/eval/evalCore.mjs', [['                    if (!(act >= 0)) {', '                    if (false) {']], ['unit-extFillRandom']],
+    ['Q29', 'src/eval/evalCore.mjs', [['if (!(d >= 1 && d <= FILL_DRAWS_MAX)) {', 'if (!(d >= 1)) {']], ['unit-extFillRandom']],
+    ['Q30', 'src/eval/evalCore.mjs', [['if (!(d >= 1 && d <= FILL_DRAWS_MAX)) {', 'if (!(d <= FILL_DRAWS_MAX)) {']], ['unit-extFillRandom']],
+    ['Q31', 'src/eval/evalCore.mjs', [['let d = Math.max(1, Math.min(FILL_DRAWS_MAX, nullDraws || 16))', 'let d = 16']], ['unit-extFillRandom']],
+    ['Q32', 'src/eval/evalCore.mjs', [['                guardExt(\'ext\')\n                if (bad !== null) {\n                    throw new ErrorCtor(bad)\n                }\n                if (optBad) {', '                if (bad !== null) {\n                    throw new ErrorCtor(bad)\n                }\n                if (optBad) {'], ['                nullSideActOf([], null, 0, 0)\n                return fillGroupActOf', "                guardExt('ext')\n                nullSideActOf([], null, 0, 0)\n                return fillGroupActOf"]], ['unit-extFillRandom']],
+    ['Q33', 'src/eval/evalCore.mjs', [["pushOwn(row, readOpt(x, 'short'))", 'pushOwn(row, x.short)']], ['unit-extFillRandom']],
+    ['Q34', 'src/eval/evalCore.mjs', [['let outer = listOf(statesByPhase, runs.length, true)', 'let outer = isArr(statesByPhase) ? Array.from(statesByPhase) : null']], ['unit-extFillRandom']],
+    ['Q35', 'src/eval/evalCore.mjs', [['fillRandom: ObjectFreeze(apiFn(fillRandom)),', 'fillRandom: ObjectFreeze(fillRandom),']], ['unit-extFillRandom']],
+    ['Q36', 'src/eval/evalCore.mjs', [['fillRandom: ObjectFreeze(apiFn(fillRandom)),', 'fillRandom: apiFn(fillRandom),']], ['unit-extFillRandom']],
+    ['Q37', 'src/eval/evalCore.mjs', [["if (o === null || typeof o !== 'object') {", "if (typeof o !== 'object') {"]], ['unit-extFillRandom']],
+    ['Q38', 'src/eval/evalCore.mjs', [["${j === 0 ? 'short' : 'long'}", "${j === 0 ? 'long' : 'short'}"]], ['unit-extFillRandom']],
+    ['Q39', 'src/eval/evalCore.mjs', [['for (let i = 0; bad === null && i < runs.length; i++) {\n                    let nd = runs[i].bars.length\n                    let items = listOf(outer[i], nd, true)', 'for (let i = 0; outer !== null && i < runs.length; i++) {\n                    let nd = runs[i].bars.length\n                    let items = listOf(outer[i], nd, true)']], ['unit-extFillRandom']],
+    ['Q40', 'src/domain/texts.mjs', [['`fillRandom` 依各決策之兩側席數以活躍度匹配隨機填席(回可直接交給 `simulate` 之選集;同比例、隨機時機之安慰劑等用)、', '']], ['unit-texts']],
+    //  opt.pool(目標名次之池): 池之選擇(不分、顛倒、對應之字串)、'phase' 之池界(只到其後一個決策)、檢測之條件(拿掉、只收其一、null、大小寫)、讀取之寫法、檢測之先後、訊息
+    ['Q41', 'src/eval/evalCore.mjs', [['let pn = wholePool ? poolN[g] : poolEnd[k * nGrp + g]', 'let pn = poolEnd[k * nGrp + g]']], ['unit-extFillRandom']],
+    ['Q42', 'src/eval/evalCore.mjs', [['let pn = wholePool ? poolN[g] : poolEnd[k * nGrp + g]', 'let pn = !wholePool ? poolN[g] : poolEnd[k * nGrp + g]']], ['unit-extFillRandom']],
+    ['Q43', 'src/eval/evalCore.mjs', [['let pn = wholePool ? poolN[g] : poolEnd[k * nGrp + g]', 'let pn = wholePool ? poolEnd[Math.min(nd - 1, k + 1) * nGrp + g] : poolEnd[k * nGrp + g]']], ['unit-extFillRandom']],
+    ['Q44', 'src/eval/evalCore.mjs', [["FILL_HALF, sideGrp, 2, act, oPool === 'phase')", "FILL_HALF, sideGrp, 2, act, oPool === 'toDate')"]], ['unit-extFillRandom']],
+    ['Q45', 'src/eval/evalCore.mjs', [["if (oPool !== undefined && oPool !== null && oPool !== 'toDate' && oPool !== 'phase') {", 'if (false) {']], ['unit-extFillRandom']],
+    ['Q46', 'src/eval/evalCore.mjs', [["oPool !== 'toDate' && oPool !== 'phase') {", "oPool !== 'toDate') {"]], ['unit-extFillRandom']],
+    ['Q47', 'src/eval/evalCore.mjs', [["oPool !== 'toDate' && oPool !== 'phase') {", "oPool !== 'phase') {"]], ['unit-extFillRandom']],
+    ['Q48', 'src/eval/evalCore.mjs', [["if (oPool !== undefined && oPool !== null && oPool !== 'toDate'", "if (oPool !== undefined && oPool !== 'toDate'"]], ['unit-extFillRandom']],
+    ['Q49', 'src/eval/evalCore.mjs', [["oPool !== 'toDate' && oPool !== 'phase') {", "oPool !== 'toDate' && String(oPool).toLowerCase() !== 'phase') {"]], ['unit-extFillRandom']],
+    ['Q50', 'src/eval/evalCore.mjs', [["oPool = readOpt(o, 'pool')", 'oPool = o.pool']], ['unit-extFillRandom']],
+    ['Q51', 'src/eval/evalCore.mjs', [["                //opt.pool(目標名次之池): 'toDate'(預設)或 'phase'; 只收此二字串(不轉型、不呼叫其方法; 讀取拋錯之哨兵亦不合)\n                if (oPool !== undefined && oPool !== null && oPool !== 'toDate' && oPool !== 'phase') {\n                    throw new ErrorCtor('invalid opt.pool: must be \\'toDate\\' or \\'phase\\'')\n                }\n", ''], ['                let d = Math.max(1, Math.min(FILL_DRAWS_MAX, nullDraws || 16))', "                if (oPool !== undefined && oPool !== null && oPool !== 'toDate' && oPool !== 'phase') {\n                    throw new ErrorCtor('invalid opt.pool: must be \\'toDate\\' or \\'phase\\'')\n                }\n                let d = Math.max(1, Math.min(FILL_DRAWS_MAX, nullDraws || 16))"]], ['unit-extFillRandom']],
+    ['Q52', 'src/eval/evalCore.mjs', [["throw new ErrorCtor('invalid opt.pool: must be \\'toDate\\' or \\'phase\\'')", "throw new ErrorCtor('invalid opt.pool: must be a string')"]], ['unit-extFillRandom']],
+    //  nullGroupActOf(replaceNull 等)端對共用函數(actRankPrep / actRankAt / drawNear)之接線(規則 R-EV-46; Gitea #197 之本庫補強): 優先測試只列「既有」之測試(不含 unit-extFillRandom), 證明抽成共用函數後該端之接線仍有既有測試守門
+    ['Q53', 'src/eval/evalCore.mjs', [['        let rp = actRankPrep(grp, nGrp, actDays)\n        let gStart = rp.gStart\n        let pos = rp.pos\n        let stamp = new Int32Array(n)\n        let tick = 0\n        let acc = new Float64Array(draws)', '        let rp = actRankPrep(grp, nGrp, 0)\n        let gStart = rp.gStart\n        let pos = rp.pos\n        let stamp = new Int32Array(n)\n        let tick = 0\n        let acc = new Float64Array(draws)']], ['unit-extReplacePart', 'unit-evalCore', 'unit-evalPostfitRecent']],
+    ['Q54', 'src/eval/evalCore.mjs', [['let hi = Math.min(gStart[g + 1] - 1, p + half)\n                        let v = drawNear(ord, lo, hi, rng, stamp, tick)', 'let hi = Math.min(gStart[g + 1] - 1, p + half)\n                        let v = drawNear(ord, lo, lo, rng, stamp, tick)']], ['unit-extReplacePart', 'unit-evalCore', 'unit-evalPostfitRecent']],
+    ['Q55', 'src/eval/evalCore.mjs', [['        let gStart = rp.gStart\n        let pos = rp.pos\n        let stamp = new Int32Array(n)\n        let tick = 0\n        let acc = new Float64Array(draws)', '        let gStart = rp.gStart\n        let pos = new Int32Array(n)\n        let stamp = new Int32Array(n)\n        let tick = 0\n        let acc = new Float64Array(draws)']], ['unit-extReplacePart', 'unit-evalCore', 'unit-evalPostfitRecent']],
+    ['Q56', 'src/eval/evalCore.mjs', [['let ord = actRankAt(rp, grp, ce, r.bars[k], skip)', 'let ord = actRankAt(rp, grp, ce, r.bars[k] + 1, skip)']], ['unit-extReplacePart', 'unit-evalCore', 'unit-evalPostfitRecent']],
 ]
 
 let args = process.argv.slice(2)

@@ -84,6 +84,7 @@ const { ObjectFreeze, ObjectSeal, ObjectHasOwn, ReflectApply, ArrayFrom, ArrayIs
 //       每次呼叫 pick 後、每批 accept 呼叫(一次逐訊號模擬)後、每個擴充診斷呼叫後與其 api 函數之入口比對受保護之內建物件, 不一致即拋 code 為 EVAL_INTEGRITY 之錯誤
 //    模組之回傳值與參數先只以擷取之參照讀成評估器自有之資料(此段可能執行模組之存取子), 比對通過後才以一般寫法處理
 //  擴充診斷之資料存取(規則 R-EV-36): api.market / factor / series 與 ctx 之同名介面共用同一份取值(marketAt / factorAt / seriesAt), 於同一棒逐位相同; api 之三個函數同其他 api 函數(apiFn、入口比對)
+//  擴充診斷之隨機填席(規則 R-EV-46): api.fillRandom 與 api.replaceNull(nullGroupActOf)共用同一份排名與抽取(actRankPrep / actRankAt / drawNear); 給定各決策之兩側席數, 預設(opt.pool = 'toDate')只用各決策棒以前之資訊('phase' 除外: 其目標名次之池含成品其後之決策之席)
 /**
  * 於已升冪排序之陣列 arr 的 [lo, hi) 區間內做二分搜尋, 回傳第一個「值 >= v」之位置
  * 區間內皆 &lt; v 時回傳 hi
@@ -1571,6 +1572,85 @@ let makeEvaluator = (L, cfg = {}) => {
     //  回傳各抽之等效年化(相位平均)陣列, 另帶 comp = { sigPerPick }
     let tieRank = null
     let tieInv = null
+    //actRankPrep / actRankAt / drawNear, 配對隨機替換之排名與抽取(nullGroupActOf 與擴充診斷之 api.fillRandom 共用同一份實作; 規則 R-EV-38、R-EV-46)
+    //  actRankPrep(grp, nGrp, actDays): 一次呼叫之前置 —— 活躍度之窗 actBars(actDays > 0 = 決策棒以前最近 actDays 日之根數; 0 = 累計)、同值之次序 tieRank / tieInv(首用時建立; 只依 tie)、
+    //    各組於排序後陣列內之起點 gStart(組別為排序鍵之最高位 ⇒ 同組者相連; 組之隻數為靜態)、排序鍵之進位 span(全期單數之最大值 + 1; 只作進位, 排序結果只依組、活躍度與 tie);
+    //    回 { actBars, gStart, span, keys, pos }(keys / pos 為該次呼叫自有之暫存)
+    let actRankPrep = (grp, nGrp, actDays) => {
+        let actBars = Number.isFinite(actDays) &amp;&amp; actDays > 0 ? Math.round(actDays) * bpd : 0
+        if (!tieRank) {
+            let idx = Array.from({ length: n }, (_, i) => i).sort((a, b) => (tie[a] - tie[b]) || (a - b))
+            tieInv = Int32Array.from(idx)
+            tieRank = new Int32Array(n)
+            for (let i = 0; i &lt; n; i++) {
+                tieRank[idx[i]] = i
+            }
+        }
+        let gStart = new Int32Array(nGrp + 1)
+        let maxCnt = 0
+        for (let s = 0; s &lt; n; s++) {
+            gStart[grp[s] + 1]++
+            let c = L.off[s + 1] - L.off[s]
+            if (c > maxCnt) {
+                maxCnt = c
+            }
+        }
+        for (let g = 0; g &lt; nGrp; g++) {
+            gStart[g + 1] += gStart[g]
+        }
+        return { actBars, gStart, span: maxCnt + 1, keys: new Float64Array(n), pos: new Int32Array(n) }
+    }
+    //actRankAt(rp, grp, ce, b, skip): 決策棒 b 之排名 —— 推進各策略之進場游標 ce(跨決策累計; 進場棒 &lt; b 者為已進場), 依(組、活躍度、tie)排序;
+    //  回 ord(排序後之策略序號)並寫 rp.pos(各策略於 ord 之位置); skip 為真者只推進游標、不排名(回 null)
+    let actRankAt = (rp, grp, ce, b, skip) => {
+        let actBars = rp.actBars
+        let span = rp.span
+        let keys = rp.keys
+        let pos = rp.pos
+        for (let s = 0; s &lt; n; s++) {
+            let eh = L.off[s + 1]
+            let e = ce[s]
+            while (e &lt; eh &amp;&amp; L.ent[e] &lt; b) {
+                e++
+            }
+            ce[s] = e
+            if (skip) {
+                continue
+            }
+            let cnt = actBars > 0 ? e - lowerBound(L.ent, L.off[s], e, b - actBars) : e - L.off[s]
+            keys[s] = (grp[s] * span + cnt) * n + tieRank[s]
+        }
+        if (skip) {
+            return null
+        }
+        keys.sort()
+        let ord = new Int32Array(n)
+        for (let i = 0; i &lt; n; i++) {
+            let s = tieInv[keys[i] - Math.floor(keys[i] / n) * n]
+            ord[i] = s
+            pos[s] = i
+        }
+        return ord
+    }
+    //drawNear(ord, lo, hi, rng, stamp, tick): 自 ord[lo] ~ ord[hi] 均勻抽一隻本次(tick)未用者 —— 撞到已用者至多重抽 16 次, 仍撞則依序找第一個未用者; 全部已用回 -1(該席從缺)
+    //  不寫 stamp(由呼叫端於採用時標記)
+    let drawNear = (ord, lo, hi, rng, stamp, tick) => {
+        let v = ord[lo + Math.floor(rng() * (hi - lo + 1))]
+        for (let t = 0; t &lt; 16 &amp;&amp; stamp[v] === tick; t++) {
+            v = ord[lo + Math.floor(rng() * (hi - lo + 1))]
+        }
+        if (stamp[v] === tick) {
+            //鄰域內多數已被取用: 依序找第一個未用者; 全部用盡則此席從缺
+            v = -1
+            for (let q = lo; q &lt;= hi; q++) {
+                if (stamp[ord[q]] !== tick) {
+                    v = ord[q]
+                    break
+                }
+            }
+        }
+        return v
+    }
     //nullGroupActOf, 配對隨機替換之通用版: 把選集之每一隻換成「同組、組內活躍度名次 ± half 名內」之隨機一隻
     //  grp(Int32Array(n); 靜態之組別 0 ~ nGrp-1); 活躍度 = 決策棒以前之累計進場數(同值依 tie)
     //  回傳各抽之等效年化(相位平均)陣列, 另帶 comp = { sigPerPick } 與 thirds = 各三等分段之各抽平均(各相位之決策數皆 ≥ 6 時才有; 分段同 evalPolicy 之 op.thirds)
@@ -1586,31 +1666,10 @@ let makeEvaluator = (L, cfg = {}) => {
     let nullGroupActOf = (runs, accept, draws, seed, half, grp, nGrp, actDays = 0, more = null) => {
         let subMask = more &amp;&amp; more.subMask ? more.subMask : null
         let decMask = more &amp;&amp; more.decMask ? more.decMask : null
-        let actBars = Number.isFinite(actDays) &amp;&amp; actDays > 0 ? Math.round(actDays) * bpd : 0
-        if (!tieRank) {
-            let idx = Array.from({ length: n }, (_, i) => i).sort((a, b) => (tie[a] - tie[b]) || (a - b))
-            tieInv = Int32Array.from(idx)
-            tieRank = new Int32Array(n)
-            for (let i = 0; i &lt; n; i++) {
-                tieRank[idx[i]] = i
-            }
-        }
-        //各組於排序後陣列內之起點(組別為排序鍵之最高位 ⇒ 同組者相連; 組之隻數為靜態)
-        let gStart = new Int32Array(nGrp + 1)
-        let maxCnt = 0
-        for (let s = 0; s &lt; n; s++) {
-            gStart[grp[s] + 1]++
-            let c = L.off[s + 1] - L.off[s]
-            if (c > maxCnt) {
-                maxCnt = c
-            }
-        }
-        for (let g = 0; g &lt; nGrp; g++) {
-            gStart[g + 1] += gStart[g]
-        }
-        let span = maxCnt + 1
-        let keys = new Float64Array(n)
-        let pos = new Int32Array(n)
+        //排名之前置(actRankPrep): 活躍度之窗、同值之次序、各組於排序後陣列內之起點 gStart
+        let rp = actRankPrep(grp, nGrp, actDays)
+        let gStart = rp.gStart
+        let pos = rp.pos
         let stamp = new Int32Array(n)
         let tick = 0
         let acc = new Float64Array(draws)
@@ -1627,31 +1686,11 @@ let makeEvaluator = (L, cfg = {}) => {
             let ords = new Array(nd)
             let selPos = new Array(nd)
             for (let k = 0; k &lt; nd; k++) {
-                let b = r.bars[k]
                 //遮罩外之決策: 只推進進場游標(ce 為跨決策之累計), 不排名(其後不取用 ords / selPos)
                 let skip = decMask !== null &amp;&amp; !decMask[ri][k]
-                for (let s = 0; s &lt; n; s++) {
-                    let eh = L.off[s + 1]
-                    let e = ce[s]
-                    while (e &lt; eh &amp;&amp; L.ent[e] &lt; b) {
-                        e++
-                    }
-                    ce[s] = e
-                    if (skip) {
-                        continue
-                    }
-                    let cnt = actBars > 0 ? e - lowerBound(L.ent, L.off[s], e, b - actBars) : e - L.off[s]
-                    keys[s] = (grp[s] * span + cnt) * n + tieRank[s]
-                }
+                let ord = actRankAt(rp, grp, ce, r.bars[k], skip)
                 if (skip) {
                     continue
-                }
-                keys.sort()
-                let ord = new Int32Array(n)
-                for (let i = 0; i &lt; n; i++) {
-                    let s = tieInv[keys[i] - Math.floor(keys[i] / n) * n]
-                    ord[i] = s
-                    pos[s] = i
                 }
                 ords[k] = ord
                 selPos[k] = Int32Array.from(r.sels[k], (s) => pos[s])
@@ -1692,22 +1731,9 @@ let makeEvaluator = (L, cfg = {}) => {
                         let p = selPos[k][i]
                         let lo = Math.max(gStart[g], p - half)
                         let hi = Math.min(gStart[g + 1] - 1, p + half)
-                        let v = ord[lo + Math.floor(rng() * (hi - lo + 1))]
-                        for (let t = 0; t &lt; 16 &amp;&amp; stamp[v] === tick; t++) {
-                            v = ord[lo + Math.floor(rng() * (hi - lo + 1))]
-                        }
-                        if (stamp[v] === tick) {
-                            //鄰域內多數已被取用: 依序找第一個未用者; 全部用盡則此席從缺
-                            v = -1
-                            for (let q = lo; q &lt;= hi; q++) {
-                                if (stamp[ord[q]] !== tick) {
-                                    v = ord[q]
-                                    break
-                                }
-                            }
-                            if (v &lt; 0) {
-                                continue
-                            }
+                        let v = drawNear(ord, lo, hi, rng, stamp, tick)
+                        if (v &lt; 0) {
+                            continue
                         }
                         stamp[v] = tick
                         if (bk) {
@@ -1749,6 +1775,96 @@ let makeEvaluator = (L, cfg = {}) => {
             vals.pnl = Float64Array.from(accP, (v) => v / runs.length)
         }
         return vals
+    }
+
+    //fillGroupActOf, 給定各決策之各組席數之活躍度匹配隨機填席(規則 R-EV-46; 擴充診斷之 api.fillRandom 用): 回 draws 組選集 out[d][ri][k](Int32Array, 序號升冪; 不帶分帳)
+    //  counts[ri](Int32Array(決策數 × nGrp)): counts[ri][k * nGrp + g] = 第 ri 相位第 k 個決策要填之第 g 組之席數(呼叫端已驗為 0 ~ n 之整數)
+    //  排名與抽取同 nullGroupActOf(actRankPrep / actRankAt / drawNear; 同一份實作): 各決策依(組、決策棒以前之活躍度、tie)排序;
+    //    每一席先自「成品於本相位第 0 ~ k 個決策之同組之席」之組內名次(各席於其自己之決策棒之排名)均勻抽一個目標名次(放回), 再自該名次 ± half 名內(限同組)以 drawNear 抽一隻本決策未用者
+    //    —— nullGroupActOf 之目標名次 = 被替換之席本身之名次; 此處 = 成品至該決策為止之同組之席之名次分佈(依決策先後累積; 不取其後之決策之席: 其名次含較晚之帳本資料)
+    //  不足: 鄰域全已用者該席從缺(同 nullGroupActOf); 該組無任何策略者其席皆從缺(不耗亂數); 成品於第 0 ~ k 個決策皆無該組之席者, 目標名次改為該組內均勻(無分佈可匹配)
+    //  只用決策棒以前之資訊(預設; wholePool 見下): 第 k 個決策之抽取只依第 0 ~ k 個決策之排名(進場棒 &lt; 各該決策棒)、成品於第 0 ~ k 個決策之選集與 counts 之第 0 ~ k 個決策; 亂數依決策先後取用
+    //  亂數: 每抽每相位一個 mulberry32(seed + (d + 1) × 7919 + ri × 104723; 同 nullGroupActOf 之寫法), 依決策序 → 組序(0 起)→ 席序取用(每席: 目標名次 1 個 + drawNear 之 1 ~ 17 個)
+    //  不進逐訊號模擬(不呼叫 opOf / simWindows): 只讀 runs、帳本與 tieRank / tieInv(首用時建立, 內容只依 tie)⇒ 於執行規則(accept)之內呼叫亦不改外層模擬之狀態
+    //  wholePool(選配; 預設 false = 'toDate'): 真者目標名次之池改為「成品於本相位全部決策之同組之席」(擴充診斷之 opt.pool = 'phase'; 第一趟排名跑完後即定)
+    //    —— 第 k 個決策之抽取經成品其後之席之名次而依其後之帳本資料(各決策之排名本身仍只用該決策棒以前之進場); 亂數之取用次序與預設相同
+    let fillGroupActOf = (runs, counts, draws, seed, half, grp, nGrp, actDays, wholePool = false) => {
+        let rp = actRankPrep(grp, nGrp, actDays)
+        let gStart = rp.gStart
+        let pos = rp.pos
+        let stamp = new Int32Array(n)
+        let tick = 0
+        let out = []
+        for (let d = 0; d &lt; draws; d++) {
+            out.push(new Array(runs.length))
+        }
+        for (let ri = 0; ri &lt; runs.length; ri++) {
+            let r = runs[ri]
+            let nd = r.bars.length
+            let cn = counts[ri]
+            let ce = Uint32Array.from(L.off.subarray(0, n))
+            let ords = new Array(nd)
+            //pool: 各組之成品之席之組內名次(依決策先後累積); poolEnd[k * nGrp + g] = 第 0 ~ k 個決策之該組之席數(第 k 個決策之目標名次只取 pool[g] 之前 poolEnd 個)
+            let nSeat = 0
+            for (let k = 0; k &lt; nd; k++) {
+                nSeat += r.sels[k].length
+            }
+            let pool = []
+            for (let g = 0; g &lt; nGrp; g++) {
+                pool.push(new Int32Array(nSeat))
+            }
+            let poolN = new Int32Array(nGrp)
+            let poolEnd = new Int32Array(nd * nGrp)
+            for (let k = 0; k &lt; nd; k++) {
+                let ord = actRankAt(rp, grp, ce, r.bars[k], false)
+                ords[k] = ord
+                let sel = r.sels[k]
+                for (let i = 0; i &lt; sel.length; i++) {
+                    let g = grp[sel[i]]
+                    pool[g][poolN[g]++] = pos[sel[i]] - gStart[g]
+                }
+                for (let g = 0; g &lt; nGrp; g++) {
+                    poolEnd[k * nGrp + g] = poolN[g]
+                }
+            }
+            for (let d = 0; d &lt; draws; d++) {
+                let rng = mulberry32(seed + (d + 1) * 7919 + ri * 104723)
+                let rs = new Array(nd)
+                for (let k = 0; k &lt; nd; k++) {
+                    let ord = ords[k]
+                    let tot = 0
+                    for (let g = 0; g &lt; nGrp; g++) {
+                        tot += cn[k * nGrp + g]
+                    }
+                    let o = new Int32Array(tot)
+                    let m = 0
+                    tick++
+                    for (let g = 0; g &lt; nGrp; g++) {
+                        let c = cn[k * nGrp + g]
+                        let g0 = gStart[g]
+                        let sz = gStart[g + 1] - g0
+                        if (sz === 0) {
+                            continue
+                        }
+                        let pn = wholePool ? poolN[g] : poolEnd[k * nGrp + g]
+                        for (let j = 0; j &lt; c; j++) {
+                            let t = pn > 0 ? pool[g][Math.floor(rng() * pn)] : Math.floor(rng() * sz)
+                            let lo = Math.max(g0, g0 + t - half)
+                            let hi = Math.min(g0 + sz - 1, g0 + t + half)
+                            let v = drawNear(ord, lo, hi, rng, stamp, tick)
+                            if (v &lt; 0) {
+                                continue
+                            }
+                            stamp[v] = tick
+                            o[m++] = v
+                        }
+                    }
+                    rs[k] = (m === tot ? o : o.slice(0, m)).sort()
+                }
+                out[d][ri] = rs
+            }
+        }
+        return out
     }
 
     //nullSideActOf, 組 = 方向(做多 0 / 做空 1)
@@ -2234,6 +2350,11 @@ let makeEvaluator = (L, cfg = {}) => {
         //          某一個為全部(所列子帳涵蓋成品之全部子帳、或遮罩全為真)時等同只給另一個; 兩者皆為全部(或另一個未給)時, 各抽之選集與既有欄與未給時逐位相同
         //          成品未分帳而給 onlyGroups 者只回 { applicable: false, reason }(不帶其餘新欄); 鄰域內無未用之策略時該席從缺(同既有寫法)
         //        參數不合者拋錯, 訊息依跨套件規格 V19、V20: invalid opt.onlyGroups(或 onlyDecisions, 帶索引時 [i] / [i][k]): must be …(不帶輸入值)
+        //    fillRandom(statesByPhase, { actDays?, draws?, pool? }?) → 長度 draws 之陣列, 各為一組 selsByPhase(各相位一個陣列、各決策一個 Int32Array; 可直接交給 simulate; 規則 R-EV-46):
+        //      statesByPhase = 各決策之兩側席數 { short, long }(0 ~ n 之整數; 相位數與各相位之決策數同成品); 每席自同側、依決策棒以前之活躍度(累計進場數; actDays > 0 改為最近 actDays 日)之名次,
+        //      匹配「成品於評估期間至該決策為止之同側之席」之名次分佈抽取(與 replaceNull 同一套排名與 ± half 之抽取; 同一決策內不重複; 鄰域全已用者從缺; 至該決策為止成品無該側之席者側內均勻)
+        //      pool = 'phase' 時池改為成品於本相位全部決策之同側之席(狀態序列本身跨時間置換之對照用; 不是只用決策棒以前之資訊); 預設 'toDate' 即上述「至該決策為止」
+        //      draws 之預設同 replaceNull、上限 64(給了而不合者拋 invalid opt.draws; 其餘 invalid statesByPhase… / invalid opt / invalid opt.actDays / invalid opt.pool; V19、V20); 不進逐訊號模擬(不受重入之限)
         //    sideGroups()、geoGroups(nTp, nSl) → { grp, nGroups }; summarize(vals) → 同上之統計(vals 為陣列或定型陣列, 選配之 vals.thirds 同; 複本只用擷取之參照, 不合者拋 invalid vals / invalid vals.thirds); rand(k) → 亂數產生器(與成品、既有虛無之亂數互不相干)
         //    market(bar, nBack?)、factor(ki, bar, nBack?)、series(name, bar, nBack?)(規則 R-EV-36): 棒序 &lt; bar 之最近 nBack 根之 K 線 / 因子 / 外部序列之值(複本; 由舊至新; nBack 預設 180)
         //      取值與 ctx.market / ctx.factor / ctx.series 於決策棒 bar 之呼叫逐位相同(同一份實作); bar 須為 0 ~ K 棒數之整數(否則拋錯; 訊息不帶輸入值), 名稱見 meta.keyNames / meta.seriesNames
@@ -2573,6 +2694,100 @@ let makeEvaluator = (L, cfg = {}) => {
                 let sp = statOf(Array.from(v.pnl))
                 return { ...summarizeOf(Array.from(v), v.thirds, ob), applicable: true, obs: ob, obsPnl: r4(obP), pnlMean: r4(sp.mean), pnlSd: r4(sp.sd) }
             }
+            //fillRandom(statesByPhase, opt?)(規則 R-EV-46): 給定各決策之兩側席數 { short, long }, 依活躍度匹配產生 draws 組隨機選集(各為可直接交給 simulate 之 selsByPhase)
+            //  第一段: 只以擷取之參照讀參數(listOf / readOpt / isArr: 不經迭代器、讀取拋錯即無效、值不取值不轉型); 形狀不合者記下第一處、其後不再讀
+            //  guardExt('ext') 之後: 先拋形狀之錯(statesByPhase 之外層 → 各相位 → 各元素 → opt), 再依 wsemi iseint 驗值(各元素之 short → long → opt.actDays → opt.draws → opt.pool〔只收字串 'toDate' / 'phase'〕); 訊息依 V19、V20(不帶輸入值)
+            //  opt.pool: 'toDate'(預設; 池 = 成品於本相位第 0 ~ k 個決策之同側之席 ⇒ 只用決策棒以前之資訊)或 'phase'(池 = 成品於本相位全部決策之同側之席; 狀態序列本身跨時間置換之對照用 ⇒ 第 k 個決策之抽取依其後之帳本資料)
+            //  抽法見 fillGroupActOf(組 = 方向 sideGrp; 名次寬度固定為 replaceNull 之預設 FILL_HALF); draws 之預設同 replaceNull、上限 FILL_DRAWS_MAX(給了而超出即拋); 種子 seed + 179424673(與既有各虛無與 api 函數之常數互異)
+            //  不進逐訊號模擬 ⇒ 不設重入之限制(於 accept 之內呼叫不改外層模擬之狀態)
+            const FILL_HALF = 50
+            const FILL_DRAWS_MAX = 64
+            let fillRandom = (statesByPhase, o) => {
+                let bad = null
+                let cells = []
+                let outer = listOf(statesByPhase, runs.length, true)
+                if (outer === null || outer.length !== runs.length) {
+                    bad = 'invalid statesByPhase: must be an array with one entry per phase of phases[]'
+                }
+                for (let i = 0; bad === null &amp;&amp; i &lt; runs.length; i++) {
+                    let nd = runs[i].bars.length
+                    let items = listOf(outer[i], nd, true)
+                    if (items === null || items.length !== nd) {
+                        bad = `invalid statesByPhase[${i}]: must be an array with one entry per decision of phases[${i}]`
+                        break
+                    }
+                    let row = []
+                    for (let k = 0; k &lt; nd; k++) {
+                        let x = items[k]
+                        if (x === null || typeof x !== 'object' || isArr(x)) {
+                            bad = `invalid statesByPhase[${i}][${k}]: must be an object { short, long }`
+                            break
+                        }
+                        pushOwn(row, readOpt(x, 'short'))
+                        pushOwn(row, readOpt(x, 'long'))
+                    }
+                    pushOwn(cells, row)
+                }
+                let optBad = false
+                let oAct
+                let oDraws
+                let oPool
+                if (bad === null &amp;&amp; o !== undefined) {
+                    if (o === null || typeof o !== 'object') {
+                        optBad = true
+                    }
+                    else {
+                        oAct = readOpt(o, 'actDays')
+                        oDraws = readOpt(o, 'draws')
+                        oPool = readOpt(o, 'pool')
+                    }
+                }
+                guardExt('ext')
+                if (bad !== null) {
+                    throw new ErrorCtor(bad)
+                }
+                if (optBad) {
+                    throw new ErrorCtor('invalid opt: must be an object')
+                }
+                //各決策之席數: counts[i][k * 2 + g](組 = 方向: 做多 0、做空 1; 同 sideGrp)
+                let counts = []
+                for (let i = 0; i &lt; runs.length; i++) {
+                    let nd = runs[i].bars.length
+                    let row = cells[i]
+                    let cn = new Int32Array(nd * 2)
+                    for (let k = 0; k &lt; nd; k++) {
+                        for (let j = 0; j &lt; 2; j++) {
+                            let v = row[k * 2 + j]
+                            let c = iseint(v) ? NumberCtor(v) : NaN
+                            if (!(c >= 0 &amp;&amp; c &lt;= n)) {
+                                throw new ErrorCtor(`invalid statesByPhase[${i}][${k}].${j === 0 ? 'short' : 'long'}: must be an integer from 0 to ${n}`)
+                            }
+                            cn[k * 2 + (j === 0 ? 1 : 0)] = c
+                        }
+                    }
+                    pushOwn(counts, cn)
+                }
+                let act = 0
+                if (oAct !== undefined &amp;&amp; oAct !== null) {
+                    act = iseint(oAct) ? NumberCtor(oAct) : NaN
+                    if (!(act >= 0)) {
+                        throw new ErrorCtor('invalid opt.actDays: must be a non-negative integer (0 for the cumulative entry count)')
+                    }
+                }
+                let d = Math.max(1, Math.min(FILL_DRAWS_MAX, nullDraws || 16))
+                if (oDraws !== undefined &amp;&amp; oDraws !== null) {
+                    d = iseint(oDraws) ? NumberCtor(oDraws) : NaN
+                    if (!(d >= 1 &amp;&amp; d &lt;= FILL_DRAWS_MAX)) {
+                        throw new ErrorCtor(`invalid opt.draws: must be an integer from 1 to ${FILL_DRAWS_MAX}`)
+                    }
+                }
+                //opt.pool(目標名次之池): 'toDate'(預設)或 'phase'; 只收此二字串(不轉型、不呼叫其方法; 讀取拋錯之哨兵亦不合)
+                if (oPool !== undefined &amp;&amp; oPool !== null &amp;&amp; oPool !== 'toDate' &amp;&amp; oPool !== 'phase') {
+                    throw new ErrorCtor('invalid opt.pool: must be \'toDate\' or \'phase\'')
+                }
+                nullSideActOf([], null, 0, 0)
+                return fillGroupActOf(runs, counts, d, seed + 179424673, FILL_HALF, sideGrp, 2, act, oPool === 'phase')
+            }
             let sideGroups = () => {
                 guardExt('ext')
                 nullSideActOf([], null, 0, 0)
@@ -2597,7 +2812,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 }
                 return v
             }
-            //  api 之九個函數(simulate、summarize、replaceNull、sideGroups、geoGroups、rand 與此三個)皆於 apiOf 內以 apiFn 另包並凍結(每個診斷各一份函數物件: 一個診斷於函數物件上掛屬性、改 call 等, 不影響其他診斷)
+            //  api 之十個函數(simulate、summarize、replaceNull、fillRandom、sideGroups、geoGroups、rand 與此三個)皆於 apiOf 內以 apiFn 另包並凍結(每個診斷各一份函數物件: 一個診斷於函數物件上掛屬性、改 call 等, 不影響其他診斷)
             let dataMarket = (bar, nBack = 180) => {
                 guardExt('ext')
                 return marketAt(barOf('market', bar), nBack, 'api.market')
@@ -2653,6 +2868,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 factor: ObjectFreeze(apiFn(dataFactor)),
                 series: ObjectFreeze(apiFn(dataSeries)),
                 rand: ObjectFreeze(apiFn(rand)),
+                fillRandom: ObjectFreeze(apiFn(fillRandom)),
             })
             for (let x of extOpt) {
                 let te = Date.now()
@@ -2806,7 +3022,7 @@ export default makeEvaluator
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Fri Nov 20 2026 19:47:13 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sat Nov 21 2026 00:58:58 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>

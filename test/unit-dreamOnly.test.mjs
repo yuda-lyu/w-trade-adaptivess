@@ -174,20 +174,23 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
             //做夢任務書於彙整之節新增一句(規則 R-REC-37:預先核對之設計取捨不得以求解窗後段為判準);雜湊取去掉該句之後之全文 ⇒ 其餘文字仍與釘死之值逐字相同,該句另斷言恰出現一次
             //  該句附所指之處: 已有共同儲存區者為其 postfit 欄, 尚無者為節點文件之附算列(本夾具尚無共同儲存區)
             let PRE_CHECK = '  - **預先核對(跑前登錄)之設計取捨不得以求解窗後段(節點文件摘要之「求解窗後段(佐證;非正本)」一列)為判準**:此段只於設計定案後附報(否則該段對該設計即非獨立之佐證)。'
-            let sha = (s) => {
+            //擴建一節之 api 列舉新增一段(規則 R-EV-46: api.fillRandom; 只在有共用工具區時出現): 雜湊取去掉該段之後之全文 ⇒ 其餘文字仍與釘死之值逐字相同, 該段另斷言其出現次數(有共用工具區者 1、無者 0)
+            let FILL = '`fillRandom` 依各決策之兩側席數以活躍度匹配隨機填席(回可直接交給 `simulate` 之選集;同比例、隨機時機之安慰劑等用)、'
+            let sha = (s, nFill) => {
                 let ls = s.split('\n')
                 assert.equal(ls.filter((x) => x === PRE_CHECK).length, 1, '新增之一句恰出現一次')
-                return crypto.createHash('sha256').update(ls.filter((x) => x !== PRE_CHECK).join('\n').split(codeRoot).join('src')).digest('hex').slice(0, 16)
+                assert.equal(s.split(FILL).length - 1, nFill, 'fillRandom 之一段之出現次數')
+                return crypto.createHash('sha256').update(ls.filter((x) => x !== PRE_CHECK).join('\n').split(FILL).join('').split(codeRoot).join('src')).digest('hex').slice(0, 16)
             }
             let node2 = { ...node, nodeId: 'n2', arms: ['B14_pitKey'], type: 'verify', issues: ['問題甲'], from: { round: 3, arms: ['B14_pitKey'], base: null, claimKey: 'abcd1234' } }
             let cases = [
-                ['一個節點', ctx([node]), 'd19e36ddb3be9072'],
-                ['零個節點(防呆)', ctx([]), 'cf365e6f9331cade'],
-                ['兩個節點、重做、失敗者', { ...ctx([node, node2], { failed: [{ nodeId: 'f1234567', arms: ['A01_nt'], error: '錯誤' }] }), reworkedIds: ['abcdef1234'] }, 'a740ddc2a44b3898'],
-                ['無共用工具區', ctx([node], { toolbox: null }), 'ffd6627dad42eb97'],
+                ['一個節點', ctx([node]), 'd19e36ddb3be9072', 1],
+                ['零個節點(防呆)', ctx([]), 'cf365e6f9331cade', 1],
+                ['兩個節點、重做、失敗者', { ...ctx([node, node2], { failed: [{ nodeId: 'f1234567', arms: ['A01_nt'], error: '錯誤' }] }), reworkedIds: ['abcdef1234'] }, 'a740ddc2a44b3898', 1],
+                ['無共用工具區', ctx([node], { toolbox: null }), 'ffd6627dad42eb97', 0],
             ]
-            for (let [name, c, want] of cases) {
-                assert.equal(sha(texts.dreamBrief(c)), want, name)
+            for (let [name, c, want, nFill] of cases) {
+                assert.equal(sha(texts.dreamBrief(c), nFill), want, name)
             }
         })
 

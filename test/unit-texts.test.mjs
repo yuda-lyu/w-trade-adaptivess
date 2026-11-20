@@ -263,6 +263,9 @@ describe('texts:任務類型與共用工具區', function () {
         //規則 R-EV-38: replaceNull 可只換一部分之席(onlyGroups / onlyDecisions)亦列於同一節(細節見合約 §7); 未啟用共用工具區者不出現
         assert(s.includes('`replaceNull` 配對隨機替換(可只換所列子帳之席 `onlyGroups`、或只換遮罩內之決策之席 `onlyDecisions`)'), 'replaceNull 只換一部分之席之說明')
         assert(!texts.dreamBrief(ctx(null)).includes('`onlyGroups`'))
+        //規則 R-EV-46: fillRandom(依各決策之兩側席數以活躍度匹配隨機填席)亦列於同一節(細節見合約 §7); 未啟用共用工具區者不出現
+        assert(s.includes('`fillRandom` 依各決策之兩側席數以活躍度匹配隨機填席(回可直接交給 `simulate` 之選集'), 'fillRandom 之說明')
+        assert(!texts.dreamBrief(ctx(null)).includes('`fillRandom`'))
         assert(s.includes('本輪節點自報:`n1aaaaaa` seat.mjs(依側配席)'))
         assert(s.includes('## 5. 參考') && s.includes('## 6. 交付') && s.includes('## 7. 禁止'))
         assert(s.includes('共用工具區 `rsi/toolbox/`、下述之專案指引文件'))
