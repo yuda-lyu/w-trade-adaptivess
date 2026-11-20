@@ -135,6 +135,10 @@ let M = [
     ['F44', 'src/tools/fakeRound.mjs', [['        let first = !firstDone && path.basename(wd) === firstId\n', '        let first = path.basename(wd) === firstId\n'], ['    return items[0].id\n', '    return items[1].id\n']], ['unit-fakeRound']],
     //F45: 讀不到本輪之計畫時改以派工次序決定(第 1 個被派工者 = 改前之寫法; 不拋錯)⇒ ⑦ 之「讀不到計畫(故障注入)離開碼非 0」殺
     ['F45', 'src/tools/fakeRound.mjs', [['            firstId = planFirstId()\n', '            firstId = (() => { try { return planFirstId() } catch (err) { return path.basename(wd) } })()\n']], ['unit-fakeRound']],
+    //── src/tools/fakeRound.mjs: 量尺之子集一項之近期活躍度版(規則 R-REC-38; unit-fakeRound ⑧)——
+    //F46: 不把近期版改成過門檻 ⇒ 新判定下該節點不計入有內容、子集一項不成立(離開碼 15)⇒ ⑧ 殺; F47: 驗後不還原 ⇒ 補算之「值與原本相同」不成立 ⇒ ⑧ 殺
+    ['F46', 'src/tools/fakeRound.mjs', [['...(nraOn ? { nullRecentAct: { ...keepNra, side: { ...keepNra.side, excess: 5, p: 0.01 } } } : {})', '...({})']], ['unit-fakeRound']],
+    ['F47', 'src/tools/fakeRound.mjs', [['fakeDiag: fd, ...(nraOn ? { nullRecentAct: keepNra } : {})', 'fakeDiag: fd']], ['unit-fakeRound']],
     //── src/domain/backtest.mjs、domain.mjs、cli/rsi.mjs: 全期帳本未建之說明與訊息不指向不存在之 g_build.mjs --full(unit-fullLedgerHint; 規則 R-EV-45 ⑨)──
     //T01: 共用訊息改回舊字樣 ⇒ ①②③ 殺; T02: validatePending 之出口改回舊字樣 ⇒ ②③ 殺; T03: 命令列說明改回舊字樣 ⇒ ③ 殺;
     //T04: 訊息不註明與評估帳本用同一個起點 ⇒ ①② 殺; T05: 回測期旗標之出口把「未啟用」與「全期帳本未建」對調 ⇒ ① 殺

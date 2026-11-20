@@ -1,6 +1,10 @@
 import { getSettings } from '../cfg.mjs'
 import { buildPickStore } from '../domain/pickStore.mjs'
 import { P as PI, isIntegrityError } from '../eval/intrinsics.mjs'
+import { guardEntry } from '../domain/agentEntries.mjs'
+
+//agent(ARSI_AGENT_ROLE = node / dream)⇒ 拒跑(離開碼 2; 於任何寫入之前; 規則 R-RUN-11)
+guardEntry('pickStore')
 
 //產生(或更新)共同儲存「自適應挑選策略」區 <狀態根>/picks/(規則 R-REC-25; 說明見 src/domain/pickStore.mjs)
 //  node tools/pickStore.mjs

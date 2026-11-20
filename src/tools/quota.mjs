@@ -2,6 +2,10 @@ import path from 'path'
 import { createRequire } from 'module'
 import { getSettings } from '../cfg.mjs'
 import { checkQuota } from '../arsi/dispatchers.mjs'
+import { guardEntry } from '../domain/agentEntries.mjs'
+
+//agent(ARSI_AGENT_ROLE = node / dream)⇒ 帶 --probe(實際派一次備援)者拒跑(離開碼 2; 規則 R-RUN-11); 只看用量者照常
+guardEntry('quota')
 
 //查各角色(節點 agent、做夢 agent)所用訂閱之用量, 與起跑前之額度守門同一查詢(規則 R-RUN-5); 只印角色、視窗名、百分比與重置時刻, 不印金鑰與帳號
 //  node tools/quota.mjs [--max 95] [--all] [--probe]     --all: 另列 Claude 訂閱之全部視窗;  --max: 以此上限試算「此刻起跑會不會被擋」(預設取 settings.rsi.preflight.quotaMaxPercent, 無則 95; 各角色之 agents.<role>.quotaMaxPercent 優先)

@@ -8,6 +8,10 @@ import fs from 'fs'
 import path from 'path'
 import { P } from '../cfg.mjs'
 import { mkArm } from '../domain/armCatalog.mjs'
+import { guardEntry } from '../domain/agentEntries.mjs'
+
+//agent(ARSI_AGENT_ROLE = node / dream)⇒ 拒跑(離開碼 2; 於任何寫入之前; 規則 R-RUN-11)
+guardEntry('buildCatalog')
 
 let layers = {
     A: '資格層:誰能進候選池',

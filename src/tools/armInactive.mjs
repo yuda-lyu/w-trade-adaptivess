@@ -2,6 +2,10 @@ import path from 'path'
 import { getSettings, argOf } from '../cfg.mjs'
 import { peekRunLock } from '../arsi/runner.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
+import { guardEntry } from '../domain/agentEntries.mjs'
+
+//agent(ARSI_AGENT_ROLE = node / dream)⇒ 帶任何引數(補記)者拒跑(離開碼 2; 於組裝專案與任何寫入之前; 規則 R-RUN-11); 無引數之列出照常
+guardEntry('armInactive')
 
 //節點之「未作用之臂」之補記(主控用; 規則 R-REC-20): 指派之臂中, 交付版未作用者(試過後關閉, 或交付版所做的不屬該臂之定義)
 //  平時由節點自報(code.inactiveArms)、做夢之審計定案(audits[].inactiveArms → 樹之 evidence.inactiveArms); 本工具只供主控補記:

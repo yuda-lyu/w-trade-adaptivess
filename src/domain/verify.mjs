@@ -6,6 +6,7 @@ import { stripComments } from '../eval/pickLoader.mjs'
 import { runNodeProc } from './proc.mjs'
 import { makeBacktest } from './backtest.mjs'
 import { gradeLabel } from './backtestGrade.mjs'
+import { absOf, stripSearchPatterns, listRootExempt, entryExecOf, recursiveRootOf, scriptListsRoot, toolListsRoot, LR_CD } from './cmdScan.mjs'
 
 
 //節點成品之機械驗證(迴圈之正本數字): 以子行程重跑 g_eval.mjs --mode full, 不採信 agent 自報
@@ -80,16 +81,6 @@ let deniedHalt = (logFile) => {
     return { tool: last.tool, target: String(inp.filePath || inp.file_path || inp.path || inp.command || '').replace(/\s+/g, ' ').slice(0, 120) }
 }
 
-//absOf, 把 agent 所給之路徑(相對於專案根、Windows 絕對、或 Git Bash 之 /d/… 形式)轉為絕對路徑
-let absOf = (root, p) => {
-    let s = String(p).replace(/^["']|["']$/g, '')
-    let m = /^\/([a-zA-Z])\/(.*)$/.exec(s)
-    if (m) {
-        s = `${m[1].toUpperCase()}:/${m[2]}`
-    }
-    return path.resolve(root, s)
-}
-
 //scanTrace, 掃 agent 之工具呼叫輸入(指令、檔案路徑; 不掃工具輸出, 以免任務書本身之字樣誤中)與其所寫之程式檔
 //  logFile: 操作紀錄(每列一個 JSON 事件; 其他格式之紀錄略過不掃, 回 note); 省略時取 workDir/agent_a{attempt}.log
 //  root + writeRoots(選配): 給定時另查「寫到允許範圍之外」—— 寫檔 / 改檔工具之路徑、指令之 --out 與輸出重導向, 須落在 writeRoots 之一以內
@@ -98,11 +89,16 @@ let absOf = (root, p) => {
 //  fileHits(選配; 預設 'issue'): 所寫之程式檔內含禁區字樣時如何記 —— 'issue' 列為問題(節點); 'note' 另列於 fileNotes 待人核對
 //    (做夢 agent 會自寫稽核腳本, 其內以禁區字樣為搜尋目標, 不是存取禁區; 其工具呼叫之輸入仍照常列為問題)
 //  nodeRules(選配; 預設 false): 節點專用之三項 —— 讀取回測期重放 / 迴圈驗證之程式(src/domain/backtest*、verify*)列為觸及禁區;
-//    提到工作夾之根本身(例如 ls rsi/work)列為「存取其他節點之工作夾(列出 …)」(任務書 §8; 做夢 agent 須讀各節點之工作夾, 不適用);
+//    提到工作夾之根本身(例如 ls rsi/work)列為「存取其他節點之工作夾(列出 …)」(任務書 §8; 做夢 agent 須讀各節點之工作夾, 不適用;
+//    指令內之該字樣只在搜尋指令之樣式引數內者不列 —— 規則 R-BT-6, 見 listRootExempt; 無法確定者照列);
 //    節點文件(node.json)之首次寫入晚於第一次完整評估者列為「規劃於評估後才寫」(任務書 §6「先寫規劃再評估」; 只列不否決;
 //    planRule 給 false 可單獨關閉此項 —— 重掃舊節點時, 其任務書尚無此要求者不適用)
 //  「存取其他節點之工作夾」只看指令與路徑: 寫檔 / 改檔工具寫入**文件**(非程式檔)之內容不算
 //    (節點文件內「未列出 rsi/work/ 或讀其他節點之工作夾」之類揭露句是文字, 不是存取; 此類曾被誤報)
+//  執行迴圈之寫檔入口(規則 R-BT-7; 節點與做夢皆查): 指令執行 agentEntries.mjs 之表內之寫檔或起行程之進入檔與模式者, 列為「觸及禁區: 執行迴圈之寫檔入口(指令或路徑)」
+//    (唯讀之模式 —— g_rsi.mjs 之 status / dry 等 —— 不列, 與各入口之拒跑同一判定; 判法見 entryExecOf)
+//  stateRoot(選配; 與 nodeRules 並用): 給定時另查以遞迴方式列出狀態根或其上層者(ls -R、find、tree、dir /s、Get-ChildItem -Recurse、遞迴之搜尋、
+//    非殼層之搜尋 / 列目錄工具、內嵌或寫入之腳本走訪目錄; 判法見 recursiveRootOf), 列為「存取其他節點之工作夾(遞迴列出狀態根)」(規則 R-BT-7; 做夢不適用)
 let CONTENT_KEYS = ['content', 'new_string', 'old_string', 'newString', 'oldString']
 let CODE_EXT = /\.(mjs|js|cjs|ts|py|sh|ps1|bat|cmd)$/i
 //程式夾之位置: 本套件之原始碼在 <套件夾>/src —— 安裝於專案後為 node_modules/w-trade-adaptivess/src, 於套件夾內開發時為 src;
@@ -169,7 +165,8 @@ let guardExtraOf = (st) => {
  */
 let forbiddenPats = (privateRoot, nodeRules = false) => [
     [/g_backtest/i, '回測期工具 g_backtest'],
-    [/ARSI_HARNESS/, '迴圈專用之環境變數'],
+    //迴圈專用之環境變數: ARSI_HARNESS(授權迴圈之子行程)與 ARSI_AGENT_ROLE(派工器交給 agent 之角色; 規則 R-RUN-11)—— 同一條、同一標籤; 搜尋樣式內者照 stripSearchPatterns(做夢)不算存取
+    [/ARSI_HARNESS|ARSI_AGENT_ROLE/, '迴圈專用之環境變數'],
     [new RegExp(escRe(path.basename(privateRoot)), 'i'), '私有根'],
     [/ledger[\\/]+(train|full|eval|latest)/i, '帳本檔'],
     [/(^|[\s"'=(,])\.?[\\/]?data[\\/]/i, '專案之 data 夾'],
@@ -200,80 +197,6 @@ let nodeCmdHits = (k, v) => NODE_CMD_PATS.filter(([re], i) => re.test(v) || (i =
 let contentHits = (src, privateRoot, nodeRules = true) => {
     let s = stripComments(String(src))
     return forbiddenPats(privateRoot, nodeRules).filter(([re]) => re.test(s)).map(([, label]) => label)
-}
-//stripSearchPatterns, 去掉指令內搜尋類指令(grep / egrep / fgrep / rg / ag / ack / findstr / git grep)之「搜尋樣式」引數; 其餘(含被搜尋之路徑)原樣保留
-//  做夢 agent 會以禁區字樣為搜尋目標自檢(例: grep -rlE "g_backtest|ARSI_HARNESS" rsi/toolbox/): 樣式不是存取, 被搜尋之路徑仍照查
-//  (例: 做夢交付前以 grep 自檢共用工具區與自己的腳本, 曾被記為觸及禁區 —— 誤報)
-//  只認「該段指令以搜尋指令開頭」者(經 xargs、env 前綴等間接呼叫者不去, 寧可多報)
-let SEARCH_CMD = /^(?:(?:\S*[\\/])?(?:grep|egrep|fgrep|rg|ag|ack|findstr)(?:\.exe)?|git(?:\s+-C\s+\S+)?\s+grep)(?=\s|$)/i
-let SEARCH_OPT_VAL = /^(-[ABCmdDfgt]|--(?:max-count|after-context|before-context|context|include|exclude|exclude-dir|glob|type|file))$/
-let stripSearchPatterns = (cmd) => {
-    //引號內之內容先以佔位符保護(樣式內之 |、;、& 不是指令分隔)
-    let quoted = []
-    let masked = String(cmd).replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, (m) => {
-        quoted.push(m)
-        return `\u0001${quoted.length - 1}\u0002`
-    })
-    let segs = masked.split(/(&&|\|\||[;|\n])/).map((seg) => {
-        let lead = /^\s*/.exec(seg)[0]
-        let body = seg.slice(lead.length)
-        let m0 = SEARCH_CMD.exec(body)
-        if (!m0) {
-            return seg
-        }
-        let isFindstr = /findstr/i.test(m0[0])
-        let toks = body.slice(m0[0].length).split(/(\s+)/)
-        let removed = false
-        let skipNext = false
-        for (let i = 0; i < toks.length; i++) {
-            let t = toks[i]
-            if (!t || /^\s+$/.test(t)) {
-                continue
-            }
-            if (skipNext) {
-                skipNext = false
-                continue
-            }
-            if (/^(-e|--regexp)$/.test(t)) {
-                //其後第一個引數即樣式
-                for (let k = i + 1; k < toks.length; k++) {
-                    if (toks[k] && !/^\s+$/.test(toks[k])) {
-                        toks[k] = ' '
-                        break
-                    }
-                }
-                removed = true
-                continue
-            }
-            if (/^--regexp=/.test(t)) {
-                toks[i] = '--regexp='
-                removed = true
-                continue
-            }
-            if (isFindstr && /^\/[A-Za-z]+(:.*)?$/.test(t)) {
-                if (/^\/C:/i.test(t)) {
-                    toks[i] = '/C:'
-                    removed = true
-                }
-                continue
-            }
-            if (SEARCH_OPT_VAL.test(t)) {
-                skipNext = true
-                continue
-            }
-            if (t.startsWith('-')) {
-                continue
-            }
-            //第一個非選項引數 = 樣式(已由 -e / --regexp / /C: 給樣式者, 其餘皆為路徑)
-            if (!removed) {
-                toks[i] = ' '
-                removed = true
-            }
-            break
-        }
-        return lead + m0[0] + toks.join('')
-    })
-    return segs.join('').replace(/\u0001(\d+)\u0002/g, (_, i) => quoted[Number(i)]) // eslint-disable-line no-control-regex
 }
 //inlinePartsOf, 把指令內 node -e / --eval / -p / --print 之內嵌腳本中「比對內容用」之字樣分出來: 回 { text(去掉這些字樣後之指令), removed(被去掉之片段) }
 //  做夢 agent 會以內嵌腳本掃描日誌自檢(例: node -e "... { k1: /g_backtest/g } ..."): 比對式內之字樣不是存取
@@ -396,20 +319,34 @@ let stripInlinePatterns = (cmd) => inlinePartsOf(cmd).text
  * @param {String} [opt.fileHits='issue'] 輸入程式檔含禁區字樣之記法('issue' 列為問題、'note' 另列待核對),預設'issue'
  * @param {Boolean} [opt.nodeRules=false] 輸入是否套用節點專用規則,預設false
  * @param {Boolean|null} [opt.planRule=null] 輸入是否查「規劃先於評估」,預設null(同 nodeRules)
+ * @param {String|null} [opt.stateRoot=null] 輸入狀態根路徑,與 nodeRules 並用時另查「遞迴列出狀態根或其上層」(規則 R-BT-7),預設null(不查)
  * @returns {Object} 回傳 { issues, note, nEvals, fileNotes, inlineNotes, planAfterEval }(inlineNotes:做夢之內嵌腳本之比對式、比對函數之引數或註解內含禁區字樣者,不計為觸及禁區、列出待核對;每項為「禁區名(內嵌腳本之比對式): 指令片段」)
  * @example
  * let r = scanTrace({ workDir: './rsi/work/node1', attempt: 1, privateRoot: './private', nodeRules: true })
  */
-let scanTrace = ({ workDir, attempt, logFile = null, privateRoot, root = null, writeRoots = null, workRoot = null, allowWork = [], fileHits = 'issue', nodeRules = false, planRule = null }) => {
+let scanTrace = ({ workDir, attempt, logFile = null, privateRoot, root = null, writeRoots = null, workRoot = null, allowWork = [], fileHits = 'issue', nodeRules = false, planRule = null, stateRoot = null }) => {
     let planOn = planRule === null ? nodeRules : planRule === true
+    //遞迴列出狀態根(規則 R-BT-7; 節點且給了 stateRoot 才查): rlRoot = 專案根(相對路徑之解析); rlDir = 此前之指令切換後之工作目錄(null = 不確定)
+    let rlOn = nodeRules && typeof stateRoot === 'string' && stateRoot !== ''
+    let rlRoot = rlOn ? (root ? path.resolve(root) : path.dirname(path.resolve(stateRoot))) : null
+    let rlDir = rlRoot
     let pats = forbiddenPats(privateRoot, nodeRules)
     //工作夾之根(相對於專案根; 例如 rsi/work)後面不接節點 id 者 = 列出全部節點之工作夾
+    //  listBase = 專案根(相對路徑之解析與工作目錄之核對用; 規則 R-BT-6); cwdMoved = 此前之指令曾切換目錄(其後未帶工作目錄之欄者, 工作目錄不確定)
     let reListRoot = null
+    let listBase = null
+    let cwdMoved = false
     if (nodeRules && workRoot) {
-        let segs = path.relative(root || path.dirname(path.dirname(workRoot)), workRoot).split(/[\\/]+/).filter((x) => x && x !== '.').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        listBase = root || path.dirname(path.dirname(workRoot))
+        let segs = path.relative(listBase, workRoot).split(/[\\/]+/).filter((x) => x && x !== '.').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
         if (segs.length) {
             reListRoot = new RegExp(`(^|[\\s"'=(\\\\/])${segs.join('[\\\\/]+')}[\\\\/]*(?=$|[\\s"'|;&)*])`)
         }
+    }
+    //cwdKnownOf, 該次工具呼叫之工作目錄是否確定為專案根(規則 R-BT-6): 帶工作目錄之欄(workdir / cwd)者以之為準; 未帶者須此前之指令未切換目錄
+    let cwdKnownOf = (inp) => {
+        let wd = inp.workdir !== undefined ? inp.workdir : inp.cwd
+        return wd === undefined ? !cwdMoved : typeof wd === 'string' && path.relative(path.resolve(listBase), absOf(listBase, wd)) === ''
     }
     let hits = new Map()
     let fileMap = new Map()
@@ -541,12 +478,50 @@ let scanTrace = ({ workDir, attempt, logFile = null, privateRoot, root = null, w
                                 }
                             }
                         }
-                        if (reListRoot && reListRoot.test(v)) {
+                        //指令之字樣只在搜尋指令之樣式引數內者不列(規則 R-BT-6; 無法確定者照列); 指令以外之欄(路徑、樣式、說明)照現行
+                        if (reListRoot && reListRoot.test(v) && !(k === 'command' && listRootExempt(v, reListRoot, { base: listBase, workRoot, cwdKnown: cwdKnownOf(inp) }))) {
                             let key = '存取其他節點之工作夾(列出工作夾之根)'
                             if (!hits.has(key)) {
                                 hits.set(key, v.replace(/\s+/g, ' ').slice(0, 160))
                             }
                         }
+                    }
+                }
+                //執行迴圈之寫檔入口(規則 R-BT-7; 節點與做夢皆查): 指令執行 agentEntries.mjs 之表內之寫檔或起行程之進入檔與模式(唯讀之模式不列; 判定見 entryExecOf)
+                if (typeof inp.command === 'string' && entryExecOf(inp.command)) {
+                    let key = '執行迴圈之寫檔入口(指令或路徑)'
+                    if (!hits.has(key)) {
+                        hits.set(key, inp.command.replace(/\s+/g, ' ').slice(0, 160))
+                    }
+                }
+                //遞迴列出狀態根或其上層(規則 R-BT-7; 節點且給了 stateRoot): 指令、非殼層之搜尋 / 列目錄工具、寫入之程式檔之內容;
+                //  工作目錄: 帶工作目錄之欄(workdir / cwd)者以之為準; 未帶者為專案根, 此前之指令曾切換目錄者另以切換後之目錄(不確定者相對路徑視為可能是)一併判
+                if (rlOn) {
+                    let wdv = inp.workdir !== undefined ? inp.workdir : inp.cwd
+                    let bases = wdv !== undefined ? [typeof wdv === 'string' ? absOf(rlRoot, wdv) : null] : (rlDir === rlRoot ? [rlRoot] : [rlRoot, rlDir])
+                    let hitR = false
+                    if (typeof inp.command === 'string') {
+                        let rs = bases.map((b) => recursiveRootOf(inp.command, { base: b, stateRoot }))
+                        hitR = rs.some((r) => r.hit)
+                        if (LR_CD.test(inp.command)) {
+                            rlDir = rs[rs.length - 1].dir
+                        }
+                    }
+                    else if (bases.some((b) => toolListsRoot(tool, inp, b, stateRoot))) {
+                        hitR = true
+                    }
+                    //寫入之程式檔: 寫入之內容(改檔工具只看新內容); 殼層腳本照指令判, JavaScript 去註解後、Python 原文照腳本判
+                    let code = isWriteTool && typeof fpTarget === 'string' && CODE_EXT.test(fpTarget) ? CONTENT_KEYS.filter((k) => !/^old/i.test(k)).map((k) => inp[k]).filter((x) => typeof x === 'string') : []
+                    for (let src of code) {
+                        let isShell = /\.(sh|ps1|bat|cmd)$/i.test(fpTarget)
+                        let isPy = /\.py$/i.test(fpTarget)
+                        if (bases.some((b) => (isShell ? recursiveRootOf(src, { base: b, stateRoot }).hit : scriptListsRoot(isPy ? src : stripComments(src), b, stateRoot)))) {
+                            hitR = true
+                        }
+                    }
+                    let key = '存取其他節點之工作夾(遞迴列出狀態根)'
+                    if (hitR && !hits.has(key)) {
+                        hits.set(key, String(typeof inp.command === 'string' ? inp.command : (fpTarget || JSON.stringify(inp))).replace(/\s+/g, ' ').slice(0, 160))
                     }
                 }
                 //寫到允許範圍之外
@@ -594,6 +569,10 @@ let scanTrace = ({ workDir, attempt, logFile = null, privateRoot, root = null, w
                             }
                         }
                     }
+                }
+                //切換目錄之指令(規則 R-BT-6): 其後未帶工作目錄之欄之呼叫, 工作目錄不確定(列出工作夾之根之免列不再適用)
+                if (typeof inp.command === 'string' && LR_CD.test(inp.command)) {
+                    cwdMoved = true
                 }
             }
         }
@@ -1063,7 +1042,7 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
             }
         }
         //可讀之他節點工作夾: 起點(spec.base)與任務書列為參考之節點(由呼叫端經 allowWork 給入)
-        let tr = scanTrace({ workDir, attempt, privateRoot: backtest.cfg.privateRoot, root: FD_ROOT, writeRoots: [workDir], workRoot: st.records.workDir, allowWork: [...(spec.base ? [spec.base] : []), ...(typeof refsOf === 'function' ? refsOf(spec, nodeId) : [])], nodeRules: true })
+        let tr = scanTrace({ workDir, attempt, privateRoot: backtest.cfg.privateRoot, root: FD_ROOT, writeRoots: [workDir], workRoot: st.records.workDir, allowWork: [...(spec.base ? [spec.base] : []), ...(typeof refsOf === 'function' ? refsOf(spec, nodeId) : [])], nodeRules: true, stateRoot: st.rsi && st.rsi.root })
         issues.push(...tr.issues)
         if (nNoLog > 0) {
             issues.push(`以 --no-log 執行評估 ${nNoLog} 次(該旗標只供迴圈重跑; 已照記入評估次數)`)
@@ -1155,5 +1134,5 @@ let extSurfaceOf = (m) => {
 let EXT_FLAG_HEAD = '提示(擴充診斷 '
 let extFlagIssue = (f) => `${EXT_FLAG_HEAD}${f.name}): ${f.text}(共用工具區之擴充診斷所列;不否決,由審計判定)`
 
-export { makeVerify, scanTrace, deniedHalt, stripSearchPatterns, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, isHalfOf, runNodeProc, shortShareOf, sideFlowIssue, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD }
+export { makeVerify, scanTrace, deniedHalt, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, isHalfOf, runNodeProc, shortShareOf, sideFlowIssue, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD }
 export default makeVerify

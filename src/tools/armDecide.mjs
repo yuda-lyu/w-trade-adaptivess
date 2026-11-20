@@ -5,6 +5,10 @@ import { peekRunLock } from '../arsi/runner.mjs'
 import { ARM_LABELS, armProposalLine } from '../arsi/records.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { decideArgsOf } from '../domain/armCatalog.mjs'
+import { guardEntry } from '../domain/agentEntries.mjs'
+
+//agent(ARSI_AGENT_ROLE = node / dream)⇒ 帶任何引數(審定)者拒跑(離開碼 2; 於組裝專案與任何寫入之前; 規則 R-RUN-11); 無引數之列出照常
+guardEntry('armDecide')
 
 //臂目錄之提案之審定(主控用; 規則 R-ARM-2): 節點與做夢「提」, 主控「審」; 經引擎之治理(rsi.governance.decide)寫入 <狀態根>/governance/
 //  (擴充檔 extensions.json 為提交點, 其後提案帳 proposals.json 與 PROPOSALS.md), 並重寫供 agent 閱讀之 arms/catalog.json; 下一輪起可指派

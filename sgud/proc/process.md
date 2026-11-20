@@ -10,6 +10,8 @@
 - 通用層 `src/arsi/` 不得匯入 `src/domain/`、`src/eval/`,不得含交易領域之用語(守門:`test/unit-guard.test.mjs`).
 - 起子行程一律 `windowsHide: true`.
 - 專案之路徑一律由 `src/cfg.mjs` 之 `FD_ROOT` / `P()` 展開;只有「定位套件自己之檔」才用 `import.meta.url`.
+- 新增或改動會寫專案之檔或起行程之命令列程式、工具或其模式時,同時更新 `src/domain/agentEntries.mjs` 之 `ENTRY_RULES`(判定須與該入口之實際解析一致)並於其開頭(讀設定之前)呼叫 `guardEntry`(R-RUN-11);操作掃描之「執行迴圈之寫檔入口」(R-BT-7)取同一張表.`unit-agentGuard` 之接線案核對表與入口一致.
+- 改操作掃描之指令解析(`src/domain/cmdScan.mjs`:`stripSearchPatterns`、`listRootExempt`、`entryExecOf`、`recursiveRootOf`、`toolListsRoot`、`scriptListsRoot`;規則 R-BT-6、R-BT-7、R-BT-8)之判定前,保存改前之函數(`git archive` 之舊版或複本於 `./tmp/`),改後以差異比對證明「除該次明定之修正外 0 差異」並植入會改變判定之變異證明比對有鑑別力(作法見 `sgud/exp/experience.md` 第 45 條);只搬移或重構者須 0 差異.引號遮蔽只經 `maskQuotes` / `unmaskQuotes`(守門:`unit-cmdScan` ③);解析函數不加入聚合入口.
 
 ## 2. 三層之分工(使用端)
 
@@ -41,5 +43,5 @@
 - **影響評估之數字**(`warmupDays`、`cadenceDays`、`nullDraws`、`actBins`、`sideActHalf`)之取值與檢測只經 `src/eval/cfgNum.mjs` 之 `EVAL_NUMS` / `evalCfgNumsOf`(評估器經 `barGrid.mjs` 之 `evalNumsOf` 另檢「日數 × 每日棒數須為整數」);新增同類之鍵先加入 `EVAL_NUMS`(預設與種類),不另寫取值.值域依評估器內部之實際用法定(讀碼,例:型別陣列之容量),不憑直覺.
 - **文字不寫死策略庫之事實**:任務書(`texts.mjs`)與合約之參考版(`initProject.mjs` 之 `CONTRACT_FACTS`)內凡屬設定之值一律取自設定(寫法在 `factsText.mjs`);新增或改動合約之句子後,以 `test/unit-factsResidue.test.mjs` 之殘留掃描核對(新寫法須補 `PHRASES`);錨點表之次序:相位數三錨點在最前,其後之錨點之原文不含「七相位」;設定等於參考值時輸出須與原文逐字相同.
 - **評估器之指紋**:只排除 `src/eval/ledgerBuild.mjs`(`fillKeys.mjs` 之 `EVAL_FP_SKIP`);新增 `src/eval/` 之檔預設計入;要排除其他檔須先證明評估器之匯入鏈不含它(`unit-evalFingerprint`).
-- **變異檢查**:改了上列任一處後 `node test/tools/mutateBar.mjs`(測試一律經安靜執行器加 `--lock` 執行;每項植入於 `test/_tmp/` 之複本;先跑無變異之對照須全綠 —— 對照 = 守門之測試(`GUARDS`)全綠〔失敗即中止〕+ 所選變異之優先測試(第 4 欄;不在 `GUARDS` 內者各單獨跑一次):優先測試於對照即失敗者(複本內與變異無關之失敗,例:`unit-guard` 之子行程隱藏視窗一案要掃 `test/unit-package.test.mjs`,複本不含該檔而失敗〔實測:「應掃到至少 2 處呼叫, 實得 0」〕),其變異記為 `UNDECIDABLE`(無法判定;不植入、不記為被殺,離開碼 1),`--control-only` 只跑對照並列出所選變異中屬此類者;須全數被殺,等價變異(第 5 欄 `equiv`,各附不可觀察之理由)V02、V13、K07、F04、F05、I14 共 6 項;`--only <編號>`、`--check` 可局部或只核對錨點;新增之守門須同時補變異;優先測試選對照即全綠者,不選於複本內另有失敗之檔).
+- **變異檢查**:改了上列任一處後 `node test/tools/mutateBar.mjs`(測試一律經安靜執行器加 `--lock` 執行;每項植入於 `test/_tmp/` 之複本;先跑無變異之對照須全綠 —— 對照 = 守門之測試(`GUARDS`)全綠〔失敗即中止〕+ 所選變異之優先測試(第 4 欄;不在 `GUARDS` 內者各單獨跑一次):優先測試於對照即失敗者(複本內與變異無關之失敗,例:`unit-guard` 之子行程隱藏視窗一案要掃 `test/unit-package.test.mjs`,複本不含該檔而失敗〔實測:「應掃到至少 2 處呼叫, 實得 0」〕),其變異記為 `UNDECIDABLE`(無法判定;不植入、不記為被殺,離開碼 1),`--control-only` 只跑對照並列出所選變異中屬此類者;須全數被殺,等價變異(第 5 欄 `equiv`,各附不可觀察之理由)V02、V13、K07、F04、F05、I14、R11 共 7 項;`--only <編號>`、`--check` 可局部或只核對錨點;新增之守門須同時補變異;優先測試選對照即全綠者,不選於複本內另有失敗之檔).
 - **新舊版對拍**(升版前):1.0.26 或前一版以 `git archive` 解到 `./tmp/`,同一夾具之設定取套件之參考設定,比對帳本(含 `meta.json`,去 `builtAt`)、`g_eval.mjs`(quick / full / train / postfit / member / `--null` / `--phases`)、`g_backtest.mjs`、任務書、看板與共同儲存區、`initProject`、`fakeRound`、`node g.mjs`;雜訊之正規化見經驗 40 ⑦.

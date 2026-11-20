@@ -7,7 +7,12 @@ import { makeProjectOrExit } from '../domain/domain.mjs'
 import { roundName } from '../arsi/records.mjs'
 import { runRounds, acquireRunLock, appendEvent, readEvents, trailingFailures, planGateOf, roundOkOf } from '../arsi/runner.mjs'
 import { checkQuota } from '../arsi/dispatchers.mjs'
+import { guardEntry } from '../domain/agentEntries.mjs'
 import { fileURLToPath } from 'url'
+
+
+//agent(ARSI_AGENT_ROLE = node / dream)執行寫檔之模式 ⇒ 拒跑(離開碼 2; 於讀設定、組裝專案與任何寫入之前; 規則 R-RUN-11); 唯讀之模式(status、dry、frontier 之列出、fill --dry)照常
+guardEntry('rsi')
 
 
 //FP_DIGEST, 輪末摘要之工具(本套件之 src/tools/roundDigest.mjs; 以本檔位置定位套件內之程式, 專案根仍由 ARSI_ROOT 傳給子行程)

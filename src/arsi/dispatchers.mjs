@@ -3,6 +3,7 @@ import os from 'os'
 import path from 'path'
 import { createRequire } from 'module'
 import maskDiagText from 'wsemi/src/maskDiagText.mjs'
+import { agentEnvOf } from './agentRole.mjs'
 
 
 //額度用盡之處置(規則 R-RUN-8; Gitea #156):
@@ -189,7 +190,9 @@ let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject 
     //訂閱之用量守門之預設門檻(與起跑前之額度檢查同一設定: 專案設定 rsi.preflight.quotaMaxPercent); 非有限數取 95
     let gateMax = Number.isFinite(maxPercent) ? maxPercent : 95
 
-    let runOpencode = async (cfg, { prompt, logFile }) => {
+    //agentEnv(規則 R-RUN-11): 節點與做夢之 agent 子行程另帶 ARSI_AGENT_ROLE = 角色(經 w-dispatch-ai 之 opt.env 只注入該次子行程; 不寫入本行程之環境)
+    //  ⇒ agent 所起之指令執行寫檔或起行程之進入檔與模式即被拒跑(src/domain/agentEntries.mjs); 其他角色不帶
+    let runOpencode = async (cfg, { prompt, logFile, agentEnv = null }) => {
         let entry = wda.providers.find((p) => p.id === cfg.id)
         if (!entry) {
             return { ok: false, error: `派工條目 ${cfg.id} 不在 w-dispatch-ai 之條目表` }
@@ -211,6 +214,7 @@ let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject 
                 }
                 catch (err) {}
             },
+            ...(agentEnv ? { env: agentEnv } : {}),
         }
         if (entry.provider === 'opencode-go') {
             let keys = keysOf(entry.envVar || 'OPENCODE_GO_KEYS')
@@ -255,8 +259,9 @@ let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject 
         return { ok: r.ok === true, ...(isQuotaFail(r) ? { quota: true } : {}), error: r.ok ? null : `${r.errorType || ''} ${r.error || ''}`.trim(), stdout: r.stdout || '', durationMs: r.durationMs }
     }
 
-    let runClaude = async (cfg, { prompt, logFile }) => {
+    let runClaude = async (cfg, { prompt, logFile, agentEnv = null }) => {
         let r = await wda.dispatchClaude(prompt, {
+            ...(agentEnv ? { env: agentEnv } : {}),
             model: cfg.model,
             //--strict-mcp-config: 不帶入帳號之外部連接器工具(只需讀寫專案檔與跑指令)
             //--output-format stream-json --verbose: 輸出逐步事件(含每次工具呼叫之輸入), 落於 logFile 供事後稽核其操作; cfg.trace === false 時只輸出最終文字
@@ -289,7 +294,8 @@ let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject 
             try {
                 fs.mkdirSync(path.dirname(o.logFile), { recursive: true })
                 fs.appendFileSync(o.logFile, `\n===== ${new Date().toISOString()} dispatch ${role} ${info.model} tag ${o.tag} =====\n`)
-                r = c2.kind === 'claude' ? await runClaude(c2, o) : await runOpencode(c2, o)
+                let oe = { ...o, agentEnv: agentEnvOf(role) }
+                r = c2.kind === 'claude' ? await runClaude(c2, oe) : await runOpencode(c2, oe)
             }
             catch (err) {
                 r = { ok: false, error: `派工例外: ${String((err && err.message) || err)}` }

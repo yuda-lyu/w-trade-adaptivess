@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url'
 import { normBarHours } from '../eval/barGrid.mjs'
 import { evalCfgNumsOf, cfgNumLoose } from '../eval/cfgNum.mjs'
 import { phaseCountOf, phaseText, horizonsOf, periodLenText, dateOf } from '../domain/factsText.mjs'
+import { guardEntry } from '../domain/agentEntries.mjs'
 
 
 //把本套件接到一個專案根: 建立或更新進入檔與參考檔(安裝或升版後執行一次)
@@ -321,6 +322,8 @@ let initProject = ({ root, dry = false, force = false, barHours } = {}) => {
 
 //直接執行時(非被匯入): 依命令列執行並列出結果
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    //agent(ARSI_AGENT_ROLE = node / dream)⇒ 拒跑(離開碼 2; 於任何寫入之前; 規則 R-RUN-11); 被匯入時(initProject 函數)不受影響
+    guardEntry('initProject')
     let i = process.argv.indexOf('--root')
     //--bar-hours <h>: 其後無值(或為另一個旗標)者視為無效之值(拋 invalid barHours, 未寫任何檔), 不當成未給
     let ib = process.argv.indexOf('--bar-hours')

@@ -13,6 +13,10 @@ import { peekRound, nextLayerId, makePaths, readArmExtensions } from '../engineA
 import { writeJson } from '../engineProtocol.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { decideArgsOf } from '../domain/armCatalog.mjs'
+import { guardEntry } from '../domain/agentEntries.mjs'
+
+//agent(ARSI_AGENT_ROLE = node / dream)⇒ 拒跑(離開碼 2; 於任何寫入之前; 規則 R-RUN-11)
+guardEntry('fakeRound')
 
 let st = getSettings()
 let root = P('tmp', 'fake')
@@ -396,10 +400,13 @@ console.log('做夢方向之處置:', JSON.stringify((Pj.records.getDreamDoc(rou
             let readMap = () => fs.readFileSync(path.join(st.rsi.root, 'SEARCH_MAP.md'), 'utf8')
             let n1 = Pj.rsi.store.getNode(x0.id)
             let keepNsa = n1.raw.metrics.nullSideAct
+            //近期活躍度版之組成對照(規則 R-REC-38; 正式之共用工具區有 nullRecentAct 而帶 side 者): 「有內容」另須其過門檻 ⇒ 一併改成過門檻, 驗後還原原值
+            let keepNra = n1.raw.metrics.ext.nullRecentAct
+            let nraOn = !!keepNra && typeof keepNra === 'object' && !keepNra.error && !!keepNra.side && typeof keepNra.side === 'object'
             let keepTrust = n1.evidence ? n1.evidence.trust : null
             let keepVeto = !!(n1.score && n1.score.flags && n1.score.flags.vetoed)
             Pj.rsi.store.updateNode(x0.id, (x) => {
-                x.raw = { ...x.raw, metrics: { ...x.raw.metrics, nullSideAct: { ...(x.raw.metrics.nullSideAct || {}), excess: 5, p: 0.01, share: 0.1, mean: 1 }, ext: { ...x.raw.metrics.ext, fakeDiag: { ...x.raw.metrics.ext.fakeDiag, subset: '假子集|含直線' } } } }
+                x.raw = { ...x.raw, metrics: { ...x.raw.metrics, nullSideAct: { ...(x.raw.metrics.nullSideAct || {}), excess: 5, p: 0.01, share: 0.1, mean: 1 }, ext: { ...x.raw.metrics.ext, fakeDiag: { ...x.raw.metrics.ext.fakeDiag, subset: '假子集|含直線' }, ...(nraOn ? { nullRecentAct: { ...keepNra, side: { ...keepNra.side, excess: 5, p: 0.01 } } } : {}) } } }
                 if (x.score && x.score.flags) {
                     x.score = { ...x.score, flags: { ...x.score.flags, vetoed: false } }
                 }
@@ -411,7 +418,7 @@ console.log('做夢方向之處置:', JSON.stringify((Pj.records.getDreamDoc(rou
             Pj.rsi.store.updateNode(x0.id, (x) => {
                 let fd = { ...x.raw.metrics.ext.fakeDiag }
                 delete fd.subset
-                x.raw = { ...x.raw, metrics: { ...x.raw.metrics, nullSideAct: keepNsa, ext: { ...x.raw.metrics.ext, fakeDiag: fd } } }
+                x.raw = { ...x.raw, metrics: { ...x.raw.metrics, nullSideAct: keepNsa, ext: { ...x.raw.metrics.ext, fakeDiag: fd, ...(nraOn ? { nullRecentAct: keepNra } : {}) } } }
                 if (x.score && x.score.flags) {
                     x.score = { ...x.score, flags: { ...x.score.flags, vetoed: keepVeto } }
                 }

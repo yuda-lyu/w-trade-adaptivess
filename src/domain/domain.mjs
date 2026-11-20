@@ -84,11 +84,26 @@ let outwardNoteOf = ({ nOut, nDirs, nUntried, nChecked, saturated }) => {
 //      訊號、信號、頭號、條號、版號、單號、行號、列號)與後字(號碼、號稱)
 //  與正負號有關者照列(正負號、正號、負號、同號、異號、反號、翻號、加號、之號、內容號 …); 「標號」不排除(「兩標號皆正」可作「兩個標的之號」解)
 let SIGN_WORD = /保留期|他標|他幣|holdout|(?<![編代序符記括字型帳賬口問逗句頓冒引分番掛年訊信頭條版單行列])號(?![碼稱])/i
+//signSentenceHit, 一句(以句末之標點切: 全形之句號、分號、驚嘆號、問號, 半形之分號、驚嘆號、問號, 與換行; 逗號、頓號不切)是否照列(規則 R-REC-39): 只排除「組成對照 / 重放 / 同分次序之結果同號 / 異號」之固定說法 ——
+//  同句提到組成對照 / 重放 / 同分次序, 且句中之字樣皆為前字為「同」或「異」之「號」⇒ 不列; 其餘照列(寧可多列; 保留期 / 他標 / 他幣 / holdout 與其他之「號」皆不是 ⇒ 同句有之即照列)
+let SIGN_ALL = new RegExp(SIGN_WORD.source, 'gi')
+let SIGN_SUBJ = /組成對照|重放|同分次序/
+let signSentenceHit = (s) => {
+    let ms = [...s.matchAll(SIGN_ALL)]
+    if (!ms.length) {
+        return false
+    }
+    if (!SIGN_SUBJ.test(s)) {
+        return true
+    }
+    return ms.some((m) => !(m[0] === '號' && (s[m.index - 1] === '同' || s[m.index - 1] === '異')))
+}
 //signsMentionOf, 做夢文件中「方向之理由」與「整體研判之調整與三項判定之依據」是否出現保留期 / 他標 / 他幣 / 號之字樣(純函數; 規則 R-REC-32)
 //  掃描: guidance.directions[k].rationale(列為「方向 k+1 之理由」)、synthesis.overview.adjust(「整體研判之調整」)、
 //    synthesis.overview.coverage / progress / localOptimum 之 why(「集中度 / 進度 / 局部最佳點之風險之依據」); 只看字串, 其他型別略過
 //  不掃描: 機制家族之歸類(families; 家族層級之讀號只寫於該處之附記, 為任務書所許)與其他欄
 //  回傳所在之欄之標籤陣列(依上列之序; 無則 [])—— 輪末摘要據以列「待核對」一行(只提示、不否決; 不讀文意)
+//  欄內之字樣只出現在「組成對照 / 重放 / 同分次序之同號 / 異號」之句者不列(signSentenceHit; 規則 R-REC-39)
 /**
  * 做夢文件中方向之理由、整體研判之調整與三項判定之依據是否出現保留期 / 他標 / 他幣 / 號之字樣(純函數)
  *
@@ -100,7 +115,8 @@ let SIGN_WORD = /保留期|他標|他幣|holdout|(?<![編代序符記括字型�
  */
 let signsMentionOf = (doc) => {
     let out = []
-    let hit = (v) => typeof v === 'string' && SIGN_WORD.test(v)
+    //欄內至少一句照列(signSentenceHit)才列該欄; 未觸及排除條件者與改前逐字相同
+    let hit = (v) => typeof v === 'string' && SIGN_WORD.test(v) && v.split(/(?<=[。；;！!？?\n])/).some(signSentenceHit)
     let dirs = doc && doc.guidance && Array.isArray(doc.guidance.directions) ? doc.guidance.directions : []
     dirs.forEach((x, k) => {
         if (x && hit(x.rationale)) {
@@ -142,6 +158,34 @@ let unproposedNoteOf = (proposals) => {
 let prevDirectionOf = (r, x, ck = null) => {
     let head = (v) => String(v || '').trim().slice(0, 120)
     return { round: r, arms: x.arms, base: x.base || null, ...(ck ? { claimKey: ck, ...(x.type === 'verify' ? { claim: head(x.claim) } : { rationale: head(x.rationale) }) } : {}) }
+}
+
+//recentDiagOf, 近期活躍度版之組成對照之 side(規則 R-REC-38; 核心讀取之擴充診斷名為 nullRecentAct; 取值之唯一來源): metrics.ext.nullRecentAct.side 之 excess 為有限數值者回該 side;
+//  未載入、出錯(帶 error)、缺 side、excess 缺或非有限數值(NaN、±Infinity、字串等)者回 null(= 無值)
+let recentDiagOf = (m) => {
+    let e = m && m.ext && typeof m.ext === 'object' ? m.ext.nullRecentAct : null
+    let s = e && typeof e === 'object' && !e.error ? e.side : null
+    return s && typeof s === 'object' && Number.isFinite(s.excess) ? s : null
+}
+//recentSideOf, 「有內容」之判定所用: 另須 p 亦為有限數值(缺 p 或非有限者回 null; 「有內容」之判定與改前逐位相同)
+let recentSideOf = (m) => {
+    let s = recentDiagOf(m)
+    return s && Number.isFinite(s.p) ? s : null
+}
+//recentExcessOf, 量尺之「挑選內容」(contentOf)與看板之「正本與重放之均」(avgOf)所用: 只用超額(不要求 p); 與 recentSideOf 同一個取值(recentDiagOf), 無值者回 null
+let recentExcessOf = (m) => {
+    let s = recentDiagOf(m)
+    return s ? s.excess : null
+}
+//compSplitOf, 組成對照之兩版之判定(規則 R-REC-14、R-REC-38; 純函數): m = 節點之正本 metrics, pMax = 階梯 1 之虛無 p
+//  builtin = 內建之組成對照(nullSideAct)之現行條件(超額 > 0、p ≤ pMax、組成可重現之比例 < 0.8)是否成立; recent = recentSideOf(m);
+//  recentOk = 近期版之條件(超額 > 0、p ≤ 同一個 pMax)是否成立(無值者 null); split = 有近期版之值且兩版一過一不過
+let compSplitOf = (m, pMax) => {
+    let c = m && m.nullSideAct
+    let builtin = !!c && typeof c.excess === 'number' && c.excess > 0 && typeof c.p === 'number' && c.p <= pMax && !(typeof c.share === 'number' && c.share >= 0.8)
+    let recent = recentSideOf(m)
+    let recentOk = recent ? recent.excess > 0 && recent.p <= pMax : null
+    return { builtin, recent, recentOk, split: recent !== null && builtin !== recentOk }
 }
 
 //makeProject(st, inject): inject.dispatch 可換掉派工器(測試以假 agent 走完整流程; 他專案可接自己的派工方式)
@@ -733,6 +777,16 @@ let makeProject = (st = getSettings(), inject = {}) => {
         return { written: old !== text, nArms: arms.length, nExt, nSelectable: arms.filter((a) => a.selectable === true).length, file: rel(fpCatalogOut) }
     }
 
+    //contentPMax, 「有內容」之 p 之門檻 = 階梯 1 之虛無 p(未給為 0.05; 搜尋地圖之「有內容」與看板之「活躍度定義不一致」同一個值)
+    let contentPMax = () => (st.score && st.score.ladder1 && st.score.ladder1.nullP) || 0.05
+    //actSplitOf, 「活躍度定義不一致」(規則 R-REC-38): 有近期活躍度版之值、且其條件與內建之組成對照之現行條件一過一不過者回 compSplitOf 之結果, 否則 null;
+    //  擴充診斷自述 notContent 者不標(其組成對照本即不計為挑選內容; 規則 R-REC-22)
+    let actSplitOf = (n) => {
+        let m = n.raw && n.raw.metrics
+        let s = compSplitOf(m, contentPMax())
+        return s.split && extSurfaceOf(m).notContent.length === 0 ? s : null
+    }
+
     //writeBoard, 臂看板(rsi/ARMS_BOARD.md): 各可選臂之節點數、最佳 S、階梯、可信度; 未試之臂; 另重寫供 agent 閱讀之生效目錄(arms/catalog.json)
     let writeBoard = () => {
         let nodes = rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => rsi.store.getNode(r.id)).filter(Boolean)
@@ -780,6 +834,14 @@ let makeProject = (st = getSettings(), inject = {}) => {
             L.push(`組成對照一欄標「※」者:擴充診斷自述其**組成對照不是挑選內容之量**(搜尋地圖不計入「有內容」與量尺之「挑選內容」;該診斷之數值見「擴充診斷之看板值」)—— ${ncRows.map((n) => `\`${n.id.slice(0, 8)}\`(${ncOf(n).map((x) => `${x.name}: ${x.text}`).join(';')})`).join(';')}。`)
             L.push('')
         }
+        //內建之組成對照與近期活躍度版一過一不過者(規則 R-REC-38): 組成對照一欄標「活躍度定義不一致」, 兩版之判定列於表前; 無此類節點者不列(樹上皆無該診斷之值者看板逐字不變)
+        let spRows = nodes.filter((n) => actSplitOf(n))
+        if (spRows.length) {
+            L.push(`組成對照一欄標「活躍度定義不一致」者:內建之組成對照(累計活躍度)與近期活躍度版(擴充診斷 \`nullRecentAct\` 之 \`side\`;門檻同為超額 > 0、p ≤ ${contentPMax()})**一過一不過**(搜尋地圖不計入「有內容」與量尺)—— ${spRows.map((n) => {
+                let s = actSplitOf(n); return `\`${n.id.slice(0, 8)}\`(內建版${s.builtin ? '過' : '不過'}、近期活躍度版${s.recentOk ? '過' : '不過'}:近期版之超額 ${s.recent.excess.toFixed(1)} / p ${s.recent.p})`
+            }).join(';')}。`)
+            L.push('')
+        }
         L.push('| 節點 | 臂 | 起點 | S | 最差相位 | 七相位平均 | 階梯 | 否決 | 虛無均 | 超額 | z | 虛無 p | 同訊號量超額 / p | 同活躍度超額 / p | 組成對照之超額 / p / 可重現 | 幾何對照之超額 / p | 換種子與同分次序之 S | 正本與重放之 S 之均;超額之均(組成對照 / 近期活躍度版) | 擴充診斷之看板值 | 每隻訊號數 | 做多比例 | 下單之做空比例(訓練期 / 回測期) | 月均單 | 最大持倉 | 選集大小 | 可信度 | 輪 | 成品之機制(自述) |')
         L.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
         let rank = (n) => [vetoedOf(n) ? 1 : 0, -(n.score ? n.score.S : -1e9)]
@@ -793,7 +855,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let mean = (xs) => {
                 let v = xs.filter((x) => typeof x === 'number'); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : '—'
             }
-            let r0 = m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null
+            let r0 = recentExcessOf(m)
             return `${mean([n.score.S, ...rp.map((x) => x.S)])};${mean([m.nullSideAct ? m.nullSideAct.excess : null, ...rp.map((x) => x.comp)])} / ${mean([r0, ...rp.map((x) => x.recent)])}`
         }
         let sorted = nodes.slice().sort((a, b) => {
@@ -804,7 +866,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let m = n.raw && n.raw.metrics
             let nu = m && m.null
             let sd = n.raw && Array.isArray(n.raw.seedS) && n.raw.seedS.length ? n.raw.seedS.map((v) => f1(v)).join(' / ') : '—'
-            L.push(`| \`${n.id}\` | ${armsLabel(n)} | ${n.spec.base ? String(n.spec.base).slice(0, 8) : '無'} | **${n.score ? n.score.S : ''}** | ${m ? f1(m.op.eqYr.min) : ''} | ${m ? f1(m.op.eqYr.mean) : ''} | ${n.score ? n.score.ladder : ''} | ${vetoedOf(n) ? '是' : '否'} | ${nu ? f1(nu.mean) : ''} | ${nu ? f1(nu.excess) : ''} | ${nu ? f1(nu.z) : ''} | ${nu ? nu.p : ''} | ${m && m.nullVol ? `${f1(m.nullVol.excess)} / ${m.nullVol.p}` : '—'} | ${m && m.nullAct ? `${f1(m.nullAct.excess)} / ${m.nullAct.p}` : '—'} | ${m && m.nullSideAct ? `${f1(m.nullSideAct.excess)} / ${m.nullSideAct.p} / ${typeof m.nullSideAct.share === 'number' ? `${Math.round(m.nullSideAct.share * 100)}%` : '—'}${m.nullSideAct.triggered === false ? ' *' : ''}${ncOf(n).length ? ' ※' : ''}` : '—'} | ${m && m.nullSideGeo ? `${f1(m.nullSideGeo.excess)} / ${m.nullSideGeo.p}` : '—'} | ${sd} | ${avgOf(n)} | ${extCellsOf(n).map((c) => `${c.name} ${c.value}`).join(';') || '—'} | ${m && m.sel && typeof m.sel.sigPerPick === 'number' ? m.sel.sigPerPick.toFixed(2) : ''} |${m && m.sel && typeof m.sel.longRatio === 'number' ? m.sel.longRatio.toFixed(2) : ''} | ${n.raw && n.raw.train && typeof n.raw.train.shortShare === 'number' && shortShareOf(m) !== null ? `${n.raw.train.shortShare.toFixed(2)} / ${shortShareOf(m).toFixed(2)}` : '—'} | ${m ? m.op.monthlyOrders.mean.toFixed(0) : ''} | ${m ? m.op.peakHold.max : ''} | ${m && m.sel ? f1(m.sel.sizeMean) : ''} | ${(n.evidence && n.evidence.trust) || '未審'} | ${roundName(n.round)} | ${descOf(n)} |`)
+            L.push(`| \`${n.id}\` | ${armsLabel(n)} | ${n.spec.base ? String(n.spec.base).slice(0, 8) : '無'} | **${n.score ? n.score.S : ''}** | ${m ? f1(m.op.eqYr.min) : ''} | ${m ? f1(m.op.eqYr.mean) : ''} | ${n.score ? n.score.ladder : ''} | ${vetoedOf(n) ? '是' : '否'} | ${nu ? f1(nu.mean) : ''} | ${nu ? f1(nu.excess) : ''} | ${nu ? f1(nu.z) : ''} | ${nu ? nu.p : ''} | ${m && m.nullVol ? `${f1(m.nullVol.excess)} / ${m.nullVol.p}` : '—'} | ${m && m.nullAct ? `${f1(m.nullAct.excess)} / ${m.nullAct.p}` : '—'} | ${m && m.nullSideAct ? `${f1(m.nullSideAct.excess)} / ${m.nullSideAct.p} / ${typeof m.nullSideAct.share === 'number' ? `${Math.round(m.nullSideAct.share * 100)}%` : '—'}${m.nullSideAct.triggered === false ? ' *' : ''}${ncOf(n).length ? ' ※' : ''}` : '—'}${actSplitOf(n) ? ' 活躍度定義不一致' : ''} | ${m && m.nullSideGeo ? `${f1(m.nullSideGeo.excess)} / ${m.nullSideGeo.p}` : '—'} | ${sd} | ${avgOf(n)} | ${extCellsOf(n).map((c) => `${c.name} ${c.value}`).join(';') || '—'} | ${m && m.sel && typeof m.sel.sigPerPick === 'number' ? m.sel.sigPerPick.toFixed(2) : ''} |${m && m.sel && typeof m.sel.longRatio === 'number' ? m.sel.longRatio.toFixed(2) : ''} | ${n.raw && n.raw.train && typeof n.raw.train.shortShare === 'number' && shortShareOf(m) !== null ? `${n.raw.train.shortShare.toFixed(2)} / ${shortShareOf(m).toFixed(2)}` : '—'} | ${m ? m.op.monthlyOrders.mean.toFixed(0) : ''} | ${m ? m.op.peakHold.max : ''} | ${m && m.sel ? f1(m.sel.sizeMean) : ''} | ${(n.evidence && n.evidence.trust) || '未審'} | ${roundName(n.round)} | ${descOf(n)} |`)
         }
         L.push('')
         L.push('## 各可選臂')
@@ -847,17 +909,20 @@ let makeProject = (st = getSettings(), inject = {}) => {
 
     //writeSearchMap, 搜尋地圖(rsi/SEARCH_MAP.md; 自動產生, 隨看板於做夢前與輪末更新; 規則 R-REC-14):
     //  讓做夢(與監控)一眼看出「整體搜尋」之形狀 —— 逐輪之趨勢、各層之覆蓋、譜系(起點鏈)、集中度之機械指標; 供做夢之整體研判(synthesis.overview)作依據
-    //  「有挑選內容」之機械判準: 組成對照(同側同活躍度虛無)之超額 > 0、p ≤ 階梯 1 之門檻, 且組成可重現之比例 < 0.8(做夢任務書「審組成」之判準)
+    //  「有挑選內容」之機械判準: 組成對照(同側同活躍度虛無)之超額 > 0、p ≤ 階梯 1 之門檻, 且組成可重現之比例 < 0.8(做夢任務書「審組成」之判準);
+    //    成品另有近期活躍度版之組成對照之值者(擴充診斷 nullRecentAct; 規則 R-REC-38), 另須其超額 > 0、p ≤ 同一個門檻 —— 兩版一過一不過者標「活躍度定義不一致」、不計入
+    //    (內建版以累計活躍度匹配, 不扣除「近期才變活躍 / 變安靜」之組成; 近期版不匹配依靜態累計活躍度挑選者之挑選變數 ⇒ 單看任一版皆可能誤判); 無其值者之判定與改前逐位相同
     //  機制家族之歸類(哪些成品押同一種結構)無法機械判定, 由做夢為之
     let writeSearchMap = () => {
         let nodes = rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => rsi.store.getNode(r.id)).filter(Boolean)
-        let pMax = (st.score && st.score.ladder1 && st.score.ladder1.nullP) || 0.05
+        let pMax = contentPMax()
         let compOf = (n) => (n.raw && n.raw.metrics && n.raw.metrics.nullSideAct) || null
         //ncOf, 擴充診斷自述「此成品之組成對照不是挑選內容之量」者(規則 R-REC-22): 不計入「有內容」與量尺之「挑選內容」, 譜系另註理由
         //  (例: 執行規則非中性且本身帶來大增益之成品, 其組成對照共用該規則 ⇒ 超額含執行層之增益; 判準由診斷自述, 迴圈不寫死哪一個診斷)
         let ncOf = (n) => extSurfaceOf(n.raw && n.raw.metrics).notContent
+        //hasContent, 「有內容」(規則 R-REC-14、R-REC-38): 內建之組成對照之現行條件成立、未自述 notContent, 且有近期活躍度版之值者其條件亦成立(無其值者不看此項)
         let hasContent = (n) => {
-            let c = compOf(n); return !!c && typeof c.excess === 'number' && c.excess > 0 && typeof c.p === 'number' && c.p <= pMax && !(typeof c.share === 'number' && c.share >= 0.8) && ncOf(n).length === 0
+            let s = compSplitOf(n.raw && n.raw.metrics, pMax); return s.builtin && s.recentOk !== false && ncOf(n).length === 0
         }
         let trustOf = (n) => (n.evidence && n.evidence.trust) || null
         let vetoedOf = (n) => !!(n.score && n.score.flags && n.score.flags.vetoed)
@@ -884,7 +949,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             }
             let rp = Array.isArray(n.raw.replays) ? n.raw.replays : []
             let active = !!(m.sel && m.null && typeof m.sel.sigPerPick === 'number' && typeof m.null.sigPerPick === 'number' && m.null.sigPerPick > 0 && m.sel.sigPerPick >= 2 * m.null.sigPerPick)
-            let r0 = m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null
+            let r0 = recentExcessOf(m)
             let useRecent = active && typeof r0 === 'number'
             let xs = [useRecent ? r0 : (m.nullSideAct ? m.nullSideAct.excess : null), ...rp.map((x) => (useRecent ? x.recent : x.comp))].filter((v) => typeof v === 'number')
             return xs.length ? { v: xs.reduce((a, b) => a + b, 0) / xs.length, kind: useRecent ? '近期活躍度版' : '內建組成對照', n: xs.length } : null
@@ -894,7 +959,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
         L.push('')
         L.push(`樹上已執行節點 ${nodes.length} 個、${rounds.length} 輪。本檔只列**可機械計算**之量,供判斷整體搜尋是否過於集中或發散、進度是否停滯、是否卡在局部最佳點;「哪些成品押同一種結構」(機制家族)須由做夢歸類。`)
         L.push('')
-        L.push(`**「有內容」**= 組成對照(同側同活躍度虛無)之超額 > 0、p ≤ ${pMax},且組成可重現之比例 < 80%(扣掉「方向 × 活躍度」後仍贏過隨機);未被否決。擴充診斷自述「組成對照不是挑選內容之量」之成品(例:執行規則非中性且本身帶來大增益者,其組成對照共用該規則)不計入,譜系於其組成對照後註明理由。**「可信」**= 做夢審計為 trusted。`)
+        //近期活躍度版之組成對照(規則 R-REC-38): 樹上至少一個節點有其值時, 「有內容」之說明多一句(無則逐字不變)
+        let nRecent = nodes.filter((n) => recentSideOf(n.raw && n.raw.metrics)).length
+        let recentClause = nRecent ? `成品另有近期活躍度版之組成對照(擴充診斷 \`nullRecentAct\` 之 \`side\`;樹上 ${nRecent} 個節點有其值)者,另須其超額 > 0、p ≤ ${pMax}:內建版以決策日以前之累計活躍度匹配,不扣除「近期才變活躍 / 變安靜」之組成;近期版以近窗之活躍度匹配,又不匹配依靜態累計活躍度挑選者之挑選變數 —— 單看任一版皆可能誤判,故兩版皆過才計;一過一不過者(${nodes.filter((n) => actSplitOf(n)).length} 個)於譜系標「活躍度定義不一致」,不計入「有內容」與量尺。` : ''
+        L.push(`**「有內容」**= 組成對照(同側同活躍度虛無)之超額 > 0、p ≤ ${pMax},且組成可重現之比例 < 80%(扣掉「方向 × 活躍度」後仍贏過隨機);未被否決。擴充診斷自述「組成對照不是挑選內容之量」之成品(例:執行規則非中性且本身帶來大增益者,其組成對照共用該規則)不計入,譜系於其組成對照後註明理由。${recentClause}**「可信」**= 做夢審計為 trusted。`)
         L.push('')
         L.push('## 1. 逐輪趨勢')
         L.push('')
@@ -1030,7 +1098,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let ds = descOf(n)
             //擴充診斷自帶之看板值(規則 R-REC-21; 欄名之意義見看板之節點一覽)
             let xs = extSurfaceOf(n.raw && n.raw.metrics).cells.map((x) => `${x.name} ${x.value}`).join('、')
-            L.push(`${'  '.repeat(lv)}- \`${n.id.slice(0, 8)}\` ${armsLabel(n)}(${roundName(n.round)};${typeOfNode(n) === 'verify' ? '驗證' : '探索'};S ${f1(sOf(n))};組成對照 ${c ? `${f1(c.excess)} / p ${c.p}` : '—'}${ncOf(n).length ? `(不計為挑選內容 —— ${ncOf(n).map((x) => `${x.name}: ${x.text}`).join(';')})` : ''};${trustOf(n) || '未審'}${vetoedOf(n) ? ';否決' : ''}${hasContent(n) ? ';**有內容**' : ''}${delta}${xs ? `;擴充診斷 ${xs}` : ''})〔${famOf(n) || '未歸類'}〕${use.length ? `;用到 ${use.join('、')}` : ''}${ds ? `;${ds}` : ''}`)
+            //兩版一過一不過(規則 R-REC-38): 於組成對照之後標「活躍度定義不一致」與兩版之判定(notContent 者不標; 兩者不並存)
+            let sp = actSplitOf(n)
+            L.push(`${'  '.repeat(lv)}- \`${n.id.slice(0, 8)}\` ${armsLabel(n)}(${roundName(n.round)};${typeOfNode(n) === 'verify' ? '驗證' : '探索'};S ${f1(sOf(n))};組成對照 ${c ? `${f1(c.excess)} / p ${c.p}` : '—'}${ncOf(n).length ? `(不計為挑選內容 —— ${ncOf(n).map((x) => `${x.name}: ${x.text}`).join(';')})` : ''}${sp ? `(活躍度定義不一致 —— 內建版${sp.builtin ? '過' : '不過'}、近期活躍度版${sp.recentOk ? '過' : '不過'}:近期版之超額 ${f1(sp.recent.excess)} / p ${sp.recent.p})` : ''};${trustOf(n) || '未審'}${vetoedOf(n) ? ';否決' : ''}${hasContent(n) ? ';**有內容**' : ''}${delta}${xs ? `;擴充診斷 ${xs}` : ''})〔${famOf(n) || '未歸類'}〕${use.length ? `;用到 ${use.join('、')}` : ''}${ds ? `;${ds}` : ''}`)
             for (let k of (kids.get(n.id) || []).slice().sort((a, b) => a.round - b.round)) {
                 line(k, lv + 1)
             }
@@ -2130,7 +2200,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 planRule = /交付版先定再跑|先寫規劃再評估/.test(fs.readFileSync(path.join(wd, 'brief.md'), 'utf8'))
             }
             catch (err) {}
-            let tr = scanTrace({ workDir: wd, attempt: d.attempt || 1, privateRoot: backtestCfg(st).privateRoot, root: FD_ROOT, writeRoots: [wd], workRoot: st.records.workDir, allowWork, nodeRules: true, planRule })
+            let tr = scanTrace({ workDir: wd, attempt: d.attempt || 1, privateRoot: backtestCfg(st).privateRoot, root: FD_ROOT, writeRoots: [wd], workRoot: st.records.workDir, allowWork, nodeRules: true, planRule, stateRoot: st.rsi.root })
             let old = d.harness.checks.issues || []
             let next = [...old.filter((s) => !isScan(s)), ...tr.issues]
             if (JSON.stringify(old) === JSON.stringify(next)) {

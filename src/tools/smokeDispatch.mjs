@@ -3,6 +3,10 @@ import fs from 'fs'
 import path from 'path'
 import { getSettings, FD_ROOT, P } from '../cfg.mjs'
 import { makeDispatch } from '../arsi/dispatchers.mjs'
+import { guardEntry } from '../domain/agentEntries.mjs'
+
+//agent(ARSI_AGENT_ROLE = node / dream)不得派工 ⇒ 拒跑(離開碼 2; 於任何寫入之前; 規則 R-RUN-11)
+guardEntry('smokeDispatch')
 
 let st = getSettings()
 let which = process.argv[2] || 'both'

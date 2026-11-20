@@ -1,6 +1,7 @@
 import path from 'path'
 import { getSettings, argOf, P } from '../cfg.mjs'
 import buildLedger from '../eval/ledgerBuild.mjs'
+import { guardEntry } from '../domain/agentEntries.mjs'
 
 
 //建訂單帳本: 讀策略庫專案之 ohlc / param / strategies(唯讀)
@@ -20,6 +21,8 @@ import buildLedger from '../eval/ledgerBuild.mjs'
 //    須為 K 線檔內某一根之開盤時間且早於帳本終點, 不合(非字串、不在 K 線上、不早於終點、其後之 K 線不滿 100 根)者印 ERROR invalid source.startTime…、不寫出、離開碼 2; 未給(或 null)⇒ 自 K 線檔之第一根(輸出與未加入本功能時相同);
 //    起點由記錄(ohlc 列)與摘要行之 startTime 欄呈現(起首列與未加入本功能時逐字相同); 起點晚於訓練期起點者(帳本未涵蓋訓練期起點)於建置成功後另印一行 WARN(離開碼仍 0)
 //    回測期旗標(g_backtest.mjs)所用之全期帳本須以同一起點建(否則 g_backtest.mjs 離開碼 5)
+//  agent(ARSI_AGENT_ROLE = node / dream)不得建帳本 ⇒ 拒跑(離開碼 2; 於讀設定與任何寫入之前; 規則 R-RUN-11)
+guardEntry('build')
 let st = getSettings()
 let limit = argOf('limit', 0)
 let train = argOf('train', false) === true

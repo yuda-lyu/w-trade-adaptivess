@@ -25,6 +25,8 @@ let DIAG_OK = 'export default function (api) {\n    return { text: \'替身診�
 let DIAG_THROW = 'export default function (api) {\n    throw new Error(\'替身診斷拋錯\')\n}\n'
 //載入失敗: 診斷模組不得碰時鐘(合約 §1; 評估器於載入時靜態檢查或執行時拒絕 ⇒ 該診斷之值為錯誤)
 let DIAG_CLOCK = 'export default function (api) {\n    return { text: String(Date.now()) }\n}\n'
+//帶近期活躍度版之 side(規則 R-REC-38; 超額為負、p 0.9 ⇒ 不過門檻): 搜尋地圖之「有內容」另須近期版過門檻 ⇒ 各節點皆不計入有內容
+let DIAG_SIDE = 'export default function (api) {\n    return { text: \'替身診斷(近期版)\', side: { excess: -3.5 - api.phases.length, p: 0.9 } }\n}\n'
 
 describe('tools/fakeRound.mjs:擴充診斷之補算 —— 略過不計失敗(限無檔、無值)、值為錯誤與補算失敗仍為離開碼 15、自備假診斷之補算(規則 R-EV-45 ⑦)', function () {
     this.timeout(180000)
@@ -317,6 +319,20 @@ describe('tools/fakeRound.mjs:擴充診斷之補算 —— 略過不計失敗(�
         assert.equal(f.same, true)
         assert.equal(f.S[0], f.S[1])
         assert.equal(f.again, 0)
+        assert.deepEqual(lineOf(r.out, PROBE_HEAD), PROBE_OK)
+    })
+
+    it('⑧ 該診斷之值帶近期活躍度版之 side 而不過門檻(規則 R-REC-38):子集一項把第一個節點之近期版一併改成過門檻、驗後還原 —— subset: true、fill: true、值與原本相同、離開碼 0', () => {
+        //R-REC-38: 搜尋地圖之「有內容」另須近期版過門檻; 子集一項只把內建版改成過門檻者, 於共用工具區有帶 side 之該診斷之專案必判子集不成立(離開碼 15)
+        //  還原: 補算之「值與原本相同」以還原後之樹上之值為原值 —— 未還原(仍為改成過門檻之值)者 same 為 false
+        let r = run(mkRoot('recentside', { diag: DIAG_SIDE }))
+        assert.equal(r.status, 0, `${r.err}\n${r.out.slice(-800)}`)
+        assert(!/不如預期/.test(r.err), r.err)
+        let f = lineOf(r.out, FILL_HEAD)
+        assert.equal(f.subset, true, JSON.stringify(f))
+        assert.equal(f.fill, true, JSON.stringify(f))
+        assert.deepEqual(f.results, [{ ok: true, filled: [REAL_DIAG] }])
+        assert.equal(f.same, true, JSON.stringify(f))
         assert.deepEqual(lineOf(r.out, PROBE_HEAD), PROBE_OK)
     })
 })

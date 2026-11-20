@@ -8,6 +8,7 @@ import { P as PI, assertIntrinsics, isIntegrityError } from '../eval/intrinsics.
 import { backtestCfg } from '../domain/backtestCfg.mjs'
 import { gradeOf } from '../domain/backtestGrade.mjs'
 import { trainFromBarOf, gridCheck, checkEvalSettings, periodAt, configMsgOf } from '../eval/barGrid.mjs'
+import { guardEntry } from '../domain/agentEntries.mjs'
 
 
 //回測期旗標(只供迴圈與主代理使用; 節點 agent 與做夢 agent 不得執行, 其輸出之數字不得揭露給 agent)
@@ -21,6 +22,8 @@ import { trainFromBarOf, gridCheck, checkEvalSettings, periodAt, configMsgOf } f
 //        未達 pass 者: 分級啟用(backtest.grade.enabled; 預設)時依「對訊號量相當之隨機挑」分為 above / mixed / level / below(src/domain/backtestGrade.mjs), 否則 fail
 //  輸出: 私有根 backtest/<name>.json(完整數字 + 參照 + 分段); 標準輸出末行「BACKTEST_FLAG <旗標>」
 //  離開碼: 0 完成 / 2 挑選模組問題或設定不合(期間之界線、eval.trainFromStart、eval.fitEnd; 規則 R-EV-44)/ 3 挑選函數執行錯誤 / 4 未授權 / 5 帳本不一致(全期帳本與評估帳本之訓練期進場數不同, 或評估帳本無法載入 / 不合核對之前提, 或任一帳本給了 startTime 而兩帳本之起點 time0 不同〔規則 R-EV-45〕)
+//  agent(ARSI_AGENT_ROLE = node / dream)⇒ 拒跑(離開碼 2; 先於授權之檢查 —— agent 自設 ARSI_HARNESS=1 者亦拒; 規則 R-RUN-11)
+guardEntry('backtest')
 if (process.env.ARSI_HARNESS !== '1') {
     console.log('g_backtest.mjs 只供迴圈使用(回測期數字不對 agent 揭露); 節點與做夢任務請用 g_eval.mjs')
     process.exit(4)

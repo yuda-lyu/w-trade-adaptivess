@@ -3,6 +3,11 @@ import path from 'path'
 import { spawn } from 'child_process'
 import { P } from '../cfg.mjs'
 import { peekRunLock, appendEvent } from '../arsi/runner.mjs'
+import { guardEntry } from '../domain/agentEntries.mjs'
+
+
+//agent(ARSI_AGENT_ROLE = node / dream)不得起脫離之子行程 ⇒ 拒跑(離開碼 2; 於建日誌夾與任何寫入之前; 規則 R-RUN-11)
+guardEntry('launch')
 
 
 //以脫離之子行程執行長任務(工作階段更替不中斷): node g_launch.mjs <日誌名> -- <node 參數…>

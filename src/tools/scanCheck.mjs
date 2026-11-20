@@ -33,7 +33,7 @@ for (let f of fs.readdirSync(st.records.nodeDir).filter((x) => x.endsWith('.json
         planRule = /交付版先定再跑|先寫規劃再評估/.test(fs.readFileSync(path.join(wd, 'brief.md'), 'utf8'))
     }
     catch (err) {}
-    let tr = scanTrace({ workDir: wd, attempt: d.attempt || 1, privateRoot: backtestCfg(st).privateRoot, root, writeRoots: [wd], workRoot, allowWork, nodeRules: true, planRule })
+    let tr = scanTrace({ workDir: wd, attempt: d.attempt || 1, privateRoot: backtestCfg(st).privateRoot, root, writeRoots: [wd], workRoot, allowWork, nodeRules: true, planRule, stateRoot: st.rsi.root })
     let old = ((d.harness && d.harness.checks && d.harness.checks.issues) || []).filter(isScan)
     let same = JSON.stringify(old) === JSON.stringify(tr.issues)
     if (!same) {
