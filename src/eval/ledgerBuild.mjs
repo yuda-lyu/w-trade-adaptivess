@@ -25,12 +25,24 @@ import { normBarHours } from './barGrid.mjs'
 //  每根之時長(規則 R-EV-44): barHours 須整除 24 小時(每日棒數為整數; 例 1、2、4、6、12、24), 不合者於讀任何檔之前拋錯; 數字字串通過即轉為數值;
 //    策略檔帶 settings.intervalSec(每根秒數之宣告)者須等於 barHours × 3600, 不合者拋錯(不寫出; 防混入另一週期之策略); 未帶者不檢
 //    外部序列對不到棒之比例上限 seriesOffGridMax(選配; 0 ~ 1): 給者, 任一序列之「時間落在帳本範圍內而對不到棒之開盤時間」之列占比超過即拋錯(不寫出); 未給 ⇒ 只記錄(行為不變)
+//  帳本之起點 startTime(選配; 規則 R-EV-45; 與 endTime 對稱, 含): K 線取 startTime ≤ time < endTime, time0 = startTime —— 策略庫之 K 線因因子之暖機而早於求解窗(訓練期)之起點者, 帳本得自求解窗起點起算
+//    (不給 ⇒ 自 K 線檔之第一根起, 帳本與未加入本功能時逐位相同); 須為 K 線檔內某一根之開盤時間(與 K 線同一字串格式)且早於 endTime, 不合者於寫出之前拋錯; 起點之後之 K 線不滿 100 根者拋 invalid startTime: must leave at least 100 bars before endTime;
+//    給了起點之帳本 ≡ 未給者「只留進場棒 ≥ 起點所對應之棒、棒序平移」: 進場棒、出場棒(未結者仍為 -1)、損益逐單相同, 逐棒之欄(因子、外部序列、K 線、基礎單位名義)為原欄之切片(first-touch 只依該棒之後之 K 線, 名義只依該棒之收盤價);
+//    帳本鍵之雜湊輸入含 time0 與棒數與逐單之進場棒 ⇒ 起點不同之帳本其鍵必不同, 不須另加輸入(未給者之雜湊輸入不變); meta.startTime 只在給了起點時才有
+//  一致性核對(meta.check): 策略檔之 numTrade 為求解窗 [summary.timeOhlcStart, summary.timeOhlcEnd] 內之進場數 ⇒ 帳本只計同窗(起點棒 ≤ 進場棒 ≤ 終點棒)者與之比; 未帶起點欄者自第 0 根;
+//    起點不在本帳本之棒上(早於帳本起點, 即帳本未涵蓋完整之求解窗; 或不在棒之開盤時間; 含空字串與非字串)者不納入核對(不計入 compared; 隻數記於 meta.check.skipped 並於記錄註明
+//    〔附第一個被略過者之檔名與其起點欄; 全數略過者以 WARN 起首〕; 無此情形時 meta.check 不含該鍵, 讀者以「缺 = 0」處理)
 /**
  * 帳本格式版本號, 併入帳本鍵(meta.key)之雜湊與 meta.version
  *
  * @type {Number}
  */
 let LEDGER_VERSION = 1
+
+//帳本起點不合之訊息(規則 R-EV-45; 型別不合與「不是 K 線之棒」「不早於 endTime」共用; 不帶輸入值)
+let START_TIME_MSG = 'invalid startTime: must be the open time of a bar of the K lines (a time string in the same format as the K lines) and earlier than endTime'
+//起點之後(至 endTime 之前)之 K 線不滿 100 根之訊息(只於給了起點時用; 未給者沿用 K 線過少之原訊息; 不帶輸入值)
+let START_FEW_MSG = 'invalid startTime: must leave at least 100 bars before endTime'
 
 let clsOf = (k) => k.indexOf('index_') === 0 ? 1 : (k.indexOf('_vbs_') >= 0 ? 2 : 0) //0 一般類、1 指數類、2 成交量類
 
@@ -150,6 +162,7 @@ let alignSeries = (arr, kpTimeInd, n, stat = null) => {
  * @param {String} opt.libraryRoot 輸入策略庫根資料夾路徑(其下需有 ohlc、param、strategies 子資料夾)
  * @param {String} opt.keyOhlc 輸入K線檔鍵名(讀取 libraryRoot/ohlc/<keyOhlc>.json)
  * @param {String} opt.endTime 輸入截止時間字串(無時區, 不含)
+ * @param {String} [opt.startTime=null] 輸入帳本起點時間字串(無時區, 含; 選配; 規則 R-EV-45): 給者, K 線取 startTime ≤ time < endTime、帳本之 time0 = startTime; 須為 K 線檔內某一根之開盤時間(與 K 線同一字串格式)且早於 endTime, 不合者於寫出之前拋 invalid startTime…(起點之後之 K 線不滿 100 根者亦然); 型別不合(非字串或無法解析)者於讀任何檔之前拋出,預設null(自 K 線檔之第一根起; 帳本與未加入本功能時逐位相同)
  * @param {String} opt.outDir 輸入帳本輸出資料夾路徑
  * @param {Number} [opt.barHours=4] 輸入每根K棒小時數(須整除 24 小時; 數字或數字字串; 不合者於讀任何檔之前拋 invalid barHours…),預設4
  * @param {Integer} [opt.limit=0] 輸入只取前幾隻策略(0為全部),預設0
@@ -157,11 +170,12 @@ let alignSeries = (arr, kpTimeInd, n, stat = null) => {
  * @param {Object} [opt.unit=null] 輸入基礎單位之設定(選配; 規則 R-EV-43){ rule: { stepSize, minQty, minNotional, asOf?, source? }, buffer = 0.1, uIni }: 給者另存每根棒之基礎單位名義(unit.f64)、meta.unit 與 meta.unitStat, 交易規則與緩衝入帳本鍵; 單一策略之全期最大同時持倉名義只記錄(最大者與超過 uIni 之隻數; 不拋錯、照寫出); 不合者拋 invalid unit…之錯誤,預設null(不啟用; 帳本與未加入本功能時逐位相同)
  * @param {Number} [opt.seriesOffGridMax=null] 輸入外部序列對不到棒之比例上限(0 ~ 1; 數字或數字字串; 選配; 規則 R-EV-44): 給者, 任一序列之時間落在帳本範圍內而對不到棒之列之占比超過即拋 invalid series…(不寫出); 不合者於讀任何檔之前拋 invalid seriesOffGridMax…,預設null(只記錄; 行為不變)
  * @param {Function} [opt.log=console.log] 輸入記錄函數,預設console.log
- * @returns {Promise<Object>} 回傳Promise,resolve為帳本 meta 物件(含 version、key、endTime、time0、nBars、nStrategies、nOrders、nUnsettled、keyNames、seriesNames 等; 給 unit 者另含 unit、unitStat)
+ * @returns {Promise<Object>} 回傳Promise,resolve為帳本 meta 物件(含 version、key、endTime、time0、nBars、nStrategies、nOrders、nUnsettled、check、keyNames、seriesNames 等; 給 startTime 者另含 startTime; 給 unit 者另含 unit、unitStat; check 於有策略因求解窗起點不在帳本之棒上而未納入核對時另含 skipped)
  * @example
  * let meta = await buildLedger({ libraryRoot: './data/library', keyOhlc: 'BTCUSDT_4h', endTime: '2024-01-01T00:00:00', outDir: './data/ledger/eval' })
+ * let meta2 = await buildLedger({ libraryRoot: './data/library', keyOhlc: 'BTCUSDT_4h', startTime: '2022-07-01T00:00:00', endTime: '2024-01-01T00:00:00', outDir: './data/ledger/eval' })
  */
-let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, limit = 0, seriesDir = null, unit = null, seriesOffGridMax = null, log = console.log }) => {
+let buildLedger = async ({ libraryRoot, keyOhlc, endTime, startTime = null, outDir, barHours = 4, limit = 0, seriesDir = null, unit = null, seriesOffGridMax = null, log = console.log }) => {
 
     let t0 = Date.now()
     //每根之時長與外部序列之門檻(規則 R-EV-44): 先於讀任何檔檢查; barHours 通過即轉為數值(其後一律用轉換值)
@@ -173,6 +187,11 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
         if (!(offGridMax >= 0 && offGridMax <= 1)) {
             throw new Error('invalid seriesOffGridMax: must be a number from 0 to 1')
         }
+    }
+    //帳本之起點(規則 R-EV-45; 選配): 型別於讀任何檔之前檢查(須為可解析之時間字串); 「是 K 線檔內某一根之開盤時間且早於 endTime」須讀 K 線檔才能判定, 於其後、任何寫出之前檢查; 訊息不帶輸入值
+    let hasStart = startTime !== undefined && startTime !== null
+    if (hasStart && !(typeof startTime === 'string' && Number.isFinite(Date.parse(`${startTime}Z`)))) {
+        throw new Error(START_TIME_MSG)
     }
     //基礎單位之設定(規則 R-EV-43): 先於讀任何檔檢查(不合者不耗時)
     let nu = normUnit(unit, 'unit')
@@ -192,9 +211,16 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
 
     //ohlc(於 endTime 截斷)
     let arrAll = JSON.parse(fs.readFileSync(path.join(libraryRoot, 'ohlc', `${keyOhlc}.json`), 'utf8'))
-    let arrOhlc = arrAll.filter((r) => r.time < endTime)
+    //起點(規則 R-EV-45): 須為 K 線檔內某一根之開盤時間且早於 endTime(與 endTime 同樣以字串比較); 不合者於任何寫出之前拋錯
+    if (hasStart && !(startTime < endTime && arrAll.some((r) => r.time === startTime))) {
+        throw new Error(START_TIME_MSG)
+    }
+    let arrOhlc = arrAll.filter((r) => (hasStart ? r.time >= startTime : true) && r.time < endTime)
     let n = arrOhlc.length
     if (n < 100) {
+        if (hasStart) {
+            throw new Error(START_FEW_MSG)
+        }
         throw new Error(`K 線過少(${n}); endTime ${endTime}`)
     }
     let barMs = barHours * 3600000
@@ -210,7 +236,7 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
         C[i] = arrOhlc[i].Close
         kpTimeInd.set(arrOhlc[i].time, i)
     }
-    log(`ohlc ${keyOhlc}: ${n} 根, ${time0} ~ ${arrOhlc[n - 1].time}(endTime ${endTime} 不含)`)
+    log(`ohlc ${keyOhlc}: ${n} 根, ${time0} ~ ${arrOhlc[n - 1].time}(${hasStart ? `startTime ${startTime} 含; ` : ''}endTime ${endTime} 不含)`)
     //每根棒之基礎單位名義(規則 R-EV-43; 給 unit 者): 進場價 = 進場棒之收盤價 ⇒ 每單之名義 = uN[進場棒]
     let uN = nu ? unitNotionalOf(C, nu, arrOhlc.map((r) => r.time)) : null
     //dN, 逐策略之持倉名義之差分(單一策略之峰值名義之記錄; 每隻策略算完即歸零重用)
@@ -352,7 +378,7 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
     let keyOr = grow(Uint8Array, 1 << 19)
     let rule = { nConds: 0, nGt: 0, nLt: 0, nOr: 0, nSymOther: 0 } //nSymOther: 比較符號非 '>' / '<' 者(觸發時一律當 '<', 與既有語義相同; 應為 0)
     let nUnsettled = 0
-    let chk = { n: 0, same: 0, diffs: [] } //與策略檔所存求解窗成交數之一致性(求解窗終點於帳本範圍內者)
+    let chk = { n: 0, same: 0, diffs: [], skipped: 0, skippedFirst: null } //skippedFirst: 第一個被略過者之檔名與其起點欄(只供記錄, 不入 meta);與策略檔所存求解窗成交數之一致性(求解窗終點於帳本範圍內者); skipped: 求解窗起點不在本帳本之棒上而未納入核對之隻數(規則 R-EV-45)
     for (let si = 0; si < ns; si++) {
         let s = JSON.parse(fs.readFileSync(path.join(fdSt, files[si]), 'utf8'))
         let md = s.mode
@@ -492,22 +518,35 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
             cls[si * 3 + clsOf(keyNames[c.ki])]++
         }
         //一致性: 策略檔之 summary.numTrade 為求解窗 [timeOhlcStart, timeOhlcEnd] 內之進場數; 帳本同窗之進場數應相同
+        //  下界(規則 R-EV-45): 起點棒 = timeOhlcStart 於本帳本之棒序; 未帶起點欄(undefined / null)者自第 0 根; 起點不在本帳本之棒上(早於帳本起點 ⇒ 帳本未涵蓋完整之求解窗; 或不在棒之開盤時間)
+        //  者不納入核對(不計入 chk.n)、只計隻數(chk.skipped)—— 起點 = 帳本起點時結果與只計終點者逐位相同
+        //  「未帶」= undefined 或 null; 其餘(含空字串、0、false 等非字串)而不在本帳本之棒上者一律不納入核對; 起點晚於終點者照核對(計數為 0, 與 numTrade 不同即計為不符)
         let tEnd = s.summary && s.summary.timeOhlcEnd
         let iEnd = tEnd ? kpTimeInd.get(tEnd) : undefined
         if (iEnd !== undefined && typeof s.numTrade === 'number') {
-            let e = ent.done()
-            let cnt = 0
-            for (let j = off[si]; j < e.length; j++) {
-                if (e[j] <= iEnd) {
-                    cnt++
+            let tStart = s.summary.timeOhlcStart
+            let iStart = tStart === undefined || tStart === null ? 0 : kpTimeInd.get(tStart)
+            if (iStart === undefined) {
+                chk.skipped++
+                if (chk.skippedFirst === null) {
+                    chk.skippedFirst = { f: files[si], t: tStart }
                 }
             }
-            chk.n++
-            if (cnt === s.numTrade) {
-                chk.same++
-            }
-            else if (chk.diffs.length < 10) {
-                chk.diffs.push({ f: files[si], ledger: cnt, file: s.numTrade })
+            else {
+                let e = ent.done()
+                let cnt = 0
+                for (let j = off[si]; j < e.length; j++) {
+                    if (e[j] >= iStart && e[j] <= iEnd) {
+                        cnt++
+                    }
+                }
+                chk.n++
+                if (cnt === s.numTrade) {
+                    chk.same++
+                }
+                else if (chk.diffs.length < 10) {
+                    chk.diffs.push({ f: files[si], ledger: cnt, file: s.numTrade })
+                }
             }
         }
         if ((si + 1) % 10000 === 0) {
@@ -602,6 +641,7 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
         libraryRoot,
         keyOhlc,
         endTime,
+        ...(hasStart ? { startTime } : {}),
         time0,
         barHours,
         nBars: n,
@@ -609,7 +649,7 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
         nOrders: E.length,
         nUnsettled,
         nFirstTouch: kpFt.size,
-        check: { compared: chk.n, same: chk.same, diffs: chk.diffs },
+        check: { compared: chk.n, same: chk.same, diffs: chk.diffs, ...(chk.skipped > 0 ? { skipped: chk.skipped } : {}) },
         rule,
         keyNames,
         seriesNames,
@@ -625,6 +665,11 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, outDir, barHours = 4, 
         buildSec: Number(((Date.now() - t0) / 1000).toFixed(1)),
     }
     fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify(meta, null, 1), 'utf8')
+    if (chk.skipped > 0) {
+        //記錄(只供閱讀, 不入 meta): 附第一個被略過者之檔名與其起點欄(JSON 字串化後截至 40 字; 字串格式與 K 線不同者即由此看出); 全數略過(一隻也未受核對)者以 WARN 起首
+        let tfs = String(JSON.stringify(chk.skippedFirst.t)).slice(0, 40)
+        log(`${chk.n === 0 ? 'WARN' : '注意:'} ${chk.skipped} 隻策略之求解窗起點(summary.timeOhlcStart)不在本帳本之棒上(帳本起點 ${time0}; 早於帳本起點者即帳本未涵蓋完整之求解窗, 或不在棒之開盤時間), 未納入一致性核對${chk.n === 0 ? '(全數略過 ⇒ 無一隻受核對)' : ''}; 第一個: ${chk.skippedFirst.f} 之 summary.timeOhlcStart = ${tfs}`)
+    }
     log(`帳本完成: 策略 ${ns}, 訂單 ${E.length}(未結 ${nUnsettled}), first-touch 表 ${kpFt.size}, 一致性 ${chk.same}/${chk.n}, 鍵 ${key}, ${meta.buildSec}s → ${outDir}`)
     return meta
 }

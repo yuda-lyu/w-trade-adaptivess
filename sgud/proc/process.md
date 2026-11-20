@@ -4,7 +4,9 @@
 
 - 一切改動先看規則帳本(`sgud/rule/rulebook.md`):列為規則者(含未完成)是預期功能.
 - 改評估器(`src/eval/*`、`src/cli/eval.mjs`)須「只增」:既有欄位、`S`、階梯與 `selHash` 不得因新增功能而變;每項新增附①單元測試(含變異:把新邏輯改壞,測試須失敗)②以真實成品抽樣重放,結果與正本相同.
-- 改迴圈之流程(`src/arsi/*`、`src/domain/*`、`src/cli/rsi.mjs`)後,於有真實帳本之專案跑 `node tools/fakeRound.mjs --redream --two`(假 agent;不耗模型額度;離開碼 0).
+- 改迴圈之流程(`src/arsi/*`、`src/domain/*`、`src/cli/rsi.mjs`)後,於有真實帳本之專案跑 `node tools/fakeRound.mjs --redream --two`(假 agent;不耗模型額度;離開碼 0;「擴充診斷之補算」之「真實診斷」一項只在共用工具區無該診斷之檔、或第一個節點無其值時略過〔輸出標 `skipped` 與原因,不計失敗,仍離開碼 0〕;該節點之值為錯誤或非 `undefined` 之假值、或補算失敗者仍離開碼 15).
+- 改建帳本(`src/eval/ledgerBuild.mjs`、`src/cli/build.mjs`、`src/cli/backtest.mjs`)或假輪次(`src/tools/fakeRound.mjs`)後,另以 `node test/tools/mutateStart.mjs`(帳本起點、一致性核對下界、回測期旗標之起點核對與假輪次補算之變異;**不得有非預期存活**:被殺者之外,只有「語意等價」〔改了寫法而可觀察之行為不變,附理由〕與「已知存活」〔須對產品碼注入測試掛鉤才打得到,套件不為此開掛鉤,附理由〕兩類可存活,皆標於工具之變異表內)與 `test/unit-barHours.test.mjs`、`test/unit-ledgerStart.test.mjs`、`test/unit-fakeRound.test.mjs` 核對;新增之選項須於未給時與發布版逐位相同(以釘死之指紋守住,見 R-EV-45 ①).
+- **釘死指紋之重取程序**(`test/unit-ledgerStart.test.mjs` 之 `PIN`、`PIN_Q`):本套件不存舊碼之夾具,釘死值轉紅時(多為相依之 `w-trade-backtest` 升版)**先辨明是 `w-trade-backtest` 等相依之行為變更,還是本套件之回歸**,不得未辨明即更新值(釘死值正是要讓相依之行為變更〔其 `genKLinesTpSl` / `settleOrderPnl` / `calcBaseUnitQuantity` 之輸出不同〕改變帳本鍵與評估紀錄時被察覺;舊碼之夾具反使相依之變更兩邊同變而不被察覺).辨明之作法:①以 1.0.30 之發布包(`npm pack w-trade-adaptivess@1.0.30`;未含 `startTime`)之 `src/eval/ledgerBuild.mjs`,於同一份合成資料(建法見測試 ① 與 ① 之二)與新相依建一次,取其指紋與帳本鍵;②與現行碼於同一份資料與新相依之輸出相同 ⇒ 差異來自相依(更新 `PIN`、`PIN_Q` 為 ① 之值,並於 `sgud/state/state.md` 記錄相依之版本與行為變更);不同 ⇒ 本套件之回歸(修碼,不改值).不得未經 ① 之比對而直接取現行碼之輸出重取(那等於讓守門恆綠).
 - 通用層 `src/arsi/` 不得匯入 `src/domain/`、`src/eval/`,不得含交易領域之用語(守門:`test/unit-guard.test.mjs`).
 - 起子行程一律 `windowsHide: true`.
 - 專案之路徑一律由 `src/cfg.mjs` 之 `FD_ROOT` / `P()` 展開;只有「定位套件自己之檔」才用 `import.meta.url`.

@@ -20,7 +20,7 @@ import { trainFromBarOf, gridCheck, checkEvalSettings, periodAt, configMsgOf } f
 //  旗標: 七相位等效年化之平均 > rule.meanMin 且最差相位 > rule.worstPhaseMin, 且換亂數種子之複製版(共 backtest.replicas 次重放)皆然 ⇒ pass;
 //        未達 pass 者: 分級啟用(backtest.grade.enabled; 預設)時依「對訊號量相當之隨機挑」分為 above / mixed / level / below(src/domain/backtestGrade.mjs), 否則 fail
 //  輸出: 私有根 backtest/<name>.json(完整數字 + 參照 + 分段); 標準輸出末行「BACKTEST_FLAG <旗標>」
-//  離開碼: 0 完成 / 2 挑選模組問題或設定不合(期間之界線、eval.trainFromStart、eval.fitEnd; 規則 R-EV-44)/ 3 挑選函數執行錯誤 / 4 未授權 / 5 帳本不一致(全期帳本與評估帳本之訓練期進場數不同, 或評估帳本無法載入 / 不合核對之前提)
+//  離開碼: 0 完成 / 2 挑選模組問題或設定不合(期間之界線、eval.trainFromStart、eval.fitEnd; 規則 R-EV-44)/ 3 挑選函數執行錯誤 / 4 未授權 / 5 帳本不一致(全期帳本與評估帳本之訓練期進場數不同, 或評估帳本無法載入 / 不合核對之前提, 或任一帳本給了 startTime 而兩帳本之起點 time0 不同〔規則 R-EV-45〕)
 if (process.env.ARSI_HARNESS !== '1') {
     console.log('g_backtest.mjs 只供迴圈使用(回測期數字不對 agent 揭露); 節點與做夢任務請用 g_eval.mjs')
     process.exit(4)
@@ -118,6 +118,13 @@ let ntStatic = null
     }
     if (reason !== null) {
         console.log(`ERROR 全期帳本與評估帳本不合核對之前提(${reason}); 請以同一策略庫重建兩者`)
+        process.exit(5)
+    }
+    //帳本之起點(選配; 規則 R-EV-45): 任一帳本之 meta 帶 startTime(即啟用了 source.startTime / opt.startTime)而兩帳本之 time0 不同 ⇒ 挑選函數於兩帳本所見之「全部歷史」與暖機不同
+    //  (評估帳本給了起點而全期帳本未同起點者, 即使給 eval.trainFromStart 使訓練期進場數核對通過, 回測期重放所見之範圍仍與評估帳本不同); 全期帳本須以同一起點建 ⇒ 專屬訊息、離開碼 5(帳本不一致)
+    //  兩帳本皆未帶 startTime 者不檢(行為同未加入本規則); 評估帳本之 startTime = K 線第一根、全期帳本未給(time0 相同)者不擋
+    if ((L.meta.startTime !== undefined || Le.meta.startTime !== undefined) && L.meta.time0 !== Le.meta.time0) {
+        console.log(`ERROR 全期帳本與評估帳本之起點不同(全期帳本 time0 ${L.meta.time0}、評估帳本 time0 ${Le.meta.time0}; 其中至少一份給了 startTime): 全期帳本須以與評估帳本同一個 startTime 建(可見範圍與暖機皆自起點起算); 請以同一 startTime 重建全期帳本`)
         process.exit(5)
     }
     //eval.trainFromStart(選配; 規則 R-EV-44): 兩帳本各以自身之 time0 與每棒小時數換算訓練期起點之棒序, 作為計數之下界; 未給 ⇒ 自帳本起點(行為不變); 設定不合 ⇒ 離開碼 2

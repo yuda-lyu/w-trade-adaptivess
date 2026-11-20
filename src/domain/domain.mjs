@@ -24,7 +24,7 @@ import { makeVerify, summaryOf, notesOf, scanTrace, shortShareOf, sideFlowIssue,
 import { makeToolboxRules, TB_BASELINE } from './toolboxRules.mjs'
 import { archiveExperience, archiveFeedback } from './archiveDocs.mjs'
 import { activeTrial, assignTrial, variantFallback } from './briefTrials.mjs'
-import { makeBacktest } from './backtest.mjs'
+import { makeBacktest, FULL_LEDGER_MSG } from './backtest.mjs'
 import { backtestCfg } from './backtestCfg.mjs'
 import { gradeLabel } from './backtestGrade.mjs'
 
@@ -1452,7 +1452,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let bt = makeBacktest({ st, FD_ROOT })
         let out = []
         if (!bt.ready()) {
-            return { ok: false, why: bt.cfg.enabled ? '全期帳本未建(node g_build.mjs --full)' : '回測期旗標未啟用', done: out }
+            return { ok: false, why: bt.cfg.enabled ? FULL_LEDGER_MSG : '回測期旗標未啟用', done: out }
         }
         for (let r of rsi.store.listIndex().filter((x) => x.status === 'executed')) {
             let n = rsi.store.getNode(r.id)

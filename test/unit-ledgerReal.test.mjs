@@ -22,9 +22,17 @@ describe('ledger(真實帳本):與官方 runStrategy 逐張一致', function () 
         //R-EV-4: 評估帳本止於回測期終點, 不含保留期(holdoutFrom 起)之 K 線
         assert.equal(meta.endTime, st.periods.backtest.end)
         assert(Date.parse(`${meta.endTime}Z`) < Date.parse(`${st.periods.holdoutFrom}Z`), '帳本不得進入保留期')
-        //R-EV-1: 帳本於各策略求解窗內之進場數 = 策略檔所存之成交數(可核對者全數一致)
-        assert(meta.check.compared > 1000, `可核對之策略數 ${meta.check.compared}`)
-        assert.equal(meta.check.same, meta.check.compared)
+        //R-EV-1: 帳本於各策略求解窗內之進場數 = 策略檔所存之成交數(可核對者全數一致; 求解窗以 [summary.timeOhlcStart, timeOhlcEnd] 計 —— 帳本起點早於求解窗起點之專案亦成立;
+        //  求解窗起點早於帳本起點者〔給了較晚之 source.startTime〕不納入核對, 見 R-EV-45)
+        //  核對全數略過(給了晚於全部求解窗起點之 source.startTime)者無可核對 ⇒ 略過本案並印原因(R-EV-4 之斷言已於上執行)
+        let skipped = meta.check.skipped || 0
+        //  只在給了 startTime 時略過(未給而全數略過 = 策略檔之起點欄之格式與 K 線不符等資料問題, 不得靜默略過 ⇒ 由下方斷言失敗並帶出略過隻數)
+        if (skipped > 0 && meta.check.compared === 0 && meta.startTime !== undefined) {
+            console.log(`略過: 帳本自 ${meta.time0} 起(startTime ${meta.startTime}), ${skipped} 隻策略之求解窗起點皆不在本帳本之棒上 ⇒ 一致性核對全數略過、無可核對者`)
+            this.skip()
+        }
+        assert(meta.check.compared > 1000, `可核對之策略數 ${meta.check.compared}(略過 ${skipped};帳本起點 ${meta.time0}、startTime ${meta.startTime})`)
+        assert.equal(meta.check.same, meta.check.compared, `相符 ${meta.check.same} / 核對 ${meta.check.compared}(略過 ${skipped};帳本起點 ${meta.time0}、startTime ${meta.startTime})`)
     })
 
     it('抽樣 12 隻:帳本之每張單(進場棒、出場棒、每單位損益)= 官方 runStrategy 之結果', async function () {
@@ -37,6 +45,9 @@ describe('ledger(真實帳本):與官方 runStrategy 逐張一致', function () 
         let end = L.meta.endTime //帳本自己之終點(回測期終點): 官方回測之資料於同一時點截斷
         let arrOhlc = JSON.parse(fs.readFileSync(path.join(lib, 'ohlc', `${st.source.keyOhlc}.json`), 'utf8')).filter((r) => r.time < end)
         let indOf = new Map(arrOhlc.map((r, i) => [r.time, i]))
+        //i0: 帳本第一根於 K 線檔之棒序 —— 未給 source.startTime 者為 0; 給了者(規則 R-EV-45)帳本之棒序自該根起算, 其以前之進場不在帳本內(官方回測自 K 線檔之第一根起 ⇒ 只比進場棒 ≥ i0 者, 棒序平移 i0)
+        let i0 = indOf.get(L.meta.time0)
+        assert(Number.isInteger(i0), '帳本第一根在 K 線檔內')
         let cache = new Map()
         let funGetSeries = async (key) => {
             if (key === st.source.keyOhlc) {
@@ -57,14 +68,15 @@ describe('ledger(真實帳本):與官方 runStrategy 逐張一致', function () 
             let si = Math.floor(rnd() * L.n)
             let s = JSON.parse(fs.readFileSync(path.join(lib, 'strategies', ids[si]), 'utf8'))
             let r = await runStrategy(ott, s, funGetSeries, { withSummary: false })
-            let os = r.orders
+            //只濾掉進場棒早於 i0 者; 進場時間不在 K 線上(棒序 undefined)者不濾 —— 留給下方之斷言指出
+            let os = r.orders.filter((o) => !(indOf.get(o.timeStart) < i0))
             //R-EV-1: 單數相同, 且逐張之進場棒、出場棒(未結為 -1)、每單位損益相同
             assert.equal(os.length, L.off[si + 1] - L.off[si], `${ids[si]} 之單數`)
             for (let q = 0; q < os.length; q++) {
                 let j = L.off[si] + q
                 let o = os[q]
-                assert.equal(indOf.get(o.timeStart), L.ent[j], `${ids[si]} 第 ${q} 單之進場棒`)
-                assert.equal(o.timeEnd ? indOf.get(o.timeEnd) : -1, L.ext[j], `${ids[si]} 第 ${q} 單之出場棒`)
+                assert.equal(indOf.get(o.timeStart) - i0, L.ent[j], `${ids[si]} 第 ${q} 單之進場棒`)
+                assert.equal(o.timeEnd ? indOf.get(o.timeEnd) - i0 : -1, L.ext[j], `${ids[si]} 第 ${q} 單之出場棒`)
                 assert(Math.abs((o.timeEnd ? o.uProfitOrLoss / o.uTrade : 0) - L.pnl[j]) < 1e-6, `${ids[si]} 第 ${q} 單之損益`)
             }
             nOrd += os.length
@@ -83,6 +95,12 @@ describe('ledger(真實帳本):與官方 runStrategy 逐張一致', function () 
         let trainEndBar = Math.round((Date.parse(`${st.periods.train.end}Z`) - Date.parse(`${L.meta.time0}Z`)) / (L.meta.barHours * 3600000))
         L.ntStatic = ntStaticOf(L, trainEndBar)
         let ev = makeEvaluator(L, { warmupDays: st.eval.warmupDays, cadenceDays: st.eval.cadenceDays })
+        //取樣之前提: 每 8 個決策取 1 個、須至少 20 個 ⇒ 暖機後之決策須 ≥ 153 個; 帳本自較晚之起點起(source.startTime)或過短而不足者略過並印原因(不改取樣之語意)
+        let nAllDec = ev.decisionBars(0).length
+        if (Math.ceil(nAllDec / 8) < 20) {
+            console.log(`略過: 帳本自 ${L.meta.time0} 起(startTime ${L.meta.startTime}), 暖機後僅 ${nAllDec} 個決策(每 8 個取 1 個 ⇒ ${Math.ceil(nAllDec / 8)} 個 < 20)`)
+            this.skip()
+        }
         let seed = 20261114
         let rnd = () => {
             seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
@@ -150,7 +168,7 @@ describe('ledger(真實帳本):與官方 runStrategy 逐張一致', function () 
             nDec++
             return []
         }, 0)
-        assert(nDec >= 20, `核對之決策數 ${nDec}`)
+        assert(nDec >= 20, `核對之決策數 ${nDec}(帳本自 ${L.meta.time0} 起;暖機後之決策共 ${nAllDec} 個)`)
         assert(nEnt > 100, `重算之進場數 ${nEnt} 應足夠`)
     })
 })

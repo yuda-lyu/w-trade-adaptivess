@@ -29,7 +29,7 @@ let FP_DIGEST = fileURLToPath(new URL('../tools/roundDigest.mjs', import.meta.ur
 //                                             文字檔(UTF-8)= 主控對本輪做夢之要求(原文列於做夢任務書之最前; 不得為空); 計畫有節點、有待重審之節點或有認領中之節點時不受理(reason 'dream-only-busy')
 //  node g_rsi.mjs --mode status               現況
 //  node g_rsi.mjs --mode board                重產臂看板(另重寫供 agent 閱讀之生效目錄 arms/catalog.json)
-//  node g_rsi.mjs --mode validate [--force]   對已入樹而尚無回測期旗標之節點補算旗標(需先 node g_build.mjs --full)
+//  node g_rsi.mjs --mode validate [--force]   對已入樹而尚無回測期旗標之節點補算旗標(需先有全期帳本: 由使用端以聚合入口之 buildLedger 自建於 settings.backtest.ledgerDir, 與評估帳本用同一個 source.startTime; g_build.mjs 不建它)
 //  node g_rsi.mjs --mode reverify --why <改了什麼> [--keep-flags] [--only <id 前綴,…>]  評估器改版後, 以現行評估器重跑樹上全部已執行節點(數字、分數、回測期旗標、節點文件); --keep-flags 沿用既有旗標、不重放回測期;
 //                                             --only 只重跑指名之節點(只增輸出之改動後補算新欄用; 數字會變之改版須全樹)
 //  node g_rsi.mjs --mode extfill [--ext <診斷名,…>] [--only <id 前綴,…>] [--force] [--null N]   擴充診斷之補算: 共用工具區新增或改寫擴充診斷後, 為既有節點補上其值

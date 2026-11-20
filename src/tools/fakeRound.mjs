@@ -1,6 +1,9 @@
 // 以假 agent 走完整一輪(不耗任何模型額度): 節點派工 → 重跑驗證 → 節點文件 → 入樹 → 做夢(審計: 採納 / 重做 / 刪除;方向含一條不合法者)→ 寫回 → 前緣 → 看板
 //  狀態根與紀錄皆落 tmp/fake(不動正式之 rsi/; 結束後可刪); 用法: node tools/fakeRound.mjs [--two] [--redream]
 //  離開碼: 0 = 全部如預期; 3 改進項之分類、4 前次方向之回顧、5 擴建、6 整體研判 / 驗證類、7 補做夢、8 臂目錄之提案 / 擴充、9 補位載體、10 未作用之臂、11 擴充診斷之看板值、12 前緣改掛、13 已試之修正、14 擴充診斷之 notContent、15 量尺之子集 / 擴充診斷之補算
+//  (規則 R-EV-45 ⑦; 擴充診斷之補算:「真實診斷」一項以正式之共用工具區〔settings.records.toolboxDir, 未給 = <rsi.root>/toolbox; 與評估之子行程之解析相同〕之 metrics/ 內有本檔寫死之診斷名(nullRecentAct)之檔、且第一個節點有其(非錯誤之)值為前提 ——
+//   無該名之檔、或第一個節點無其值(undefined)者該項略過(輸出標 skipped 與原因, 不計為失敗、不影響離開碼); 有該檔而第一個節點之值為錯誤(診斷載入失敗或拋錯)或非 undefined 之假值者為失敗(valueError; 離開碼 15), 有值而補算失敗者亦同;
+//   「自備假診斷(替身評估)」一項不依賴共用工具區, 恆執行, 不合另印專屬之一行、仍為離開碼 15)
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
@@ -14,6 +17,9 @@ let st = getSettings()
 let root = P('tmp', 'fake')
 fs.rmSync(root, { recursive: true, force: true })
 let realRoot = st.rsi.root
+//真實專案之共用工具區(「真實診斷」一項取其 metrics/ 內之診斷檔; 與評估之子行程〔src/cli/eval.mjs〕及 domain.mjs 同一個解析: settings.records.toolboxDir, 未給 = <rsi.root>/toolbox; 規則 R-EV-45 ⑦);
+//  須於下一行改寫 st.rsi.root 與 st.records 之前取得(其後 st 為假專案之設定)
+let realToolboxDir = st.records.toolboxDir || path.join(realRoot, 'toolbox')
 st.rsi.root = path.join(root, 'rsi')
 st.records = { nodeDir: path.join(root, 'rsi/records/nodes'), dreamDir: path.join(root, 'rsi/records/dreams'), trashDir: path.join(root, 'rsi/records/trash'), workDir: path.join(root, 'rsi/work') }
 
@@ -392,7 +398,7 @@ console.log('做夢方向之處置:', JSON.stringify((Pj.records.getDreamDoc(rou
             //②補算: 假輪次之子行程評估取用正式之共用工具區 ⇒ 於假共用工具區放同名之檔, 使迴圈端認得此診斷名(驗後移除)
             let nm = 'nullRecentAct'
             let fdM = path.join(st.rsi.root, 'toolbox', 'metrics')
-            let srcM = path.join(realRoot, 'toolbox', 'metrics', `${nm}.mjs`)
+            let srcM = path.join(realToolboxDir, 'metrics', `${nm}.mjs`) //真實專案之共用工具區(同評估之子行程之解析); fdM 為假專案之(st.rsi.root 已改為假根)
             let okFill = false
             let info = {}
             let n2 = Pj.rsi.store.getNode(x0.id)
@@ -434,12 +440,75 @@ console.log('做夢方向之處置:', JSON.stringify((Pj.records.getDreamDoc(rou
                     fs.rmSync(path.join(fdM, `${nm}.mjs`), { force: true })
                 }
             }
-            else {
-                info = { skipped: '正式之共用工具區無此診斷、或該節點無其值' }
+            else if (!fs.existsSync(srcM)) {
+                //略過之兩種情形之一: 正式之共用工具區無該名之診斷檔
+                info = { skipped: `正式之共用工具區無此診斷(無 metrics/${nm}.mjs)` }
             }
-            console.log('量尺之子集與擴充診斷之補算:', JSON.stringify({ subset: okSub, fill: okFill, ...info }))
-            if (!okSub || !okFill) {
+            else if (orig === undefined) {
+                //略過之兩種情形之二: 有該診斷之檔而第一個節點無其值(只認 undefined; 評估器只產生物件〔診斷之輸出; 載入失敗或拋錯者為 { error }〕或 undefined〔未載入〕)
+                info = { skipped: '第一個節點無其值' }
+            }
+            else {
+                //有該診斷之檔、第一個節點有其值而不是正常之結果: 為錯誤(診斷載入失敗或執行拋錯; 帶 error), 或非 undefined 之假值(null、0、false 等; 評估器不產生, 同改前視為失敗)
+                //  ⇒ 不是略過 —— 為失敗(離開碼 15; 同改前); 文字對 null 等值安全(假值不取 .error)
+                info = { valueError: `該節點之值為錯誤: ${(orig && orig.error ? String(orig.error).split('\n')[0] : `非診斷之結果(${JSON.stringify(orig)})`).slice(0, 120)}` }
+            }
+            //②之二 自備之假診斷(不依賴使用端之共用工具區; 名稱為中性之 fakeProbe): 於假共用工具區放一個診斷檔(使迴圈端認得此診斷名), 補算之評估(原為 g_eval.mjs 之子行程;
+            //  其載入之共用工具區為專案之正式者)以替身 runEval 取代 —— 替身回「正本之選集指紋 + 假診斷之值」之結果檔; 只驗補算之接線(extFill → fill → 併入樹與節點文件 → 補算檔):
+            //  值併入、分數與選集指紋不變、節點文件註明、補算檔寫成而無暫存檔、已有值者再補不重算、指名不存在者拋錯(評估本身之同一算法需要真實之擴充診斷, 見上一段; 無者略過)
+            let pn = 'fakeProbe'
+            let probeInfo = {}
+            let okProbe = false
+            {
+                let n4 = Pj.rsi.store.getNode(x0.id)
+                let sel4 = n4.raw.metrics.selHash
+                let s4 = n4.score.S
+                let val = { text: '假探針', n: 3 }
+                let calls = []
+                let stub = async ({ nodeId, kind, args }) => {
+                    calls.push({ nodeId, kind, only: args[args.indexOf('--ext-only') + 1] })
+                    writeJson(args[args.indexOf('--out') + 1], { ok: true, metrics: { selHash: sel4, ext: { [pn]: val } } })
+                    return { code: 0, timeout: false }
+                }
+                fs.mkdirSync(fdM, { recursive: true })
+                fs.writeFileSync(path.join(fdM, `${pn}.mjs`), 'export default function (api) {\n    return { text: \'假探針\' }\n}\n', 'utf8')
+                try {
+                    let threw2 = false
+                    try {
+                        await Pj.extFill({ names: ['noSuchProbe'], runEval: stub })
+                    }
+                    catch (err) {
+                        threw2 = /無此擴充診斷/.test(String(err.message))
+                    }
+                    let rp = await Pj.extFill({ names: [pn], only: [x0.id], runEval: stub })
+                    let n5 = Pj.rsi.store.getNode(x0.id)
+                    let d5 = Pj.records.getNodeDoc(x0.id)
+                    let rp2 = await Pj.extFill({ names: [pn], only: [x0.id], runEval: stub })
+                    probeInfo = { threw: threw2, results: rp.results.map((x) => ({ ok: x.ok, filled: x.filled, error: x.error })), calls: calls.length, again: rp2.results.length }
+                    okProbe = threw2 && rp.nNodes === 1 && rp.results.length === 1 && rp.results[0].ok === true && rp.results[0].filled.join() === pn &&
+                        calls.length === 1 && calls[0].nodeId === x0.id && calls[0].kind === 'ext' && calls[0].only === pn &&
+                        JSON.stringify(n5.raw.metrics.ext[pn]) === JSON.stringify(val) && n5.score.S === s4 && n5.raw.metrics.selHash === sel4 && !!n5.raw.metrics.ext.fakeDiag &&
+                        !!d5 && d5.harness.notes.some((s) => String(s).includes(`補算擴充診斷:${pn}`)) &&
+                        rp2.results.length === 0 &&
+                        !(fs.existsSync(path.join(st.rsi.root, 'fill')) && fs.readdirSync(path.join(st.rsi.root, 'fill')).some((f) => f.includes('.tmp-')))
+                }
+                finally {
+                    fs.rmSync(path.join(fdM, `${pn}.mjs`), { force: true })
+                }
+            }
+            //補算之「真實診斷」一項只在兩種情形略過(不計為失敗, 輸出明示略過與原因): ①正式之共用工具區無該名之診斷檔(例: 全新之專案尚無任何擴充診斷)②第一個節點無其值;
+            //  有檔而第一個節點之值為錯誤、或有值而補算失敗者為失敗(離開碼 15; 同改前); 子集之項與自備假診斷之項照常核對
+            let fillSkipped = info.skipped !== undefined
+            console.log('量尺之子集與擴充診斷之補算:', JSON.stringify({ subset: okSub, fill: fillSkipped ? 'skipped' : okFill, ...info }))
+            console.log('自備假診斷之補算(替身評估):', JSON.stringify({ probe: okProbe, ...probeInfo }))
+            let failMain = !okSub || (!fillSkipped && !okFill)
+            if (failMain) {
                 console.error('量尺之子集 / 擴充診斷之補算不如預期')
+            }
+            if (!okProbe) {
+                console.error('自備假診斷之補算(替身評估)不如預期 —— 套件之補算接線有誤(與專案之共用工具區無關)')
+            }
+            if (failMain || !okProbe) {
                 process.exitCode = 15
             }
         }
