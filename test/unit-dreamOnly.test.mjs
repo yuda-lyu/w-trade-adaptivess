@@ -483,10 +483,11 @@ module.exports = {
         const brief = fs.readFileSync(path.join(wd, 'brief.md'), 'utf8')
         const tpl = JSON.parse(fs.readFileSync(path.join(wd, 'dream.template.json'), 'utf8'))
         rec({ fn: 'dispatchClaude', nAudits: tpl.audits.length, hasRequest: brief.includes('## 0. 主控之要求(本輪為「只做夢」輪次)'), quoted: brief.includes('> 請重審現有各變體') })
+        const sat = process.env.QSTUB_DREAM === 'saturated' ? { overview: { families: [{ name: 'F1', nodes: [], basis: 'b' }], coverage: { verdict: 'concentrated', why: 'w' }, progress: { verdict: 'flat', why: 'w' }, localOptimum: { risk: 'high', why: 'w' }, blindSpots: [], adjust: 'a', prevReview: '', outwardSaturated: { basis: 'checked and found nothing' } } } : {}
         if (process.env.QSTUB_DREAM === 'fail') {
             return { ok: false, errorType: 'exec', error: 'Exit code 1', stdout: '', durationMs: 5 }
         }
-        fs.writeFileSync(path.join(wd, 'dream.json'), JSON.stringify({ audits: [], synthesis: { summary: '替身做夢(只做夢)', worked: [], failed: [], patterns: [], prevDirections: [] }, guidance: { directions: [], avoid: [], openQuestions: [], improvements: [{ kind: 'loop', target: '摘要檢查', what: '改進內容甲' }], armProposals: [] }, expansion: [], docsUpdated: [] }))
+        fs.writeFileSync(path.join(wd, 'dream.json'), JSON.stringify({ audits: [], synthesis: { summary: '替身做夢(只做夢)', worked: [], failed: [], patterns: [], prevDirections: [], ...sat }, guidance: { directions: [], avoid: [], openQuestions: [], improvements: [{ kind: 'loop', target: '摘要檢查', what: '改進內容甲' }], armProposals: [] }, expansion: [], docsUpdated: [] }))
         if (process.env.QSTUB_DREAM === 'nosgud') {
             return { ok: true, stdout: 'DONE', durationMs: 5 }
         }
@@ -777,6 +778,64 @@ module.exports = {
             let rd = r.events.find((e) => e.event === 'round-done')
             assert.deepEqual([rd.ok, rd.dreamOnly, rd.hookFailed], [false, true, true], JSON.stringify(rd))
             assert.equal(trailingFailures(r.events), 1)
+        })
+
+        it('向外飽和之標示(R-REC-46):做夢宣告之輪 ⇒ 一頁摘要之「一眼看完」列「向外飽和」一行、事件 run-done 與狀態檔之 run 帶 outwardSaturated: { round };其後因前緣為空而未起輪之執行亦帶(取最近一份做夢文件);其後之做夢未重申者不再帶', () => {
+            let dir = mkProject('saturated', { emptyPlan: true })
+            let r = runCli(dir, ['--mode', 'round', '--dream-only', '--file', path.join(dir, 'why.txt')], { QSTUB_DREAM: 'saturated' })
+            assert.equal(r.status, 0, r.out)
+            assert.deepEqual(r.events.map((e) => e.event), ['run-start', 'round-done', 'run-done'], r.out)
+            assert.deepEqual(r.events[2].outwardSaturated, { round: 1 }, JSON.stringify(r.events[2]))
+            let stt = JSON.parse(fs.readFileSync(path.join(dir, 'rsi', 'STATUS.json'), 'utf8'))
+            assert.deepEqual(stt.run.outwardSaturated, { round: 1 })
+            assert(/做夢已宣告向外飽和/.test(r.out), r.out)
+            let R = JSON.parse(fs.readFileSync(path.join(dir, 'rsi', 'rounds', 'r001', 'ROUND.json'), 'utf8'))
+            let line = R.hook.lines.find((l) => l.startsWith('向外飽和'))
+            assert(line && line.includes('探索 0、驗證 0'), JSON.stringify(R.hook.lines))
+            let digest = fs.readFileSync(path.join(dir, 'rsi', 'rounds', 'r001', 'DIGEST.md'), 'utf8')
+            let glance = digest.slice(digest.indexOf('## 一眼看完'), digest.indexOf('## 節點'))
+            assert(glance.split('\n').includes(`- ${line}`), glance)
+            //其後之一般輪次: 前緣為空而不起輪 ⇒ run-done(rounds 0、reason frontier-empty)仍帶標示
+            let r2 = runCli(dir, ['--mode', 'round'])
+            assert.equal(r2.status, 0, r2.out)
+            let done2 = r2.events[r2.events.length - 1]
+            assert.deepEqual([done2.event, done2.rounds, done2.reason, done2.outwardSaturated], ['run-done', 0, 'frontier-empty', { round: 1 }])
+            //其後之做夢未重申 ⇒ 不再帶(宣告須每輪重申); 狀態檔之 run 不殘留上次之標示; 該輪之一頁摘要不列
+            let r3 = runCli(dir, ['--mode', 'round', '--dream-only', '--file', path.join(dir, 'why.txt')])
+            assert.equal(r3.status, 0, r3.out)
+            let done3 = r3.events[r3.events.length - 1]
+            assert.deepEqual([done3.event, done3.rounds, 'outwardSaturated' in done3], ['run-done', 1, false], JSON.stringify(done3))
+            assert(!/做夢已宣告向外飽和/.test(r3.out), '未宣告者不記結束段之日誌句')
+            let st3 = JSON.parse(fs.readFileSync(path.join(dir, 'rsi', 'STATUS.json'), 'utf8'))
+            assert.equal('outwardSaturated' in st3.run, false, '狀態檔之 run 不殘留上次之標示')
+            let digest2 = fs.readFileSync(path.join(dir, 'rsi', 'rounds', 'r002', 'DIGEST.md'), 'utf8')
+            assert(!digest2.includes('向外飽和'), '未宣告之輪之一頁摘要不列')
+        })
+
+        it('向外飽和之標示(R-REC-46):未曾有輪次之專案、前緣為空 ⇒ 結束段不讀做夢文件、不新建 records 夾(未宣告者之輸出與改前逐位相同);事件 run-done 無該鍵', () => {
+            let dir = mkProject('saturatedFresh', { emptyPlan: true })
+            let r = runCli(dir, ['--mode', 'round'])
+            assert.equal(r.status, 0, r.out)
+            let done = r.events[r.events.length - 1]
+            assert.deepEqual([done.event, done.rounds, done.reason, 'outwardSaturated' in done], ['run-done', 0, 'frontier-empty', false], JSON.stringify(done))
+            assert.equal(fs.existsSync(path.join(dir, 'rsi', 'records')), false, '未曾有輪次之專案不新建 records 夾')
+        })
+
+        it('向外飽和之標示(R-REC-46):讀取做夢文件失敗視同未宣告 ⇒ 執行照常結束(離開碼 0、事件 run-done 與狀態檔之 run 皆無該鍵)', () => {
+            let dir = mkProject('saturatedReadFail', { emptyPlan: true })
+            let r = runCli(dir, ['--mode', 'round', '--dream-only', '--file', path.join(dir, 'why.txt')], { QSTUB_DREAM: 'saturated' })
+            assert.equal(r.status, 0, r.out)
+            assert.deepEqual(r.events[r.events.length - 1].outwardSaturated, { round: 1 }, '前提: 讀得到時帶標示')
+            //做夢文件夾改為同名之檔 ⇒ 列出做夢文件拋錯(讀取失敗)
+            let dd = path.join(dir, 'rsi', 'records', 'dreams')
+            fs.rmSync(dd, { recursive: true, force: true })
+            fs.writeFileSync(dd, 'not a directory', 'utf8')
+            let r2 = runCli(dir, ['--mode', 'round'])
+            assert.equal(r2.status, 0, r2.out)
+            let done = r2.events[r2.events.length - 1]
+            assert.deepEqual([done.event, done.rounds, done.reason, 'outwardSaturated' in done], ['run-done', 0, 'frontier-empty', false], JSON.stringify(done))
+            let stt = JSON.parse(fs.readFileSync(path.join(dir, 'rsi', 'STATUS.json'), 'utf8'))
+            assert.deepEqual([stt.done, 'outwardSaturated' in stt.run], [true, false])
         })
 
         it('只做夢輪次而計畫有節點(可選之臂尚未試)⇒ 不受理:離開碼 0、事件 run-done(rounds 0、reason dream-only-busy)、不建輪夾、不派工', () => {

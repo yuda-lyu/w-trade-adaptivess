@@ -34,7 +34,7 @@ P('')
         P('')
     }
     let lines = (R && R.hook && R.hook.lines) || []
-    let facts = [/^整體研判/, /^額度/, /^改進項/, /^做夢之操作稽核/].map((re) => lines.find((l) => re.test(l))).filter(Boolean)
+    let facts = [/^整體研判/, /^向外飽和/, /^額度/, /^改進項/, /^做夢之操作稽核/].map((re) => lines.find((l) => re.test(l))).filter(Boolean)
     if (R) {
         P('## 一眼看完(迴圈之機械摘要)')
         P('')

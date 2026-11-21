@@ -425,9 +425,25 @@ else if (mode === 'round') {
         },
         log: P.log,
     })
+    //向外飽和之標示(規則 R-REC-46): 最近一份做夢文件宣告(或續存)向外飽和者, 狀態檔之 run 與事件 run-done 帶 outwardSaturated: { round }(宣告所在之輪), 日誌附一句; 否則鍵不出現(與改前逐位相同)
+    //  取「最近一份做夢文件」而非本次執行之輪: 前緣為空而未起輪(rounds 0)者亦標出; 宣告須每輪重申, 其後之做夢未重申者即不再標; 讀取失敗視同未宣告(不影響執行之結束)
+    //  不帶之路徑: 補做夢後輪末回調失敗之早退(上方之 run-done; 該輪已有 ROUND.json 者其 hook.lines 與一頁摘要照帶, 無者宣告只留於日誌); 做夢文件夾不存在(未曾有輪次之專案)者不讀(listDreamDocs 會建夾;做夢文件夾不存在者不留副作用)
+    let satInfo = null
+    try {
+        let dreamDocs = fs.existsSync(st.records.dreamDir) ? P.records.listDreamDocs() : []
+        let lastDream = dreamDocs[dreamDocs.length - 1]
+        if (lastDream && lastDream.harness && lastDream.harness.tally && lastDream.harness.tally.overview && lastDream.harness.tally.overview.outwardSaturated === true) {
+            satInfo = { round: lastDream.round }
+        }
+    }
+    catch (err) {}
+    let satKey = satInfo ? { outwardSaturated: satInfo } : {}
+    if (satInfo) {
+        P.log(`做夢已宣告向外飽和(${roundName(satInfo.round)});其後之出路(新資訊源、新臂、結束搜尋)待主控裁示`)
+    }
     //dreamOnly: 本次執行為只做夢者標記, 否則移除(undefined 於寫檔時略去; 狀態檔以合併寫入, 不移除則會殘留上次只做夢之標記)
-    P.setStatus({ stage: 'done', done: true, run: { done: rr.done.length, total: roundsPerRun, stopped: rr.stopped, ...(stopReason ? { reason: stopReason } : {}) }, dreamOnly: dreamOnly ? true : undefined })
-    ev({ event: 'run-done', rounds: rr.done.length, total: roundsPerRun, stopped: rr.stopped || null, ...(stopReason ? { reason: stopReason } : {}) })
+    P.setStatus({ stage: 'done', done: true, run: { done: rr.done.length, total: roundsPerRun, stopped: rr.stopped, ...(stopReason ? { reason: stopReason } : {}), ...satKey }, dreamOnly: dreamOnly ? true : undefined })
+    ev({ event: 'run-done', rounds: rr.done.length, total: roundsPerRun, stopped: rr.stopped || null, ...(stopReason ? { reason: stopReason } : {}), ...satKey })
     if (roundsPerRun > 1 || rr.stopped) {
         P.log(`本次執行結束: 已跑 ${rr.done.length} / ${roundsPerRun} 輪${rr.stopped ? `;提前停止: ${rr.stopped}` : ''}`)
     }

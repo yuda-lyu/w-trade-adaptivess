@@ -757,6 +757,15 @@ let M = [
     ['TI07', 'test/tools/sgudGuard.mjs', [["else if (a[k] !== b[k]) {", "else if (false) {"]], ['unit-sgudUntouched']], //快照差異不報變動
     ['TI08', 'test/tools/sgudGuard.mjs', [["`${s.size}:${Math.floor(s.mtimeMs)}`", "`${s.size}`"]], ['unit-sgudUntouched']], //快照只比大小(同大小之改寫偵不出)
     ['TI09', 'test/tools/sgudGuard.mjs', [["                walk(q)\n", "                void q\n"]], ['unit-sgudUntouched']], //快照不進子夾
+    //── 向外飽和之標示(SL 系列; 規則 R-REC-46; 輪末摘要之一行、一頁摘要之「一眼看完」、事件 run-done 與狀態檔之 run)──
+    ['SL01', 'src/domain/domain.mjs', [["    if (saturated !== true) {", "    if (true) {"]], ['unit-outwardSaturated']], //已宣告亦回空字串
+    ['SL02', 'src/domain/domain.mjs', [["            if (satLine) {", "            if (false) {"]], ['unit-outwardSaturated']], //輪末鉤子不列該行
+    ['SL03', 'src/tools/roundDigest.mjs', [["/^向外飽和/, ", ""]], ['unit-dreamOnly']], //一頁摘要之「一眼看完」不列該行
+    ['SL04', 'src/cli/rsi.mjs', [["let satKey = satInfo ? { outwardSaturated: satInfo } : {}", "let satKey = {}"]], ['unit-dreamOnly']], //事件與狀態檔不帶標示
+    ['SL05', 'src/cli/rsi.mjs', [["let lastDream = dreamDocs[dreamDocs.length - 1]", "let lastDream = dreamDocs[0]"]], ['unit-dreamOnly']], //取最早而非最近一份做夢文件(其後未重申者仍帶)
+    ['SL06', 'src/cli/rsi.mjs', [["    catch (err) {}\n    let satKey", "    catch (err) { throw err }\n    let satKey"]], ['unit-dreamOnly']], //讀取做夢文件失敗時拋出(不視同未宣告; 執行之結束被拖垮)
+    ['SL07', 'src/cli/rsi.mjs', [["let dreamDocs = fs.existsSync(st.records.dreamDir) ? P.records.listDreamDocs() : []", "let dreamDocs = P.records.listDreamDocs()"]], ['unit-dreamOnly']], //做夢文件夾不存在者亦讀(listDreamDocs 建夾 ⇒ 未曾有輪次之專案多出 records 夾)
+    ['SL08', 'src/cli/rsi.mjs', [["    if (satInfo) {", "    if (false) {"]], ['unit-dreamOnly']], //已宣告而不記結束段之日誌句
 ]
 
 let args = process.argv.slice(2)

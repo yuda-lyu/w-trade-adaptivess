@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { getSettings } from '../src/cfg.mjs'
 import { makeTexts, OUT_SATURATED_NOTE } from '../src/domain/texts.mjs'
-import { makeProject, outwardNoteOf, OUT_CHECK_MIN } from '../src/domain/domain.mjs'
+import { makeProject, outwardNoteOf, saturatedLineOf, OUT_CHECK_MIN } from '../src/domain/domain.mjs'
 import { checkDreamAgentPart, tallyDream, renderDreamMd } from '../src/arsi/records.mjs'
 import { specHash } from '../src/engineApi.mjs'
 import { makeTmp } from './tools/synthLedger.mjs'
@@ -198,12 +198,14 @@ describe('向外飽和之宣告(R-REC-29)', function () {
             let d = path.join(t.dir, 'proj')
             st.rsi.root = path.join(d, 'rsi')
             st.rsi.docLimits = false //輪末鉤子之專案文件自動整理(R-REC-17)取本庫自身之 sgud; 測試不得改寫入版控之文件(R-PKG-10)
+            st.rsi.guides = false //本段斷言任務書含 / 不含特定字樣; 任務書末所附之寫法守則為可編輯之檔(可含該等字樣)⇒ 不附(同文字段之 guides: false)
             st.records = { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), trashDir: path.join(d, 'rsi/records/trash'), workDir: path.join(d, 'rsi/work'), toolboxDir: path.join(d, 'rsi/toolbox') }
             st.eval.ledgerDir = path.join(d, 'ledger')
             fs.mkdirSync(st.eval.ledgerDir, { recursive: true })
             fs.writeFileSync(path.join(st.eval.ledgerDir, 'meta.json'), JSON.stringify({ key: 'synth' }), 'utf8')
             let calls = { dream: 0, briefs: [], templates: [] }
-            let ref = { baseId: null, baseArm: null, audits: [], saturated, direction: null }
+            //ref.directions(選配): 做夢所交之方向陣列(可為空陣列 = 0 條); ref.checked(選配): 做夢自報已預先核對而皆無內容之向外候選種數
+            let ref = { baseId: null, baseArm: null, audits: [], saturated, direction: null, directions: null, checked: null }
             let dispatch = async (role, { prompt }) => {
                 if (role !== 'dream') {
                     throw new Error('fake: 節點派工例外')
@@ -216,8 +218,8 @@ describe('向外飽和之宣告(R-REC-29)', function () {
                 calls.templates.push(tpl)
                 let dream = {
                     audits: ref.audits,
-                    synthesis: { summary: '假做夢', worked: [], failed: [], patterns: [], prevDirections: [], overview: { ...good, ...(ref.saturated ? { outwardSaturated: { basis: '向外預先核對 12 種皆無內容' } } : {}) } },
-                    guidance: { directions: [ref.direction || { type: 'verify', newFamily: false, arms: [ref.baseArm], base: ref.baseId, claim: '窗軸於嚴格半庫仍成立', rationale: '驗證', expect: '交付版 = 起點;判定 = 六半皆正' }], avoid: [], openQuestions: [], improvements: [], armProposals: [] },
+                    synthesis: { summary: '假做夢', worked: [], failed: [], patterns: [], prevDirections: [], overview: { ...good, ...(ref.checked ? { outwardChecked: { kinds: ref.checked, files: ['f_pre.json'] } } : {}), ...(ref.saturated ? { outwardSaturated: { basis: '向外預先核對 12 種皆無內容' } } : {}) } },
+                    guidance: { directions: ref.directions || [ref.direction || { type: 'verify', newFamily: false, arms: [ref.baseArm], base: ref.baseId, claim: '窗軸於嚴格半庫仍成立', rationale: '驗證', expect: '交付版 = 起點;判定 = 六半皆正' }], avoid: [], openQuestions: [], improvements: [], armProposals: [] },
                     expansion: [],
                     docsUpdated: [],
                 }
@@ -237,6 +239,8 @@ describe('向外飽和之宣告(R-REC-29)', function () {
             return { P, calls, ref, putExecuted }
         }
         let mixLine = (hk) => hk.lines.find((l) => l.startsWith('任務類型:')) || ''
+        //satLines, 輪末摘要內以「向外飽和」起首之各行(規則 R-REC-46: 已宣告者恰 1 行、未宣告者 0 行)
+        let satLines = (hk) => hk.lines.filter((l) => l.startsWith('向外飽和'))
 
         it('可選之臂皆已試過 + 做夢宣告 ⇒ 任務書列例外之二、範本含 outwardSaturated、摘要記「向外 0(已宣告向外飽和)」、做夢文件列宣告', async () => {
             let { P, calls, ref, putExecuted } = mk({ saturated: true })
@@ -376,6 +380,75 @@ describe('向外飽和之宣告(R-REC-29)', function () {
             assert.equal(calls.dream, 2)
             assert(calls.briefs[1].includes('**例外之二('))
             assert(!mixLine(hk2).includes(OUT_SATURATED_NOTE) && mixLine(hk2).includes('**無向外之方向**'), mixLine(hk2))
+        })
+
+        //「向外飽和」一行(規則 R-REC-46): 配比之附註於預先核對達門檻時記「預先核對皆不成立」、於方向 0 條時為空 ⇒ 看不出做夢已宣告, 故另列一行
+        it('「向外飽和」一行:已宣告者恰列 1 行(緊接配比一列之後;下一輪之方向數取自做夢文件、未試之可選臂數取自套用後之樹);未宣告者不列', async () => {
+            let a = mk({ saturated: true })
+            let all = a.P.selectable.map((x) => x.id)
+            a.ref.baseId = a.putExecuted(all)
+            a.ref.baseArm = all[0]
+            a.P.requestDreamOnly({ why: '重審' })
+            let hk1 = await a.P.domain.hooks.afterRound({ round: 2, nodes: [] })
+            assert.deepEqual(satLines(hk1), [saturatedLineOf({ saturated: true, nExplore: 0, nVerify: 1, nUntried: 0 })], hk1.lines.join(' / ').slice(0, 800))
+            assert.equal(hk1.lines.indexOf(satLines(hk1)[0]), hk1.lines.indexOf(mixLine(hk1)) + 1, '緊接配比一列之後')
+            //未宣告(其餘相同)⇒ 不列
+            let b = mk({ saturated: false })
+            b.ref.baseId = b.putExecuted(b.P.selectable.map((x) => x.id))
+            b.ref.baseArm = all[0]
+            b.P.requestDreamOnly({ why: '重審' })
+            let hk2 = await b.P.domain.hooks.afterRound({ round: 2, nodes: [] })
+            assert.deepEqual(satLines(hk2), [])
+        })
+
+        it('「向外飽和」一行:預先核對達門檻(配比之附註記「預先核對皆不成立」而非宣告)而已宣告 ⇒ 仍列出宣告', async () => {
+            let { P, ref, putExecuted } = mk({ saturated: true })
+            let all = P.selectable.map((a) => a.id)
+            ref.baseId = putExecuted(all)
+            ref.baseArm = all[0]
+            ref.checked = OUT_CHECK_MIN
+            P.requestDreamOnly({ why: '重審' })
+            let hk = await P.domain.hooks.afterRound({ round: 2, nodes: [] })
+            assert(mixLine(hk).includes('預先核對皆不成立') && !mixLine(hk).includes(OUT_SATURATED_NOTE), mixLine(hk))
+            assert.deepEqual(satLines(hk), [saturatedLineOf({ saturated: true, nExplore: 0, nVerify: 1, nUntried: 0 })])
+        })
+
+        it('「向外飽和」一行:方向 0 條(配比之附註為空)而已宣告 ⇒ 仍列出宣告(探索 0、驗證 0)', async () => {
+            let { P, ref, putExecuted } = mk({ saturated: true })
+            let all = P.selectable.map((a) => a.id)
+            ref.baseId = putExecuted(all)
+            ref.baseArm = all[0]
+            ref.directions = []
+            P.requestDreamOnly({ why: '重審' })
+            let hk = await P.domain.hooks.afterRound({ round: 2, nodes: [] })
+            assert(mixLine(hk).endsWith('配比 向外 0、向內 0'), mixLine(hk))
+            assert.deepEqual(satLines(hk), [saturatedLineOf({ saturated: true, nExplore: 0, nVerify: 0, nUntried: 0 })])
+        })
+
+        it('「向外飽和」一行:尚有未試之可選臂而做夢仍宣告 ⇒ 照列宣告並帶未試之臂數(適用與否仍由配比之附註表示:照舊標示)', async () => {
+            let { P, ref, putExecuted } = mk({ saturated: true })
+            let first = P.selectable[0].id
+            ref.baseId = putExecuted([first])
+            ref.baseArm = first
+            P.requestDreamOnly({ why: '重審' })
+            let hk = await P.domain.hooks.afterRound({ round: 2, nodes: [] })
+            assert(mixLine(hk).includes('**無向外之方向**'), mixLine(hk))
+            assert.deepEqual(satLines(hk), [saturatedLineOf({ saturated: true, nExplore: 0, nVerify: 1, nUntried: P.selectable.length - 1 })])
+        })
+    })
+
+    describe('saturatedLineOf(純函數;R-REC-46)', function () {
+        it('已宣告(saturated === true)⇒ 一行:以「向外飽和」起首、含下一輪之方向數與未試之可選臂數(字面值)', () => {
+            assert.equal(saturatedLineOf({ saturated: true, nExplore: 0, nVerify: 1, nUntried: 0 }), '向外飽和:**做夢已宣告**現行資訊範圍內已無可試之向外方向(下一輪之方向 探索 0、驗證 1;未試之可選臂 0 個);其後之出路(新資訊源、新臂、結束搜尋)待主控裁示')
+            let s = saturatedLineOf({ saturated: true, nExplore: 2, nVerify: 3, nUntried: 7 })
+            assert(s.startsWith('向外飽和') && s.includes('探索 2、驗證 3') && s.includes('未試之可選臂 7 個'), s)
+            assert(s.length < 400 && !/\r|\n/.test(s), '單行、不逾一頁摘要之截斷長度(每行取前 400 字)')
+        })
+
+        it('未宣告(saturated 非 true:未給、null、false、字串、1、物件、陣列)⇒ 空字串', () => {
+            for (let saturated of [undefined, null, false, 'true', 1, {}, [true]]) {
+                assert.equal(saturatedLineOf({ saturated, nExplore: 0, nVerify: 1, nUntried: 0 }), '', JSON.stringify(saturated))
+            }
         })
     })
 })

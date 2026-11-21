@@ -31,7 +31,8 @@ describe('起點為別名(選集與較早之節點相同)時之一致處理(規�
         let d = path.join(t.dir, `proj_${Math.random().toString(36).slice(2, 8)}`)
         st.resources = {}
         //docLimits: false —— 輪末鉤子之專案文件自動整理(R-REC-17)取本庫自身之 sgud(FD_ROOT 為模組常數), 測試不得改寫入版控之文件(R-PKG-10)
-        st.rsi = { ...st.rsi, root: path.join(d, 'rsi'), docLimits: false }
+        //maxArmsPerNode: 4 —— 「臂數已滿」之子案以 4 個臂為滿; 明設而不取設定檔之值(設定檔可調, 重產於他處執行時值可不同)
+        st.rsi = { ...st.rsi, root: path.join(d, 'rsi'), docLimits: false, maxArmsPerNode: 4 }
         st.records = { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), trashDir: path.join(d, 'rsi/records/trash'), workDir: path.join(d, 'rsi/work'), toolboxDir: path.join(d, 'rsi/toolbox') }
         st.eval.ledgerDir = path.join(d, 'ledger')
         fs.mkdirSync(st.eval.ledgerDir, { recursive: true })

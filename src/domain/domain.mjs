@@ -80,6 +80,30 @@ let outwardNoteOf = ({ nOut, nDirs, nUntried, nChecked, saturated }) => {
     return `;**無向外之方向**(可選之臂皆已試過;預先核對而皆無內容之向外候選 ${nChecked} 種,未達 ${OUT_CHECK_MIN} 種)`
 }
 
+//saturatedLineOf, 輪末摘要「向外飽和」一行(純函數; 規則 R-REC-46): 做夢本輪於 synthesis.overview.outwardSaturated 宣告(或續存)「現行資訊範圍內已無可試之向外方向」者列一行, 未宣告者回空字串(摘要與改前逐字相同)
+//  配比一列之附註(outwardNoteOf)於預先核對達 OUT_CHECK_MIN 種時優先記「預先核對皆不成立」、於方向 0 條時為空字串 ⇒ 兩種情形皆看不出做夢已宣告, 故另列一行(既有之附註不改)
+//  只陳述宣告與現況(下一輪之方向數、未試之可選臂數), 不判定宣告是否適用(適用與否仍由配比一列之附註表示)
+/**
+ * 產生輪末摘要「向外飽和」一行(純函數)
+ *
+ * 做夢本輪宣告(或續存)「現行資訊範圍內已無可試之向外方向」時回傳一行文字(以「向外飽和」起首),未宣告時回傳空字串。
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {Boolean} [opt.saturated=false] 輸入做夢本輪是否宣告(或續存)向外飽和,只認 true
+ * @param {Number} opt.nExplore 輸入下一輪方向中探索類之條數
+ * @param {Number} opt.nVerify 輸入下一輪方向中驗證類之條數
+ * @param {Number} opt.nUntried 輸入未試之可選臂數
+ * @returns {String} 回傳該行文字,未宣告時為空字串
+ * @example
+ * let s = saturatedLineOf({ saturated: true, nExplore: 0, nVerify: 1, nUntried: 0 })
+ */
+let saturatedLineOf = ({ saturated, nExplore, nVerify, nUntried }) => {
+    if (saturated !== true) {
+        return ''
+    }
+    return `向外飽和:**做夢已宣告**現行資訊範圍內已無可試之向外方向(下一輪之方向 探索 ${nExplore}、驗證 ${nVerify};未試之可選臂 ${nUntried} 個);其後之出路(新資訊源、新臂、結束搜尋)待主控裁示`
+}
+
 //SIGN_WORD, 保留期 / 其他標的之正負號之字樣(規則 R-REC-32; 輪末摘要之機械提示用): 保留期、他標(「其他標的」亦含此二字)、他幣(「其他幣種」亦含此二字)、
 //  holdout(不分大小寫), 或「號」字 —— 但排除與正負號無關之常見複合詞:
 //    前字(編號、代號、序號、符號、記號、括號、字號、型號、帳號 / 賬號、口號、問號、逗號、句號、頓號、冒號、引號、分號、番號、掛號、年號、
@@ -1555,6 +1579,11 @@ let makeProject = (st = getSettings(), inject = {}) => {
             //已宣告向外飽和(synthesis.overview.outwardSaturated; 規則 R-REC-29)⇒ 可選之臂皆已試過時記為「向外 0(已宣告向外飽和)」(nUntried 為套用審計後之樹; 見 untriedOf)
             let outNote = outwardNoteOf({ nOut, nDirs: dirs.length, nUntried, nChecked, saturated: !!(tally.overview && tally.overview.outwardSaturated === true) })
             lines.push(`任務類型:本輪節點 探索 ${ctxNodes.length - nV}、驗證 ${nV};下一輪方向 探索 ${dirs.filter((x) => x.type !== 'verify').length}、驗證 ${dirs.filter((x) => x.type === 'verify').length};配比 向外 ${nOut}、向內 ${dirs.length - nOut}${outNote}`)
+            //向外飽和之宣告(規則 R-REC-46): 做夢本輪已宣告者另列一行(配比之附註於預先核對達門檻或方向 0 條時看不出已宣告); 未宣告者不列(摘要與改前逐字相同)
+            let satLine = saturatedLineOf({ saturated: !!(tally.overview && tally.overview.outwardSaturated === true), nExplore: dirs.filter((x) => x.type !== 'verify').length, nVerify: dirs.filter((x) => x.type === 'verify').length, nUntried })
+            if (satLine) {
+                lines.push(satLine)
+            }
             //整體研判(synthesis.overview; 規則 R-REC-14): 三個判定列入輪末摘要(逐輪比較); 未交者標示; 判定與配比之機械核對 ——
             //  「過於集中」或「局部最佳點之風險高」而探索類之方向中押新家族者(newFamily: true)不到一半者標示(驗證類不計入; 不否決; 由主控看做夢是否言行一致)
             //  以臂 / 層定義之「向外」擋不住「換一個臂、仍是同一家族」, 故此處以做夢自標之 newFamily 核對
@@ -2823,5 +2852,5 @@ let makeProjectOrExit = (st, inject = {}) => {
     }
 }
 
-export { makeProject, makeProjectOrExit, outwardNoteOf, unproposedNoteOf, rebasedNoteOf, prevDirectionOf, signsMentionOf, rankKeyOf, OUT_CHECK_MIN }
+export { makeProject, makeProjectOrExit, outwardNoteOf, saturatedLineOf, unproposedNoteOf, rebasedNoteOf, prevDirectionOf, signsMentionOf, rankKeyOf, OUT_CHECK_MIN }
 export default makeProject
