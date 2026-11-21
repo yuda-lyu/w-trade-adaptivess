@@ -99,8 +99,8 @@ describe('進入檔之拒跑:角色之環境變數與判定表', function () {
         for (let [name, args] of READ_CASES) {
             assert.equal(entryWrites(name, args), false, `${name} ${args.join(' ')}`)
         }
-        //表之鍵 = 4 個命令列 + 13 個工具(只列出內容之工具與 g_eval、g_toolbox 不在表內)
-        assert.deepEqual(Object.keys(ENTRY_RULES).sort(), ['archiveDocs', 'armDecide', 'armInactive', 'backtest', 'briefPreview', 'build', 'buildCatalog', 'fakeRound', 'initProject', 'launch', 'pickStore', 'quota', 'replayCheck', 'roundDigest', 'rsi', 'searchMap', 'smokeDispatch'])
+        //表之鍵 = 4 個命令列 + 14 個工具(只列出內容之工具與 g_eval、g_toolbox 不在表內; libCheck 為主控專用之唯讀工具〔hindsight〕, 規則 R-EV-48)
+        assert.deepEqual(Object.keys(ENTRY_RULES).sort(), ['archiveDocs', 'armDecide', 'armInactive', 'backtest', 'briefPreview', 'build', 'buildCatalog', 'fakeRound', 'initProject', 'launch', 'libCheck', 'pickStore', 'quota', 'replayCheck', 'roundDigest', 'rsi', 'searchMap', 'smokeDispatch'])
         //非陣列之引數視為無引數; 數字引數照字串判
         assert.equal(entryWrites('rsi', null), false)
         assert.equal(entryWrites('armDecide', [5]), true)

@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { getSettings } from '../src/cfg.mjs'
 import { makeTexts } from '../src/domain/texts.mjs'
-import { scanTrace, forbiddenPats } from '../src/domain/verify.mjs'
+import { scanTrace, forbiddenPats, contentHits } from '../src/domain/verify.mjs'
 import { makeTmp, FD_ROOT } from './tools/synthLedger.mjs'
 
 
@@ -91,5 +91,42 @@ describe('節點之禁區涵蓋迴圈驗證之全部原始碼(規則 R-BT-10)', 
         assert(/^let stripSearchPatterns = /m.test(read('verifyCmdScan.mjs')))
         assert(/^let peakHintOf = /m.test(read('verifyEvalHints.mjs')) && /^let twinHintOf = /m.test(read('verifyEvalHints.mjs')))
         assert(/^let EVAL_HINT = Object\.freeze/m.test(read('verifyEvalHints.mjs')), '門檻之常數在判定之檔內')
+    })
+
+    //庫況體檢之程式(規則 R-EV-48 之主控專用工具; 排程第 589 項之主控另加): 其輸出含評估期內全庫之統計(事後資訊), 節點不得執行亦不得讀取或匯入其程式
+    //  規格: ①節點之操作紀錄(指令或路徑)提到 src/domain/libStats.mjs 或 src/tools/libCheck.mjs(含套件裝於 node_modules 者)⇒ 列「觸及禁區: 回測期重放 / 迴圈驗證之程式」(同一條禁區字樣)
+    //    ②執行 tools/libCheck.mjs 照列 R-BT-7 ① 之「執行迴圈之寫檔入口」(節點與做夢皆查; 與各入口之拒跑同一張表)
+    //    ③邊界: 其他 src/domain/ 檔與 src/eval/ 下之檔(含 R-EV-47 之 subsetRule.mjs; 內容只含訓練期與靜態欄之判定)不因此被列(節點得讀評估器之原始碼; 與既有之 R-BT-10 同); 做夢(非節點規則)不列「讀取」
+    //  同一條禁區字樣、同一個標籤(unit-cmdScan 釘死「標籤之清單與次序不變」): 庫況體檢之程式併入既有之「回測期重放 / 迴圈驗證之程式」
+    let LABEL2 = LABEL
+    let EXEC = '執行迴圈之寫檔入口'
+    let hit2 = (issues) => issues.some((x) => x.includes(LABEL2))
+    it('④ 庫況體檢之程式:節點讀取或匯入 src/domain/libStats.mjs、src/tools/libCheck.mjs(路徑與指令;套件裝於 node_modules 者亦然)皆列;執行 tools/libCheck.mjs 照列「執行迴圈之寫檔入口」;其他檔不因此被列', () => {
+        let FD = FD_ROOT.replace(/\\/g, '/')
+        for (let f of ['src/domain/libStats.mjs', 'src/tools/libCheck.mjs']) {
+            assert(hit2(nodeIssues({ file_path: `${FD}/${f}` }, 'Read')), `Read 絕對路徑 ${f}`)
+            assert(hit2(nodeIssues({ filePath: f }, 'Read')), `Read 相對路徑 ${f}`)
+            assert(hit2(nodeIssues({ command: `cat ./${f}` })), `cat ${f}`)
+            assert(hit2(nodeIssues({ command: `head -n 40 node_modules/w-trade-adaptivess/${f}` })), `套件裝於 node_modules: ${f}`)
+            assert(hit2(nodeIssues({ command: `node -e "import('./node_modules/w-trade-adaptivess/${f}').then((m) => console.log(Object.keys(m)))"` })), `內嵌腳本匯入 ${f}`)
+        }
+        //②執行(R-BT-7 ①; 既有之判定): 節點與做夢皆列, 且不另列 LABEL2(執行之指令不含 src/ 路徑時亦照列)
+        for (let c of ['node tools/libCheck.mjs', 'node tools/libCheck.mjs --json --dir-hi 0.8', 'npx node tools/libCheck.mjs']) {
+            assert(nodeIssues({ command: c }).some((x) => x.includes(EXEC)), `節點執行 ${c}`)
+        }
+        //③邊界: 不涵蓋之檔
+        for (let c of ['cat src/domain/texts.mjs', 'cat src/eval/subsetRule.mjs', 'cat src/eval/ledger.mjs', 'cat src/domain/agentEntries.mjs', 'cat src/tools/briefPreview.mjs', 'node g_eval.mjs --pick p.mjs --mode quick --subset side:long']) {
+            assert.equal(hit2(nodeIssues({ command: c })), false, `不列: ${c}`)
+        }
+        assert.equal(hit2(nodeIssues({ file_path: `${FD}/src/eval/subsetRule.mjs` }, 'Read')), false, 'Read src/eval/subsetRule.mjs 不列(同 src/eval/ 之既有檔)')
+        //做夢非節點規則: 禁區字樣之清單(forbiddenPats(…, false))不含此項
+        assert.equal(forbiddenPats(privateRoot, false).some(([, label]) => label === LABEL2), false)
+        assert.equal(forbiddenPats(privateRoot, true).filter(([, label]) => label === LABEL2).length, 1, '標籤之條數不變(同一條字樣,不另增)')
+    })
+
+    it('④ 共用工具區之逐檔檢查(contentHits;節點規則):程式內容匯入 libStats.mjs 或 libCheck.mjs 者列庫況體檢之程式;不提者不列', () => {
+        assert(contentHits('import { libReportOf } from \'../../node_modules/w-trade-adaptivess/src/domain/libStats.mjs\'\nexport default () => libReportOf', privateRoot).includes(LABEL2))
+        assert(contentHits('let m = await import(\'./src/tools/libCheck.mjs\')', privateRoot).includes(LABEL2))
+        assert.equal(contentHits('import { memberLedger } from \'../../src/eval/ledger.mjs\'\nexport default () => 1', privateRoot).includes(LABEL2), false)
     })
 })

@@ -6,7 +6,7 @@ import { FD_ROOT, FD_TMP } from './synthLedger.mjs'
 import { dupIdsOf } from './mutateIds.mjs'
 
 
-//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(verifyCmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); EH 系列為 R-REC-43、R-REC-44(迴圈檢查之提示「單峰交付」「選集與他節點相同」; 判定在 verifyEvalHints.mjs, EH37 之錨點在 verify.mjs 之 dirNodeIdsOf); VZ 系列為 R-BT-10(節點之禁區涵蓋 verify* / backtest* 與任務書之檔名樣式一致)、AW 系列為 R-BT-9(可讀之他節點工作夾三處共用 verify.mjs 之 allowWorkOf; 皆為 Gitea #200 之主控另加); SD 系列為 R-REC-47(任務書之「可疑方向」、資訊來源之三級、量尺句、審組成之一句與合約之判讀名詞; 錨點在 texts.mjs 與 contract/pick-contract.md); 指令解析已自 verify.mjs 搬入 verifyCmdScan.mjs[原 cmdScan.mjs], 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
+//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(verifyCmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); EH 系列為 R-REC-43、R-REC-44(迴圈檢查之提示「單峰交付」「選集與他節點相同」; 判定在 verifyEvalHints.mjs, EH37 之錨點在 verify.mjs 之 dirNodeIdsOf); VZ 系列為 R-BT-10(節點之禁區涵蓋 verify* / backtest* 與任務書之檔名樣式一致)、AW 系列為 R-BT-9(可讀之他節點工作夾三處共用 verify.mjs 之 allowWorkOf; 皆為 Gitea #200 之主控另加); SD 系列為 R-REC-47(任務書之「可疑方向」、資訊來源之三級、量尺句、審組成之一句與合約之判讀名詞; 錨點在 texts.mjs 與 contract/pick-contract.md); SB 系列為 R-EV-47(子庫之規則與 --subset)與 R-EV-48(庫況體檢與其拒跑); 指令解析已自 verify.mjs 搬入 verifyCmdScan.mjs[原 cmdScan.mjs], 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
 //  用法(測試以 quiet-run --lock 執行): node test/tools/mutateBar.mjs [--list] [--check] [--control-only] [--only <id,id…>] [--from <序> --to <序>] [--out <結果.json>]
 //    --check 只核對各變異之錨點(須恰出現一次; all 者至少一次), 不跑測試; 另核全部變異之編號唯一(重複者列出並以非 0 離開; R-PKG-9);未被殺者(survived)為測試之缺口 —— 補測試,不是補斷言(見 sgud/exp 之變異作法)
 //    --control-only 只跑對照(守門之測試與所選變異之優先測試, 不植入變異)並列出所選變異中「無法判定」者, 供不重跑全部變異而盤點分類
@@ -701,9 +701,9 @@ let M = [
     ['EH69', 'src/domain/domain.mjs', [['        try {\n            refreshEvalHints([...nodeIds, ...pending])\n        }\n        catch (err) {', '        {\n            refreshEvalHints([...nodeIds, ...pending])\n        }\n        if (false) {']], ['unit-evalHints']], //處置之後之失敗中斷輪末鉤子
     ['EH70', 'src/domain/domain.mjs', [["let evalHintsAll = typeof inject.evalHints === 'function' ? inject.evalHints : evalHintsOfDocs", 'let evalHintsAll = evalHintsOfDocs']], ['unit-evalHints']], //不採注入之判定
     //── 節點之禁區涵蓋迴圈驗證之全部原始碼(VZ 系列; 規則 R-BT-10; Gitea #200 之主控另加 2、4): 禁區字樣之 verify 起首之涵蓋、任務書之檔名樣式與之一致 ──
-    ['VZ01', 'src/domain/verify.mjs', [["+(backtest|verify)/i, '回測期重放 / 迴圈驗證之程式'", "+(backtest|verify\\.mjs)/i, '回測期重放 / 迴圈驗證之程式'"]], ['unit-verifyZone']], //禁區只涵蓋 verify.mjs 單檔(verifyCmdScan.mjs、verifyEvalHints.mjs 不涵蓋)
-    ['VZ02', 'src/domain/verify.mjs', [["+(backtest|verify)/i, '回測期重放 / 迴圈驗證之程式'", "+(backtest)/i, '回測期重放 / 迴圈驗證之程式'"]], ['unit-verifyZone']], //禁區不含 verify 起首者
-    ['VZ03', 'src/domain/verify.mjs', [["+(backtest|verify)/i, '回測期重放 / 迴圈驗證之程式'", "+(verify)/i, '回測期重放 / 迴圈驗證之程式'"]], ['unit-verifyZone']], //禁區不含 backtest 起首者
+    ['VZ01', 'src/domain/verify.mjs', [["(?:backtest|verify|libStats)|tools", "(?:backtest|verify\\.mjs|libStats)|tools"]], ['unit-verifyZone']], //禁區只涵蓋 verify.mjs 單檔(verifyCmdScan.mjs、verifyEvalHints.mjs 不涵蓋; 錨點隨 R-BT-10 ④ 併入庫況體檢之程式而更新, 語意不變)
+    ['VZ02', 'src/domain/verify.mjs', [["(?:backtest|verify|libStats)|tools", "(?:backtest|libStats)|tools"]], ['unit-verifyZone']], //禁區不含 verify 起首者
+    ['VZ03', 'src/domain/verify.mjs', [["(?:backtest|verify|libStats)|tools", "(?:verify|libStats)|tools"]], ['unit-verifyZone']], //禁區不含 backtest 起首者
     ['VZ04', 'src/domain/texts.mjs', [["codeRel + '/verify*.mjs`", "codeRel + '/verify.mjs`"]], ['unit-verifyZone']], //任務書只寫 verify.mjs 單檔(與禁區字樣不一致)
     ['VZ05', 'src/domain/texts.mjs', [["'/backtest*.mjs`、`' + codeRel", "'/backtest.mjs`、`' + codeRel"]], ['unit-verifyZone']], //任務書之 backtest 樣式改為單檔
     ['VZ06', 'src/domain/texts.mjs', [["codeRel + '/verify*.mjs` —— 評估時", "codeRel + '/verify*.mjs`、`' + codeRel + '/cmdScan.mjs` —— 評估時"]], ['unit-verifyZone']], //任務書另列禁區字樣未涵蓋之檔名
@@ -809,6 +809,65 @@ let M = [
     ['SD39', 'contract/pick-contract.md', [["內容 = 組成對照之超額;同一個模組、同一種對照", "內容 = S;同一個模組、同一種對照"]], ['unit-texts']], //合約之內容定義改為 S
     ['SD40', 'contract/pick-contract.md', [["它與「同比例、隨機時機之安慰劑」不同 —— 後者保留成品之狀態比例、只打亂時機。", ""]], ['unit-texts']], //合約缺側別中性與安慰劑之區分句
     ['SD41', 'contract/pick-contract.md', [["換一批成員重算同一個模組", "換一批參數重算同一個模組"]], ['unit-texts']], //合約之組成位移不是換成員
+    //── 子庫之規則(規則 R-EV-47; subsetRule.mjs、ledger.mjs、cli/eval.mjs、verifyEvalHints.mjs)與庫況體檢(規則 R-EV-48; libStats.mjs、agentEntries.mjs、tools/libCheck.mjs)──
+    ['SB01', 'src/eval/subsetRule.mjs', [["uOf(s, r.salt) >= 1 - r.p))", "uOf(s, r.salt) >= r.p))"]], ['unit-subsetLedger']], //rand 之乙側取 u ≥ p(p ≠ 0.5 時與 1 − p 不同)
+    ['SB02', 'src/eval/subsetRule.mjs', [["r.lo === null ? null : Math.fround(r.lo)", "r.lo === null ? null : r.lo"]], ['unit-subsetLedger']], //下界不取 fround(漏掉存成 float32 之界值)
+    ['SB03', 'src/eval/subsetRule.mjs', [["let inBand = (v, lo, hi) => (lo === null || v >= lo) && (hi === null || v <= hi)", "let inBand = (v, lo, hi) => (lo === null || v > lo) && (hi === null || v <= hi)"]], ['unit-subsetLedger']], //下界不含
+    ['SB04', 'src/eval/subsetRule.mjs', [["if (L.ent[j] >= fromBar && L.ext[j] >= 0 && L.ext[j] < toBar) {", "if (L.ent[j] >= fromBar && L.ext[j] >= 0 && L.ent[j] < toBar) {"]], ['unit-subsetLedger']], //hold 計入出場在訓練期終點之後之單(只看進場)
+    ['SB05', 'src/eval/subsetRule.mjs', [["if (L.ent[j] >= fromBar && L.ext[j] >= 0 && L.ext[j] < toBar) {", "if (L.ext[j] >= 0 && L.ext[j] < toBar) {"]], ['unit-subsetLedger']], //hold 不看訓練期之下界
+    ['SB06', 'src/eval/subsetRule.mjs', [["return k % 2 ? ds[(k - 1) / 2] : (ds[k / 2 - 1] + ds[k / 2]) / 2", "return ds[Math.floor(k / 2)]"]], ['unit-subsetLedger']], //偶數筆取中間偏高之一數
+    ['SB07', 'src/eval/subsetRule.mjs', [["return d !== null && inBand(d, r.lo, r.hi)", "return d === null || inBand(d, r.lo, r.hi)"]], ['unit-subsetLedger']], //無單者留下
+    ['SB08', 'src/eval/subsetRule.mjs', [["(isLong(s) !== (r.side === 'long') ? true : uOf(s, r.salt) < r.p)", "(isLong(s) !== (r.side === 'long') ? false : uOf(s, r.salt) < r.p)"]], ['unit-subsetLedger']], //siderand 去除另一側
+    ['SB09', 'src/eval/subsetRule.mjs', [["return segs.length > N ? segs.slice(N).join('_') : ''", "return segs.length > N ? segs.slice(N + 1).join('_') : ''"]], ['unit-subsetLedger']], //家族多去一段
+    ['SB10', 'src/eval/subsetRule.mjs', [["let order = [...cnt.entries()].sort((a, b) => (b[1] - a[1]) ||", "let order = [...cnt.entries()].sort((a, b) => (a[1] - b[1]) ||"]], ['unit-subsetLedger']], //nofam:top 由少到多
+    ['SB11', 'src/eval/subsetRule.mjs', [["if (n === 0 || nRem / n >= r.ratio) {", "if (n === 0) {"]], ['unit-subsetLedger']], //nofam:top 不停(去除全部家族)
+    ['SB12', 'src/eval/subsetRule.mjs', [["return `rand:${String(r.p)}:0x${r.salt.toString(16)}:${r.half}`", "return `rand:${String(r.p)}:0x${r.salt.toString(16)}`"]], ['unit-subsetLedger']], //正規化不補半
+    ['SB13', 'src/eval/subsetRule.mjs', [["if ((lo === null && hi === null) || (lo !== null && hi !== null && lo > hi)) {", "if (lo !== null && hi !== null && lo > hi) {"]], ['unit-subsetLedger']], //兩端皆空亦收
+    ['SB14', 'src/eval/subsetRule.mjs', [["let famsOf = (N) => {", "let famsOf = (N0) => {\n        let N = N0 === 0 ? 0 : 3"]], ['unit-subsetLedger']], //nofam 之 N 不依所給(恆為 3)
+    ['SB15', 'src/eval/ledger.mjs', [["return gatherLedger(L, sel, { subset: ObjectFreeze({ rule, nFull: nFullOf(L) }) })", "return gatherLedger(L, sel, { subset: ObjectFreeze({ rule, nFull: L.n }) })"]], ['unit-subsetLedger']], //半庫內再取之 nFull 取半庫之隻數
+    ['SB16', 'src/eval/ledger.mjs', [["        if (sel[s] !== 0 && sel[s] !== 1) {", "        if (false) {"]], ['unit-subsetLedger']], //遮罩之值不檢
+    ['SB17', 'src/eval/ledger.mjs', [["let nFullOf = (L) => (L.member ? L.member.nFull : (L.subset ? L.subset.nFull : L.n))", "let nFullOf = (L) => (L.member ? L.member.nFull : L.n)"]], ['unit-subsetLedger']], //子庫之 nFull 不沿用
+    ['SB18', 'src/cli/eval.mjs', [["    if (memberArg !== null) {", "    if (false) {"]], ['unit-subsetLedger']], //與 --member 併用不拒
+    ['SB19', 'src/cli/eval.mjs', [["process.argv.filter((a) => a === '--subset').length > 1 || subsetArg === true ? null", "subsetArg === true ? null"]], ['unit-subsetLedger']], //旗標重複不拒
+    ['SB20', 'src/cli/eval.mjs', [["...(subset ? { subset: subset.rule } : {}), ...(waitedSec", "...(waitedSec"]], ['unit-subsetLedger']], //評估紀錄不帶 subset
+    ['SB21', 'src/cli/eval.mjs', [["...(subset ? { subset: { rule: subset.rule } } : {}) })", "})"]], ['unit-subsetLedger']], //失敗之結果檔不帶 subset
+    ['SB22', 'src/cli/eval.mjs', [["    L = subsetLedger(Lfull, sm.sel, subset.rule)", "    void sm"]], ['unit-subsetLedger']], //不套用子庫(以全庫評估)
+    ['SB23', 'src/domain/verifyEvalHints.mjs', [["        if (j.subset !== undefined && j.subset !== null) {", "        if (false) {"]], ['unit-subsetLedger']], //機械提示計入子庫之列
+    ['SB24', 'src/domain/agentEntries.mjs', [["    libCheck: { label: 'tools/libCheck.mjs', writes: always, hindsight: true },", "    libCheck: { label: 'tools/libCheck.mjs', writes: always },"]], ['unit-libCheck']], //拒跑之理由用寫檔之一句
+    ['SB25', 'src/domain/agentEntries.mjs', [["    libCheck: { label: 'tools/libCheck.mjs', writes: always, hindsight: true },", "    libCheck: { label: 'tools/libCheck.mjs', writes: () => false, hindsight: true },"]], ['unit-libCheck']], //agent 不拒跑
+    ['SB26', 'src/domain/libStats.mjs', [["((wl >= hi && ws <= lo) || (ws >= hi && wl <= lo))", "(wl >= hi && ws <= lo)"]], ['unit-libCheck']], //只認做多側高
+    ['SB27', 'src/domain/libStats.mjs', [["((wl >= hi && ws <= lo) ||", "((wl > hi && ws <= lo) ||"]], ['unit-libCheck']], //高側之門檻不含
+    ['SB28', 'src/domain/libStats.mjs', [["let cuts = [evFrom, evFrom + Math.floor(len / 3),", "let cuts = [evFrom, evFrom + Math.floor(len / 4),"]], ['unit-libCheck']], //三等分之界錯
+    ['SB29', 'src/domain/libStats.mjs', [["if (L.ent[j] < w.fromBar || L.ent[j] >= w.toBar) {", "if (L.ent[j] < w.fromBar || L.ent[j] > w.toBar) {"]], ['unit-libCheck']], //期之終點含
+    ['SB30', 'src/domain/libStats.mjs', [["winRate: o[k].closed ? r4(o[k].wins / o[k].closed) : null", "winRate: o[k].closed ? r4(o[k].wins / o[k].orders) : null"]], ['unit-libCheck']], //勝率之分母含未結之單
+    ['SB31', 'src/domain/libStats.mjs', [["profitFactor: o[k].neg > 0 ? r4(o[k].pos / o[k].neg) : null", "profitFactor: o[k].neg > 0 ? r4(o[k].pos / (o[k].pos + o[k].neg)) : null"]], ['unit-libCheck']], //獲利因子之分母錯
+    ['SB32', 'src/domain/libStats.mjs', [["out[isLong(s) ? 'long' : 'short'].push((c / days) * 30)", "out[isLong(s) ? 'long' : 'short'].push((c / days) * 7)"]], ['unit-libCheck']], //進場頻率以 7 日計
+    ['SB33', 'src/domain/libStats.mjs', [["let xs = [...m.values()].sort((a, b) => a.value - b.value)", "let xs = [...m.values()].sort((a, b) => b.value - a.value)"]], ['unit-libCheck']], //候選值由大到小
+    ['SB34', 'src/domain/libStats.mjs', [["let d = holdMedianOf(L, s, trainFrom, trainEnd)", "let d = holdMedianOf(L, s, 0, trainEnd)"]], ['unit-libCheck']], //各策略之中位不看訓練期之下界
+    ['SB35', 'src/tools/libCheck.mjs', [["    if (!(x >= 0 && x <= 1)) {", "    if (!(x >= 0)) {"]], ['unit-libCheck']], //門檻之參數不檢上界
+    ['SB36', 'src/tools/libCheck.mjs', [["    trainFrom = f === null ? 0 : f", "    trainFrom = 300"]], ['unit-libCheck']], //訓練期之下界不取設定
+    ['SB37', 'src/eval/ledger.mjs', [["return gatherLedger(L, sel, { member: ObjectFreeze({ salt: saltV, half: halfV, nFull: nFullOf(L) }) })", "return gatherLedger(L, sel, { member: ObjectFreeze({ salt: saltV, half: halfV, nFull: L.n }) })"]], ['unit-memberLedger', 'unit-subsetLedger']], //半庫之重組改經 gatherLedger 後: 半庫內再切之 nFull 取半庫之隻數
+    ['SB38', 'src/eval/subsetRule.mjs', [["        let N = nOf(a[1])", "        let N = 3"]], ['unit-subsetLedger']], //nofam 之 N 不依所給(回到寫死之預設)
+    ['SB39', 'src/eval/subsetRule.mjs', [["return `nofam:${r.N}:${r.family}`", "return `nofam:${r.family}:${r.N}`"]], ['unit-subsetLedger']], //正規化之字串之 N 與家族之次序錯
+    ['SB40', 'src/domain/libStats.mjs', [["let d = holdMedianOf(L, s, trainFrom, trainEnd)", "let d = holdMedianOf(L, s, trainFrom, L.nBars)"]], ['unit-libCheck']], //各策略之中位計入出場在訓練期之後之單
+    ['SB41', 'src/domain/texts.mjs', [["分層者以 `g_eval.mjs --subset <規則>` 評估;隨機半庫照舊可用 `--member`,或 `--subset rand:…`", "`--member` 只切隨機半庫,分層者以模組內排除該類成員之版本另評估"]], ['unit-texts']], //做夢任務書之分層子庫回到改前之句(不指向 --subset)
+    ['SB42', 'contract/pick-contract.md', [["分層者以 `g_eval.mjs --subset <規則>` 評估;隨機半庫照舊可用 `--member`,或 `--subset rand:…`", "`--member` 只切隨機半庫,分層者以模組內排除該類成員之版本另評估"]], ['unit-texts']], //合約之組成位移回到改前之句
+    //── 節點之禁區涵蓋庫況體檢之程式(R-BT-10 ④; 排程第 589 項之主控另加)──
+    ['SB43', 'src/domain/verify.mjs', [["(?:backtest|verify|libStats)|tools", "(?:backtest|verify)|tools"]], ['unit-verifyZone']], //禁區不含 src/domain/libStats.mjs(節點可讀取或匯入庫況體檢之計算)
+    ['SB44', 'src/domain/verify.mjs', [["libCheck)/i, '回測期重放 / 迴圈驗證之程式'", "libCheckX)/i, '回測期重放 / 迴圈驗證之程式'"]], ['unit-verifyZone']], //禁區不含 src/tools/libCheck.mjs
+    //── 排程第 589 項之接續輪(主控另加): 帶等號之 --subset= / --member= 拒收、空子庫之警示、libCheck 之設定讀不到(R-EV-47、R-EV-48)──
+    ['SB45', 'src/cli/eval.mjs', [["if (process.argv.some((a) => a.startsWith('--subset='))) {", "if (false) {"]], ['unit-subsetLedger']], //帶等號之 --subset= 不拒(靜默忽略而以全庫評估)
+    ['SB46', 'src/cli/eval.mjs', [["if (process.argv.some((a) => a.startsWith('--member='))) {", "if (false) {"]], ['unit-subsetLedger']], //帶等號之 --member= 不拒
+    ['SB47', 'src/cli/eval.mjs', [["a.startsWith('--subset=')", "a === '--subset='"]], ['unit-subsetLedger']], //只拒空值之 --subset=(帶值者不拒)
+    ['SB48', 'src/cli/eval.mjs', [["(a) => a.startsWith('--member='))", "(a) => a.startsWith('--subset='))"]], ['unit-subsetLedger']], //--member= 之檢查誤認為 --subset=(--member= 不拒, 且訊息錯置)
+    ['SB49', 'src/cli/eval.mjs', [["    if (subset.n === 0) {", "    if (subset.n === 1) {"]], ['unit-subsetLedger']], //空子庫不警示而留 1 隻者警示
+    ['SB50', 'src/cli/eval.mjs', [["    if (subset.n === 0) {", "    if (subset.n >= 0) {"]], ['unit-subsetLedger']], //留 ≥ 1 隻者亦警示
+    ['SB51', 'src/cli/eval.mjs', [["    if (subset.n === 0) {", "    if (false) {"]], ['unit-subsetLedger']], //空子庫不警示
+    ['SB52', 'src/tools/libCheck.mjs', [["或設定 ARSI_ROOT`)\n    process.exit(2)", "或設定 ARSI_ROOT`)\n    process.exit(1)"]], ['unit-libCheck']], //設定讀不到之離開碼不為 2
+    ['SB53', 'src/tools/libCheck.mjs', [["catch (err) {\n    console.log(`ERROR 無法讀取專案設定", "catch (err) {\n    throw err\n    console.log(`ERROR 無法讀取專案設定"]], ['unit-libCheck']], //設定讀不到不捕捉(未捕捉之例外,離開碼 1)
+    ['SB54', 'src/tools/libCheck.mjs', [["catch (err) {\n    console.log(`ERROR 無法讀取專案設定", "catch (err) {\n    if (!(err && err.code === 'ENOENT')) {\n        throw err\n    }\n    console.log(`ERROR 無法讀取專案設定"]], ['unit-libCheck']], //只捕捉檔案不存在(資料夾、不合法之 JSON、缺欄位仍為未捕捉之例外)
+    ['SB55', 'src/tools/libCheck.mjs', [["${P('settings.json')});請於", "${String((err && err.message) || err).split('\\n')[0]});請於"]], ['unit-libCheck']], //訊息改帶原錯誤之內容(JSON 之解析錯誤會回顯檔案之內容)
+    ['SB56', 'src/tools/libCheck.mjs', [["${P('settings.json')});請於", "settings.json);請於"]], ['unit-libCheck']], //訊息不帶 settings.json 之路徑
 ]
 
 let args = process.argv.slice(2)

@@ -34,7 +34,7 @@ let rsiWrites = (args) => {
     }
     return true
 }
-//ENTRY_RULES, 名稱 → { label(拒跑訊息所用; 不含輸入值), writes(args) → 布林 }
+//ENTRY_RULES, 名稱 → { label(拒跑訊息所用; 不含輸入值), writes(args) → 布林, hindsight?(true = 主控專用之唯讀工具: 輸出含事後資訊, agent 亦拒跑, 理由另為一句) }
 //  命令列: rsi(g_rsi.mjs)、launch(g_launch.mjs; 起脫離之子行程)、build(g_build.mjs; 寫帳本)、backtest(g_backtest.mjs; 迴圈專用);
 //  工具(tools/<名>.mjs; initProject 為 src/tools/initProject.mjs 之直接執行): 寫狀態根或專案之檔、派工或起迴圈專用之評估者; 只列出內容者(無引數、未給寫出之旗標、initProject --dry)照常
 let always = () => true
@@ -56,10 +56,12 @@ let ENTRY_RULES = {
     briefPreview: { label: 'tools/briefPreview.mjs --out', writes: (args) => has(args, '--out') },
     quota: { label: 'tools/quota.mjs --probe', writes: (args) => has(args, '--probe') },
     roundDigest: { label: 'tools/roundDigest.mjs --out', writes: (args) => has(args, '--out') },
+    //主控專用之唯讀工具(hindsight: 輸出含評估期內全庫之統計 = 事後資訊; 規則 R-EV-48): 不寫檔, 但 agent 一律拒跑, 理由另為一句
+    libCheck: { label: 'tools/libCheck.mjs', writes: always, hindsight: true },
 }
 
 /**
- * 進入檔(命令列名或工具名)以 args 執行時是否寫專案之檔或起行程(agent 不得執行者);不在表內之名稱(g_eval.mjs、g_toolbox.mjs、唯讀之工具)回 false
+ * 進入檔(命令列名或工具名)以 args 執行時是否寫專案之檔或起行程,或為主控專用之工具(agent 不得執行者);不在表內之名稱(g_eval.mjs、g_toolbox.mjs、唯讀之工具)回 false
  *
  * @param {String} name 輸入進入檔之名稱(rsi、launch、build、backtest 或工具名,如 pickStore)
  * @param {Array<String>} [args=[]] 輸入進入檔之後之命令列引數
@@ -91,7 +93,11 @@ let guardEntry = (name, args = process.argv.slice(2), { env = process.env, log =
     if (!role || !entryWrites(name, args)) {
         return false
     }
-    log(`拒跑: ${ENTRY_RULES[name].label} 會寫入專案之檔或起行程, 不得由 agent 執行(${AGENT_ROLE_ENV}=${role}; 評估用 g_eval.mjs, 共用工具區之自檢用 g_toolbox.mjs)`)
+    //主控專用之唯讀工具(hindsight)另一句理由: 不寫檔, 拒跑之因是其輸出含事後資訊
+    let msg = ENTRY_RULES[name].hindsight === true
+        ? `拒跑: ${ENTRY_RULES[name].label} 之輸出含評估期內全庫之統計(事後資訊), 只供主控使用, 不得由 agent 執行(${AGENT_ROLE_ENV}=${role}; 評估用 g_eval.mjs, 共用工具區之自檢用 g_toolbox.mjs)`
+        : `拒跑: ${ENTRY_RULES[name].label} 會寫入專案之檔或起行程, 不得由 agent 執行(${AGENT_ROLE_ENV}=${role}; 評估用 g_eval.mjs, 共用工具區之自檢用 g_toolbox.mjs)`
+    log(msg)
     exit(2)
     return true
 }

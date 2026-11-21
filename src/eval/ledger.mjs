@@ -198,9 +198,13 @@ let tieBaseOf = (idx) => {
     return (x ^ (x >>> 16)) >>> 0
 }
 
-//memberOf, 策略是否屬於某一半(成員重抽; 規則 R-EV-40): 以其同分次鍵之基底與鹽之雜湊切半 ——
-//  ((Math.imul(tie ^ salt, 2654435761) >>> 0) / 4294967296) < 0.5 者為甲半(half 0), 其餘為乙半(half 1); 換鹽 = 換一種切法
-let memberOf = (tieBase, salt, half) => (((MathImul(tieBase ^ salt, 2654435761) >>> 0) / 4294967296) < 0.5) === (half === 0)
+//memberUOf, 策略之同分次鍵之基底與鹽之雜湊所得之 [0, 1) 之值(成員重抽與子庫之 rand / siderand 共用; 規則 R-EV-40、R-EV-47)
+//  = (Math.imul(tie ^ salt, 2654435761) >>> 0) / 4294967296; 換鹽 = 換一種切法
+let memberUOf = (tieBase, salt) => (MathImul(tieBase ^ salt, 2654435761) >>> 0) / 4294967296
+//memberOf, 策略是否屬於某一半(成員重抽; 規則 R-EV-40): memberUOf < 0.5 者為甲半(half 0), 其餘為乙半(half 1)
+let memberOf = (tieBase, salt, half) => (memberUOf(tieBase, salt) < 0.5) === (half === 0)
+//nFullOf, 帳本所出自之全庫之隻數: 半庫帳本(member)或子庫帳本(subset)取其所記者, 全庫取 n
+let nFullOf = (L) => (L.member ? L.member.nFull : (L.subset ? L.subset.nFull : L.n))
 
 /**
  * 半庫帳本之 srcIdx(各策略於全庫之序號)是否合格: 型別以內部槽判定為 Int32Array(不看原型鏈; 同 L.ntStatic)、長度 n、全為 0 以上
@@ -224,7 +228,7 @@ let isSrcIdx = (srcIdx, n) => {
     return true
 }
 
-//isLedgerShape, memberLedger 之入口檢查: 帳本物件之逐策略欄、逐單欄、進場規則之各條件之型別(內部槽)與長度須相符(讀取之區段不得超出)
+//isLedgerShape, memberLedger 與 subsetLedger 之入口檢查: 帳本物件之逐策略欄、逐單欄、進場規則之各條件之型別(內部槽)與長度須相符(讀取之區段不得超出)
 //  型別對照 loadLedger 之讀入; keySym / keyTh / keyOr 於舊帳本為 null(皆可); 起訖欄(off、keyOff)自 0 起且不遞減; 逐單與條件欄之長度不得短於其起訖欄之終點
 //  帳本為評估器自己之資料(loadLedger 之回傳; 挑選模組與擴充診斷碰不到): 本檢查為防呆(手組或損毀之帳本), 不處理「呼叫端以存取子在檢查後改內建物件」之情形(同 loadLedger / makeEvaluator 對呼叫端之信任)
 let isLedgerShape = (L) => {
@@ -262,7 +266,8 @@ let isLedgerShape = (L) => {
         //基礎單位(規則 R-EV-43): unitN 與 unit 須同時有或同時無(只有其一者, 全庫建評估器即拒絕, 半庫亦不得靜默以每單 1 單位評估)
         ((L.unitN === undefined || L.unitN === null) === (L.unit === undefined || L.unit === null)) &&
         (L.unitN === undefined || L.unitN === null || colOk(L.unitN, 'Float64Array', L.nBars)) &&
-        (L.member === undefined || L.member === null || (typeof L.member === 'object' && NumberIsInteger(L.member.nFull) && L.member.nFull >= n))
+        (L.member === undefined || L.member === null || (typeof L.member === 'object' && NumberIsInteger(L.member.nFull) && L.member.nFull >= n)) &&
+        (L.subset === undefined || L.subset === null || (typeof L.subset === 'object' && NumberIsInteger(L.subset.nFull) && L.subset.nFull >= n))
 }
 
 /**
@@ -308,10 +313,23 @@ let memberLedger = (L, salt, half) => {
     let src0 = L.srcIdx === undefined || L.srcIdx === null ? null : L.srcIdx
     //成員: 依各策略於全庫之序號(已是半庫者取其 srcIdx)之同分次鍵之基底切半
     let sel = new Uint8ArrayCtor(n0)
-    let n = 0
     for (let s = 0; s < n0; s++) {
         if (memberOf(tieBaseOf(src0 === null ? s : src0[s]), saltV, halfV)) {
             sel[s] = 1
+        }
+    }
+    return gatherLedger(L, sel, { member: ObjectFreeze({ salt: saltV, half: halfV, nFull: nFullOf(L) }) })
+}
+
+//gatherLedger, 依遮罩(sel[s] === 1 者留)重組帳本(半庫帳本 memberLedger 與子庫帳本 subsetLedger 共用; 規則 R-EV-40、R-EV-47)
+//  呼叫端已於入口比對內建物件並檢查 L 之形; 其後同步執行, 複製只以索引讀寫定型陣列與擷取之建構子
+//  tag = 標記之欄({ member } 或 { subset }; 置於 srcIdx 之後)
+let gatherLedger = (L, sel, tag) => {
+    let n0 = L.n
+    let src0 = L.srcIdx === undefined || L.srcIdx === null ? null : L.srcIdx
+    let n = 0
+    for (let s = 0; s < n0; s++) {
+        if (sel[s] === 1) {
             n++
         }
     }
@@ -392,7 +410,7 @@ let memberLedger = (L, salt, half) => {
         keyOr: key.outs[3],
         seriesNames: L.seriesNames,
         srcIdx,
-        member: ObjectFreeze({ salt: saltV, half: halfV, nFull: L.member ? L.member.nFull : n0 }),
+        ...tag,
     }
     //逐棒之欄與原帳本共用(延遲讀取者仍於首次取用時才由原帳本載入, 其載入前之內建物件比對亦在原帳本內)
     //  基礎單位之每根棒之名義(規則 R-EV-43; 有者才帶)亦為逐棒之欄 ⇒ 共用
@@ -404,6 +422,42 @@ let memberLedger = (L, salt, half) => {
     Object.defineProperty(M, 'ser', { enumerable: false, configurable: true, get: () => L.ser })
     setExitCols(M)
     return M
+}
+
+/**
+ * 子庫帳本: 依遮罩只留一部分之策略, 回傳重新編號之帳本物件(不改動傳入之帳本; 規則 R-EV-47; 命令列 g_eval.mjs --subset 之帳本)
+ * 各逐策略欄、逐棒之欄、srcIdx 之作法同 memberLedger(同一段重組; 半庫帳本即遮罩為「切半之該半」之子庫); 另帶凍結之 subset{ rule, nFull }
+ * 遮罩由 src/eval/subsetRule.mjs 之 subsetMaskOf 依規則求得; 訓練期之進場數須於其後另給(L.ntStatic = ntStaticOf(子庫帳本, 訓練期之終點棒序))
+ * 入口先比對受保護之內建物件; 參數不合者拋錯(訊息不帶輸入值)
+ *
+ * @param {Object} L 輸入由 loadLedger 取得之帳本物件(亦可為半庫或子庫帳本: 於其內再取, srcIdx 與 subset.nFull 仍指全庫)
+ * @param {Uint8Array} sel 輸入遮罩(長度 L.n; 1 = 留、0 = 去)
+ * @param {String} rule 輸入所用之規則之字串(記於 subset.rule; 非空字串)
+ * @returns {Object} 回傳子庫帳本物件, 欄位同 loadLedger 之回傳(不含 ntStatic), 另含 srcIdx 與 subset({ rule, nFull }; 凍結)
+ * @example
+ * let L = loadLedger('./data/ledger/eval')
+ * let sel = new Uint8Array(L.n).fill(1)
+ * sel[0] = 0
+ * let S = subsetLedger(L, sel, 'side:long')
+ * console.log(S.n, S.subset.nFull)
+ */
+let subsetLedger = (L, sel, rule) => {
+    assertIntrinsics('ledger-load')
+    if (!isLedgerShape(L)) {
+        throw new ErrorCtor('invalid L: must be a ledger object (see loadLedger and memberLedger)')
+    }
+    if (TypedArrayPrototypeGetToStringTag(sel) !== 'Uint8Array' || TypedArrayPrototypeGetLength(sel) !== L.n) {
+        throw new ErrorCtor('invalid sel: must be a Uint8Array of length L.n with values 0 or 1')
+    }
+    for (let s = 0; s < L.n; s++) {
+        if (sel[s] !== 0 && sel[s] !== 1) {
+            throw new ErrorCtor('invalid sel: must be a Uint8Array of length L.n with values 0 or 1')
+        }
+    }
+    if (typeof rule !== 'string' || rule.length === 0) {
+        throw new ErrorCtor('invalid rule: must be a non-empty string')
+    }
+    return gatherLedger(L, sel, { subset: ObjectFreeze({ rule, nFull: nFullOf(L) }) })
 }
 
 //ids, 策略序號 → 策略檔名(需要時才讀)
@@ -421,5 +475,5 @@ let loadIds = (dir) => {
 }
 
 
-export { loadLedger, loadIds, tieBaseOf, isSrcIdx, memberLedger }
+export { loadLedger, loadIds, tieBaseOf, isSrcIdx, memberLedger, memberUOf, subsetLedger }
 export default loadLedger

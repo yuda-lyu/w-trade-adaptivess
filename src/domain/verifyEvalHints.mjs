@@ -33,7 +33,7 @@ let evalHintBody = (s) => {
     return t.endsWith(HINT_TAIL) ? t.slice(0, t.length - HINT_TAIL.length) : t
 }
 //fullRowsOf, 評估紀錄之各列(原文)→ 兩條提示所計之列 [{ pick, selHash, S }](依檔內之次序): 成功(ok === true)、完整評估(mode === 'full')、評估期(無 period 或為 backtest)、
-//  不帶成員抽樣(無 member)、有選集指紋(非空字串)且不是參考檔(isRefPick)之列; S 非有限數值者記 null; 無法解析之列略過; lines 非陣列者回 []
+//  不帶成員抽樣(無 member)、不帶子庫(無 subset; 規則 R-EV-47)、有選集指紋(非空字串)且不是參考檔(isRefPick)之列; S 非有限數值者記 null; 無法解析之列略過; lines 非陣列者回 []
 let fullRowsOf = (lines) => {
     let out = []
     for (let l of Array.isArray(lines) ? lines : []) {
@@ -48,6 +48,10 @@ let fullRowsOf = (lines) => {
             continue
         }
         if (!j || j.ok !== true || j.mode !== 'full' || (j.period && j.period !== 'backtest') || (j.member !== undefined && j.member !== null) || typeof j.selHash !== 'string' || !j.selHash || isRefPick(j.pick)) {
+            continue
+        }
+        //子庫之評估(--subset; 規則 R-EV-47)同成員抽樣: 不是正本之評估, 不計
+        if (j.subset !== undefined && j.subset !== null) {
             continue
         }
         out.push({ pick: typeof j.pick === 'string' ? j.pick : '', selHash: j.selHash, S: typeof j.S === 'number' && Number.isFinite(j.S) ? j.S : null })

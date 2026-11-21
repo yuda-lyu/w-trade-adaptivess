@@ -174,7 +174,9 @@ let forbiddenPats = (privateRoot, nodeRules = false) => [
     ...GUARD_EXTRA,
     //整批封存之舊制紀錄(夾名形如 archive_<八位日期>_regime<n>): 其節點、做夢文件與經驗不得作為現行制之參考
     [/archive_\d{8}_regime\d*/i, '舊制之備份'],
-    ...(nodeRules ? [[/(?:lib|src)[\\/]+domain[\\/]+(backtest|verify)/i, '回測期重放 / 迴圈驗證之程式']] : []),
+    //  同一條、同一標籤: 迴圈驗證之程式(src/domain/verify*、backtest*)與庫況體檢之程式(src/domain/libStats.mjs、src/tools/libCheck.mjs; 規則 R-EV-48、R-BT-10 ④)
+    //  —— 後者之輸出含評估期內全庫之統計(事後資訊), 節點不得讀取或匯入其程式; 執行 tools/libCheck.mjs 另由「執行迴圈之寫檔入口」(R-BT-7 ①)與入口之拒跑(R-RUN-11)擋
+    ...(nodeRules ? [[/(?:lib|src)[\\/]+(?:domain[\\/]+(?:backtest|verify|libStats)|tools[\\/]+libCheck)/i, '回測期重放 / 迴圈驗證之程式']] : []),
 ]
 //節點專用、只套用於工具呼叫之指令與路徑(不套用於檔案內容與共用工具區之逐檔檢查 —— 程式內容中之「lib」「src」可能只是變數名):
 //  ①以目錄或萬用字元涵蓋迴圈驗證之程式者(…/domain/*.mjs、rg … <程式夾>/domain、ls <程式夾>/domain/、grep -r … <程式夾>、列出套件夾或其 src): 其輸出會含 verify.mjs 之內容

@@ -1,8 +1,9 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
-import { getSettings, argOf } from '../cfg.mjs'
-import { loadLedger, memberLedger } from '../eval/ledger.mjs'
+import { getSettings, argOf, argStrOf } from '../cfg.mjs'
+import { loadLedger, memberLedger, subsetLedger } from '../eval/ledger.mjs'
+import { parseSubsetRule, subsetMaskOf, SUBSET_MSG, SUBSET_MEMBER_MSG } from '../eval/subsetRule.mjs'
 import { makeEvaluator, ntStaticOf, isCapitalError } from '../eval/evalCore.mjs'
 import { normUnit, sameUnit } from '../eval/unit.mjs'
 import { trainFromBarOf, gridCheck, checkEvalSettings, evalNumsOf, periodAt, configMsgOf } from '../eval/barGrid.mjs'
@@ -41,7 +42,10 @@ import { createResourceMonitor } from '../arsi/resources.mjs'
 //    --tie-salt N: 換同分次序(ctx.meta.tie 與同一進場棒之訊號先後; 同樣只在迴圈之重放時生效; 節點要自檢同分之影響用共用工具區之 snippets/tieAlt.mjs)
 //    --member <鹽>:<0|1>: 成員重抽(規則 R-EV-40)—— 只把策略庫之一半交給挑選函數(0 = 甲半、1 = 乙半; 鹽為 0 ~ 4294967295 之整數, 十進位或 0x 開頭之十六進位; 換鹽 = 換一種切法),
 //           模組不必改寫: ctx.n 為半庫之隻數, ctx.meta 之各陣列與 ctx.stat 等皆為半庫內之序號, 各策略之 ctx.meta.tie 與其於全庫時相同; 期間、相位、虛無、擴充診斷照舊
-//           用途: 檢驗成品之內容是否依賴特定成員(「換一批策略」之重複; 兩半皆成立才算不依賴); **此結果不是正本**(結果檔與評估紀錄另記 member), 節點、做夢與迴圈皆可用; 格式不合者不評估(離開碼 2)
+//           用途: 檢驗成品之內容是否依賴特定成員(「換一批策略」之重複; 兩半皆成立才算不依賴); **此結果不是正本**(結果檔與評估紀錄另記 member), 節點、做夢與迴圈皆可用; 格式不合、帶等號之 --member=… 者不評估(離開碼 2)
+//    --subset <規則>[,<規則>…]: 子庫(規則 R-EV-47; --member 之一般化)—— 只把符合全部規則之策略交給挑選函數與虛無抽樣(規則見 src/eval/subsetRule.mjs 之檔頭與 README §3;
+//           rand:0.5:<鹽>:<h> 之子庫 = --member <鹽>:<h> 之半庫); 其餘同 --member(此結果不是正本; 結果檔與評估紀錄另記 subset; 與 --ref、--ext-test、--period 之併用同 --member);
+//           不與 --member 併用; 格式不合、旗標重複給、帶等號之 --subset=… 者不評估(離開碼 2); 規則使留下 0 隻者照常評估, 畫面於「子庫」一列之後另加一句警示
 //    --ref: 另以參考模組之 pick 於同相位、同亂數種子逐決策執行(各有自己的 ctx.state / ctx.rand, 與本模組互不影響),
 //           輸出兩者選集之重疊率(交集 ÷ 本模組之選集大小)依決策段(各相位最前 10% / 中段 / 最後 10% 之決策)之分佈;
 //           只增輸出(結果檔之 refOverlap), 既有數字與 selHash 不變; 可給多個(逗號分隔): refOverlap = 第一個, 另有 refOverlaps = 全部依序
@@ -106,9 +110,14 @@ if (isPostfit) {
 //成員重抽(規則 R-EV-40): --member <鹽>:<0|1> ⇒ 以半庫帳本(memberLedger: 只含該半之策略、重新編號、保留各策略於全庫之同分次鍵)評估; 未給 ⇒ 全庫(行為不變)
 //  格式不合者不評估(離開碼 2; 不靜默改用全庫: 那會把全庫之結果當成半庫之結果); 於載入模組與等資源閘之前即檢查(不先耗時), 不寫結果檔、不記評估紀錄
 //  鹽之 0x 十六進位寫法只於此處解析(memberLedger 收整數, 依 iseint); memberTag 為標記('0x<鹽之十六進位>:<0|1>'; 未給為 null): 結果檔之 member.tag 與評估紀錄之每一列(含失敗者)帶之 —— 帶此標記者不是正本之評估
+//  帶等號之 --member=<鹽>:<半> 同拒(離開碼 2; 同上之時點與處置): 命令列之旗標只認 --key value(其他旗標之 --key=value 被忽略), 此寫法被忽略會使成員重抽之評估變成全庫之評估而評估紀錄記為正本列
 let memberArg = argOf('member', null)
 let member = null
 let memberTag = null
+if (process.argv.some((a) => a.startsWith('--member='))) {
+    console.log('invalid --member: must be written as --member <salt>:<half> (a space, not =)')
+    process.exit(2)
+}
 if (memberArg !== null) {
     //格式 <鹽>:<0|1>: 鹽之位數不另限(前導零無妨), 以數值 ≤ 4294967295 為界(過大者轉為 Infinity 或大數而拒收); 旗標重複給者拒收(argOf 只取第一個, 其餘靜默忽略會誤跑)
     let mm = /^(0x[0-9a-fA-F]+|[0-9]+):([01])$/.exec(String(memberArg))
@@ -120,8 +129,36 @@ if (memberArg !== null) {
     member = { salt: saltV, half: Number(mm[2]) }
     memberTag = `0x${saltV.toString(16)}:${member.half}`
 }
-//memberInfo, 失敗之結果檔所帶之 member(帳本尚未載入, 無 n / nFull): 成功之結果檔之 member 另含 n 與 nFull
-let memberInfo = () => (member ? { member: { tag: memberTag, salt: member.salt, half: member.half } } : {})
+//子庫之規則(規則 R-EV-47): --subset <規則>[,<規則>…] ⇒ 以子庫帳本(subsetLedger: 只含符合全部規則之策略、重新編號、保留各策略於全庫之同分次鍵)評估; 未給 ⇒ 全庫(行為不變)
+//  格式不合(parseSubsetRule 拋錯)、旗標重複給、只給旗標、與 --member 併用、帶等號者不評估(離開碼 2; 同 --member 之時點與處置: 於載入模組與資源閘之前, 不寫結果檔、不記評估紀錄, 訊息不帶輸入值)
+//  subset.rule = 正規化之規則字串(parseSubsetRule 之 tag): 結果檔之 subset.rule 與評估紀錄之每一列(含失敗者)帶之 —— 帶此標記者不是正本之評估
+//  帶等號之 --subset=<規則> 同拒(離開碼 2; 同上; 於其餘之子庫檢查之前, 故不被「第一個 --subset」之合格值遮蔽): 同上, 被忽略會以全庫評估而評估紀錄記為正本列
+let subsetArg = argStrOf('subset', null)
+let subset = null
+if (process.argv.some((a) => a.startsWith('--subset='))) {
+    console.log('invalid --subset: must be written as --subset <rule> (a space, not =)')
+    process.exit(2)
+}
+if (subsetArg !== null) {
+    let ps = null
+    try {
+        ps = process.argv.filter((a) => a === '--subset').length > 1 || subsetArg === true ? null : parseSubsetRule(subsetArg)
+    }
+    catch (err) {
+        ps = null
+    }
+    if (ps === null) {
+        console.log(SUBSET_MSG)
+        process.exit(2)
+    }
+    if (memberArg !== null) {
+        console.log(SUBSET_MEMBER_MSG)
+        process.exit(2)
+    }
+    subset = { rules: ps.rules, rule: ps.tag }
+}
+//memberInfo, 失敗之結果檔所帶之 member / subset(帳本尚未載入, 無 n / nFull): 成功之結果檔之 member / subset 另含 n 與 nFull 等
+let memberInfo = () => ({ ...(member ? { member: { tag: memberTag, salt: member.salt, half: member.half } } : {}), ...(subset ? { subset: { rule: subset.rule } } : {}) })
 let fpOut = argOf('out', '')
 let t0 = Date.now()
 //評估紀錄: 挑選模組位於節點 / 做夢之工作夾內時, 每次執行於其所在資料夾之 .evals.log 附加一列(時間、檔名、模式、結果), 供迴圈計數「交付前評估了幾次」
@@ -148,7 +185,7 @@ let logEval = (o) => {
         if (relToWork.startsWith('..') || path.isAbsolute(relToWork)) {
             return
         }
-        fs.appendFileSync(path.join(dir, '.evals.log'), safeJson({ at: new Date().toISOString(), pick: path.basename(String(fpPick)), mode, ...(periodArg !== 'backtest' ? { period: periodArg } : {}), h: pickHash, ...(memberTag ? { member: memberTag } : {}), ...(waitedSec > 0 ? { waitedSec } : {}), ...o }) + '\n')
+        fs.appendFileSync(path.join(dir, '.evals.log'), safeJson({ at: new Date().toISOString(), pick: path.basename(String(fpPick)), mode, ...(periodArg !== 'backtest' ? { period: periodArg } : {}), h: pickHash, ...(memberTag ? { member: memberTag } : {}), ...(subset ? { subset: subset.rule } : {}), ...(waitedSec > 0 ? { waitedSec } : {}), ...o }) + '\n')
     }
     catch (err) {}
 }
@@ -328,6 +365,17 @@ catch (err) {
 }
 if (trainFrom === 0) {
     trainFrom = null
+}
+//子庫(規則 R-EV-47): 訓練期之界線求得之後才套用(hold 之規則以之為訓練期); 其前之檢查與換算只讀 meta 與 nBars(子庫與全庫相同)
+//  遮罩(subsetMaskOf)與帳本之重組(subsetLedger)之入口各比對內建物件; 與讀帳本同為同步, 其間不會再執行模組之程式
+if (subset) {
+    let sm = subsetMaskOf(Lfull, subset.rules, { trainEndBar, trainFromBar: trainFrom === null ? 0 : trainFrom })
+    L = subsetLedger(Lfull, sm.sel, subset.rule)
+    let nLong = 0
+    for (let s = 0; s < L.n; s++) {
+        nLong += L.mode[s] > 0 ? 1 : 0
+    }
+    subset = { ...subset, n: L.n, nFull: Lfull.n, nLong, nShort: L.n - nLong, ...(sm.topFamilies ? { topFamilies: sm.topFamilies } : {}) }
 }
 L.ntStatic = trainFrom === null ? ntStaticOf(L, trainEndBar) : ntStaticOf(L, trainEndBar, trainFrom)
 let win = periodArg === 'train' ? { toBar: trainEndBar } : { fromBar: btStartBar }
@@ -603,10 +651,18 @@ let periodInfo = periodArg === 'train'
     : (postfit
         ? { name: 'postfit', label: '求解窗後段(診斷;只留求解窗已結束之席;非正本)', start: ev.timeOf(postfit.fromBar), end: st.periods.backtest.start, canonical: false }
         : { name: 'backtest', label: '回測期', start: st.periods.backtest.start, end: st.periods.backtest.end })
-let out = { ok: true, mode, period: periodInfo, seed, ...(tieSalt !== 0 ? { tieSalt } : {}), ...(member ? { member: { tag: memberTag, ...member } } : {}), pick: path.resolve(fpPick), pickBytes: pk.bytes, pickMeta: pk.meta, at: new Date().toISOString(), metrics: m, score: sc, limits: st.eval.limits, loadMs: Date.now() - t0 - m.ms.total, ...(refOverlap ? { refOverlap } : {}), ...(refOverlaps.length > 1 ? { refOverlaps } : {}) }
+let out = { ok: true, mode, period: periodInfo, seed, ...(tieSalt !== 0 ? { tieSalt } : {}), ...(member ? { member: { tag: memberTag, ...member } } : {}), ...(subset ? { subset: { rule: subset.rule, n: subset.n, nFull: subset.nFull, nLong: subset.nLong, nShort: subset.nShort, ...(subset.topFamilies ? { topFamilies: subset.topFamilies } : {}) } } : {}), pick: path.resolve(fpPick), pickBytes: pk.bytes, pickMeta: pk.meta, at: new Date().toISOString(), metrics: m, score: sc, limits: st.eval.limits, loadMs: Date.now() - t0 - m.ms.total, ...(refOverlap ? { refOverlap } : {}), ...(refOverlaps.length > 1 ? { refOverlaps } : {}) }
 let f1 = (x) => (typeof x === 'number' ? x.toFixed(1) : String(x))
 if (member) {
     console.log(`成員重抽 ${memberTag}: 只用策略庫之${member.half === 0 ? '甲' : '乙'}半(${member.n} 隻 / 全庫 ${member.nFull} 隻;各策略之同分次鍵同全庫)—— 此結果不是正本`)
+}
+if (subset) {
+    let tf = subset.topFamilies ? `;nofam:top 去除之家族 ${subset.topFamilies.map((x) => x.length).join(' / ')} 個(見結果檔之 subset.topFamilies)` : ''
+    console.log(`子庫 ${subset.rule}: 留 ${subset.n} 隻 / 全庫 ${subset.nFull} 隻(做多 ${subset.nLong}、做空 ${subset.nShort};各策略之同分次鍵同全庫${tf})—— 此結果不是正本`)
+    //空子庫(規則使留下 0 隻; R-EV-47): 評估照常(結果不變), 畫面另加一句警示(規則多半是寫過嚴或互斥, 結果恆為空選集)
+    if (subset.n === 0) {
+        console.log('警告: 子庫為空(規則使留下 0 隻): 選集恆空、結果無判讀價值; 請檢查 --subset 之規則')
+    }
 }
 if (postfit) {
     console.log(`求解窗後段(--period postfit): 只計決策棒落在 ${periodInfo.start} ~ ${periodInfo.end}(不含)之決策, 且每次決策只留「求解窗之終點棒早於決策棒」之席 —— 此結果不是正本(佐證; 不入 S、階梯與看板之排序; 不印判讀)`)
