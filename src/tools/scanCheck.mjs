@@ -10,6 +10,7 @@ import { evalHintsOfDocs, isEvalHint } from '../domain/verifyEvalHints.mjs'
 //  確認變動皆如預期後, 才以 node g_rsi.mjs --mode validate 寫回節點文件(處理要點 §6)
 //  planRule 與寫回時相同: 只適用於任務書已有「先寫規劃再評估」/「交付版先定再跑」之節點
 //  迴圈檢查之兩條機械提示(規則 R-REC-43 單峰交付、R-REC-44 選集與他節點相同)與寫回時同一判定(evalHintsOfDocs; 以全部節點文件與其評估紀錄求得), 列於掃描項之後一併對照
+//  側別曝險之提示(規則 R-REC-48)須以樹上之值(raw.metrics、raw.train、evidence)判定, 本工具唯讀而無樹 ⇒ 不在此對照之內(--mode validate 寫回時才併入; 已知限制見 sgud/state/state_REC2.md)
 let st = getSettings()
 setGuardExtra(guardExtraOf(st)) //專案另加之禁區字樣(與迴圈之掃描同一組)
 let root = st.FD_ROOT

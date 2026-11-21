@@ -661,6 +661,11 @@ let renderNodeMd = (d) => {
         let c = d.control.inactiveArms
         out.push(`- 未作用之臂(主控補記${typeof c.at === 'string' ? `;${c.at.slice(0, 10)}` : ''};以此為準): ${c.arms.length ? c.arms.join('、') : '無'}${isArr(c.offDef) && c.offDef.length ? `(其中依修訂後之定義不屬該臂、不計入已試: ${c.offDef.join('、')})` : ''}${typeof c.why === 'string' && c.why ? ` —— ${c.why}` : ''}`)
     }
+    //主控之側別曝險之放行(tools/exposure.mjs; 規則 R-REC-48): fingerprint = 放行時之成品指紋(指紋改變者放行失效); 撤銷者記 null(不列); 無此欄者逐字不變
+    if (isObj(d.control) && isObj(d.control.exposureRelease)) {
+        let c = d.control.exposureRelease
+        out.push(`- 側別曝險之放行(主控${typeof c.at === 'string' ? `;${c.at.slice(0, 10)}` : ''};綁定之指紋 ${typeof c.fingerprint === 'string' ? c.fingerprint.slice(0, 12) : '—'}): ${typeof c.why === 'string' ? c.why : ''}`)
+    }
     out.push('')
     return out.join('\n')
 }

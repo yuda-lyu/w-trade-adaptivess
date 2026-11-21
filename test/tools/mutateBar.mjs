@@ -6,7 +6,7 @@ import { FD_ROOT, FD_TMP } from './synthLedger.mjs'
 import { dupIdsOf } from './mutateIds.mjs'
 
 
-//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(verifyCmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); EH 系列為 R-REC-43、R-REC-44(迴圈檢查之提示「單峰交付」「選集與他節點相同」; 判定在 verifyEvalHints.mjs, EH37 之錨點在 verify.mjs 之 dirNodeIdsOf); VZ 系列為 R-BT-10(節點之禁區涵蓋 verify* / backtest* 與任務書之檔名樣式一致)、AW 系列為 R-BT-9(可讀之他節點工作夾三處共用 verify.mjs 之 allowWorkOf; 皆為 Gitea #200 之主控另加); SD 系列為 R-REC-47(任務書之「可疑方向」、資訊來源之三級、量尺句、審組成之一句與合約之判讀名詞; 錨點在 texts.mjs 與 contract/pick-contract.md); SB 系列為 R-EV-47(子庫之規則與 --subset)與 R-EV-48(庫況體檢與其拒跑); 指令解析已自 verify.mjs 搬入 verifyCmdScan.mjs[原 cmdScan.mjs], 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
+//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(verifyCmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); EH 系列為 R-REC-43、R-REC-44(迴圈檢查之提示「單峰交付」「選集與他節點相同」; 判定在 verifyEvalHints.mjs, EH37 之錨點在 verify.mjs 之 dirNodeIdsOf); VZ 系列為 R-BT-10(節點之禁區涵蓋 verify* / backtest* 與任務書之檔名樣式一致)、AW 系列為 R-BT-9(可讀之他節點工作夾三處共用 verify.mjs 之 allowWorkOf; 皆為 Gitea #200 之主控另加); SD 系列為 R-REC-47(任務書之「可疑方向」、資訊來源之三級、量尺句、審組成之一句與合約之判讀名詞; 錨點在 texts.mjs 與 contract/pick-contract.md); SB 系列為 R-EV-47(子庫之規則與 --subset)與 R-EV-48(庫況體檢與其拒跑);EX 系列為 R-REC-48(側別曝險之判定、效果與放行)、SR 系列為 R-REC-50(全樹之側別讀數)、GD 系列為 R-REC-49(量尺之並列與選配之主鍵); 指令解析已自 verify.mjs 搬入 verifyCmdScan.mjs[原 cmdScan.mjs], 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
 //  用法(測試以 quiet-run --lock 執行): node test/tools/mutateBar.mjs [--list] [--check] [--control-only] [--only <id,id…>] [--from <序> --to <序>] [--out <結果.json>]
 //    --check 只核對各變異之錨點(須恰出現一次; all 者至少一次), 不跑測試; 另核全部變異之編號唯一(重複者列出並以非 0 離開; R-PKG-9);未被殺者(survived)為測試之缺口 —— 補測試,不是補斷言(見 sgud/exp 之變異作法)
 //    --control-only 只跑對照(守門之測試與所選變異之優先測試, 不植入變異)並列出所選變異中「無法判定」者, 供不重跑全部變異而盤點分類
@@ -494,7 +494,7 @@ let M = [
     //── 近期版之超額之取值(J 系列; domain.mjs 之 recentDiagOf / recentExcessOf; contentOf 與 avgOf 與「有內容」共用; Gitea #198 之另見 1)──
     ['J01', 'src/domain/domain.mjs', [['    return s ? s.excess : null\n}', '    return s ? s.excess : 0\n}']], ['unit-searchMapRecent']],
     ['J02', 'src/domain/domain.mjs', [['            let r0 = recentExcessOf(m)\n            return `${mean(', "            let r0 = m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null\n            return `${mean("]], ['unit-searchMapRecent']],
-    ['J03', 'src/domain/domain.mjs', [['            let r0 = recentExcessOf(m)\n            let useRecent', "            let r0 = m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null\n            let useRecent"]], ['unit-searchMapRecent']],
+    ['J03', 'src/domain/domain.mjs', [['    let r0 = recentExcessOf(m)\n    let useRecent', "    let r0 = m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null\n    let useRecent"]], ['unit-searchMapRecent']],
     ['J04', 'src/domain/domain.mjs', [['let recentExcessOf = (m) => {\n    let s = recentDiagOf(m)', 'let recentExcessOf = (m) => {\n    let s = recentSideOf(m)']], ['unit-searchMapRecent']],
     ['J05', 'src/domain/diagRead.mjs', [["let e = m && m.ext && typeof m.ext === 'object' ? m.ext.nullRecentAct : null\n    let s = e && typeof e === 'object' && !e.error ? e.side : null\n    return s && typeof s === 'object' && Number.isFinite(s.excess)", "let e = m && m.ext && typeof m.ext === 'object' ? m.ext.nullRecentAct : null\n    let s = e && typeof e === 'object' ? e.side : null\n    return s && typeof s === 'object' && Number.isFinite(s.excess)"]], ['unit-searchMapRecent', 'unit-recentDiag']], //移至 diagRead.mjs(錨點隨之)
     //── 迴圈專用之環境變數(Z 系列; verify.mjs 之 forbiddenPats; 規則 R-RUN-11 之清除角色變數)──
@@ -707,6 +707,7 @@ let M = [
     ['VZ04', 'src/domain/texts.mjs', [["codeRel + '/verify*.mjs`", "codeRel + '/verify.mjs`"]], ['unit-verifyZone']], //任務書只寫 verify.mjs 單檔(與禁區字樣不一致)
     ['VZ05', 'src/domain/texts.mjs', [["'/backtest*.mjs`、`' + codeRel", "'/backtest.mjs`、`' + codeRel"]], ['unit-verifyZone']], //任務書之 backtest 樣式改為單檔
     ['VZ06', 'src/domain/texts.mjs', [["codeRel + '/verify*.mjs` —— 評估時", "codeRel + '/verify*.mjs`、`' + codeRel + '/cmdScan.mjs` —— 評估時"]], ['unit-verifyZone']], //任務書另列禁區字樣未涵蓋之檔名
+    ['VZ07', 'src/domain/agentEntries.mjs', [["exposure: { label: 'tools/exposure.mjs 之放行', writes: (args) => args.length > 0 },", "exposure: { label: 'tools/exposure.mjs 之放行', writes: () => false },"]], ['unit-verifyZone']], //節點執行放行之工具不列「執行迴圈之寫檔入口」(排程第 591 項之主控另加; 側別曝險之判定之檔在禁區內、放行之工具之執行亦列)
     //── 可讀之他節點工作夾(AW 系列; 規則 R-BT-9; Gitea #200 之主控另加 5): 迴圈驗證、重掃與 scanCheck 共用 verify.mjs 之三函數 ──
     ['AW01', 'src/domain/verify.mjs', [[', ...dirNodeIdsOf(d.task && d.task.direction, ids)]', ']']], ['unit-scanAllowWork']], //可讀之列不含方向指名之節點
     ['AW02', 'src/domain/verify.mjs', [['...dirWorkIdsOf(d.task && d.task.direction, workRel), ', '']], ['unit-scanAllowWork']], //可讀之列不含方向內提到之工作夾
@@ -868,6 +869,63 @@ let M = [
     ['SB54', 'src/tools/libCheck.mjs', [["catch (err) {\n    console.log(`ERROR 無法讀取專案設定", "catch (err) {\n    if (!(err && err.code === 'ENOENT')) {\n        throw err\n    }\n    console.log(`ERROR 無法讀取專案設定"]], ['unit-libCheck']], //只捕捉檔案不存在(資料夾、不合法之 JSON、缺欄位仍為未捕捉之例外)
     ['SB55', 'src/tools/libCheck.mjs', [["${P('settings.json')});請於", "${String((err && err.message) || err).split('\\n')[0]});請於"]], ['unit-libCheck']], //訊息改帶原錯誤之內容(JSON 之解析錯誤會回顯檔案之內容)
     ['SB56', 'src/tools/libCheck.mjs', [["${P('settings.json')});請於", "settings.json);請於"]], ['unit-libCheck']], //訊息不帶 settings.json 之路徑
+    ['EX01', 'src/domain/verifyExposure.mjs', [["let hit = fs || (shift && (sf || fl.length > 0))", "let hit = fs || shift || sf || fl.length > 0"]], ['unit-exposure']], //三條任一即曝險(不以席次之側別隨期改變為前提)
+    ['EX02', 'src/domain/verifyExposure.mjs', [["let hit = fs || (shift && (sf || fl.length > 0))", "let hit = fs || (shift && sf && fl.length > 0)"]], ['unit-exposure']], //須三者並存
+    ['EX03', 'src/domain/verifyExposure.mjs', [["Math.round(Math.abs(a - b) * 1e9) / 1e9 >= cfg.minShift", "Math.abs(a - b) >= cfg.minShift"]], ['unit-exposure']], //差不取整(恰為門檻者因浮點之尾差不成立)
+    ['EX04', 'src/domain/verifyExposure.mjs', [["/ 1e9 >= cfg.minShift", "/ 1e9 > cfg.minShift"]], ['unit-exposure']], //恰為門檻者不成立
+    ['EX05', 'src/domain/verifyExposure.mjs', [["rel.selHash === raw.selHash", "true"]], ['unit-exposure']], //放行不綁選集指紋
+    ['EX06', 'src/domain/verifyExposure.mjs', [["let sf = !!tr && sideFlowIssue(", "let sf = sideFlowIssue("]], ['unit-exposure']], //訓練期之診斷缺者仍取其做空單比例
+    ['EX07', 'src/domain/verifyExposure.mjs', [["filter((f) => cfg.flags.includes(f.name))", "filter((f) => true)"]], ['unit-exposure']], //採計全部之擴充診斷之旗標
+    ['EX08', 'src/domain/verifyExposure.mjs', [["if (v === false) {", "if (v === null) {"]], ['unit-exposure']], //false 不關閉
+    ['EX09', 'src/domain/verify.mjs', [["let fixedSideOf = (a, b, sizeMax) => sizeMax > 0 && ", "let fixedSideOf = (a, b, sizeMax) => "]], ['unit-exposure']], //固定側別不要求選集非空
+    ['EX10', 'src/domain/domain.mjs', [["cands = cands.filter((n) => !exposureOfNode(n).blocked)", "void 0"]], ['unit-exposure']], //補位之底取曝險者
+    ['EX11', 'src/domain/domain.mjs', [["if (ex && ex.blocked) {", "if (false) {"]], ['unit-exposure']], //前置閘門不拒曝險之起點
+    ['EX12', 'src/domain/domain.mjs', [["if (ex.blocked) {", "if (false) {"]], ['unit-exposure']], //方向之提出不拒曝險之起點
+    ['EX13', 'src/domain/domain.mjs', [["if (xh) {", "if (false) {"]], ['unit-exposure']], //提示之重產不含側別曝險
+    ['EX14', 'src/domain/domain.mjs', [["let isEvalHint = (s) => isTwoHint(s) || isExposureHint(s)", "let isEvalHint = (s) => isTwoHint(s)"]], ['unit-exposure']], //舊之曝險提示不被替換(放行後仍留)
+    ['EX15', 'src/domain/domain.mjs', [["return e.hit ? (e.released ? ' 曝險(已放行)' : ' 曝險') : ''", "return ''"]], ['unit-exposure']], //看板之「S」一欄不標
+    ['EX16', 'src/domain/domain.mjs', [["${xMark(n) ? `;**${xMark(n).slice(1, -1)}**` : ''}", ""]], ['unit-exposure']], //搜尋地圖之譜系不標
+    ['EX17', 'src/domain/domain.mjs', [["let xNote = ex.hit ? (ex.released ? ';側別曝險(已放行)' : ';側別曝險(不作為起點)') : ''", "let xNote = ''"]], ['unit-exposure']], //任務書之參考節點不註明
+    ['EX18', 'src/tools/exposure.mjs', [["if (!undo && !e.hit) {", "if (false) {"]], ['unit-exposure']], //非曝險者亦放行
+    ['EX19', 'src/tools/exposure.mjs', [["if (lock.running) {", "if (false) {"]], ['unit-exposure']], //輪次進行中不拒
+    ['EX20', 'src/tools/exposure.mjs', [["doc.control = { ...(doc.control || {}), exposureRelease: rec ? { fingerprint: rec.selHash, why: rec.why, at: rec.at } : null }", "void 0"]], ['unit-exposure']], //節點文件不同步
+    ['EX21', 'src/tools/exposure.mjs', [["P.refreshEvalHints([n.id])", "void 0"]], ['unit-exposure']], //提示不即時改寫
+    ['EX22', 'src/arsi/records.mjs', [["if (isObj(d.control) && isObj(d.control.exposureRelease)) {", "if (false) {"]], ['unit-exposure']], //節點文件不渲染放行
+    ['EX23', 'src/domain/agentEntries.mjs', [["exposure: { label: 'tools/exposure.mjs 之放行', writes: (args) => args.length > 0 },", "exposure: { label: 'tools/exposure.mjs 之放行', writes: () => false },"]], ['unit-agentGuard']], //agent 帶引數者不拒
+    ['EX24', 'src/tools/fakeRound.mjs', [[".filter((n) => !Pj.exposureOf(n).blocked)", ""]], ['unit-fakeRound'], 'equiv'], //假輪次之預期之底不排除曝險者(假審計之樹無曝險之成品 ⇒ 此變異於該樹等價, 預期存活; 補位之底排除曝險者由 unit-exposure 之真樹案覆蓋)
+    ['EX25', 'src/domain/domain.mjs', [["            hm = evalHintsAll(records.listNodeDocs(), st.records.workDir)", "            hm = evalHintsTwo(records.listNodeDocs(), st.records.workDir)"]], ['unit-exposure']], //--mode validate 之重掃不含側別曝險之一條(排程第 591 項之主控另加之專用案; 與兩條提示同一個判定之入口)
+    ['EX26', 'src/domain/domain.mjs', [["let hs = hm ? (hm.get(d.nodeId) || []) : old.filter(isEvalHint)", "let hs = hm ? (hm.get(d.nodeId) || []) : old.filter(isTwoHint)"]], ['unit-exposure']], //重掃時判定之入口拋錯 ⇒ 既有之曝險提示被清掉(排程第 591 項之主控另加)
+    ['SR01', 'src/domain/sideRead.mjs', [["let r = sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : null", "let r = sxy / Math.sqrt(sxx * syy)"]], ['unit-sideRead']], //變異數為 0 者不回 null
+    ['SR02', 'src/domain/sideRead.mjs', [["if (seen.has(k)) {", "if (false) {"]], ['unit-sideRead']], //同選集指紋者重複計
+    ['SR03', 'src/domain/sideRead.mjs', [["if (xs.length < cfg.minNodes) {", "if (xs.length <= cfg.minNodes) {"]], ['unit-sideRead']], //恰為下限者不列
+    ['SR04', 'src/domain/sideRead.mjs', [["Math.abs(r) >= cfg.corrAbs", "Math.abs(r) > cfg.corrAbs"]], ['unit-sideRead']], //相關恰為門檻者不警示
+    ['SR05', 'src/domain/sideRead.mjs', [["short: topHi <= cfg.lo", "short: topHi < cfg.lo"]], ['unit-sideRead']], //恰為 lo 者不警示
+    ['SR06', 'src/domain/sideRead.mjs', [["long: topLo >= cfg.hi", "long: topLo > cfg.hi"]], ['unit-sideRead']], //恰為 hi 者不警示
+    ['SR07', 'src/domain/sideRead.mjs', [["sort((a, b) => (kv(b) - kv(a)) ||", "sort((a, b) => (kv(a) - kv(b)) ||"]], ['unit-sideRead']], //前幾名取排序鍵最低者
+    ['SR08', 'src/domain/sideRead.mjs', [["if (!(c.lo < c.hi)) {", "if (false) {"]], ['unit-sideRead']], //lo ≥ hi 不回預設
+    ['SR09', 'src/domain/domain.mjs', [["let ok = srCfg ? nodes.filter((n) => n.score && Number.isFinite(n.score.S) && !(n.score.flags && n.score.flags.vetoed) && n.raw && n.raw.metrics) : []", "let ok = srCfg ? nodes.filter((n) => n.score && Number.isFinite(n.score.S) && n.raw && n.raw.metrics) : []"]], ['unit-sideRead']], //被否決者亦計
+    ['SR10', 'src/domain/domain.mjs', [["let rows = ok.filter((n) => !alias.has(n.id))", "let rows = ok.filter((n) => true)"]], ['unit-sideRead']], //別名亦計
+    ['SR11', 'src/domain/domain.mjs', [["        if (srT.line) {", "        if (false) {"]], ['unit-sideRead']], //搜尋地圖不列讀數
+    ['SR12', 'src/domain/domain.mjs', [["                lines.push(srT.warn)", "                void 0"]], ['unit-sideRead']], //輪末摘要不列警示
+    ['SR13', 'src/tools/roundDigest.mjs', [["/^側別讀數之警示/", "/^側別讀數之警示X/"]], ['unit-exposure']], //一頁摘要不取警示之列
+    ['GD01', 'src/domain/domain.mjs', [["show: !!key && ((!!content && content.id !== key.id) || keyEx.hit)", "show: !!key && (!!content && content.id !== key.id)"]], ['unit-gaugeDual']], //排序鍵最高者為曝險而與內容最高者相同時不列
+    ['GD02', 'src/domain/domain.mjs', [["content.id !== key.id) || keyEx.hit)", "content.id === key.id) || keyEx.hit)"]], ['unit-gaugeDual']], //出現之條件反轉
+    ['GD03', 'src/domain/domain.mjs', [["let cands = nodes.filter((n) => n.score && Number.isFinite(n.score.S) && !(n.score.flags && n.score.flags.vetoed) && n.evidence && n.evidence.trust === 'trusted')", "let cands = nodes.filter((n) => n.score && Number.isFinite(n.score.S) && !(n.score.flags && n.score.flags.vetoed))"]], ['unit-gaugeDual']], //非可信者亦為候選
+    ['GD04', 'src/domain/domain.mjs', [["L.push(`**量尺(並列)**:${gaugeDualText(gd)}", "L.push(`**量尺**:${gaugeDualText(gd)}"]], ['unit-gaugeDual']], //看板之段落之字樣
+    ['GD05', 'src/domain/domain.mjs', [["lines.push(`量尺(並列;樹上可信者):${gaugeDualText(gd)}`)", "void 0"]], ['unit-gaugeDual']], //輪末摘要不列並列
+    ['GD06', 'src/domain/domain.mjs', [["return (ca === null ? 0 : cb - ca) || (kv(b) - kv(a))", "return (ca === null ? 0 : ca - cb) || (kv(b) - kv(a))"]], ['unit-gaugeDual']], //主鍵取內容最低者
+    ['GD07', 'src/domain/domain.mjs', [["return ca === null ? 1 : -1", "return ca === null ? -1 : 1"]], ['unit-gaugeDual']], //無內容之值者排在前
+    ['GD08', 'src/domain/domain.mjs', [["cands.sort((a, b) => byContent(rankKeyOf)(a, b) || (a.id < b.id ? -1 : 1))", "void 0"]], ['unit-gaugeDual']], //補位之底不依主鍵
+    ['GD09', 'src/domain/domain.mjs', [["let rankBy = st.rsi && st.rsi.rankBy === 'content' ? 'content' : 'key'", "let rankBy = st.rsi && st.rsi.rankBy ? 'content' : 'key'"]], ['unit-gaugeDual']], //不認之值亦改主鍵
+    ['GD10', 'src/domain/domain.mjs', [["contentValOf(n) === null ? 1 : 0, -(contentValOf(n) === null ? 0 : contentValOf(n)), -kvOf(n)]", "-kvOf(n)]"]], ['unit-gaugeDual']], //看板之次序不依主鍵
+    ['GD11', 'src/domain/domain.mjs', [["return ra.reduce((d, x, i) => d || (x - rb[i]), 0)", "return (ra[0] - rb[0]) || (ra[1] - rb[1])"]], ['unit-gaugeDual']], //次序只比前兩項(主鍵之值與次鍵不比)
+    ['GD12', 'src/domain/domain.mjs', [["reduce((b, n) => (b === null || byContent(kvOf)(n, b) < 0 ? n : b), null)", "reduce((b, n) => (b === null || kvOf(n) > kvOf(b) ? n : b), null)"]], ['unit-gaugeDual']], //各臂之最佳不依主鍵
+    ['GD13', 'src/domain/domain.mjs', [[".sort(byContent(kvOf))[0] || null", ".sort((a, b) => kvOf(b) - kvOf(a))[0] || null"]], ['unit-gaugeDual']], //搜尋地圖之最高不依主鍵
+    ['GD14', 'src/domain/domain.mjs', [["**目前「挑選內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品(並列;同一個者寫一次並註明)**(各列 id、", "**目前回測期 S 最高且可信之成品**(id、"]], ['unit-gaugeDual']], //做夢更新 state 之句回到改前
+    ['GD15', 'src/tools/roundDigest.mjs', [["/^量尺\\(並列/", "/^量尺\\(並列X/"]], ['unit-exposure']], //一頁摘要不取並列之列
+    ['GD16', 'src/domain/rankCompare.mjs', [["let den = Math.sqrt((c + d + tx) * (c + d + ty))", "let den = Math.sqrt((c + d) * (c + d))"]], ['unit-gaugeDual']], //τ-b 之分母不計同值之對
+    ['GD17', 'src/domain/rankCompare.mjs', [["r[idx[j].i] = (s + e) / 2 + 1", "r[idx[j].i] = s + 1"]], ['unit-gaugeDual']], //同值不取平均名次
+    ['GD18', 'src/domain/rankCompare.mjs', [["overlap: topK.filter((x) => inC.has(x.id)).length", "overlap: topK.length"]], ['unit-gaugeDual']], //交集之個數
 ]
 
 let args = process.argv.slice(2)

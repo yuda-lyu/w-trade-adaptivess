@@ -129,4 +129,42 @@ describe('節點之禁區涵蓋迴圈驗證之全部原始碼(規則 R-BT-10)', 
         assert(contentHits('let m = await import(\'./src/tools/libCheck.mjs\')', privateRoot).includes(LABEL2))
         assert.equal(contentHits('import { memberLedger } from \'../../src/eval/ledger.mjs\'\nexport default () => 1', privateRoot).includes(LABEL2), false)
     })
+
+    //側別曝險之判定與放行之工具(規則 R-REC-48; 排程第 591 項之主控另加): 判定之組合與門檻在 src/domain/verifyExposure.mjs(檔名以 verify 起首 ⇒ 節點之禁區涵蓋)
+    //  規格: ①節點讀取或匯入 verifyExposure.mjs(路徑與指令;套件裝於 node_modules 者亦然;內嵌腳本之匯入;共用工具區之逐檔檢查)皆列「觸及禁區: 回測期重放 / 迴圈驗證之程式」(同一條禁區字樣、同一標籤)
+    //    ②判定與其門檻之預設只在該檔內(domain.mjs 與 tools/exposure.mjs 只讀設定、呼叫 exposureOf, 不內嵌判定之組合或門檻之名)
+    //    ③執行 tools/exposure.mjs 帶引數(放行、撤銷)者照列「執行迴圈之寫檔入口」(節點與做夢皆查; 與入口之拒跑同一張表 —— 表內有 exposure); 不帶引數(列出)者與 tools/rankCompare.mjs(唯讀)不列
+    //    ④邊界(依「判定、門檻不該讓節點讀到」之既有判準): 全樹之側別讀數(sideRead.mjs;只列讀數與警示、不改任何選取、S 或階梯,節點個別之成品無從藉其門檻規避)、
+    //      量尺並列之估法(rankCompare.mjs 與 tools/rankCompare.mjs;純統計、無門檻、唯讀)、放行之工具本身(tools/exposure.mjs;只含放行之管道)不在禁區內 —— 與既有之 domain.mjs 內之看板與搜尋地圖之集中度指標同(節點得讀)
+    it('⑤ 側別曝險之判定(verifyExposure.mjs):節點讀取或匯入之(路徑與指令、node_modules、內嵌匯入、逐檔檢查)皆列;判定與門檻只在該檔;執行放行之工具照列「執行迴圈之寫檔入口」;讀數與估法之檔、列出與唯讀之工具不列', () => {
+        let FD = FD_ROOT.replace(/\\/g, '/')
+        let f = 'src/domain/verifyExposure.mjs'
+        //①讀取與匯入
+        assert(hit(nodeIssues({ file_path: `${FD}/${f}` }, 'Read')), 'Read 絕對路徑')
+        assert(hit(nodeIssues({ filePath: f }, 'Read')), 'Read 相對路徑')
+        assert(hit(nodeIssues({ command: `cat ./${f}` })), 'cat')
+        assert(hit(nodeIssues({ command: `head -n 40 node_modules/w-trade-adaptivess/${f}` })), '套件裝於 node_modules')
+        assert(hit(nodeIssues({ command: `node -e "import('./node_modules/w-trade-adaptivess/${f}').then((m) => console.log(Object.keys(m)))"` })), '內嵌腳本匯入')
+        assert(contentHits('import { exposureOf } from \'../../node_modules/w-trade-adaptivess/src/domain/verifyExposure.mjs\'\nexport default () => exposureOf', privateRoot).includes(LABEL))
+        assert(domainFiles(/^verify.*\.mjs$/).includes('verifyExposure.mjs'), '檔名以 verify 起首(禁區字樣涵蓋)')
+        //②判定與門檻只在該檔
+        let read = (p) => fs.readFileSync(path.join(FD_ROOT, p), 'utf8')
+        assert(/^let exposureOf = /m.test(read(f)) && /^let EXPOSURE_DEFAULT = Object\.freeze/m.test(read(f)), '判定與門檻之預設在判定之檔內')
+        for (let p of ['src/domain/domain.mjs', 'src/tools/exposure.mjs', 'src/tools/rankCompare.mjs']) {
+            assert(!/minShift|fixedState|placeboTiming/.test(read(p)), `${p} 不內嵌判定之門檻或旗標名`)
+        }
+        //③執行
+        for (let c of ['node tools/exposure.mjs --node a1b2c3 --why x', 'node src/tools/exposure.mjs --undo --node a1b2c3 --why x', 'npx node tools/exposure.mjs --node a1b2c3 --why x']) {
+            assert(nodeIssues({ command: c }).some((x) => x.includes(EXEC)), `節點執行 ${c}`)
+        }
+        for (let c of ['node tools/exposure.mjs', 'node src/tools/rankCompare.mjs', 'node tools/rankCompare.mjs --k 5']) {
+            assert.equal(nodeIssues({ command: c }).some((x) => x.includes(EXEC)), false, `不列(唯讀): ${c}`)
+        }
+        //④邊界: 不涵蓋之檔(讀取不列)
+        for (let c of ['cat src/domain/sideRead.mjs', 'cat src/domain/rankCompare.mjs', 'cat src/tools/rankCompare.mjs', 'cat src/tools/exposure.mjs', 'cat src/domain/domain.mjs']) {
+            assert.equal(hit(nodeIssues({ command: c })), false, `不列: ${c}`)
+        }
+        //禁區字樣之標籤條數不變(同一條字樣)
+        assert.equal(forbiddenPats(privateRoot, true).filter(([, label]) => label === LABEL).length, 1)
+    })
 })

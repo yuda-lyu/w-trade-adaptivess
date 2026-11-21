@@ -749,6 +749,9 @@ let isHalfOf = (pickMeta) => !!(pickMeta && pickMeta.params && (pickMeta.params.
 //    基準 = 中性隨機 40 隻(templates/neutral_random40.mjs)之同一比例: 回測期約 0.16、訓練期(quick 診斷)約 0.22; 可由 settings.score.sideFlow 覆寫
 //    例: 「做多取甲規則、做空取乙規則」之分側組合, 席次之做多比例兩期皆正常(固定側別之檢查不列), 但兩期之下單皆大半為做空單 ——
 //    兩側之活躍度不對稱使下單集中於做空側, 等於把回測期之方向寫進模組; S、階梯與同側同活躍度虛無都照樣保留它, 故另設此檢查(不否決, 由做夢審計)
+//fixedSideOf, 固定側別之判定(迴圈檢查之「固定側別」與側別曝險之判定〔verifyExposure.mjs; 規則 R-REC-48〕共用此單一定義): a = 訓練期之選集之做多比例, b = 回測期者, sizeMax = 回測期之選集之最大席數
+//  選集非空(sizeMax > 0)且兩期皆 < 0.1 或皆 > 0.9 ⇒ true
+let fixedSideOf = (a, b, sizeMax) => sizeMax > 0 && ((a < 0.1 && b < 0.1) || (a > 0.9 && b > 0.9))
 let SIDE_FLOW = { baseShort: { backtest: 0.16, train: 0.22 }, hi: 2.5, lo: 0.4 }
 let shortShareOf = (m) => {
     let b = m && m.op && m.op.bySide
@@ -1033,7 +1036,7 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
                 train = { longRatio: o.metrics.sel.longRatio, tags: (o.metrics.sel.tags || []).slice(0, 4), ...(shortShareOf(o.metrics) === null ? {} : { shortShare: shortShareOf(o.metrics) }) }
                 let a = train.longRatio
                 let b = out.metrics.sel.longRatio
-                if (out.metrics.sel.sizeMax > 0 && ((a < 0.1 && b < 0.1) || (a > 0.9 && b > 0.9))) {
+                if (fixedSideOf(a, b, out.metrics.sel.sizeMax)) {
                     issues.push(`固定側別: 選集之做多比例 訓練期 ${a} / 回測期 ${b}(兩期皆只挑${a < 0.1 ? '做空' : '做多'}側;回測期之行情方向可能被寫進模組,由審計判定)`)
                 }
                 //下單流量偏一側(規則 R-REC-15): 席次之做多比例正常, 仍可經由兩側活躍度之不對稱使下單集中在一側
@@ -1273,5 +1276,5 @@ let dirNodeIdsOf = (direction, ids) => {
 //allowWorkOf, 節點文件 d 可讀之他節點工作夾之 id: 起點(spec.base)、任務書列為參考之節點(task.refs)、方向內提到之工作夾與指名之節點
 let allowWorkOf = (d, { workRel, ids }) => [...(d.spec && d.spec.base ? [d.spec.base] : []), ...(((d.task && d.task.refs) || []).filter((r) => r.nodeId).map((r) => r.nodeId)), ...dirWorkIdsOf(d.task && d.task.direction, workRel), ...dirNodeIdsOf(d.task && d.task.direction, ids)]
 
-export { makeVerify, scanTrace, deniedHalt, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, isHalfOf, runNodeProc, shortShareOf, sideFlowIssue, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD, replicaExtOf, replicaExtArgsOf, replayExtOf, boardMeanOf, extBoardMeansOf, REPLICA_EXT, evalLines, dirWorkIdsOf, dirNodeIdsOf, allowWorkOf }
+export { makeVerify, scanTrace, deniedHalt, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, isHalfOf, runNodeProc, fixedSideOf, shortShareOf, sideFlowIssue, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD, replicaExtOf, replicaExtArgsOf, replayExtOf, boardMeanOf, extBoardMeansOf, REPLICA_EXT, evalLines, dirWorkIdsOf, dirNodeIdsOf, allowWorkOf }
 export default makeVerify

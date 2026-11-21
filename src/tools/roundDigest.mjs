@@ -34,7 +34,8 @@ P('')
         P('')
     }
     let lines = (R && R.hook && R.hook.lines) || []
-    let facts = [/^整體研判/, /^向外飽和/, /^額度/, /^改進項/, /^做夢之操作稽核/].map((re) => lines.find((l) => re.test(l))).filter(Boolean)
+    //量尺之並列與側別讀數之警示(規則 R-REC-49、R-REC-50): 輪末摘要有其列者才取(無者與改前逐字相同)
+    let facts = [/^整體研判/, /^向外飽和/, /^額度/, /^改進項/, /^做夢之操作稽核/, /^量尺\(並列/, /^側別讀數之警示/].map((re) => lines.find((l) => re.test(l))).filter(Boolean)
     if (R) {
         P('## 一眼看完(迴圈之機械摘要)')
         P('')
