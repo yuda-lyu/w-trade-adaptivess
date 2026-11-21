@@ -4,7 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
 import { getSettings } from '../src/cfg.mjs'
-import { makeTexts } from '../src/domain/texts.mjs'
+import { makeTexts, FILL_BACKLOG_ON, FILL_BACKLOG_OFF } from '../src/domain/texts.mjs'
 import { makeProject } from '../src/domain/domain.mjs'
 import { renderDreamMd } from '../src/arsi/records.mjs'
 import { planGateOf, roundOkOf, trailingFailures } from '../src/arsi/runner.mjs'
@@ -176,11 +176,15 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
             let PRE_CHECK = '  - **預先核對(跑前登錄)之設計取捨不得以求解窗後段(節點文件摘要之「求解窗後段(佐證;非正本)」一列)為判準**:此段只於設計定案後附報(否則該段對該設計即非獨立之佐證)。'
             //擴建一節之 api 列舉新增一段(規則 R-EV-46: api.fillRandom; 只在有共用工具區時出現): 雜湊取去掉該段之後之全文 ⇒ 其餘文字仍與釘死之值逐字相同, 該段另斷言其出現次數(有共用工具區者 1、無者 0)
             let FILL = '`fillRandom` 依各決策之兩側席數以活躍度匹配隨機填席(回可直接交給 `simulate` 之選集;同比例、隨機時機之安慰劑等用)、'
+            //擴建一節「既有節點之擴充診斷之值」一句之替換(規則 R-REC-41: 輪末之附算一併處理待補算者為 FILL_BACKLOG_ON; 參考設定未給 settings.rsi.fillBacklogSec ⇒ 預設開啟):
+            //  雜湊取「把該句換回改前之原文 FILL_BACKLOG_OFF」之後之全文 ⇒ 其餘文字仍與釘死之值逐字相同; 該句另斷言其出現次數(有共用工具區者 1、無者 0), 原文不殘留
             let sha = (s, nFill) => {
                 let ls = s.split('\n')
                 assert.equal(ls.filter((x) => x === PRE_CHECK).length, 1, '新增之一句恰出現一次')
                 assert.equal(s.split(FILL).length - 1, nFill, 'fillRandom 之一段之出現次數')
-                return crypto.createHash('sha256').update(ls.filter((x) => x !== PRE_CHECK).join('\n').split(FILL).join('').split(codeRoot).join('src')).digest('hex').slice(0, 16)
+                assert.equal(s.split(FILL_BACKLOG_ON).length - 1, nFill, '輪末一併補算之一句之出現次數')
+                assert.equal(s.split(FILL_BACKLOG_OFF).length - 1, 0, '改前之一句不殘留')
+                return crypto.createHash('sha256').update(ls.filter((x) => x !== PRE_CHECK).join('\n').split(FILL).join('').split(FILL_BACKLOG_ON).join(FILL_BACKLOG_OFF).split(codeRoot).join('src')).digest('hex').slice(0, 16)
             }
             let node2 = { ...node, nodeId: 'n2', arms: ['B14_pitKey'], type: 'verify', issues: ['問題甲'], from: { round: 3, arms: ['B14_pitKey'], base: null, claimKey: 'abcd1234' } }
             let cases = [

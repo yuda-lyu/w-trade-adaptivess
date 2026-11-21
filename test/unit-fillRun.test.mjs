@@ -280,6 +280,8 @@ describe('附算與補算之執行(規則 R-REC-34)', function () {
         }
         made = mk()
         st = made.st
+        //本案為「輪末不處理待補算」(settings.rsi.fillBacklogSec = 0; 規則 R-REC-41 之關閉 = 改前之行為); 一併處理待補算之情形見 unit-fillBacklog
+        st.rsi = { ...st.rsi, fillBacklogSec: 0 }
         let runEval = async (a) => {
             calls.push(a)
             return made.runEval(a)

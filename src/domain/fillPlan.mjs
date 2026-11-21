@@ -8,6 +8,7 @@
 //  擴充診斷之正本值(完整評估所得之 raw.metrics.ext[名])之是否過時以「診斷之登錄」判定: 登錄 = { <名>: { hash, since } }(since = 迴圈首次見到此雜湊之時刻;
 //    第一次建立登錄時 since 為 null = 既有之正本值皆視為現行); 正本之評估時刻早於 since 者視為過時(該診斷於其後被改寫)
 //  呼叫端(迴圈之輪末、補算工具)依 planFill 之 tasks 執行評估(以參數注入), 以 fillDocOf 產生補算檔之內容、以 postfitRowOf / postfitLineOf 產生共同儲存區與節點文件之值
+import iseint from 'wsemi/src/iseint.mjs'
 
 /**
  * 補算檔之結構版本字串
@@ -34,6 +35,28 @@ let POSTFIT_HEAD = '求解窗後段(佐證;非正本):'
  * @type {Array<String>}
  */
 let FILL_NO_RETRY_KINDS = ['config', 'capital', 'integrity', 'reverify']
+/**
+ * 輪末之附算一併處理待補算之總時長之上限(秒)之預設值(規則 R-REC-41;settings.rsi.fillBacklogSec 未給或無效時)
+ *
+ * @type {Number}
+ */
+let FILL_BACKLOG_SEC = 1800
+
+//fillBacklogSecOf, 輪末之附算一併處理待補算之總時長之上限(秒; 規則 R-REC-41; 純函數): rsiCfg = settings.rsi;
+//  fillBacklogSec 依 wsemi iseint 判定(安全整數之數字或其數字字串; 通過者以其數值為準), 須 ≥ 0; 未給或無效者為 FILL_BACKLOG_SEC(不拋錯; 同附算之併行數 fillParOf 之慣例)
+//  0 = 不處理(輪末只算本輪審計之節點與待重試者, 待補算只列於摘要; 與 1.0.35 相同)
+/**
+ * 輪末之附算一併處理待補算之總時長之上限(秒;0 為不處理)
+ *
+ * @param {Object|null} rsiCfg 輸入設定之 rsi 物件(讀取 fillBacklogSec)
+ * @returns {Number} 回傳上限之秒數;未給或無效(非安全整數、負數)者回 FILL_BACKLOG_SEC
+ * @example
+ * fillBacklogSecOf({ fillBacklogSec: '600' }) // => 600
+ */
+let fillBacklogSecOf = (rsiCfg) => {
+    let v = rsiCfg && typeof rsiCfg === 'object' ? rsiCfg.fillBacklogSec : undefined
+    return iseint(v) && Number(v) >= 0 ? Number(v) : FILL_BACKLOG_SEC
+}
 
 let isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
 let isStr = (v) => typeof v === 'string' && v.length > 0
@@ -55,6 +78,26 @@ let sameKey = (a, b) => {
     }
     let v = (o, k) => (o[k] === undefined ? null : o[k])
     return v(a, 'pick') === v(b, 'pick') && v(a, 'evaluator') === v(b, 'evaluator') && v(a, 'diag') === v(b, 'diag') && v(a, 'nulls') === v(b, 'nulls')
+}
+
+//fillSigSrcOf, 一個任務之待算之鍵之正規字串(規則 R-REC-41; 呼叫端以之取雜湊為「不重試之失敗之紀錄」之 sig): 求解窗後段之鍵與各診斷之鍵(依名排序; 各鍵取 pick、evaluator、diag、nulls, 缺鍵視同 null)
+//  only(選配)= { postfit: 布林, ext: [名] }: 只取其中之項目(記入時只取該次失敗之項目 ⇒ 其後之計畫只剩這些項目而鍵相同者, 正規字串相同)
+/**
+ * 一個任務之待算之鍵之正規字串(求解窗後段之鍵與各診斷之鍵;同一組項目、同一組鍵者相同)
+ *
+ * @param {Object} task 輸入 planFill 之 tasks 之一項 { postfit, ext: [名], keys: { postfit, ext: { <名>: 鍵 } } }
+ * @param {Object|null} [only=null] 輸入只取之項目 { postfit: Boolean, ext: [名] },預設null(全部項目)
+ * @returns {String} 回傳正規字串
+ * @example
+ * fillSigSrcOf({ postfit: true, ext: [], keys: { postfit: { pick: 'p', evaluator: 'e' }, ext: {} } }) // => '{"postfit":["p","e",null,null],"ext":[]}'
+ */
+let fillSigSrcOf = (task, only = null) => {
+    let k = isObj(task) && isObj(task.keys) ? task.keys : {}
+    let kv = (o) => (isObj(o) ? ['pick', 'evaluator', 'diag', 'nulls'].map((x) => (o[x] === undefined ? null : o[x])) : null)
+    let ex = isObj(k.ext) ? k.ext : {}
+    let names = Object.keys(ex).filter((nm) => !isObj(only) || (Array.isArray(only.ext) && only.ext.includes(nm))).sort()
+    let pf = !isObj(only) || only.postfit === true ? kv(k.postfit) : null
+    return JSON.stringify({ postfit: pf, ext: names.map((nm) => [nm, kv(ex[nm])]) })
 }
 
 //registryOf, 診斷之登錄之更新: 雜湊相同者沿用其 since; 新增或改寫者 since = now; 前次無登錄(null)⇒ 全部 since 為 null(既有之正本值皆視為現行); 已移除之診斷不留
@@ -351,10 +394,10 @@ let postfitInfoOf = (fill, key, canonSel = null) => {
 /**
  * 一次附算或補算之結果轉為摘要之列
  *
- * @param {Object} r 輸入 { tasks(計畫之 tasks), results: [{ nodeId, postfit: 'ok' | 'failed' | null, ext: { ok: [名], failed: [名] }, error, kind }], backlog, sec, skipped: [字串], source('round' = 輪末之附算;其餘 = 命令列之補算), retryInfo(執行後之待重試 [{ id, n, last, source, [force] }]; 輪末之摘要據以列「來源為命令列之待重試」之個數) }
+ * @param {Object} r 輸入 { tasks(計畫之 tasks), results: [{ nodeId, postfit: 'ok' | 'failed' | null, ext: { ok: [名], failed: [名] }, error, kind }], backlog, sec, skipped: [字串], source('round' = 輪末之附算;其餘 = 命令列之補算), retryInfo(執行後之待重試 [{ id, n, last, source, [force] }]; 輪末之摘要據以列「來源為命令列之待重試」之個數), [backlogRun](輪末一併處理待補算者 { n: 本次處理之成品數, rest: 尚餘之成品數, capSec: 總時長之上限, [skipped]: 前次失敗而不重試、原因未變而未取之成品數(有者才帶), [failed]: 本次取用之待補算中失敗者之個數(有者才帶) }; 規則 R-REC-41) }
  * @param {Object} [opt={}] 輸入設定物件
  * @param {String} [opt.cmd='node g_rsi.mjs --mode fill'] 輸入補齊待補算之指令(列於待補算之後)
- * @returns {Array<String>} 回傳摘要之列(0 ~ 2 列;無待算亦無待補算者為空陣列)
+ * @returns {Array<String>} 回傳摘要之列(0 ~ 4 列;無待算亦無待補算者為空陣列)
  * @example
  * fillLinesOf({ tasks: [], results: [], backlog: { postfit: [], ext: {} }, sec: 0 }) // => []
  */
@@ -369,6 +412,15 @@ let fillLinesOf = (r, { cmd = 'node g_rsi.mjs --mode fill' } = {}) => {
         //重試之列只列暫時性之失敗(重跑結果相同之失敗與須重驗者不入待重試, 呼叫端另列); 重試之時機依本次之來源: 輪末之失敗 ⇒ 下一次輪末, 命令列之失敗 ⇒ 再執行補算工具時
         let bad = res.filter((x) => (x.postfit === 'failed' || (x.ext && Array.isArray(x.ext.failed) && x.ext.failed.length)) && !FILL_NO_RETRY_KINDS.includes(x.kind))
         out.push(`附算(求解窗後段與擴充診斷;佐證,不改 S):${res.length} 個成品;求解窗後段 成功 ${pfOk}${pfBad ? `、**失敗 ${pfBad}**` : ''};擴充診斷 補入 ${exOk} 項${exBad ? `、**失敗 ${exBad} 項**` : ''};${Math.round(r.sec || 0)} 秒${bad.length ? `;失敗者(${r.source === 'round' ? '下一次輪末重試' : '再執行補算工具時重試'}):${bad.map((x) => `${String(x.nodeId).slice(0, 8)}${x.error ? `(${String(x.error).split('\n')[0].slice(0, 80)})` : ''}`).join('、').slice(0, 300)}` : ''}`)
+    }
+    //輪末之附算一併處理待補算(規則 R-REC-41; 有 backlogRun 才列 = 本次有待補算且上限 > 0): 本次處理之成品數(含於上列之個數)與尚餘之個數; 尚餘者之各項照列於下一列之「待補算之成品」
+    //  skipped(選配)= 前次失敗而不重試、原因未變而未取之成品數: 有者另註, 且不寫「已補齊」(其仍待算, 照列於「待補算之成品」); 無者不帶此鍵、該列與無此欄時逐字相同
+    //  failed(選配)= 本次取用之待補算中失敗者(求解窗後段或任一診斷失敗;暫時性與重跑結果相同者皆計; 本次之範圍內之成品之失敗不計)之個數: 有者不寫「已補齊」、改註此數(失敗之內容見「附算」與「附算之失敗而不重試」之列); 無者不帶此鍵、該列與無此欄時逐字相同
+    let br = r.backlogRun
+    if (br && typeof br === 'object') {
+        let nSk = Number.isInteger(br.skipped) && br.skipped > 0 ? br.skipped : 0
+        let nFail = Number.isInteger(br.failed) && br.failed > 0 ? br.failed : 0
+        out.push(`附算一併處理待補算(樹上既有之成品,依成品之先後;總時長上限 ${br.capSec} 秒):本次 ${br.n} 個成品${br.rest ? `;**尚餘 ${br.rest} 個成品**(已達上限,留待下一次輪末)` : (nSk || nFail ? '' : ';已補齊')}${nFail ? `;本次取用者中 **${nFail} 個失敗**(失敗者見「附算」與「附算之失敗而不重試」之列)` : ''}${nSk ? `;另 ${nSk} 個前次失敗而不重試、原因未變,未取(以 \`${cmd} --only <id>\` 個別處理)` : ''}`)
     }
     let bl = r.backlog || { postfit: [], ext: {} }
     let nPf = Array.isArray(bl.postfit) ? bl.postfit.length : 0
@@ -386,4 +438,4 @@ let fillLinesOf = (r, { cmd = 'node g_rsi.mjs --mode fill' } = {}) => {
     return out
 }
 
-export { planFill, registryOf, sameKey, postfitRowOf, postfitLineOf, fillDocOf, postfitOfFill, postfitInfoOf, fillLinesOf, FILL_SCHEMA, FILL_DIR, POSTFIT_HEAD, FILL_NO_RETRY_KINDS }
+export { planFill, registryOf, sameKey, fillSigSrcOf, postfitRowOf, postfitLineOf, fillDocOf, postfitOfFill, postfitInfoOf, fillLinesOf, fillBacklogSecOf, FILL_SCHEMA, FILL_DIR, POSTFIT_HEAD, FILL_NO_RETRY_KINDS, FILL_BACKLOG_SEC }

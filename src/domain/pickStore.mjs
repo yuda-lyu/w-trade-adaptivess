@@ -4,6 +4,7 @@ import { loadPick } from '../eval/pickLoader.mjs'
 import { isIntegrityError, integrityError, assertIntrinsics, pushOwn } from '../eval/intrinsics.mjs'
 import { postfitInfoOf, FILL_DIR } from './fillPlan.mjs'
 import { pickHashOf, evaluatorFpOf, readFill } from './fillKeys.mjs'
+import { recentDiagOf } from './diagRead.mjs'
 
 //共同儲存「自適應挑選策略」區(規則 R-REC-25): <狀態根>/picks/
 //  目的: 各節點(探索與驗證皆含)交付之挑選模組統一歸檔 —— 程式碼之逐位複本 + 由迴圈以同一評估器重跑所得之回測期績效與必要之欄位,
@@ -256,7 +257,7 @@ let infoOf = (d, { meta = null, fam = null, ho = null, cross = undefined, postfi
     let op = m.op || {}
     let eq = op.eqYr || {}
     let ns = m.nullSideAct || {}
-    let nr = (m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side) || {}
+    let nr = recentDiagOf(m) || {} //近期活躍度版之 side(與領域、迴圈之驗證同一個「有值」之判準: 物件、不帶 error、超額為有限數值; 規則 R-REC-38 ⑦); 無值者皆 null
     let both = [ns.excess, nr.excess].filter((v) => typeof v === 'number')
     let sc = h.score || {}
     let c = d.conclusion || {}

@@ -11,7 +11,7 @@ import { spawnSync } from 'child_process'
 import { getSettings, FD_ROOT, P } from '../cfg.mjs'
 import { peekRound, nextLayerId, makePaths, readArmExtensions } from '../engineApi.mjs'
 import { writeJson } from '../engineProtocol.mjs'
-import { makeProjectOrExit } from '../domain/domain.mjs'
+import { makeProjectOrExit, rankKeyOf } from '../domain/domain.mjs'
 import { decideArgsOf } from '../domain/armCatalog.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
@@ -302,10 +302,13 @@ console.log('做夢方向之處置:', JSON.stringify((Pj.records.getDreamDoc(rou
         console.error('臂目錄之提案 / 擴充不如預期')
         process.exitCode = 8
     }
-    //補位載體(規則 R-REC-19): 樹上已有「可信、未被否決、臂數未滿」之成品時, 尚未試過之取法 / 執行層(D、E)之臂以其中 S 最高者為底(arms = 底之臂 + 該臂);
+    //補位載體(規則 R-REC-19): 樹上已有「可信、未被否決、臂數未滿」之成品時, 尚未試過之取法 / 執行層(D、E)之臂以其中排序鍵最高者為底(arms = 底之臂 + 該臂; 規則 R-REC-40: 鍵 = rankKeyOf, 同鍵者依 id);
     //  其餘層照舊為單臂根節點; 無此成品(冷啟動、或唯一可信者被否決)⇒ D / E 亦為單臂根節點; 有底之載體其任務之起點即該成品
     let cs = Pj.domain.carriers()
-    let bt = idx.map((r) => Pj.rsi.store.getNode(r.id)).filter((n) => n && n.status === 'executed' && n.score && !(n.score.flags && n.score.flags.vetoed) && n.evidence && n.evidence.trust === 'trusted' && n.spec.arms.length < 4).sort((a, b) => b.score.S - a.score.S)[0] || null
+    //eligOf / btOf, 可為底之成品(每次讀樹)與預期之底(其中排序鍵最高者)
+    let eligOf = () => idx.map((r) => Pj.rsi.store.getNode(r.id)).filter((n) => n && n.status === 'executed' && n.score && !(n.score.flags && n.score.flags.vetoed) && n.evidence && n.evidence.trust === 'trusted' && n.spec.arms.length < 4)
+    let btOf = () => eligOf().sort((a, b) => rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))[0] || null
+    let bt = btOf()
     let cD = cs.D30_volumeCut
     let cE = cs.E39_skipWeekend
     let cA = cs.A02_ntPit
@@ -317,7 +320,57 @@ console.log('做夢方向之處置:', JSON.stringify((Pj.records.getDreamDoc(rou
             ? cD.base === bt.id && cD.arms.includes('D30_volumeCut') && btAct.every((a) => cD.arms.includes(a)) && cD.arms.length === btAct.length + 1 && cE.base === bt.id && Pj.taskFor(cD).base.arms.join('+') === bt.spec.arms.join('+') && Pj.taskFor(cD).base.inactiveArms.join('+') === btOff.join('+')
             : cD.base === null && cD.arms.length === 1 && cE.base === null)
     console.log('補位載體:', bt ? `以 ${bt.id.slice(0, 8)}(${bt.spec.arms.join('+')}${btOff.length ? `;未作用 ${btOff.join('+')}` : ''})為底` : '樹上無可信且未被否決之成品 ⇒ 中性底', '| D30:', JSON.stringify(cD), '| E39:', JSON.stringify(cE), '| A02:', JSON.stringify(cA))
-    if (!okCar) {
+    //排序鍵之鑑別(規則 R-REC-40): 暫把可為底之成品之中 S 最高者之重放之 S 改為甚低(S 仍最高、排序鍵最低)⇒ 底須為排序鍵最高者(不是 S 最高者); 驗後還原
+    //  可為底之成品不足 2 個者(假審計只採納一部分), 暫把另一個已執行、未被否決、臂數未滿之節點之可信度改為 trusted 湊成 2 個(驗後還原)
+    let el = eligOf()
+    let okKey = true
+    let promoted = null
+    if (el.length === 1) {
+        let other = idx.map((r) => Pj.rsi.store.getNode(r.id)).find((n) => n && n.id !== el[0].id && n.status === 'executed' && n.score && Number.isFinite(n.score.S) && !(n.score.flags && n.score.flags.vetoed) && n.spec.arms.length < 4)
+        if (other) {
+            promoted = { id: other.id, evidence: other.evidence }
+            Pj.rsi.store.updateNode(other.id, (x) => {
+                x.evidence = { ...(x.evidence || {}), trust: 'trusted' }
+            })
+            el = eligOf()
+        }
+    }
+    if (el.length >= 2) {
+        let top = [...el].sort((a, b) => b.score.S - a.score.S || (a.id < b.id ? -1 : 1))[0]
+        let keepRep = top.raw ? top.raw.replays : undefined
+        let lowS = Math.min(...el.map((n) => n.score.S)) - 1e6
+        Pj.rsi.store.updateNode(top.id, (x) => {
+            x.raw = { ...x.raw, replays: [{ S: lowS - 1.25 }, { S: lowS - 2.75 }] }
+        })
+        let bt2 = btOf()
+        let cD2 = Pj.domain.carriers().D30_volumeCut
+        okKey = !!bt2 && bt2.id !== top.id && !!cD2 && cD2.base === bt2.id
+        console.log('補位載體之排序鍵:', `${promoted ? `暫把 ${promoted.id.slice(0, 8)} 之可信度改為 trusted;` : ''}S 最高者 ${top.id.slice(0, 8)} 之重放暫改為甚低 ⇒ 底 ${cD2 && cD2.base ? cD2.base.slice(0, 8) : '—'}(預期 ${bt2 ? bt2.id.slice(0, 8) : '—'})`)
+        Pj.rsi.store.updateNode(top.id, (x) => {
+            let raw = { ...x.raw }
+            if (keepRep === undefined) {
+                delete raw.replays
+            }
+            else {
+                raw.replays = keepRep
+            }
+            x.raw = raw
+        })
+    }
+    else {
+        console.log('補位載體之排序鍵: 可為底之成品不足 2 個(未驗)')
+    }
+    if (promoted) {
+        Pj.rsi.store.updateNode(promoted.id, (x) => {
+            if (promoted.evidence === undefined) {
+                delete x.evidence
+            }
+            else {
+                x.evidence = promoted.evidence
+            }
+        })
+    }
+    if (!okCar || !okKey) {
         console.error('補位載體不如預期')
         process.exitCode = 9
     }

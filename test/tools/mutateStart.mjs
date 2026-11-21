@@ -4,11 +4,12 @@ import path from 'path'
 import { createRequire } from 'module'
 import { spawnSync } from 'child_process'
 import { FD_ROOT, FD_TMP } from './synthLedger.mjs'
+import { dupIdsOf } from './mutateIds.mjs'
 
 
 //變異檢查(規則 R-EV-45 之守門之鑑別力): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
 //  用法: node test/tools/mutateStart.mjs [--list] [--check] [--only <id,id…>] [--out <結果.json>]
-//    --check 只核對各變異之錨點(須恰出現一次; all 者至少一次), 不跑測試; 未被殺者(SURVIVED)為測試之缺口 —— 補測試(或資料),不是補斷言
+//    --check 只核對各變異之錨點(須恰出現一次; all 者至少一次), 不跑測試; 另核全部變異之編號唯一(重複者列出並以非 0 離開; R-PKG-9); 未被殺者(SURVIVED)為測試之缺口 —— 補測試(或資料),不是補斷言
 //  複本不含 node_modules(由上層 node_modules 解析); 每個變異跑完還原; 結束刪複本
 let GUARDS = ['unit-ledgerStart', 'unit-fakeRound', 'unit-fullLedgerHint'] //對照(無變異之複本)跑之測試; 各變異只跑其「優先跑之測試」(第 4 欄)
 
@@ -161,6 +162,15 @@ if (args.includes('--list')) {
 let only = argv('only') ? String(argv('only')).split(',') : null
 let sel = M.map((m, i) => ({ m, i: i + 1 })).filter((x) => (only ? only.includes(x.m[0]) : true))
 let check = args.includes('--check')
+//--check 另核全部變異之編號唯一(不受 --only 限制; 重複者列出並以非 0 離開; 規則 R-PKG-9): 編號重複時 --only 會同時植入兩項, 錨點之核對偵不出
+if (check) {
+    let dup = dupIdsOf(M)
+    if (dup.length) {
+        console.log(`編號重複(各編號須唯一): ${dup.join('、')}`)
+        process.exit(1)
+    }
+    console.log(`編號唯一: ${M.length} 項`)
+}
 
 let normNl = (s) => s.replace(/\r\n/g, '\n')
 let root = path.join(FD_TMP, `mutStart_${process.pid}`)

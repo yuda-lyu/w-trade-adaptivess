@@ -6,6 +6,7 @@ import { stripComments } from '../eval/pickLoader.mjs'
 import { runNodeProc } from './proc.mjs'
 import { makeBacktest } from './backtest.mjs'
 import { gradeLabel } from './backtestGrade.mjs'
+import { recentDiagOf, neutralDeltaOf } from './diagRead.mjs'
 import { absOf, stripSearchPatterns, listRootExempt, entryExecOf, recursiveRootOf, scriptListsRoot, toolListsRoot, LR_CD } from './cmdScan.mjs'
 
 
@@ -769,14 +770,14 @@ let sideFlowIssue = (bt, tr, cfg = null) => {
     return `下單流量偏一側: 做空單之比例 訓練期 ${tr} / 回測期 ${bt}(全體隨機約 ${c.baseShort.train} / ${c.baseShort.backtest};兩期皆${up ? `≥ ${c.hi} 倍` : `≤ ${c.lo} 倍`} ⇒ 下單偏${up ? '做空' : '做多'}側屬組成,回測期之方向可能經由兩側活躍度之不對稱寫進模組;由審計判定)`
 }
 
-//  replays(選配): 各次重放之 { S, comp(組成對照之超額), recent(近期活躍度之組成對照之超額) }(規則 R-EV-24; 有給時該列一併列出)
+//  replays(選配): 各次重放之 { S, comp(組成對照之超額), recent(近期活躍度之組成對照之超額), [ext](一併載入之擴充診斷之摘要; 規則 R-REC-42) }(規則 R-EV-24; 有給時該列一併列出; 帶 ext 者另列各診斷之看板值之多抽之均)
 /**
  * 產生節點文件之補充說明列(領域指標;皆為回測期之數字)
  *
  * @param {Object} m 輸入評估之 metrics,讀取 period、op、nullSideAct、ext
  * @param {Array<Number>|null} [seedS=null] 輸入換亂數種子重放所得之 S 陣列,預設null
  * @param {Object|null} [train=null] 輸入訓練期診斷之選集組成 { longRatio, tags },預設null
- * @param {Array<Object>|null} [replays=null] 輸入各次重放之 { S, comp, recent },預設null
+ * @param {Array<Object>|null} [replays=null] 輸入各次重放之 { S, comp, recent, [ext] }(ext 為一併載入之擴充診斷之摘要;帶者另列各診斷之看板值之多抽之均),預設null
  * @param {Boolean} [half=false] 輸入是否為半庫版,預設false
  * @param {Object|null} [sideFlow=null] 輸入「下單流量偏一側」之設定(settings.score.sideFlow;「下單之做空比例」一列所附之全體隨機基準取自其與內建值之合併),預設null
  * @returns {Array<String>} 回傳說明列字串陣列
@@ -796,8 +797,11 @@ let notesOf = (m, seedS = null, train = null, replays = null, half = false, side
             out.push('半庫版(成品之 meta.params.half 為 0 或 1; 以 ctx.meta.tie 之雜湊把策略庫切半): 下列重放 = 另兩種切法, S 隨成員擺動, 不作「分數不穩」之判讀; 判內容以正本與重放之組成對照之均')
         }
         let hasRp = Array.isArray(replays) && replays.length === seedS.length && replays.some((x) => x && (typeof x.comp === 'number' || typeof x.recent === 'number'))
-        let rp = hasRp ? `;組成對照之超額 ${replays.map((x) => f1(x.comp)).join(' / ')}${m.nullSideAct && typeof m.nullSideAct.excess === 'number' ? `(正本 ${f1(m.nullSideAct.excess)})` : ''};近期活躍度之組成對照之超額 ${replays.map((x) => f1(x.recent)).join(' / ')}${m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side && typeof m.ext.nullRecentAct.side.excess === 'number' ? `(正本 ${f1(m.ext.nullRecentAct.side.excess)})` : ''}` : ''
-        out.push(`換亂數種子與同分次序之重放(迴圈${hasRp ? ';組成對照 32 抽' : ';不含虛無'}): S ${seedS.map((v) => f1(v)).join(' / ')}${rp} —— 每次同時換 ctx.rand 之種子與同分次序(ctx.meta.tie、同一進場棒之訊號先後);含隨機抽取、或主鍵大量同分(入選者實際由 tie 決定)之成品其結果隨之波動;各次之 S 與主分數相差很大者,主分數不可靠${hasRp ? ';**判內容以正本與各次重放之超額之平均為準,不以單抽**' : ''}`)
+        let rp = hasRp ? `;組成對照之超額 ${replays.map((x) => f1(x.comp)).join(' / ')}${m.nullSideAct && typeof m.nullSideAct.excess === 'number' ? `(正本 ${f1(m.nullSideAct.excess)})` : ''};近期活躍度之組成對照之超額 ${replays.map((x) => f1(x.recent)).join(' / ')}${recentDiagOf(m) ? `(正本 ${f1(recentDiagOf(m).excess)})` : ''}` : ''
+        //各擴充診斷之看板值之多抽之均(規則 R-REC-42; 重放帶其值者才列, 否則與改前相同)
+        let xm = extBoardMeansOf(m, replays)
+        let xmText = xm.length ? `;擴充診斷之看板值之均(正本與各次重放):${xm.map((x) => `${x.name} ${x.value}(${x.n} 抽)`).join('、')}` : ''
+        out.push(`換亂數種子與同分次序之重放(迴圈${hasRp ? ';組成對照 32 抽' : ';不含虛無'}): S ${seedS.map((v) => f1(v)).join(' / ')}${rp}${xmText} —— 每次同時換 ctx.rand 之種子與同分次序(ctx.meta.tie、同一進場棒之訊號先後);含隨機抽取、或主鍵大量同分(入選者實際由 tie 決定)之成品其結果隨之波動;各次之 S 與主分數相差很大者,主分數不可靠${hasRp ? ';**判內容以正本與各次重放之超額之平均為準,不以單抽**' : ''}`)
     }
     if (m.null) {
         out.push(`同劑量虛無(${m.null.draws} 抽;同決策日、同選集大小、同執行規則之隨機挑): 均 ${f1(m.null.mean)}%、sd ${f1(m.null.sd)};本成品之超額 ${f1(m.null.excess)} 個百分點(z ${m.null.z}、p ${m.null.p})`)
@@ -968,14 +972,29 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
             let nRep = Number.isInteger(st.eval.replicaSeeds) ? st.eval.replicaSeeds : 0
             let seed0 = st.eval.seed === undefined ? 1 : st.eval.seed
             let nDraw = Number.isInteger(st.eval.replicaNullDraws) ? st.eval.replicaNullDraws : 32
+            //重放一併載入之擴充診斷(規則 R-REC-42; settings.rsi.replicaExt): 預設 = 正本中帶看板值之診斷 + 正本之 neutralExec(其 delta 有值者); 'none' 或無此類診斷者之引數與改前逐字相同
+            let rxScope = replicaExtOf(st.rsi)
+            let extArgs = replicaExtArgsOf(rxScope, out.metrics)
+            let extArgs0 = ['--ext-only', 'nullRecentAct']
+            let replayOf = (i, fpS, ea) => runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), '--pick', fpPick, '--mode', 'full', '--null', String(nDraw), ...ea, '--seed', String(seed0 + i), '--tie-salt', String(i), '--out', fpS, '--no-log'], { cwd: FD_ROOT, timeoutMs: (st.eval.timeoutSec || 900) * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })
             for (let i = 1; i <= nRep; i++) {
                 let fpS = path.join(workDir, `harness_seed${i}.json`)
                 try {
                     fs.rmSync(fpS, { force: true })
                 }
                 catch (err) {}
-                let rs = await runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), '--pick', fpPick, '--mode', 'full', '--null', String(nDraw), '--ext-only', 'nullRecentAct', '--seed', String(seed0 + i), '--tie-salt', String(i), '--out', fpS, '--no-log'], { cwd: FD_ROOT, timeoutMs: (st.eval.timeoutSec || 900) * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })
+                let rs = await replayOf(i, fpS, extArgs)
                 let o = readJson(fpS)
+                //另載入之診斷使該次重放失敗者(逾時、完整性錯誤等; 診斷之拋錯本身由評估器記為 { error }, 不使之失敗)⇒ 以改前之引數再重放一次, 重放之 S 與既有之兩項不受影響
+                if ((rs.timeout || !o || o.ok !== true || !o.score) && extArgs.join(' ') !== extArgs0.join(' ')) {
+                    issues.push(`換亂數種子與同分次序之重放(第 ${i} 次)一併載入擴充診斷時失敗,已改為只載入 nullRecentAct 重放(該次無其他擴充診斷之值)`)
+                    try {
+                        fs.rmSync(fpS, { force: true })
+                    }
+                    catch (err) {}
+                    rs = await replayOf(i, fpS, extArgs0)
+                    o = readJson(fpS)
+                }
                 if (rs.timeout || !o || o.ok !== true || !o.score) {
                     issues.push(`換亂數種子與同分次序之重放失敗(第 ${i} 次)`)
                     break
@@ -984,8 +1003,10 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
                     break //結果不依賴亂數種子與同分次序
                 }
                 seedS.push(o.score.S)
-                let nr = o.metrics.ext && o.metrics.ext.nullRecentAct && o.metrics.ext.nullRecentAct.side
-                replays.push({ S: o.score.S, comp: o.metrics.nullSideAct && typeof o.metrics.nullSideAct.excess === 'number' ? o.metrics.nullSideAct.excess : null, recent: nr && typeof nr.excess === 'number' ? nr.excess : null })
+                let nr = recentDiagOf(o.metrics) //近期活躍度版之 side(與領域、共同儲存區同一個「有值」之判準: 物件、不帶 error、超額為有限數值; 規則 R-REC-38 ⑦)
+                //重放之擴充診斷之摘要(看板值與 neutralExec 之 delta; 'none' 者不存 ⇒ 紀錄與改前相同)
+                let rx = rxScope === 'none' ? null : replayExtOf(o.metrics)
+                replays.push({ S: o.score.S, comp: o.metrics.nullSideAct && typeof o.metrics.nullSideAct.excess === 'number' ? o.metrics.nullSideAct.excess : null, recent: nr ? nr.excess : null, ...(rx ? { ext: rx } : {}) })
             }
             //主分數為正而重放後為零或負: 分數依賴亂數抽取或同分次序(不否決, 由做夢審計)
             //  半庫版(成品自述 meta.params.half 為 0 或 1; 共用工具區之 *_half.mjs 樣板: 以 ctx.meta.tie 之雜湊切半)換同分次序即換一種切法 ⇒ 不列「分數不穩」,
@@ -1134,5 +1155,93 @@ let extSurfaceOf = (m) => {
 let EXT_FLAG_HEAD = '提示(擴充診斷 '
 let extFlagIssue = (f) => `${EXT_FLAG_HEAD}${f.name}): ${f.text}(共用工具區之擴充診斷所列;不否決,由審計判定)`
 
-export { makeVerify, scanTrace, deniedHalt, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, isHalfOf, runNodeProc, shortShareOf, sideFlowIssue, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD }
+//迴圈之重放一併載入擴充診斷(規則 R-REC-42): 換亂數種子與同分次序之重放(makeVerify)於 nullRecentAct 之外另載入之擴充診斷、其值之摘取與看板值之多抽之均
+//  不改重放本身(次數、種子、同分次序、虛無抽數)與正本之數字; 重放之診斷值只存於重放之紀錄(raw.replays[].ext 與 harness_seed*.json), 不寫回正本之 metrics.ext
+/**
+ * 重放之擴充診斷之載入範圍之預設值(settings.rsi.replicaExt 未給或無效時;R-REC-42):'board' = 正本之完整評估中帶看板值之診斷,另加正本之 neutralExec(其 delta 有值者,不論有無看板值)
+ *
+ * @type {String}
+ */
+let REPLICA_EXT = 'board'
+//replicaExtOf, 載入範圍(純函數): 'board'(預設)| 'all'(共用工具區 metrics/ 之全部)| 'none'(只 nullRecentAct = 改前)| 診斷名之陣列(另加 nullRecentAct);
+//  無效者(其他值、元素非字串、空字串或含逗號 / 空白之名)視為未給(不拋錯; 同附算之併行數 settings.rsi.fillParallel 之慣例)
+let replicaExtOf = (rsiCfg) => {
+    let v = rsiCfg && typeof rsiCfg === 'object' ? rsiCfg.replicaExt : undefined
+    if (v === 'board' || v === 'all' || v === 'none') {
+        return v
+    }
+    if (Array.isArray(v) && v.every((s) => typeof s === 'string' && s.length > 0 && !/[,\s]/.test(s))) {
+        return [...new Set(v)].sort()
+    }
+    return REPLICA_EXT
+}
+//replicaExtArgsOf, 重放之 --ext-only 引數(純函數): scope = replicaExtOf 之結果, m = 正本之 metrics(scope 為 'board' 時讀其各診斷之看板值與 neutralExec 之 delta)
+//  'all' ⇒ [](不指名 = 共用工具區之全部); 其餘 ⇒ ['--ext-only', 'nullRecentAct' 與所指之名(依名排序、去重)]; 'none' 或所指之名為空 ⇒ ['--ext-only', 'nullRecentAct'](與改前逐字相同)
+//  'board' 所指之名 = 正本中帶看板值之診斷 + 正本之 neutralExec(經 neutralDeltaOf 判為有值者〔物件、不帶 error、delta 為有限數值〕,不論其有無看板值: 重放之紀錄帶其 delta 為排序鍵所讀; 規則 R-REC-40、R-REC-42 ①);
+//  明列之名之陣列照所列(不自動加; 未列 neutralExec 者排序鍵每抽用正本之差)
+let replicaExtArgsOf = (scope, m) => {
+    if (scope === 'all') {
+        return []
+    }
+    let names = scope === 'board' ? [...extSurfaceOf(m).cells.map((c) => c.name), ...(neutralDeltaOf(m) !== null ? ['neutralExec'] : [])] : (Array.isArray(scope) ? scope : [])
+    let ns = [...new Set(names.filter((nm) => nm !== 'nullRecentAct' && !/[,\s]/.test(nm)))].sort()
+    return ['--ext-only', ['nullRecentAct', ...ns].join(',')]
+}
+//replayExtOf, 一次重放之結果之擴充診斷 → 重放之紀錄所存之摘要(純函數): 各診斷之看板值(extSurfaceOf 之 cells, 與正本同一套清理)與 neutralExec 之 delta(排序鍵所讀; 規則 R-REC-40);
+//  出錯(error)、無看板值者不存(neutralExec 有有限之 delta 者仍存其 delta); 皆無者回 null
+let replayExtOf = (m) => {
+    let out = {}
+    for (let c of extSurfaceOf(m).cells) {
+        out[c.name] = { board: c.value }
+    }
+    let delta = neutralDeltaOf(m)
+    if (delta !== null) {
+        out.neutralExec = { ...(out.neutralExec || {}), delta }
+    }
+    return Object.keys(out).length ? out : null
+}
+//boardMeanOf, 看板值之多抽之均(純函數): vals = 各抽之看板值(字串或數字; 正本在前); 每個值之數字(BOARD_NUM)換成佔位後之樣板須各抽相同, 依位置取均(小數位數 = 該位置各抽之最多者);
+//  少於 2 抽、樣板不同(例:「—」與數字、文字不同、正負號以「+」書寫者與不帶者)或無數字者回 null(不硬算)
+let BOARD_NUM = /-?\d+(?:\.\d+)?/g
+let boardMeanOf = (vals) => {
+    if (!Array.isArray(vals) || vals.length < 2) {
+        return null
+    }
+    let parts = vals.map((v) => {
+        let nums = []
+        let tpl = String(v).replace(BOARD_NUM, (x) => {
+            nums.push(x)
+            return '\u0000'
+        })
+        return { tpl, nums }
+    })
+    if (parts[0].nums.length === 0 || parts.some((p) => p.tpl !== parts[0].tpl)) {
+        return null
+    }
+    let mean = parts[0].nums.map((_, i) => {
+        let dec = Math.max(...parts.map((p) => (p.nums[i].split('.')[1] || '').length))
+        let s = (parts.reduce((a, p) => a + Number(p.nums[i]), 0) / parts.length).toFixed(dec)
+        return /^-0(\.0*)?$/.test(s) ? s.slice(1) : s
+    })
+    return parts[0].tpl.split('\u0000').reduce((acc, seg, i) => acc + (i > 0 ? mean[i - 1] : '') + seg, '')
+}
+//extBoardMeansOf, 各診斷之看板值之多抽之均(正本與各次重放; 純函數): m = 正本之 metrics, replays = 各次重放之紀錄(raw.replays; 其 ext 為 replayExtOf 之結果)
+//  回 [{ name, label, value, n }](依診斷名; n = 所取之抽數): 只列正本有看板值、至少一次重放帶其看板值且可取均者; 重放皆未帶 ext 者回 [](看板與節點文件與改前相同)
+let extBoardMeansOf = (m, replays) => {
+    let rp = Array.isArray(replays) ? replays.filter((x) => x && x.ext && typeof x.ext === 'object') : []
+    if (!rp.length) {
+        return []
+    }
+    let out = []
+    for (let c of extSurfaceOf(m).cells) {
+        let vals = [c.value, ...rp.map((x) => (x.ext[c.name] && x.ext[c.name].board !== undefined ? x.ext[c.name].board : null)).filter((v) => v !== null)]
+        let v = boardMeanOf(vals)
+        if (v !== null) {
+            out.push({ name: c.name, label: c.label, value: v, n: vals.length })
+        }
+    }
+    return out
+}
+
+export { makeVerify, scanTrace, deniedHalt, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, isHalfOf, runNodeProc, shortShareOf, sideFlowIssue, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD, replicaExtOf, replicaExtArgsOf, replayExtOf, boardMeanOf, extBoardMeansOf, REPLICA_EXT }
 export default makeVerify

@@ -3,11 +3,12 @@ import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
 import { FD_ROOT, FD_TMP } from './synthLedger.mjs'
+import { dupIdsOf } from './mutateIds.mjs'
 
 
-//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(cmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); 指令解析已自 verify.mjs 搬入 cmdScan.mjs, 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
+//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(cmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); 指令解析已自 verify.mjs 搬入 cmdScan.mjs, 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
 //  用法(測試以 quiet-run --lock 執行): node test/tools/mutateBar.mjs [--list] [--check] [--control-only] [--only <id,id…>] [--from <序> --to <序>] [--out <結果.json>]
-//    --check 只核對各變異之錨點(須恰出現一次; all 者至少一次), 不跑測試;未被殺者(survived)為測試之缺口 —— 補測試,不是補斷言(見 sgud/exp 之變異作法)
+//    --check 只核對各變異之錨點(須恰出現一次; all 者至少一次), 不跑測試; 另核全部變異之編號唯一(重複者列出並以非 0 離開; R-PKG-9);未被殺者(survived)為測試之缺口 —— 補測試,不是補斷言(見 sgud/exp 之變異作法)
 //    --control-only 只跑對照(守門之測試與所選變異之優先測試, 不植入變異)並列出所選變異中「無法判定」者, 供不重跑全部變異而盤點分類
 //  對照 = 無變異之複本跑守門之測試(GUARDS; 須全綠, 否則中止)與所選變異之優先測試(不在 GUARDS 內者, 各單獨跑一次):
 //    優先測試於對照即失敗者(複本內之失敗與變異無關, 例: 測試內之規則運算式不合複本之路徑), 其變異記為 UNDECIDABLE(無法判定): 不植入、不記為被殺(否則該測試之無關失敗會被誤記為變異被殺)
@@ -252,9 +253,9 @@ let M = [
     ['M03', 'src/domain/domain.mjs', [['let recentOk = recent ? recent.excess > 0 && recent.p <= pMax : null', 'let recentOk = recent ? recent.excess > 0 && recent.p < pMax : null']], ['unit-searchMapRecent']],
     ['M04', 'src/domain/domain.mjs', [['let recentOk = recent ? recent.excess > 0 && recent.p <= pMax : null', 'let recentOk = recent ? recent.excess > 0 || recent.p <= pMax : null']], ['unit-searchMapRecent']],
     ['M05', 'src/domain/domain.mjs', [['split: recent !== null && builtin !== recentOk }', 'split: recent !== null }']], ['unit-searchMapRecent']],
-    ['M06', 'src/domain/domain.mjs', [["let s = e && typeof e === 'object' && !e.error ? e.side : null", "let s = e && typeof e === 'object' ? e.side : null"]], ['unit-searchMapRecent']],
+    ['M06', 'src/domain/diagRead.mjs', [["let s = e && typeof e === 'object' && !e.error ? e.side : null", "let s = e && typeof e === 'object' ? e.side : null"]], ['unit-searchMapRecent', 'unit-recentDiag']], //recentDiagOf 移至 diagRead.mjs(Gitea #199 主控之裁定; 錨點隨之)
     ['M07', 'src/domain/domain.mjs', [['return s && Number.isFinite(s.p) ? s : null', 'return s ? s : null']], ['unit-searchMapRecent']], //recentSideOf 不要求 p 為有限數值
-    ['M08', 'src/domain/domain.mjs', [["return s && typeof s === 'object' && Number.isFinite(s.excess) ? s : null", "return s && typeof s === 'object' ? s : null"]], ['unit-searchMapRecent']], //recentDiagOf(recentSideOf 與 recentExcessOf 共用)不要求超額為有限數值
+    ['M08', 'src/domain/diagRead.mjs', [["return s && typeof s === 'object' && Number.isFinite(s.excess) ? s : null", "return s && typeof s === 'object' ? s : null"]], ['unit-searchMapRecent', 'unit-recentDiag']], //recentDiagOf(recentSideOf 與 recentExcessOf 共用)不要求超額為有限數值; 移至 diagRead.mjs(錨點隨之)
     ['M09', 'src/domain/domain.mjs', [['return s.split && extSurfaceOf(m).notContent.length === 0 ? s : null', 'return s.split ? s : null']], ['unit-searchMapRecent']],
     ['M10', 'src/domain/domain.mjs', [['let recentClause = nRecent ? ', 'let recentClause = true ? ']], ['unit-searchMapRecent']],
     ['M11', 'src/domain/domain.mjs', [['        if (spRows.length) {', '        if (true) {']], ['unit-searchMapRecent']],
@@ -495,12 +496,131 @@ let M = [
     ['J02', 'src/domain/domain.mjs', [['            let r0 = recentExcessOf(m)\n            return `${mean(', "            let r0 = m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null\n            return `${mean("]], ['unit-searchMapRecent']],
     ['J03', 'src/domain/domain.mjs', [['            let r0 = recentExcessOf(m)\n            let useRecent', "            let r0 = m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null\n            let useRecent"]], ['unit-searchMapRecent']],
     ['J04', 'src/domain/domain.mjs', [['let recentExcessOf = (m) => {\n    let s = recentDiagOf(m)', 'let recentExcessOf = (m) => {\n    let s = recentSideOf(m)']], ['unit-searchMapRecent']],
-    ['J05', 'src/domain/domain.mjs', [["let e = m && m.ext && typeof m.ext === 'object' ? m.ext.nullRecentAct : null\n    let s = e && typeof e === 'object' && !e.error ? e.side : null\n    return s && typeof s === 'object' && Number.isFinite(s.excess)", "let e = m && m.ext && typeof m.ext === 'object' ? m.ext.nullRecentAct : null\n    let s = e && typeof e === 'object' ? e.side : null\n    return s && typeof s === 'object' && Number.isFinite(s.excess)"]], ['unit-searchMapRecent']],
+    ['J05', 'src/domain/diagRead.mjs', [["let e = m && m.ext && typeof m.ext === 'object' ? m.ext.nullRecentAct : null\n    let s = e && typeof e === 'object' && !e.error ? e.side : null\n    return s && typeof s === 'object' && Number.isFinite(s.excess)", "let e = m && m.ext && typeof m.ext === 'object' ? m.ext.nullRecentAct : null\n    let s = e && typeof e === 'object' ? e.side : null\n    return s && typeof s === 'object' && Number.isFinite(s.excess)"]], ['unit-searchMapRecent', 'unit-recentDiag']], //移至 diagRead.mjs(錨點隨之)
     //── 迴圈專用之環境變數(Z 系列; verify.mjs 之 forbiddenPats; 規則 R-RUN-11 之清除角色變數)──
     ['Z01', 'src/domain/verify.mjs', [['[/ARSI_HARNESS|ARSI_AGENT_ROLE/, ', '[/ARSI_HARNESS/, ']], ['unit-cmdScan']],
     ['Z02', 'src/domain/verify.mjs', [['[/ARSI_HARNESS|ARSI_AGENT_ROLE/, ', '[/ARSI_AGENT_ROLE/, ']], ['unit-cmdScan']],
     ['Z03', 'src/domain/verify.mjs', [["[/ARSI_HARNESS|ARSI_AGENT_ROLE/, '迴圈專用之環境變數']", "[/ARSI_HARNESS|ARSI_AGENT_ROLE/, '迴圈專用之環境變數(角色)']"]], ['unit-cmdScan']],
     ['Z04', 'src/domain/verify.mjs', [['[/ARSI_HARNESS|ARSI_AGENT_ROLE/, ', '[/ARSI_HARNESS|ARSI_AGENT/, ']], ['unit-cmdScan']],
+    //── 排序鍵(SK 系列; 規則 R-REC-40; domain.mjs 之 neutralDeltaOf / rankKeyOf 與各用鍵處、fakeRound.mjs 之補位核對)──
+    //  SK01 ~ SK08 鍵之定義之各分支; SK09 ~ SK10 補位之底; SK11 ~ SK14 參考節點; SK15 ~ SK21 看板(SK21 為等價: 臂之最佳因鍵而變者必使節點一覽之次序亦變); SK22 ~ SK26、SK28 搜尋地圖; SK27 假輪次
+    ['SK01', 'src/domain/diagRead.mjs', [['!Array.isArray(e) && !e.error && Number.isFinite(e.delta) ? e.delta : null', '!Array.isArray(e) && Number.isFinite(e.delta) ? e.delta : null']], ['unit-rankKey']],
+    ['SK02', 'src/domain/diagRead.mjs', [['&& !e.error && Number.isFinite(e.delta) ? e.delta : null', "&& !e.error && typeof e.delta === 'number' ? e.delta : null"]], ['unit-rankKey']],
+    ['SK03', 'src/domain/domain.mjs', [['for (let x of Array.isArray(raw.replays) ? raw.replays : []) {', 'for (let x of []) {']], ['unit-rankKey']],
+    ['SK04', 'src/domain/domain.mjs', [['let vs = [d0 === null ? S : S - d0]', 'let vs = [S]']], ['unit-rankKey']],
+    ['SK05', 'src/domain/domain.mjs', [['let d = dx === null ? d0 : dx', 'let d = d0']], ['unit-rankKey']],
+    ['SK06', 'src/domain/domain.mjs', [['vs.push(d === null ? x.S : x.S - d)', 'vs.push(x.S)']], ['unit-rankKey']],
+    ['SK07', 'src/domain/domain.mjs', [['if (x && Number.isFinite(x.S)) {\n            let dx', "if (x && typeof x.S === 'number') {\n            let dx"]], ['unit-rankKey']],
+    ['SK08', 'src/domain/domain.mjs', [['let dx = d0 === null ? null : neutralDeltaOf(x)', 'let dx = neutralDeltaOf(x)']], ['unit-rankKey']],
+    ['SK09', 'src/domain/domain.mjs', [['.sort((a, b) => rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))[0] || null', '.sort((a, b) => b.score.S - a.score.S || (a.id < b.id ? -1 : 1))[0] || null']], ['unit-rankKey']],
+    ['SK10', 'src/domain/domain.mjs', [['rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))[0] || null', 'rankKeyOf(b) - rankKeyOf(a))[0] || null']], ['unit-rankKey']],
+    ['SK11', 'src/domain/domain.mjs', [['(kvOf(b) - kvOf(a))).slice(0, st.rsi.refTopNodes || 3)', '(b.score.S - a.score.S)).slice(0, st.rsi.refTopNodes || 3)']], ['unit-rankKey']],
+    ['SK12', 'src/domain/domain.mjs', [['let refByKey = topK.some((n, i) => n !== topS[i])', 'let refByKey = false']], ['unit-rankKey']],
+    ['SK13', 'src/domain/domain.mjs', [['let refByKey = topK.some((n, i) => n !== topS[i])', 'let refByKey = true']], ['unit-rankKey']],
+    ['SK14', 'src/domain/domain.mjs', [["',以中性執行之 S 計'", "''"]], ['unit-rankKey']],
+    ['SK15', 'src/domain/domain.mjs', [['let sorted = byKey ? sortedK : sortedS', 'let sorted = sortedS']], ['unit-rankKey']],
+    ['SK16', 'src/domain/domain.mjs', [['let byKey = sortedK.some((n, i) => n !== sortedS[i])', 'let byKey = true']], ['unit-rankKey']],
+    ['SK17', 'src/domain/domain.mjs', [['let keyNoteOf = (n) => (byKey && n.score', 'let keyNoteOf = (n) => (n.score']], ['unit-rankKey']],
+    ['SK18', 'src/domain/domain.mjs', [['Math.round(rankKeyOf(n) * 100) !== Math.round(n.score.S * 100)', 'rankKeyOf(n) !== n.score.S']], ['unit-rankKey']],
+    ['SK19', 'src/domain/domain.mjs', [['let kbHit = !!kb && ss.length > 0 && kb.score.S !== Math.max(...ss)', 'let kbHit = false']], ['unit-rankKey']],
+    ['SK20', 'src/domain/domain.mjs', [['kvOf(n) > kvOf(b) ? n : b', 'kvOf(n) < kvOf(b) ? n : b']], ['unit-rankKey']],
+    ['SK21', 'src/domain/domain.mjs', [['if (byKey || armHit) {', 'if (byKey) {']], ['unit-rankKey'], 'equiv'],
+    ['SK22', 'src/domain/domain.mjs', [['let best = (xs) => xs.filter((n) => sOf(n) !== null).sort((a, b) => kvOf(b) - kvOf(a))[0] || null', 'let best = (xs) => xs.filter((n) => sOf(n) !== null).sort((a, b) => sOf(b) - sOf(a))[0] || null']], ['unit-rankKey']],
+    ['SK23', 'src/domain/domain.mjs', [['let hit = !!n && n !== bestS(xs)', 'let hit = false']], ['unit-rankKey']],
+    ['SK24', 'src/domain/domain.mjs', [['        if (keyHits) {', '        if (false) {']], ['unit-rankKey']],
+    ['SK25', 'src/domain/domain.mjs', [["byKeyOf(top, cand) ? keyMark(top) : ''", "''"]], ['unit-rankKey']],
+    ['SK26', 'src/domain/domain.mjs', [["kHit ? '排序鍵最高' : 'S 最高'", "'S 最高'"]], ['unit-rankKey']],
+    ['SK27', 'src/tools/fakeRound.mjs', [['.sort((a, b) => rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))[0] || null', '.sort((a, b) => b.score.S - a.score.S)[0] || null']], ['unit-fakeRound']],
+    ['SK28', 'src/domain/domain.mjs', [['let keyMark = (n) => `〔依排序鍵 ${f1(kvOf(n))}〕`', "let keyMark = (n) => ''"]], ['unit-rankKey']],
+    ['SK29', 'src/domain/domain.mjs', [['return vs.every((v) => v === vs[0]) ? vs[0] : vs.reduce(', 'return vs.reduce(']], ['unit-rankKey']], //各抽全相同時取該值本身(複審所見;不留和除以抽數之 1 ULP 尾差)
+    //── 輪末之附算一併處理待補算(BL 系列; 規則 R-REC-41; domain.mjs 之 fill / afterRound、fillPlan.mjs、texts.mjs)──
+    ['BL01', 'src/domain/domain.mjs', [['if (Number.isFinite(backlogSec) && backlogSec > 0 && Array.isArray(targets)) {', 'if (false) {']], ['unit-fillBacklog']],
+    ['BL02', 'src/domain/domain.mjs', [['.filter((id) => !inRetry.has(id)))', ')']], ['unit-fillBacklog']],
+    ['BL03', 'src/domain/domain.mjs', [['let order = nodes.map((n) => n.id).filter((id) => blIds.has(id))', 'let order = [...blIds].sort()']], ['unit-fillBacklog']],
+    ['BL04', 'src/domain/domain.mjs', [['let capped0 = () => next >= nMain && clockOf() - tCap0 >= backlogSec * 1000', 'let capped0 = () => false']], ['unit-fillBacklog']],
+    ['BL05', 'src/domain/domain.mjs', [["let clockOf = typeof inject.clock === 'function' ? inject.clock : () => Date.now()", 'let clockOf = () => Date.now()']], ['unit-fillBacklog']],
+    ['BL06', 'src/domain/domain.mjs', [['let blDone = new Set(tasks.slice(nMain, Math.max(nMain, Math.min(next, tasks.length))).map((x) => x.nodeId))', 'let blDone = new Set()']], ['unit-fillBacklog']],
+    ['BL07', 'src/domain/domain.mjs', [['...(blTasks.length || nSkipBl ? { backlogRun:', '...(false ? { backlogRun:']], ['unit-fillBacklog']],
+    ['BL08', 'src/domain/domain.mjs', [['backlogSec: fillBacklogSecOf(st.rsi), ', '']], ['unit-fillBacklog']],
+    ['BL09', 'src/domain/fillPlan.mjs', [['iseint(v) && Number(v) >= 0 ? Number(v) : FILL_BACKLOG_SEC', 'iseint(v) ? Number(v) : FILL_BACKLOG_SEC']], ['unit-fillBacklog']],
+    ['BL10', 'src/domain/fillPlan.mjs', [['let FILL_BACKLOG_SEC = 1800', 'let FILL_BACKLOG_SEC = 0']], ['unit-fillBacklog']],
+    ['BL11', 'src/domain/fillPlan.mjs', [["    if (br && typeof br === 'object') {", '    if (false) {']], ['unit-fillBacklog']],
+    ['BL12', 'src/domain/texts.mjs', [['let backlogOn = fillBacklogSecOf(st.rsi) > 0 && !(st.rsi && st.rsi.autoFill === false)', 'let backlogOn = fillBacklogSecOf(st.rsi) > 0']], ['unit-fillBacklog']],
+    ['BL13', 'src/domain/texts.mjs', [['(backlogOn ? FILL_BACKLOG_ON : FILL_BACKLOG_OFF)', '(FILL_BACKLOG_OFF)']], ['unit-fillBacklog', 'unit-dreamOnly']],
+    ['BL14', 'src/domain/domain.mjs', [['if (next >= tasks.length || capped0()) {', 'if (next >= tasks.length) {']], ['unit-fillBacklog']],
+    ['BL15', 'src/domain/domain.mjs', [['while (next < tasks.length && !capped0()) {', 'while (next < tasks.length) {']], ['unit-fillBacklog']],
+    ['BL16', 'src/domain/domain.mjs', [['let tasks = blTasks.length ? [...plan.tasks, ...blTasks] : plan.tasks', 'let tasks = plan.tasks']], ['unit-fillBacklog']],
+    //不重試之失敗之紀錄(R-REC-41 之補充): 略過之判定、記入、移除、只限輪末之一併處理、狀態檔之比較與寫法、摘要
+    ['BL17', 'src/domain/domain.mjs', [['if (blRec.has(tk.nodeId) && blRec.get(tk.nodeId) === fillSigOf(tk)) {', 'if (false) {']], ['unit-fillBacklog']],
+    ['BL18', 'src/domain/domain.mjs', [['if (blRec.has(tk.nodeId) && blRec.get(tk.nodeId) === fillSigOf(tk)) {', 'if (blRec.has(tk.nodeId)) {']], ['unit-fillBacklog']],
+    ['BL19', 'src/domain/domain.mjs', [['for (let x of results.filter((r) => FILL_NO_RETRY_KINDS.includes(r.kind))) {', 'for (let x of []) {']], ['unit-fillBacklog']],
+    ['BL20', 'src/domain/domain.mjs', [["sig: fillSigOf(tk, { postfit: x.postfit === 'failed', ext: x.ext.failed })", 'sig: fillSigOf(tk)']], ['unit-fillBacklog']],
+    ['BL21', 'src/domain/domain.mjs', [['                    if (!still.has(id)) {', '                    if (false) {']], ['unit-fillBacklog']],
+    ['BL22', 'src/domain/domain.mjs', [['let tasks = blTasks.length ? [...plan.tasks, ...blTasks] : plan.tasks', 'let tasks = [...plan.tasks.filter((t) => !fsr.blocked.some((b) => b.id === t.nodeId && b.sig === fillSigOf(t))), ...blTasks]']], ['unit-fillBacklog']],
+    ['BL23', 'src/domain/domain.mjs', [['retryInfo, blockedInfo])', 'retryInfo, stOld.blocked === undefined ? [] : stOld.blocked])']], ['unit-fillBacklog']],
+    ['BL24', 'src/domain/domain.mjs', [['...(blockedInfo.length ? { blocked: blockedInfo } : {})', 'blocked: blockedInfo']], ['unit-fillBacklog']],
+    ['BL25', 'src/domain/domain.mjs', [['blocked: blockedOf(o.blocked), note: null', 'blocked: [], note: null']], ['unit-fillBacklog']],
+    ['BL26', 'src/domain/domain.mjs', [['...(nSkipBl ? { skipped: nSkipBl } : {})', '']], ['unit-fillBacklog']],
+    ['BL27', 'src/domain/fillPlan.mjs', [["(nSk || nFail ? '' : ';已補齊')", "';已補齊'"]], ['unit-fillBacklog']], //本輪(tad199b)隨「已補齊」之條件加 nFail 而錨點隨之
+    ['BL28', 'src/domain/fillPlan.mjs', [["['pick', 'evaluator', 'diag', 'nulls'].map(", "['pick', 'evaluator', 'nulls'].map("]], ['unit-fillBacklog']],
+    //── 迴圈之重放一併載入擴充診斷(RX 系列; 規則 R-REC-42; verify.mjs 之 replicaExtOf / replicaExtArgsOf / replayExtOf / boardMeanOf / extBoardMeansOf / makeVerify / notesOf、domain.mjs 之看板)──
+    ['RX01', 'src/domain/verify.mjs', [["v.every((s) => typeof s === 'string' && s.length > 0 && !/[,\\s]/.test(s))", "v.every((s) => typeof s === 'string')"]], ['unit-replayExt']],
+    ['RX02', 'src/domain/verify.mjs', [["let REPLICA_EXT = 'board'", "let REPLICA_EXT = 'none'"]], ['unit-replayExt']],
+    ['RX03', 'src/domain/verify.mjs', [["    if (scope === 'all') {\n        return []\n    }", '    if (false) {\n        return []\n    }']], ['unit-replayExt']],
+    ['RX04', 'src/domain/verify.mjs', [["let names = scope === 'board' ? [...extSurfaceOf(m).cells.map((c) => c.name),", "let names = scope === 'board' ? [...Object.keys((m && m.ext) || {}),"]], ['unit-replayExt']],
+    ['RX05', 'src/domain/verify.mjs', [[".filter((nm) => nm !== 'nullRecentAct' && !/[,\\s]/.test(nm))", ".filter((nm) => nm !== 'nullRecentAct')"]], ['unit-replayExt']],
+    ['RX06', 'src/domain/verify.mjs', [[".filter((nm) => nm !== 'nullRecentAct' && !/[,\\s]/.test(nm))", '.filter((nm) => !/[,\\s]/.test(nm))']], ['unit-replayExt']],
+    ['RX07', 'src/domain/verify.mjs', [['if (delta !== null) {', 'if (false) {']], ['unit-replayExt']], //replayExtOf 改取 neutralDeltaOf(diagRead.mjs; Gitea #199 主控之裁定 1; 錨點隨之)
+    ['RX08', 'src/domain/diagRead.mjs', [['!Array.isArray(e) && !e.error && Number.isFinite(e.delta)', '!Array.isArray(e) && Number.isFinite(e.delta)']], ['unit-replayExt']], //neutralDeltaOf 之 error 判定(重放之紀錄經 replayExtOf 取之)
+    ['RX09', 'src/domain/verify.mjs', [['parts.some((p) => p.tpl !== parts[0].tpl)', 'false']], ['unit-replayExt']],
+    ['RX10', 'src/domain/verify.mjs', [["let dec = Math.max(...parts.map((p) => (p.nums[i].split('.')[1] || '').length))", 'let dec = 1']], ['unit-replayExt']],
+    ['RX11', 'src/domain/verify.mjs', [['return /^-0(\\.0*)?$/.test(s) ? s.slice(1) : s', 'return s']], ['unit-replayExt']],
+    ['RX12', 'src/domain/verify.mjs', [["let rx = rxScope === 'none' ? null : replayExtOf(o.metrics)", 'let rx = replayExtOf(o.metrics)']], ['unit-replayExt']],
+    ['RX13', 'src/domain/verify.mjs', [["&& extArgs.join(' ') !== extArgs0.join(' ')) {", '&& false) {']], ['unit-replayExt']],
+    ['RX14', 'src/domain/verify.mjs', [['let rs = await replayOf(i, fpS, extArgs)', 'let rs = await replayOf(i, fpS, extArgs0)']], ['unit-replayExt']],
+    ['RX15', 'src/domain/verify.mjs', [['${rp}${xmText} ——', '${rp} ——']], ['unit-replayExt']],
+    ['RX16', 'src/domain/domain.mjs', [['/ ${mean([r0, ...rp.map((x) => x.recent)])}${xm ? `;${xm}` : \'\'}`', '/ ${mean([r0, ...rp.map((x) => x.recent)])}`']], ['unit-replayExt']],
+    ['RX17', 'src/domain/domain.mjs', [["${anyXm ? ';擴充診斷之看板值之均' : ''}", '']], ['unit-replayExt']],
+    ['RX18', 'src/domain/domain.mjs', [["${x.n < 1 + rp.length ? `(${x.n} 抽)` : ''}", '']], ['unit-replayExt']],
+    ['RX19', 'src/domain/verify.mjs', [['out[c.name] = { board: c.value }', 'out[c.name] = { board: m.ext[c.name].board }']], ['unit-replayExt']],
+    ['RX20', 'src/domain/verify.mjs', [['if (parts[0].nums.length === 0 || ', 'if (']], ['unit-replayExt']],
+    ['RX21', 'src/domain/verify.mjs', [["let rp = Array.isArray(replays) ? replays.filter((x) => x && x.ext && typeof x.ext === 'object') : []", 'let rp = Array.isArray(replays) ? replays.filter(Boolean) : []']], ['unit-replayExt']],
+    ['RX22', 'src/domain/domain.mjs', [['        if (anyXm) {', '        if (false) {']], ['unit-replayExt']],
+    //── 近期活躍度版之診斷之「有值」之唯一判準(DR 系列; R-REC-38 ⑦; recentDiagOf 於 diagRead.mjs; 驗證之兩處與共同儲存區之一處共用; Gitea #199 之主控另加; 既有之 M06、M08、J05 之錨點隨函數移至 diagRead.mjs)──
+    ['DR01', 'src/domain/diagRead.mjs', [['Number.isFinite(s.excess) ? s : null', "typeof s.excess === 'number' ? s : null"]], ['unit-recentDiag', 'unit-searchMapRecent']], //NaN / ±Infinity 之超額亦視為有值
+    ['DR02', 'src/domain/verify.mjs', [["${recentDiagOf(m) ? `(正本 ${f1(recentDiagOf(m).excess)})` : ''}", "${m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side && typeof m.ext.nullRecentAct.side.excess === 'number' ? `(正本 ${f1(m.ext.nullRecentAct.side.excess)})` : ''}"]], ['unit-recentDiag']], //節點文件之重放一列改回內嵌之舊判準
+    ['DR03', 'src/domain/verify.mjs', [['let nr = recentDiagOf(o.metrics) //', 'let nr = o.metrics.ext && o.metrics.ext.nullRecentAct && o.metrics.ext.nullRecentAct.side //'], ['recent: nr ? nr.excess : null', "recent: nr && typeof nr.excess === 'number' ? nr.excess : null"]], ['unit-replayExt']], //重放之紀錄改回內嵌之舊判準
+    ['DR04', 'src/domain/pickStore.mjs', [['let nr = recentDiagOf(m) || {} //', 'let nr = (m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side) || {} //']], ['unit-recentDiag']], //共同儲存區改回內嵌之舊判準
+    ['DR05', 'src/domain/pickStore.mjs', [['let nr = recentDiagOf(m) || {} //', 'let nr = (recentDiagOf(m) && Number.isFinite(recentDiagOf(m).p) ? recentDiagOf(m) : null) || {} //']], ['unit-recentDiag']], //共同儲存區另要求 p 為有限數值(只讀超額之處不要求 p)
+    ['DR06', 'src/domain/verify.mjs', [['${recentDiagOf(m) ? `(正本', '${recentDiagOf(m) && Number.isFinite(recentDiagOf(m).p) ? `(正本']], ['unit-recentDiag', 'unit-replayExt']], //節點文件之重放一列另要求 p 為有限數值
+    ['DR07', 'src/domain/verify.mjs', [['recent: nr ? nr.excess : null', 'recent: nr && Number.isFinite(nr.p) ? nr.excess : null']], ['unit-replayExt']], //重放之紀錄另要求 p 為有限數值
+    //── 變異工具之編號唯一(UQ 系列; R-PKG-9; --check 另核編號唯一; Gitea #199 之主控另加; 錨點含換行以免與本表之列自身相符)──
+    ['UQ01', 'test/tools/mutateIds.mjs', [['if (seen.has(id) && !dup.includes(id)) {', 'if (false) {']], ['unit-mutateIds']],
+    ['UQ02', 'test/tools/mutateIds.mjs', [['if (seen.has(id) && !dup.includes(id)) {', 'if (seen.has(id)) {']], ['unit-mutateIds']], //三次出現者列兩次
+    ['UQ03', 'test/tools/mutateBar.mjs', [['    let dup = dupIdsOf(M)\n    if (dup.length) {', '    let dup = []\n    if (dup.length) {']], ['unit-mutateIds']],
+    ['UQ04', 'test/tools/mutateBar.mjs', [["${dup.join('、')}`)\n        process.exit(1)", "${dup.join('、')}`)\n        process.exit(0)"]], ['unit-mutateIds']],
+    ['UQ05', 'test/tools/mutateBar.mjs', [["${dup.join('、')}`)\n        process.exit(1)", '`)\n        process.exit(1)']], ['unit-mutateIds']], //不列重複之編號
+    ['UQ06', 'test/tools/mutateBar.mjs', [['    console.log(`編號唯一: ${M.length} 項`)\n}', '}']], ['unit-mutateIds']],
+    ['UQ07', 'test/tools/mutateStart.mjs', [['    let dup = dupIdsOf(M)\n    if (dup.length) {', '    let dup = []\n    if (dup.length) {']], ['unit-mutateIds']],
+    ['UQ08', 'test/tools/mutateStart.mjs', [["${dup.join('、')}`)\n        process.exit(1)", "${dup.join('、')}`)\n        process.exit(0)"]], ['unit-mutateIds']],
+    ['UQ09', 'test/tools/mutateStart.mjs', [["${dup.join('、')}`)\n        process.exit(1)", '`)\n        process.exit(1)']], ['unit-mutateIds']],
+    ['UQ10', 'test/tools/mutateStart.mjs', [['    console.log(`編號唯一: ${M.length} 項`)\n}', '}']], ['unit-mutateIds']],
+    ['UQ11', 'test/tools/mutateBar.mjs', [['if (check) {\n    let dup', 'if (false) {\n    let dup']], ['unit-mutateIds']], //只在 --check 之外才核(此處改為從不核)
+    //── 本次取用之待補算中有失敗者不寫「已補齊」(BF 系列; R-REC-41 ⑧; Gitea #199 主控之裁定 2)──
+    ['BF01', 'src/domain/fillPlan.mjs', [["(nSk || nFail ? '' : ';已補齊')", "(nSk ? '' : ';已補齊')"]], ['unit-fillBacklog']], //有失敗者仍寫「已補齊」
+    ['BF02', 'src/domain/fillPlan.mjs', [["${nFail ? `;本次取用者中 **${nFail} 個失敗**(失敗者見「附算」與「附算之失敗而不重試」之列)` : ''}", '']], ['unit-fillBacklog']], //不註失敗之個數
+    ['BF03', 'src/domain/fillPlan.mjs', [['let nFail = Number.isInteger(br.failed) && br.failed > 0 ? br.failed : 0', 'let nFail = br.failed || 0']], ['unit-fillBacklog']], //非正整數者亦採
+    ['BF04', 'src/domain/domain.mjs', [['results.filter((x) => blDone.has(x.nodeId) && (x.postfit', 'results.filter((x) => (x.postfit']], ['unit-fillBacklog']], //本次之範圍內之成品之失敗亦計
+    ['BF05', 'src/domain/domain.mjs', [["(x.postfit === 'failed' || (x.ext && x.ext.failed.length > 0))).length", '(x.ext && x.ext.failed.length > 0)).length']], ['unit-fillBacklog']], //不計求解窗後段之失敗
+    ['BF06', 'src/domain/domain.mjs', [["(x.postfit === 'failed' || (x.ext && x.ext.failed.length > 0))).length", "x.postfit === 'failed').length"]], ['unit-fillBacklog']], //不計擴充診斷之失敗
+    ['BF07', 'src/domain/domain.mjs', [['...(nFailBl ? { failed: nFailBl } : {})', 'failed: nFailBl']], ['unit-fillBacklog']], //無失敗者亦帶 failed(0)
+    //── 重放另載入正本之 neutralExec(NX 系列; R-REC-42 ①; Gitea #199 主控之裁定 1)──
+    ['NX01', 'src/domain/verify.mjs', [["...(neutralDeltaOf(m) !== null ? ['neutralExec'] : [])", '...[]']], ['unit-replayExt']], //board 不另加 neutralExec
+    ['NX02', 'src/domain/verify.mjs', [["...(neutralDeltaOf(m) !== null ? ['neutralExec'] : [])", "...['neutralExec']"]], ['unit-replayExt']], //不論正本有無值皆加
+    ['NX03', 'src/domain/verify.mjs', [['(Array.isArray(scope) ? scope : [])', "(Array.isArray(scope) ? [...scope, ...(neutralDeltaOf(m) !== null ? ['neutralExec'] : [])] : [])"]], ['unit-replayExt']], //名之陣列亦自動加
+    ['NX04', 'src/domain/verify.mjs', [["let names = scope === 'board' ?", "let names = scope === 'board' || scope === 'none' ?"]], ['unit-replayExt']], //none 亦載入看板值之診斷與 neutralExec
+    ['NX05', 'src/domain/verify.mjs', [['out.neutralExec = { ...(out.neutralExec || {}), delta }', 'out.neutralExec = { delta }']], ['unit-replayExt']], //紀錄之 neutralExec 丟掉看板值
+    ['NX06', 'src/domain/verify.mjs', [["let ns = [...new Set(names.filter((nm) => nm !== 'nullRecentAct' && !/[,\\s]/.test(nm)))].sort()", "let ns = names.filter((nm) => nm !== 'nullRecentAct' && !/[,\\s]/.test(nm)).sort()"]], ['unit-replayExt']], //不去重(有看板值又有 delta 之 neutralExec 列兩次)
 ]
 
 let args = process.argv.slice(2)
@@ -517,6 +637,15 @@ let from = Number(argv('from', 1))
 let to = Number(argv('to', M.length))
 let sel = M.map((m, i) => ({ m, i: i + 1 })).filter((x) => (only ? only.includes(x.m[0]) : x.i >= from && x.i <= to))
 let check = args.includes('--check')
+//--check 另核全部變異之編號唯一(不受 --only / --from / --to 限制; 重複者列出並以非 0 離開; 規則 R-PKG-9): 編號重複時 --only 會同時植入兩項, 錨點之核對偵不出
+if (check) {
+    let dup = dupIdsOf(M)
+    if (dup.length) {
+        console.log(`編號重複(各編號須唯一): ${dup.join('、')}`)
+        process.exit(1)
+    }
+    console.log(`編號唯一: ${M.length} 項`)
+}
 
 let normNl = (s) => s.replace(/\r\n/g, '\n')
 let root = path.join(FD_TMP, `mut_${process.pid}`)

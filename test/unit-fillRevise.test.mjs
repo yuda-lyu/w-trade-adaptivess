@@ -683,6 +683,8 @@ describe('附算與補算之採信條件與邊界', function () {
 
     it('本輪無節點 ⇒ 不附算(不評估、不寫補算檔);只做夢輪次只處理待重試者,其餘只列待補算', async () => {
         let { P, st, ids, runEval } = mk2()
+        //本案為「輪末不處理待補算」(settings.rsi.fillBacklogSec = 0; 規則 R-REC-41 之關閉 = 改前之行為); 只做夢輪次一併處理待補算之情形見 unit-fillBacklog
+        st.rsi = { ...st.rsi, fillBacklogSec: 0 }
         assert.equal(P.fillPlanOf().tasks.length, 3, '三個成品皆待算(鑑別前提)')
         let seen = []
         let re = async (x) => {
