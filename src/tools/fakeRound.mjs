@@ -306,7 +306,11 @@ console.log('做夢方向之處置:', JSON.stringify((Pj.records.getDreamDoc(rou
     //  其餘層照舊為單臂根節點; 無此成品(冷啟動、或唯一可信者被否決)⇒ D / E 亦為單臂根節點; 有底之載體其任務之起點即該成品
     let cs = Pj.domain.carriers()
     //eligOf / btOf, 可為底之成品(每次讀樹)與預期之底(其中排序鍵最高者)
-    let eligOf = () => idx.map((r) => Pj.rsi.store.getNode(r.id)).filter((n) => n && n.status === 'executed' && n.score && !(n.score.flags && n.score.flags.vetoed) && n.evidence && n.evidence.trust === 'trusted' && n.spec.arms.length < 4)
+    //  別名(選集與較早之節點相同者)不可為底(規則 R-REC-45): 排除之
+    let eligOf = () => {
+        let al = Pj.rsi.aliasMap()
+        return idx.map((r) => Pj.rsi.store.getNode(r.id)).filter((n) => n && n.status === 'executed' && n.score && !(n.score.flags && n.score.flags.vetoed) && n.evidence && n.evidence.trust === 'trusted' && n.spec.arms.length < 4 && !al.has(n.id))
+    }
     let btOf = () => eligOf().sort((a, b) => rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))[0] || null
     let bt = btOf()
     let cD = cs.D30_volumeCut

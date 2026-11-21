@@ -44,6 +44,7 @@ describe('附算與補算之執行(規則 R-REC-34)', function () {
         st.resources = {}
         st.rsi = { ...st.rsi, fillParallel: 1 }
         st.rsi.root = path.join(d, 'rsi')
+        st.rsi.docLimits = false //輪末鉤子之專案文件自動整理(R-REC-17)取本庫自身之 sgud; 測試不得改寫入版控之文件(R-PKG-10)
         st.records = { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), trashDir: path.join(d, 'rsi/records/trash'), workDir: path.join(d, 'rsi/work'), toolboxDir: path.join(d, 'rsi/toolbox') }
         st.eval.ledgerDir = path.join(d, 'ledger')
         fs.mkdirSync(st.eval.ledgerDir, { recursive: true })

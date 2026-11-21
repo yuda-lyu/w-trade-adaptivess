@@ -154,6 +154,17 @@ let unproposedNoteOf = (proposals) => {
     return [`**方向未入前緣 ${miss.length} 條**(各條不會另成節點;原因見下列各行,待主控核對)`, ...miss.map(one)]
 }
 
+//rebasedNoteOf, 輪末摘要「方向之起點為別名而改掛正本」之各行(純函數; 規則 R-REC-45): proposals = 做夢文件 harness.applied.proposals(與 guidance.directions 逐條對齊);
+//  帶 baseUsed(實用之起點)者即改掛者; 無則 [](摘要與改前逐字相同); 否則首行為條數與說明, 其後每條一行(序號、臂、做夢所寫之起點 → 實用之起點、入前緣與否)
+let rebasedNoteOf = (proposals) => {
+    let hit = (Array.isArray(proposals) ? proposals : []).map((x, k) => ({ x, k })).filter((o) => o.x && typeof o.x.baseUsed === 'string' && o.x.baseUsed)
+    if (!hit.length) {
+        return []
+    }
+    let one = ({ x, k }) => `方向之起點改掛:方向 ${k + 1}(${(Array.isArray(x.arms) ? x.arms : []).join(' + ')};起點 ${String(x.base).slice(0, 8)} → ${x.baseUsed.slice(0, 8)};${x.ok ? '已入前緣' : '未入前緣'})`
+    return [`**方向之起點為別名 ${hit.length} 條**(選集與較早之節點逐位相同;迴圈已改以其正本為起點;做夢文件之迴圈註記同記)`, ...hit.map(one)]
+}
+
 //prevDirectionOf, 做夢任務書「前次方向之回顧」之一條(純函數): r = 做夢之輪次, x = 方向(做夢文件之方向, 或節點之來源方向), ck = 該方向入前緣時所帶之鍵(無則 null)
 //  帶鍵之方向(規則 R-REC-24 之主張鍵; 探索類之區分用之鍵 —— Gitea #154)另以鍵區分: 驗證類附主張之開頭, 探索類附依據之開頭(依方向之類型, 不依有無 claim 欄:
 //  探索類之方向可能殘留多餘之 claim 欄), 供做夢辨認同臂同起點之數條方向
@@ -376,6 +387,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //    在中性(隨機)之底上與同劑量之隨機無從分辨(E37、E38 於中性底之組成對照 +0.6 / +1.6; D28 之節點須自行偏離中性預設、另找有內容之排序才可識別)
     //    ⇒ 尚未試過之 D / E 臂, 其載體 = { arms: 底之臂 + 該臂, base: 底 }; 底 = carrierBase(): 樹上已審為可信、未被否決、臂數未滿者中排序鍵(rankKeyOf; 規則 R-REC-40)最高之成品
     //      (同鍵者依 id; 無重放且無中性執行之差之樹 = S 最高者, 與改前相同); 樹上無此成品(冷啟動)⇒ 照舊為單臂根節點
+    //      底不取別名(規則 R-REC-45): 別名(選集與較早之節點相同者)交給閘門時一律被拒(閘門之視圖不含別名), 取到即該等臂永遠補不上; 排除別名後取其次, 底即其正本(正本符合上列條件者)
     //    (底會隨樹之最佳者改變; 因下述「已試過之臂不再出載體」, 同一臂不會因換底而被重派; 其後之延伸由做夢之方向決定)
     //  組合層(G)同理:「多個規則怎麼合成」須有一個有內容之規則當成分, 在中性底上只能合成兩份隨機
     let BASED_LAYERS = ['D', 'E', 'G']
@@ -423,9 +435,29 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let od = offDefArmsOf(n)
         return n.spec.arms.map((a) => (od.includes(a) ? `${a}(未作用;依修訂後之定義不屬此臂)` : (off.includes(a) ? `${a}(未作用)` : a))).join(sep)
     }
-    let carrierBase = (nodes = executedNodes()) => nodes
-        .filter((n) => n.score && Number.isFinite(n.score.S) && !(n.score.flags && n.score.flags.vetoed) && n.evidence && n.evidence.trust === 'trusted' && n.spec && Array.isArray(n.spec.arms) && activeArmsOf(n).length < maxArms)
-        .sort((a, b) => rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))[0] || null
+    //aliasIdMap, 別名表(Map: 別名 id → 正本 id; 引擎之 rsi.aliasMap(); 規則 R-REC-45): 別名 = 選集指紋與較早之節點相同之節點
+    //  引擎交給策略與前置閘門之視圖(view.nodes)不含別名 ⇒ 別名不得為起點(閘門一律拒絕); 補位之底(carrierBase)與方向之起點(proposeDirection)據此避開
+    //  取不到(引擎無此函數、或拋錯)⇒ 空表(當作無別名; 不使出計畫、做夢之套用中斷)
+    let aliasIdMap = () => {
+        try {
+            let m = rsi && typeof rsi.aliasMap === 'function' ? rsi.aliasMap() : null
+            return m instanceof Map ? m : new Map()
+        }
+        catch (err) {
+            return new Map()
+        }
+    }
+    //carrierBase, 補位之底: 可信、未被否決、臂數未滿者中排序鍵最高者(同鍵依 id); 別名不取(規則 R-REC-45; 別名表只在有候選時才求, 冷啟動不讀樹)
+    let carrierBase = (nodes = executedNodes()) => {
+        let cands = nodes
+            .filter((n) => n.score && Number.isFinite(n.score.S) && !(n.score.flags && n.score.flags.vetoed) && n.evidence && n.evidence.trust === 'trusted' && n.spec && Array.isArray(n.spec.arms) && activeArmsOf(n).length < maxArms)
+            .sort((a, b) => rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))
+        if (!cands.length) {
+            return null
+        }
+        let alias = aliasIdMap()
+        return cands.find((n) => !alias.has(n.id)) || null
+    }
     let carriers = () => {
         let byLayer = {}
         for (let a of selectable) {
@@ -568,6 +600,11 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 }
                 let b = (view.nodes || []).find((n) => n.id === spec.base)
                 if (!(b && b.status === 'executed')) {
+                    //起點為別名者(節點存在且已執行, 但閘門之視圖不含別名; 規則 R-REC-45): 仍拒, 訊息明示其正本; 起點確實不存在或未執行者之訊息逐字不變
+                    let canon = aliasIdMap().get(spec.base)
+                    if (typeof canon === 'string' && canon && canon !== spec.base) {
+                        return { ok: false, why: `起點 ${String(spec.base).slice(0, 8)} 為 ${canon.slice(0, 8)} 之別名(選集相同);請以 ${canon.slice(0, 8)} 為起點` }
+                    }
                     return { ok: false, why: `起點 ${String(spec.base).slice(0, 8)} 不存在或未執行` }
                 }
                 //起點不得為被否決者(含回測期旗標 fail)
@@ -607,11 +644,16 @@ let makeProject = (st = getSettings(), inject = {}) => {
     let claimKeyAt = (d, k) => {
         let ap = d && d.harness && d.harness.applied && Array.isArray(d.harness.applied.proposals) ? d.harness.applied.proposals : []; return ap[k] && typeof ap[k].claimKey === 'string' ? ap[k].claimKey : null
     }
+    //  baseUsedAt(規則 R-REC-45): 方向之起點為別名者, 迴圈改以其正本為起點入前緣, 實用之起點記於該文件之 harness.applied.proposals(與 guidance.directions 逐條對齊)之 baseUsed ⇒
+    //    節點之規格之起點 = baseUsed 者與方向對應(方向自身之 base 照舊為做夢所寫之別名); 無此記錄者(未改掛)只依方向自身之 base, 與改前相同
+    let baseUsedAt = (d, k) => {
+        let ap = d && d.harness && d.harness.applied && Array.isArray(d.harness.applied.proposals) ? d.harness.applied.proposals : []; return ap[k] && typeof ap[k].baseUsed === 'string' && ap[k].baseUsed ? ap[k].baseUsed : null
+    }
     //  envChanged(有才帶): 該文件套用時所記之評估環境之鍵與現行不同(方向內之數字為口徑變更前之值); 未記鍵之文件(本功能之前)無從判定, 不帶
     let directionOf = (spec) => {
         for (let d of records.listDreamDocs().slice().reverse()) {
             let dirs = (d.guidance && d.guidance.directions) || []
-            let i = dirs.findIndex((x, k) => x && armKey(x.arms) === armKey(spec.arms) && (x.base || null) === (spec.base || null) && claimKeyAt(d, k) === (spec.claim || null))
+            let i = dirs.findIndex((x, k) => x && armKey(x.arms) === armKey(spec.arms) && ((x.base || null) === (spec.base || null) || (spec.base && baseUsedAt(d, k) === spec.base)) && claimKeyAt(d, k) === (spec.claim || null))
             if (i >= 0) {
                 let hit = dirs[i]
                 let ek = d.harness && d.harness.applied ? d.harness.applied.envKey : null
@@ -1461,6 +1503,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let a = ap.applied
         lines.push(`代理式做夢(${dr.doc.agent.model};${dr.doc.agent.durationSec}s):審計 ${nodeIds.length} 節點 ⇒ 採納 ${a.accepted.length}、重做 ${a.rework.length}(成功 ${a.rework.filter((x) => x.ok).length})、刪除 ${a.deleted.length};方向 ${a.proposals.length} 條(入前緣 ${a.proposals.filter((x) => x.ok).length});做夢文件 ${rel(records.paths.dreamMd(round))}`)
         lines.push(...unproposedNoteOf(a.proposals))
+        lines.push(...rebasedNoteOf(a.proposals))
         lines.push(`專案文件更新:${sgudFiles.map((f) => `${f} ${sgud[f] ? '已更新' : '**未更新**'}`).join(';')}${dr.issues.length ? `;做夢文件之格式問題 ${dr.issues.length} 項:${dr.issues.slice(0, 3).join(';')}` : ''}`)
         //專案指引文件之自動整理(規則 R-REC-17): 經驗檔、回饋檔逾上限即把較舊者原文搬到同夾之 <名>_<年月日>.md, 主檔留索引(只搬不刪; 於更新時間之核對之後才做)
         //  上限取 settings.rsi.docLimits = { maxBytes, keepBytes, keepRows }(預設 30000 / 18000 / 14); settings.rsi.docLimits === false 關閉
@@ -2546,7 +2589,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //    無依據文字者無從取鍵, 照舊略過。未與既有節點相撞者規格不變(既有節點之 id 不受影響); 驗證類不走此路。
     //    樹上尚無同規格之節點而前緣內已有同臂同起點之待執行提案者(同一輪內之兩條探索、或上一輪之提案尚未跑)維持略過(不改帶鍵: 同一方向重寫依據文字不得變成兩個節點),
     //    由輪末摘要之「方向未入前緣」列出; 已相撞而帶鍵者, 依據文字不同即為另一個規格(單憑文字無從分辨「改寫」與「另一種機制」, 取後者以免靜默漏掉機制)
-    let proposeDirection = (d, round) => {
+    //  起點為別名者(選集與較早之節點相同; 規則 R-REC-45): 別名與正本之選集逐位相同, 自別名出發與自正本出發為同一件事, 而閘門之視圖不含別名 ⇒ 改以其正本為起點後照常處理
+    //    (規格之 id、同規格之判定、主張鍵、區分用之鍵皆依改掛後之起點 ⇒ 同一方向以別名或正本各寫一次為同一個規格, 不會成為兩個節點); 回傳之 note 註明改掛、另帶 baseUsed(實用之起點;
+    //    節點之來源方向依此對應 —— directionOf 之 baseUsedAt); 並於該做夢文件加一則迴圈註記(下一輪之做夢與節點先讀文件開頭之註記); 起點不是別名者與改前逐字相同
+    let proposeOne = (d, round, track) => {
         let ck = claimKeyOf(d)
         let keyed = ck ? { claimKey: ck } : {}
         try {
@@ -2556,6 +2602,13 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 let b = rsi.store.getNode(spec.base)
                 if (!b || b.status !== 'executed') {
                     return { ok: false, note: `起點 ${String(spec.base).slice(0, 8)} 不存在或未執行`, ...keyed }
+                }
+                let canon = aliasIdMap().get(spec.base)
+                let cn = typeof canon === 'string' && canon && canon !== spec.base ? rsi.store.getNode(canon) : null
+                if (cn && cn.status === 'executed') {
+                    track.rebased = { from: spec.base, to: canon }
+                    spec = { ...spec, base: canon }
+                    b = cn
                 }
                 if (b.score && b.score.flags && b.score.flags.vetoed) {
                     return { ok: false, note: `起點 ${String(spec.base).slice(0, 8)} 已被否決(${(b.score.flags.why || []).slice(-1)[0] || ''}), 不得作為起點`, ...keyed }
@@ -2614,6 +2667,27 @@ let makeProject = (st = getSettings(), inject = {}) => {
         catch (err) {
             return { ok: false, note: String((err && err.message) || err).slice(0, 200), ...keyed }
         }
+    }
+    let proposeDirection = (d, round) => {
+        let track = { rebased: null }
+        let r = proposeOne(d, round, track)
+        if (!track.rebased) {
+            return r
+        }
+        let from = track.rebased.from.slice(0, 8)
+        let to = track.rebased.to.slice(0, 8)
+        //迴圈註記: 方向入前緣者(r.ok)且該文件已存在才加(同一句已有者不重複); 註記之文字陳述「已改以 X 為起點入前緣」, 未入前緣者(正本被否決、同規格已存在、例外等)不加 ——
+        //  其改掛由 note 之後綴、baseUsed 與輪末摘要(rebasedNoteOf: 列「未入前緣」)表達; 失敗不影響方向之處置
+        try {
+            let dd = records.getDreamDoc(round)
+            let text = `方向(臂 ${(Array.isArray(d.arms) ? d.arms : []).join(' + ')})之起點 ${from} 為 ${to} 之別名(選集與較早之節點逐位相同);迴圈已改以 ${to} 為起點入前緣,方向之內容不變,節點之來源方向照常對應。`
+            if (r.ok === true && dd && !((dd.harness && dd.harness.addendum) || []).some((a) => a && a.text === text)) {
+                dd.harness = { ...(dd.harness || {}), addendum: [...((dd.harness && dd.harness.addendum) || []), { at: new Date().toISOString(), text }] }
+                records.putDreamDoc(dd)
+            }
+        }
+        catch (err) {}
+        return { ...r, note: `${r.note}(起點 ${from} 為 ${to} 之別名(選集相同),已改以 ${to} 為起點)`, baseUsed: track.rebased.to }
     }
 
     //closeFrontier, 主代理把前緣內尚未執行之提案結案(例: 提案之依據已被其後之回測期旗標推翻); arms 為臂 id 陣列(須完全相同), base 省略 = 不限, claim(主張鍵)省略 = 不限
@@ -2749,5 +2823,5 @@ let makeProjectOrExit = (st, inject = {}) => {
     }
 }
 
-export { makeProject, makeProjectOrExit, outwardNoteOf, unproposedNoteOf, prevDirectionOf, signsMentionOf, rankKeyOf, OUT_CHECK_MIN }
+export { makeProject, makeProjectOrExit, outwardNoteOf, unproposedNoteOf, rebasedNoteOf, prevDirectionOf, signsMentionOf, rankKeyOf, OUT_CHECK_MIN }
 export default makeProject

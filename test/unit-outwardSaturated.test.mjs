@@ -197,6 +197,7 @@ describe('向外飽和之宣告(R-REC-29)', function () {
             let st = getSettings()
             let d = path.join(t.dir, 'proj')
             st.rsi.root = path.join(d, 'rsi')
+            st.rsi.docLimits = false //輪末鉤子之專案文件自動整理(R-REC-17)取本庫自身之 sgud; 測試不得改寫入版控之文件(R-PKG-10)
             st.records = { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), trashDir: path.join(d, 'rsi/records/trash'), workDir: path.join(d, 'rsi/work'), toolboxDir: path.join(d, 'rsi/toolbox') }
             st.eval.ledgerDir = path.join(d, 'ledger')
             fs.mkdirSync(st.eval.ledgerDir, { recursive: true })

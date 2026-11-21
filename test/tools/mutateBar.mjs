@@ -512,8 +512,8 @@ let M = [
     ['SK06', 'src/domain/domain.mjs', [['vs.push(d === null ? x.S : x.S - d)', 'vs.push(x.S)']], ['unit-rankKey']],
     ['SK07', 'src/domain/domain.mjs', [['if (x && Number.isFinite(x.S)) {\n            let dx', "if (x && typeof x.S === 'number') {\n            let dx"]], ['unit-rankKey']],
     ['SK08', 'src/domain/domain.mjs', [['let dx = d0 === null ? null : neutralDeltaOf(x)', 'let dx = neutralDeltaOf(x)']], ['unit-rankKey']],
-    ['SK09', 'src/domain/domain.mjs', [['.sort((a, b) => rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))[0] || null', '.sort((a, b) => b.score.S - a.score.S || (a.id < b.id ? -1 : 1))[0] || null']], ['unit-rankKey']],
-    ['SK10', 'src/domain/domain.mjs', [['rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))[0] || null', 'rankKeyOf(b) - rankKeyOf(a))[0] || null']], ['unit-rankKey']],
+    ['SK09', 'src/domain/domain.mjs', [['.sort((a, b) => rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))\n        if (!cands.length) {', '.sort((a, b) => b.score.S - a.score.S || (a.id < b.id ? -1 : 1))\n        if (!cands.length) {']], ['unit-rankKey']],
+    ['SK10', 'src/domain/domain.mjs', [['rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))\n        if (!cands.length) {', 'rankKeyOf(b) - rankKeyOf(a))\n        if (!cands.length) {']], ['unit-rankKey']],
     ['SK11', 'src/domain/domain.mjs', [['(kvOf(b) - kvOf(a))).slice(0, st.rsi.refTopNodes || 3)', '(b.score.S - a.score.S)).slice(0, st.rsi.refTopNodes || 3)']], ['unit-rankKey']],
     ['SK12', 'src/domain/domain.mjs', [['let refByKey = topK.some((n, i) => n !== topS[i])', 'let refByKey = false']], ['unit-rankKey']],
     ['SK13', 'src/domain/domain.mjs', [['let refByKey = topK.some((n, i) => n !== topS[i])', 'let refByKey = true']], ['unit-rankKey']],
@@ -725,6 +725,38 @@ let M = [
     ['AW15', 'src/domain/domain.mjs', [["let dirWorkIds = (direction) => dirWorkIdsOf(direction, workRelOf())", "let dirWorkIds = (direction) => dirWorkIdsOf(direction, '')"]], ['unit-scanAllowWork']], //迴圈驗證之 refsOf 之工作夾之根為空(只由結構之案守: 該路徑於單元測試中無法不跑評估而觸及)
     //── 兩條提示之寫入: 文件與樹各自比對(R-REC-44 ⑦; Gitea #200 之複審所見)──
     ['EH71', 'src/domain/domain.mjs', [['let treeChanged = treeOld !== null && JSON.stringify(treeOld) !== JSON.stringify(withHints(treeOld, hm.get(id)))', 'let treeChanged = docChanged']], ['unit-evalHints']], //樹只隨文件之變動而更新(文件已寫、樹之更新拋錯者不補)
+    //── 起點為別名(選集與較早之節點相同)時之一致處理(AB 系列; 規則 R-REC-45; domain.mjs 之 aliasIdMap / carrierBase / gates.pre / proposeOne / proposeDirection / directionOf、rebasedNoteOf 與輪末摘要、fakeRound.mjs 之補位核對)──
+    ['AB01', 'src/domain/domain.mjs', [["return cands.find((n) => !alias.has(n.id)) || null", "return cands[0] || null"]], ['unit-aliasBase']], //補位之底不排除別名
+    ['AB02', 'src/domain/domain.mjs', [["        if (!cands.length) {\n            return null\n        }\n        let alias = aliasIdMap()", "        let alias = aliasIdMap()\n        if (!cands.length) {\n            return null\n        }"]], ['unit-aliasBase']], //無候選(冷啟動)亦求別名表(讀樹)
+    ['AB03', 'src/domain/domain.mjs', [["        catch (err) {\n            return new Map()\n        }\n    }\n    //carrierBase,", "        catch (err) {\n            throw err\n        }\n    }\n    //carrierBase,"]], ['unit-aliasBase']], //別名表拋錯時中斷出計畫
+    ['AB04', 'src/domain/domain.mjs', [["return m instanceof Map ? m : new Map()", "return m || new Map()"]], ['unit-aliasBase']], //別名表非 Map 時不視同無別名
+    ['AB05', 'src/domain/domain.mjs', [["                    let canon = aliasIdMap().get(spec.base)\n                    if (typeof canon === 'string' && canon && canon !== spec.base) {", "                    let canon = aliasIdMap().get(spec.base)\n                    if (false) {"]], ['unit-aliasBase']], //閘門不辨別名(訊息回「不存在或未執行」)
+    ['AB06', 'src/domain/domain.mjs', [["之別名(選集相同);請以 ${canon.slice(0, 8)} 為起點` }", "之別名(選集相同);請以 ${String(spec.base).slice(0, 8)} 為起點` }"]], ['unit-aliasBase']], //閘門訊息之「請以 X 為起點」寫成別名自己
+    ['AB07', 'src/domain/domain.mjs', [["為 ${canon.slice(0, 8)} 之別名(選集相同);請以", "為 ${String(spec.base).slice(0, 8)} 之別名(選集相同);請以"]], ['unit-aliasBase']], //閘門訊息之正本寫成別名自己
+    ['AB08', 'src/domain/domain.mjs', [["if (cn && cn.status === 'executed') {", "if (false) {"]], ['unit-aliasBase']], //方向之起點為別名者不改掛
+    ['AB09', 'src/domain/domain.mjs', [["                    spec = { ...spec, base: canon }\n                    b = cn", "                    b = cn"]], ['unit-aliasBase']], //記為改掛而規格之起點仍為別名
+    ['AB10', 'src/domain/domain.mjs', [["                    spec = { ...spec, base: canon }\n                    b = cn", "                    spec = { ...spec, base: canon }"]], ['unit-aliasBase']], //改掛後之否決檢查仍看別名
+    ['AB11', 'src/domain/domain.mjs', [[", baseUsed: track.rebased.to }", " }"]], ['unit-aliasBase']], //回傳不帶 baseUsed
+    ['AB12', 'src/domain/domain.mjs', [["已改以 ${to} 為起點)`, baseUsed", "已改以 ${from} 為起點)`, baseUsed"]], ['unit-aliasBase']], //note 之「已改以 X」寫成別名
+    ['AB13', 'src/domain/domain.mjs', [["if (r.ok === true && dd && !((dd.harness && dd.harness.addendum) || []).some((a) => a && a.text === text)) {", "if (r.ok === true && dd) {"]], ['unit-aliasBase']], //迴圈註記不去重
+    ['AB14', 'src/domain/domain.mjs', [["                records.putDreamDoc(dd)\n            }\n        }\n        catch (err) {}\n        return { ...r, note", "                void dd\n            }\n        }\n        catch (err) {}\n        return { ...r, note"]], ['unit-aliasBase']], //迴圈註記不寫入做夢文件
+    ['AB15', 'src/domain/domain.mjs', [["((x.base || null) === (spec.base || null) || (spec.base && baseUsedAt(d, k) === spec.base))", "((x.base || null) === (spec.base || null))"]], ['unit-aliasBase']], //節點之來源方向不認 baseUsed
+    ['AB16', 'src/domain/domain.mjs', [["((x.base || null) === (spec.base || null) || (spec.base && baseUsedAt(d, k) === spec.base))", "((x.base || null) === (spec.base || null) || baseUsedAt(d, k) === (spec.base || null))"]], ['unit-aliasBase']], //無記錄與起點 null 視為相符
+    ['AB17', 'src/domain/domain.mjs', [["x.ok ? '已入前緣' : '未入前緣'", "x.ok ? '未入前緣' : '已入前緣'"]], ['unit-aliasBase']], //摘要之入前緣與否顛倒
+    ['AB18', 'src/domain/domain.mjs', [["        lines.push(...rebasedNoteOf(a.proposals))\n", ""]], ['unit-aliasBase']], //輪末摘要不列改掛一段
+    ['AB19', 'src/domain/domain.mjs', [["note: `${r.note}(起點 ${from} 為 ${to} 之別名", "note: `${r.note}(起點 ${to} 為 ${to} 之別名"]], ['unit-aliasBase']], //note 之別名寫成正本
+    ['AB21', 'src/domain/domain.mjs', [["if (r.ok === true && dd && !((dd.harness && dd.harness.addendum) || []).some((a) => a && a.text === text)) {", "if (dd && !((dd.harness && dd.harness.addendum) || []).some((a) => a && a.text === text)) {"]], ['unit-aliasBase']], //未入前緣者(正本被否決等)亦加迴圈註記(註記陳述「入前緣」而與事實不符)
+    ['AB20', 'src/tools/fakeRound.mjs', [[" && !al.has(n.id))", ")"]], ['unit-fakeRound'], 'equiv'], //fakeRound 之補位核對不排除別名(假審計之樹無別名 ⇒ 此變異於該樹等價, 預期存活; 排除別名之行為由 unit-aliasBase 之真樹案覆蓋; 見 state §5)
+    //── 測試不得改寫入版控之文件(TI 系列; 規則 R-PKG-10; test/tools/sgudGuard.mjs 之判定與快照差異; 動態守門之 root hook 不在變異之列)──
+    ['TI01', 'test/tools/sgudGuard.mjs', [["/afterRound|redream\\(/.test(text)", "/afterRound/.test(text)"]], ['unit-sgudUntouched']], //只認 afterRound(redream 之路徑漏掃)
+    ['TI02', 'test/tools/sgudGuard.mjs', [["/afterRound|redream\\(/.test(text)", "/redream\\(/.test(text)"]], ['unit-sgudUntouched']], //只認 redream(afterRound 漏掃)
+    ['TI03', 'test/tools/sgudGuard.mjs', [["docLimits\\s*[:=]\\s*false", "docLimits\\s*[:=]\\s*\\w+"]], ['unit-sgudUntouched']], //docLimits 設為其他值亦視為已關閉
+    ['TI04', 'test/tools/sgudGuard.mjs', [["!hasDocLimitsOff(text) && !allow.includes(f)", "!hasDocLimitsOff(text)"]], ['unit-sgudUntouched']], //子行程隔離者不豁免
+    ['TI05', 'test/tools/sgudGuard.mjs', [["x !== self", "true"]], ['unit-sgudUntouched']], //守門自身亦被掃描
+    ['TI06', 'test/tools/sgudGuard.mjs', [["/\\.test\\.mjs$/.test(x)", "/\\.mjs$/.test(x)"]], ['unit-sgudUntouched']], //非測試檔亦被掃描
+    ['TI07', 'test/tools/sgudGuard.mjs', [["else if (a[k] !== b[k]) {", "else if (false) {"]], ['unit-sgudUntouched']], //快照差異不報變動
+    ['TI08', 'test/tools/sgudGuard.mjs', [["`${s.size}:${Math.floor(s.mtimeMs)}`", "`${s.size}`"]], ['unit-sgudUntouched']], //快照只比大小(同大小之改寫偵不出)
+    ['TI09', 'test/tools/sgudGuard.mjs', [["                walk(q)\n", "                void q\n"]], ['unit-sgudUntouched']], //快照不進子夾
 ]
 
 let args = process.argv.slice(2)

@@ -231,6 +231,7 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
             let st = getSettings()
             let d = path.join(t.dir, 'proj')
             st.rsi.root = path.join(d, 'rsi')
+            st.rsi.docLimits = false //輪末鉤子之專案文件自動整理(R-REC-17)取本庫自身之 sgud; 測試不得改寫入版控之文件(R-PKG-10)
             st.records = { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), trashDir: path.join(d, 'rsi/records/trash'), workDir: path.join(d, 'rsi/work'), toolboxDir: path.join(d, 'rsi/toolbox') }
             st.eval.ledgerDir = path.join(d, 'ledger')
             fs.mkdirSync(st.eval.ledgerDir, { recursive: true })
@@ -527,6 +528,7 @@ module.exports = {
         let seedState = (dir, fn) => {
             let st = getSettings()
             st.rsi.root = path.join(dir, 'rsi')
+            st.rsi.docLimits = false //輪末鉤子之專案文件自動整理(R-REC-17)取本庫自身之 sgud; 測試不得改寫入版控之文件(R-PKG-10)
             st.records = { nodeDir: path.join(dir, 'rsi/records/nodes'), dreamDir: path.join(dir, 'rsi/records/dreams'), trashDir: path.join(dir, 'rsi/records/trash'), workDir: path.join(dir, 'rsi/work'), toolboxDir: path.join(dir, 'rsi/toolbox') }
             st.eval.ledgerDir = path.join(dir, 'ledger')
             let P = makeProject(st, { dispatch: async () => ({ ok: false, error: 'seed' }), gate: null, catalogFile: path.join(dir, 'seed_catalog.json') })
