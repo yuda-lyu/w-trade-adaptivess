@@ -6,7 +6,7 @@ import { FD_ROOT, FD_TMP } from './synthLedger.mjs'
 import { dupIdsOf } from './mutateIds.mjs'
 
 
-//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(verifyCmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); EH 系列為 R-REC-43、R-REC-44(迴圈檢查之提示「單峰交付」「選集與他節點相同」; 判定在 verifyEvalHints.mjs, EH37 之錨點在 verify.mjs 之 dirNodeIdsOf); VZ 系列為 R-BT-10(節點之禁區涵蓋 verify* / backtest* 與任務書之檔名樣式一致)、AW 系列為 R-BT-9(可讀之他節點工作夾三處共用 verify.mjs 之 allowWorkOf; 皆為 Gitea #200 之主控另加); 指令解析已自 verify.mjs 搬入 verifyCmdScan.mjs[原 cmdScan.mjs], 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
+//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(verifyCmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); EH 系列為 R-REC-43、R-REC-44(迴圈檢查之提示「單峰交付」「選集與他節點相同」; 判定在 verifyEvalHints.mjs, EH37 之錨點在 verify.mjs 之 dirNodeIdsOf); VZ 系列為 R-BT-10(節點之禁區涵蓋 verify* / backtest* 與任務書之檔名樣式一致)、AW 系列為 R-BT-9(可讀之他節點工作夾三處共用 verify.mjs 之 allowWorkOf; 皆為 Gitea #200 之主控另加); SD 系列為 R-REC-47(任務書之「可疑方向」、資訊來源之三級、量尺句、審組成之一句與合約之判讀名詞; 錨點在 texts.mjs 與 contract/pick-contract.md); 指令解析已自 verify.mjs 搬入 verifyCmdScan.mjs[原 cmdScan.mjs], 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
 //  用法(測試以 quiet-run --lock 執行): node test/tools/mutateBar.mjs [--list] [--check] [--control-only] [--only <id,id…>] [--from <序> --to <序>] [--out <結果.json>]
 //    --check 只核對各變異之錨點(須恰出現一次; all 者至少一次), 不跑測試; 另核全部變異之編號唯一(重複者列出並以非 0 離開; R-PKG-9);未被殺者(survived)為測試之缺口 —— 補測試,不是補斷言(見 sgud/exp 之變異作法)
 //    --control-only 只跑對照(守門之測試與所選變異之優先測試, 不植入變異)並列出所選變異中「無法判定」者, 供不重跑全部變異而盤點分類
@@ -766,6 +766,49 @@ let M = [
     ['SL06', 'src/cli/rsi.mjs', [["    catch (err) {}\n    let satKey", "    catch (err) { throw err }\n    let satKey"]], ['unit-dreamOnly']], //讀取做夢文件失敗時拋出(不視同未宣告; 執行之結束被拖垮)
     ['SL07', 'src/cli/rsi.mjs', [["let dreamDocs = fs.existsSync(st.records.dreamDir) ? P.records.listDreamDocs() : []", "let dreamDocs = P.records.listDreamDocs()"]], ['unit-dreamOnly']], //做夢文件夾不存在者亦讀(listDreamDocs 建夾 ⇒ 未曾有輪次之專案多出 records 夾)
     ['SL08', 'src/cli/rsi.mjs', [["    if (satInfo) {", "    if (false) {"]], ['unit-dreamOnly']], //已宣告而不記結束段之日誌句
+    //── 任務書之「可疑方向」與資訊來源之三級(SD 系列; 規則 R-REC-47; 做夢任務書 §3 一段、量尺句、審計規程第 8 點之一句; 節點任務書 §6 第 7 條; 合約 §5 之判讀名詞)──
+    ['SD01', 'src/domain/texts.mjs', [["L.push('- **可疑方向**(彙整與寫方向之前先過一遍;", "void ('- **可疑方向**(彙整與寫方向之前先過一遍;"]], ['unit-texts']], //不列「可疑方向」之標題列
+    ['SD02', 'src/domain/texts.mjs', [["L.push('  - **資訊來源分三級**", "void ('  - **資訊來源分三級**"]], ['unit-texts']], //不列資訊來源三級之子條
+    ['SD03', 'src/domain/texts.mjs', [["L.push('  - **1. 側別曝險冒充挑選**", "void ('  - **1. 側別曝險冒充挑選**"]], ['unit-texts']], //缺第 1 項
+    ['SD04', 'src/domain/texts.mjs', [["L.push('  - **2. 以庫彙總量定側別或席次**", "void ('  - **2. 以庫彙總量定側別或席次**"]], ['unit-texts']], //缺第 2 項
+    ['SD05', 'src/domain/texts.mjs', [["L.push('  - **3. 以落後之延續規則定側別**", "void ('  - **3. 以落後之延續規則定側別**"]], ['unit-texts']], //缺第 3 項
+    ['SD06', 'src/domain/texts.mjs', [["L.push('  - **4. 同一個底之連續疊加**", "void ('  - **4. 同一個底之連續疊加**"]], ['unit-texts']], //缺第 4 項
+    ['SD07', 'src/domain/texts.mjs', [["L.push('  - **5. 成員依賴**", "void ('  - **5. 成員依賴**"]], ['unit-texts']], //缺第 5 項
+    ['SD08', 'src/domain/texts.mjs', [["L.push('  - **6. 內容只在庫之某一類成員成立**", "void ('  - **6. 內容只在庫之某一類成員成立**"]], ['unit-texts']], //缺第 6 項
+    ['SD09', 'src/domain/texts.mjs', [["隨機半庫(至少 6 個;", "隨機半庫(至少 2 個;"]], ['unit-texts']], //第 3 級之重算只要 2 個半庫
+    ['SD10', 'src/domain/texts.mjs', [["須有兩種以上行情段(", "須有一種以上行情段("]], ['unit-texts']], //落後之延續規則只要一種行情段之證據
+    ['SD11', 'src/domain/texts.mjs', [["**探索類之方向與預先核對至少一半改用側別中性之底**", "**探索類之方向與預先核對至少一個改用側別中性之底**"]], ['unit-texts']], //連續疊加之處置由至少一半放寬為至少一個
+    ['SD12', 'src/domain/texts.mjs', [["隨機半庫之內容保持率之中位 < 0.5,", "隨機半庫之內容保持率之中位 < 0.9,"]], ['unit-texts']], //成員依賴之門檻改變
+    ['SD13', 'src/domain/texts.mjs', [["**不列為已驗證之最高、不作為其後方向與預先核對之起點**", "**不作為其後方向與預先核對之起點**"]], ['unit-texts']], //側別曝險仍可列為已驗證之最高
+    ['SD14', 'src/domain/texts.mjs', [["每輪在 `summary` **並列**寫明", "每輪在 `summary` 寫明"]], ['unit-texts']], //量尺句不並列
+    ['SD15', 'src/domain/texts.mjs', [["、後者是否命中下述「可疑方向」第 1 項(命中者只是側別曝險,不是進度)", ""]], ['unit-texts']], //量尺句不寫後者是否命中第 1 項
+    ['SD16', 'src/domain/texts.mjs', [[" **迴圈檢查列「下單流量偏一側」、或擴充診斷之提示指出成品等同某一個固定狀態(例:`fixedState`)、同比例隨機時機之安慰劑(`placeboTiming`)無內容者,其優勢歸為側別曝險:彙整時不列 `worked`、不作為方向之起點;要保留其側內之機制者,於方向內指明以兩側席次固定之版本重做**(見 §3「可疑方向」)。", ""]], ['unit-texts']], //審計規程第 8 點不加該句
+    ['SD17', 'src/domain/texts.mjs', [["彙整時不列 `worked`、不作為方向之起點;要保留其側內之機制者", "彙整時不列 `worked`;要保留其側內之機制者"]], ['unit-texts']], //審計規程之新句缺「不作為方向之起點」
+    ['SD18', 'src/domain/texts.mjs', [["L.push('7. **資訊來源**:成品用到庫彙總量", "void ('7. **資訊來源**:成品用到庫彙總量"]], ['unit-texts']], //節點任務書不列第 7 條
+    ['SD19', 'src/domain/texts.mjs', [["(isVerify ? '驗證類不另交對照版。' :", "(!isVerify ? '驗證類不另交對照版。' :"]], ['unit-texts']], //探索與驗證之後半句對調
+    ['SD20', 'src/domain/texts.mjs', [["成品用到庫彙總量(第 3 級,見合約 §5)者", "成品用到庫彙總量(第 2 級,見合約 §5)者"]], ['unit-texts']], //庫彙總量之級別寫錯
+    ['SD21', 'src/domain/texts.mjs', [["完整評估一次,計入評估次數),並寫出兩者之組成對照之超額。", "完整評估一次),並寫出兩者之組成對照之超額。"]], ['unit-texts']], //另存之對照版不寫計入評估次數
+    ['SD22', 'src/domain/texts.mjs', [[",計入評估次數),並寫出兩者之組成對照之超額。", ",計入評估次數)。"]], ['unit-texts']], //不要求寫出兩者之組成對照之超額
+    ['SD23', 'src/domain/texts.mjs', [["自報「資訊來源:第 3 級(用到之彙總量是什麼)」", "自報「資訊來源」"]], ['unit-texts']], //自報句不寫級別與彙總量
+    ['SD24', 'contract/pick-contract.md', [["  - **內容保持率**:", "  - 內容保持率:"]], ['unit-texts']], //合約缺內容保持率之名詞
+    ['SD25', 'contract/pick-contract.md', [["建議至少 6 個", "建議至少 2 個"]], ['unit-texts']], //合約與任務書之半庫個數不一致
+    ['SD26', 'contract/pick-contract.md', [["中位 < 0.5、或任一半庫之相位平均為負者", "中位 < 0.9、或任一半庫之相位平均為負者"]], ['unit-texts']], //合約與任務書之門檻不一致
+    ['SD27', 'contract/pick-contract.md', [["或任一半庫之相位平均為負者,視為成員依賴", "或任一半庫之七相位平均為負者,視為成員依賴"]], ['unit-texts']], //新增字句含 renderContract 之錨點字樣(七相位之出現次數不符 ⇒ 改寫拋錯)
+    ['SD28', 'contract/pick-contract.md', [["  - **側別中性(兩側席次固定)**:", "  - **側別中性**:"]], ['unit-texts']], //合約之名詞與任務書之稱呼不同名
+    ['SD29', 'src/domain/texts.mjs', [["(迴圈會檢查每個已完整評估之版本是否仍有檔可重現。)", "(迴圈會檢查每個已完整評估之版本是否仍有檔可重現)"]], ['unit-texts']], //節點任務書之他處一字之差(只有釘死之雜湊抓得到)
+    ['SD30', 'src/domain/texts.mjs', [["你的做夢文件是未來節點 agent 的主要參考,品質直接決定下一輪之探索品質。", "你的做夢文件是未來節點 agent 的主要參考,品質直接決定下一輪之探索品質"]], ['unit-dreamOnly']], //做夢任務書之他處一字之差(只有釘死之雜湊抓得到)
+    ['SD31', 'src/domain/texts.mjs', [["先排驗證,再疊加機制。')", "先排驗證,再疊加機制')"]], ['unit-dreamOnly']], //新段鄰近之 guidance.directions 條目一字之差(還原步驟不得吞掉鄰近之改動)
+    //  SD32 ~ SD41: 新段與合約判讀名詞之語意字句(釘死之雜湊只守「其餘逐字不變」, 不守新增文字之內部; 複審所列之語意反轉 / 刪句形狀)
+    ['SD32', 'src/domain/texts.mjs', [["命中者依下列各項處置,處置優先於該成品之分數;", "命中者依下列各項處置;"]], ['unit-texts']], //標題列不寫處置優先於分數
+    ['SD33', 'src/domain/texts.mjs', [["最依賴庫之組成", "不依賴庫之組成"]], ['unit-texts']], //第 3 級之語意反轉(不依賴庫之組成)
+    ['SD34', 'src/domain/texts.mjs', [["依整側之彙總損益或全庫之做多比例配兩側之席次", "依整側之彙總損益配兩側之席次"]], ['unit-texts']], //第 2 項之例缺全庫之做多比例
+    ['SD35', 'src/domain/texts.mjs', [["依近期已實現損益之好壞", "依近期成交量之大小"]], ['unit-texts']], //第 3 項改指另一種量
+    ['SD36', 'src/domain/texts.mjs', [["各半庫內之 p 皆小只說明各半內有超額,不說明超額之量級仍在;", ""]], ['unit-texts']], //第 5 項缺「顯著不等於穩健」之說明句
+    ['SD37', 'src/domain/texts.mjs', [["(`placeboTiming`)無內容 ⇒ 記為側別曝險", "(`placeboTiming`)有內容 ⇒ 記為側別曝險"]], ['unit-texts']], //第 1 項之語意反轉(安慰劑有內容亦記為側別曝險)
+    ['SD38', 'contract/pick-contract.md', [["須經下列之組成位移重算仍在,才可稱挑選內容", "不必經下列之組成位移重算,即可稱挑選內容"]], ['unit-texts']], //合約之第 3 級不要求組成位移
+    ['SD39', 'contract/pick-contract.md', [["內容 = 組成對照之超額;同一個模組、同一種對照", "內容 = S;同一個模組、同一種對照"]], ['unit-texts']], //合約之內容定義改為 S
+    ['SD40', 'contract/pick-contract.md', [["它與「同比例、隨機時機之安慰劑」不同 —— 後者保留成品之狀態比例、只打亂時機。", ""]], ['unit-texts']], //合約缺側別中性與安慰劑之區分句
+    ['SD41', 'contract/pick-contract.md', [["換一批成員重算同一個模組", "換一批參數重算同一個模組"]], ['unit-texts']], //合約之組成位移不是換成員
 ]
 
 let args = process.argv.slice(2)

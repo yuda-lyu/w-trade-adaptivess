@@ -1,9 +1,12 @@
 import assert from 'assert'
+import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { getSettings } from '../src/cfg.mjs'
 import { makeTexts } from '../src/domain/texts.mjs'
 import { outwardNoteOf, prevDirectionOf, OUT_CHECK_MIN } from '../src/domain/domain.mjs'
+import { renderContract } from '../src/tools/initProject.mjs'
+import { FD_ROOT } from './tools/synthLedger.mjs'
 
 
 //任務書文字(src/domain/texts.mjs): 任務類型決定節點之做法要求(R-REC-8); 共用工具區之指引(R-TB-3); 做夢之擴建一節(R-TB-2); 節點任務書之大小(處理要點 §7: 逾 15 KB 即整併)
@@ -288,5 +291,202 @@ describe('texts:任務類型與共用工具區', function () {
         assert.deepEqual(pds.map((x) => x.claimKey), ['a1b2c3d4', '0a1b2c3d', 'e5f6a7b8', undefined])
         //節點之來源方向帶同一鍵者預填自判之判定; 不帶鍵之同臂方向不吃到(鍵不同 ⇒ 不是同一條)
         assert.deepEqual(out.map((x) => x.verdict.startsWith('confirmed |') ? 'pending' : x.verdict), ['confirmed', 'pending', 'pending', 'pending'])
+    })
+
+    //可疑方向與資訊來源之三級(規則 R-REC-47)。對應之原則:挑選應由各臂之機制找出,不得建構在策略庫之上層特徵(全庫之分佈、比例、整側或整群之彙總量)上;
+    //  做夢任務書 §3 之「可疑方向」一段(資訊來源三級、六種形狀之處置)、審計規程第 8 點末之一句、`synthesis.summary` 之量尺句;節點任務書 §6 之第 7 條;合約 §5 之判讀名詞
+    describe('可疑方向與資訊來源之三級(R-REC-47)', function () {
+        let N1 = { nodeId: 'n1aaaaaaaaaaaaaa', arms: ['A04_act'], base: null, S: 1, worst: 0, excess: 0, ladder: 0, vetoed: false, claimedS: 1, nEvals: 1, nFull: 1, nFullSel: 1, issues: [], from: null, type: 'explore', docMd: 'd.md', workDir: 'rsi/work/n1' }
+        let dctx = (extra = {}, nodes = [N1]) => ({ round: 9, nodeIds: nodes.map((n) => n.nodeId), reworkedIds: [], workDir: path.join(st.records.workDir, 'dream_r009'), context: { nodes, failed: [], refs: [], prevDirections: [], maxDirections: 7, extra: '2. 更新文件', toolbox, ...extra } })
+        let dirV = { round: 6, doc: 'rsi/records/dreams/r006.md', rationale: '依據乙', expect: '預期丙', type: 'verify', claim: '主張甲' }
+        let HEADS = ['**資訊來源分三級**', '**1. 側別曝險冒充挑選**', '**2. 以庫彙總量定側別或席次**', '**3. 以落後之延續規則定側別**', '**4. 同一個底之連續疊加**', '**5. 成員依賴**', '**6. 內容只在庫之某一類成員成立**']
+        //「可疑方向」一段之各列(標題列 + 子條); 先斷言其位置(§3 之內、guidance.directions 之前)與單獨成段
+        let paraOf = (d, name = '') => {
+            let i3 = d.indexOf('\n## 3. 彙整與方向\n')
+            let iH = d.indexOf('\n- **可疑方向**(')
+            let iDir = d.indexOf('\n- `guidance.directions`:')
+            let iEnd = d.indexOf('\n## ', i3 + 1)
+            assert(i3 >= 0 && i3 < iH && iH < iDir && iDir < iEnd, `${name}位置:須在 §3 之內、guidance.directions 之前`)
+            assert.equal(d.split('**可疑方向**').length - 1, 1, `${name}標題字樣只出現一次`)
+            return d.slice(iH + 1, iDir + 1).split('\n').filter((l) => l !== '')
+        }
+
+        it('做夢任務書:「可疑方向」於 §3 單獨成段(標題列 + 7 個子條)、位於 guidance.directions 之前;三級與六種形狀之標題依序皆在;有 / 無共用工具區與只做夢輪次皆有', () => {
+            //任務書之句:「須單獨成段、可被測試以標題字樣定位」「六種可疑形狀與處置」
+            for (let [name, c] of [['一個節點', dctx()], ['無共用工具區', dctx({ toolbox: null })], ['只做夢輪次', dctx({ request: { why: '重審', dreamOnly: true } }, [])]]) {
+                let ls = paraOf(texts.dreamBrief(c), `${name}:`)
+                assert(ls[0].startsWith('- **可疑方向**('), name)
+                assert.equal(ls.length, 1 + HEADS.length, `${name}:標題列 + ${HEADS.length} 個子條`)
+                HEADS.forEach((h, k) => assert(ls[k + 1].startsWith(`  - ${h}`), `${name}:第 ${k + 1} 個子條應為 ${h}`))
+            }
+            //§3 之各條目其餘照舊在(新段不取代任一條): synthesis / plain / overview / directions / avoid / prevDirections / improvements / armProposals
+            let d = texts.dreamBrief(dctx())
+            for (let k of ['- `synthesis`:本輪學到什麼', '- `synthesis.plain`:', '- `synthesis.overview`:', '- `guidance.directions`:', '- `guidance.avoid`:', '- `synthesis.prevDirections`:', '- `guidance.improvements`:', '- `guidance.armProposals`:']) {
+                assert.equal(d.split(`\n${k}`).length - 1, 1, k)
+            }
+            assert(d.indexOf('\n- `synthesis.overview`:') < d.indexOf('\n- **可疑方向**(') && d.indexOf('\n- **可疑方向**(') < d.indexOf('\n- `guidance.directions`:'), '次序:整體研判 → 可疑方向 → 方向之條目')
+        })
+
+        it('做夢任務書「可疑方向」之內容:三級之定義與第 3 級之要求(隨機半庫至少 6 個與分層子庫重算仍在才可稱挑選內容,未做者只列為候選);六種形狀各自之處置', () => {
+            let ls = paraOf(texts.dreamBrief(dctx()))
+            let has = (k, ...xs) => xs.forEach((x) => assert(ls[k].includes(x), `第 ${k} 列缺「${x}」:${ls[k].slice(0, 60)}`))
+            //資訊來源三級(任務書:①策略自身之量 ②庫內相對 ③庫彙總量;第 3 級 = 把策略庫當行情之感測器)
+            has(1, '**第 1 級 = 策略自身之量**(其進出場、已實現損益、進場條件、持倉狀態)', '**第 2 級 = 庫內相對**(同一次決策內之分位、名次、前若干比例)', '**第 3 級 = 庫彙總量**(整側、型態、因子家族、行為群之彙總損益或計數,全庫之做多比例,以全庫之中位或分位切型態)', '把策略庫當行情之感測器', '最依賴庫之組成')
+            //標題列: 命中者依各項處置, 處置優先於該成品之分數(任務書之句:「處置優先於分數」)
+            has(0, '命中者依下列各項處置,處置優先於該成品之分數;')
+            has(1, '**用到第 3 級之成品,其內容須於隨機半庫(至少 6 個;', '`g_eval.mjs --member <鹽>:<0|1>`', '與分層子庫(', '重算後仍在,才可稱挑選內容**', '未做者只列為候選')
+            //1 側別曝險冒充挑選: 不列為已驗證之最高、不作為其後方向與預先核對之起點; 要在其上延伸者先以兩側席次固定之版本重做
+            has(2, '「下單流量偏一側」', '`fixedState`', '`placeboTiming`', '(`placeboTiming`)無內容 ⇒ 記為側別曝險', '記為側別曝險', '不列 `worked`', '**不列為已驗證之最高、不作為其後方向與預先核對之起點**', '先以兩側席次固定之版本重做')
+            //2 以庫彙總量定側別或席次: 同第 3 級之要求
+            has(3, '依整側之彙總損益或全庫之做多比例配兩側之席次', '屬第 3 級,同上之要求', '隨機半庫與分層子庫重算仍在才可稱挑選內容,否則只是候選')
+            //3 以落後之延續規則定側別: 須有兩種以上行情段之證據; 只在單一行情段成立者列 patterns
+            has(4, '依近期已實現損益之好壞決定側別或席次', '須有兩種以上行情段(走勢方向不同之期間)之證據', '只在單一行情段成立者列 `patterns`', '不列 `worked`')
+            //4 同一個底之連續疊加: 探索類之方向與預先核對至少一半改用側別中性之底
+            has(5, '近數輪之方向與預先核對皆以同一成品或同一側別層為底', '**探索類之方向與預先核對至少一半改用側別中性之底**', '兩側席次固定之版本', '做不到須在 `adjust` 寫理由')
+            //5 成員依賴: 內容保持率之中位 < 0.5 或任一半庫之相位平均為負 ⇒ 不列 worked; 「顯著」不等於穩健, 看量級之保持率
+            has(6, '隨機半庫之內容保持率之中位 < 0.5', '任一半庫之相位平均為負', '不列 `worked`', '**「顯著」不等於穩健**', '各半庫內之 p 皆小只說明各半內有超額,不說明超額之量級仍在', '判定看內容保持率之量級')
+            //6 內容只在庫之某一類成員成立: 標示其範圍, 不外推
+            has(7, '某止盈止損帶、某持倉長度、某求解批次、某因子家族', '標示其範圍,不外推為一般之挑選內容')
+            //名詞指向合約 §5
+            assert(ls[0].includes('名詞定義見 `docs/pick-contract.md` §5「判讀名詞」'))
+        })
+
+        it('量尺句:並列「內容(組成對照之超額)最高且可信」與「回測期 S 最高且可信」之成品,並寫明是否同一個、後者是否命中第 1 項;原句不殘留。審計規程第 8 點末加一句(側別曝險不列 worked、不作為起點、以兩側席次固定之版本重做),原句之末仍為原文', () => {
+            let d = texts.dreamBrief(dctx())
+            let sum = d.split('\n').find((l) => l.startsWith('- `synthesis`:本輪學到什麼'))
+            assert(sum.includes('每輪在 `summary` **並列**寫明**目前樹上「內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品各是哪一個、S 與最差相位各多少**(進度之量尺)'))
+            assert(sum.includes('並寫明兩者是否為同一個、後者是否命中下述「可疑方向」第 1 項(命中者只是側別曝險,不是進度)。'))
+            assert(!d.includes('目前樹上回測期 S 最高且可信之成品是哪一個'), '改前之量尺句不殘留')
+            //審組成: 新句附於該列之末; 其前仍為原句之末(未被改動)
+            let l8 = d.split('\n').find((l) => l.startsWith('8. **審組成**'))
+            assert(l8.includes('只在其比例與成品相差 < 10% 時才可用來判時機**。 **迴圈檢查列「下單流量偏一側」、或擴充診斷之提示指出成品等同某一個固定狀態(例:`fixedState`)、同比例隨機時機之安慰劑(`placeboTiming`)無內容者,其優勢歸為側別曝險:彙整時不列 `worked`、不作為方向之起點;要保留其側內之機制者,於方向內指明以兩側席次固定之版本重做**(見 §3「可疑方向」)。'))
+            assert(l8.endsWith('(見 §3「可疑方向」)。'), '新句為該列之末')
+            //兩處之對應: 新句所指之第 1 項即「可疑方向」之第 1 項之處置(同為不列 worked、不作為起點、兩側席次固定之版本重做)
+            assert.equal(d.split('兩側席次固定之版本重做').length - 1, 2, '「可疑方向」之第 1 項與審計規程之新句各一處')
+        })
+
+        it('節點任務書 §6 第 7 條:成品用到庫彙總量(第 3 級)者自報一句;探索類另交「兩側席次固定」之對照版、驗證類不另交;緊接第 6 條之後、在「## 7. 交付」之前;不新增必填之結構化欄位(範本不變);大小不逾 15,000 位元組', () => {
+            let e = brief(task())
+            let v = brief(task({ type: 'verify', claim: '主張甲', direction: dirV }))
+            for (let [name, s] of [['探索', e], ['驗證', v]]) {
+                let ls = s.split('\n')
+                let i6 = ls.findIndex((l) => l.startsWith('6. 寫結論(`conclusion`)'))
+                let i7 = ls.findIndex((l) => l.startsWith('7. **資訊來源**:'))
+                assert(i6 >= 0 && i7 === i6 + 1, `${name}:第 7 條緊接第 6 條之後`)
+                assert(ls[i7 + 1] === '' && ls[i7 + 2].startsWith('## 7. 交付'), `${name}:其後為交付一節`)
+                assert.equal(s.split('7. **資訊來源**:').length - 1, 1, `${name}:只出現一次`)
+                //任務書之句:「成品用到第③級之量(庫彙總量)者,於 conclusion.summary 自報一句「資訊來源:第 N 級(用到之彙總量是什麼)」」
+                assert(ls[i7].includes('成品用到庫彙總量(第 3 級,見合約 §5)者,於 `conclusion.summary` 自報「資訊來源:第 3 級(用到之彙總量是什麼)」;'), name)
+            }
+            //探索類另交一個「兩側席次固定」之對照版(可即為 control.mjs, 或另存一檔並完整評估一次, 計入評估次數), 並寫出兩者之組成對照之超額
+            let l7e = e.split('\n').find((l) => l.startsWith('7. **資訊來源**:'))
+            assert(l7e.endsWith('探索類另交一個「兩側席次固定」之對照版(可即 `control.mjs`,或另存一檔並完整評估一次,計入評估次數),並寫出兩者之組成對照之超額。'))
+            //驗證類之設計由方向定死: 只自報, 不另交對照版
+            let l7v = v.split('\n').find((l) => l.startsWith('7. **資訊來源**:'))
+            assert(l7v.endsWith(';驗證類不另交對照版。') && !v.includes('兩側席次固定'))
+            //不新增必填之結構化欄位: 範本之鍵與改前相同(自報寫在 conclusion.summary)
+            let keysOf = (t) => Object.keys(texts.nodeTemplate({ workDir: wd, task: t }).conclusion)
+            assert.deepEqual(keysOf(task()), ['outcome', 'summary', 'findings', 'limitations', 'nextIdeas', 'armProposals'])
+            assert.deepEqual(keysOf(task({ type: 'verify', claim: '主張甲', direction: dirV })), ['summary', 'findings', 'limitations', 'nextIdeas', 'armProposals', 'claimVerdict', 'claimNote'])
+            assert.deepEqual(Object.keys(texts.nodeTemplate({ workDir: wd, task: task() })), ['plan', 'code', 'results', 'conclusion'])
+            //大小: 本條務求精簡(節點任務書逾 15,000 位元組即整併); 無起點之探索與驗證、有無共同儲存區與其他標的之正負號之最大者皆不逾
+            for (let t of [task(), task({ type: 'verify', claim: '主張甲', direction: dirV })]) {
+                assert(Buffer.byteLength(brief(t)) <= 15000, `節點任務書 ${Buffer.byteLength(brief(t))} 位元組`)
+            }
+        })
+
+        it('節點任務書:去掉第 7 條後與改前逐字相同(釘死):七種情境之輸出之 sha256 前 16 字,與改前(1.0.40)之輸出逐字相等時所取之值相同;含共同儲存區與其他標的之正負號者之大小仍不逾 15,000 位元組', () => {
+            //取值方式:改前之 texts.mjs 與現行之 texts.mjs 於同一組設定與同一組輸入下產出節點任務書,兩者於去掉第 7 條之後逐字相等(路徑字樣正規化後)才取改前輸出之雜湊記於此;
+            //  新舊之差只能是第 7 條(一整列);任務書之一般文字有意改動時,須重取並於變更說明列出理由
+            let codeRoot = path.relative(st.FD_ROOT, path.join(FD_ROOT, 'src')).replace(/\\/g, '/')
+            //共同儲存區之相對路徑(任務書內寫有; 暫存夾名含行程號)正規化為 <STORE>
+            let storeRel = null
+            let sha = (s) => {
+                let ls = s.split('\n')
+                let idx = ls.map((x, i) => (x.startsWith('7. **資訊來源**:') ? i : -1)).filter((i) => i >= 0)
+                assert.equal(idx.length, 1, '第 7 條恰出現一次')
+                ls.splice(idx[0], 1)
+                let t = ls.join('\n').split(codeRoot).join('src')
+                return crypto.createHash('sha256').update(storeRel ? t.split(storeRel).join('<STORE>') : t).digest('hex').slice(0, 16)
+            }
+            let armE = { id: 'E38_maxHoldN', layer: 'E', layerName: 'E 執行', title: '同時持倉上限', desc: 'accept 以 book.open 限制', grid: null }
+            let baseNode = { nodeId: 'base000011112222', arms: ['A04_act', 'E39_skipWeekend'], inactiveArms: ['E39_skipWeekend'], S: 12.3, ladder: 1, backtest: null, doc: 'rsi/records/nodes/base000011112222.md' }
+            let tv = () => task({ type: 'verify', claim: '主張甲', direction: dirV })
+            let cases = [
+                ['探索(無起點)', brief(task()), '8c0f293cb007f1d3'],
+                ['探索(有起點;新加之臂屬執行層)', brief(task({ arms: [arm, armE], base: baseNode })), '836629dc02dd5ced'],
+                ['探索(無共用工具區)', brief(task({ toolbox: null })), 'f493f2a552384c39'],
+                ['驗證(來源方向)', brief(tv()), '4606ce4abdc3354e'],
+                ['驗證(無共用工具區)', brief(task({ type: 'verify', claim: '主張甲', direction: dirV, toolbox: null })), '54712794b404ce39'],
+            ]
+            for (let [name, s, want] of cases) {
+                assert.equal(sha(s), want, name)
+            }
+            //共同儲存區與其他標的之正負號(兩者皆有時任務書最長): 同樣只差第 7 條, 且不逾 15,000 位元組
+            let root0 = path.join(FD_ROOT, 'test', '_tmp', `texts_suspect_${process.pid}`)
+            fs.mkdirSync(path.join(root0, 'picks'), { recursive: true })
+            try {
+                fs.writeFileSync(path.join(root0, 'picks', 'INDEX.md'), '# 總表\n', 'utf8')
+                fs.writeFileSync(path.join(root0, 'picks', '_cross.json'), '{}', 'utf8')
+                let tx = makeTexts({ st: { ...st, rsi: { ...st.rsi, root: root0 } }, FD_ROOT: st.FD_ROOT })
+                let nb = (t) => tx.nodeBrief({ workDir: wd, task: t, round: 7, nodeId: 'nodeX', attempt: 1 })
+                let se = nb(task())
+                let sv = nb(tv())
+                storeRel = path.relative(st.FD_ROOT, path.join(root0, 'picks')).replace(/\\/g, '/')
+                assert(se.includes(storeRel) && sv.includes(storeRel), '任務書內寫有共同儲存區之路徑(正規化之依據)')
+                assert.equal(sha(se), '53462acc9007c693', '探索(有共同儲存區與其他標的之正負號)')
+                assert.equal(sha(sv), '0ec4c7b045ac2e23', '驗證(有共同儲存區與其他標的之正負號)')
+                for (let s of [se, sv]) {
+                    assert(Buffer.byteLength(s) <= 15000, `節點任務書 ${Buffer.byteLength(s)} 位元組`)
+                }
+            }
+            finally {
+                fs.rmSync(root0, { recursive: true, force: true })
+            }
+        })
+
+        it('合約 §5 之判讀名詞:資訊來源之三級、側別中性(兩側席次固定)、組成位移、內容保持率各一至兩句;經 renderContract 改寫(每根 24 小時)後仍在;任務書與合約同名同門檻', () => {
+            let ref = fs.readFileSync(path.join(FD_ROOT, 'contract', 'pick-contract.md'), 'utf8')
+            let sec5 = ref.slice(ref.indexOf('\n## 5. 評估指令\n'), ref.indexOf('\n## 6. 常見錯誤\n'))
+            assert(sec5.length > 100, '找得到 §5')
+            let TERMS = ['**資訊來源之三級**', '**側別中性(兩側席次固定)**', '**組成位移**', '**內容保持率**']
+            let blockOf = (text) => {
+                let ls = text.split('\n')
+                let i = ls.findIndex((l) => l.startsWith('- **判讀名詞**('))
+                assert(i >= 0, '有「判讀名詞」一項')
+                let out = []
+                for (let l of ls.slice(i + 1)) {
+                    if (!l.startsWith('  - ')) {
+                        break
+                    }
+                    out.push(l)
+                }
+                return out
+            }
+            for (let [name, text] of [['參考版', sec5], ['每根 24 小時', renderContract(ref, { barHours: 24 })]]) {
+                let ls = blockOf(text)
+                assert.equal(ls.length, TERMS.length, `${name}:四個名詞`)
+                TERMS.forEach((t, k) => {
+                    assert(ls[k].startsWith(`  - ${t}:`), `${name}:第 ${k + 1} 個應為 ${t}`)
+                    let n = (ls[k].match(/。/g) || []).length
+                    assert(n >= 1 && n <= 2, `${name}:${t} 為一至兩句(${n})`)
+                })
+            }
+            //任務書所指之名詞(節號與名稱)與合約同名; 第 5 項之門檻與隨機半庫之個數兩處一致
+            let d = texts.dreamBrief(dctx())
+            assert(d.includes('`docs/pick-contract.md` §5「判讀名詞」') && ref.includes('- **判讀名詞**('))
+            //(合約之字樣只在「判讀名詞」一項內比對: 他處另有同樣之字串者不算)
+            let defs = blockOf(sec5).join('\n')
+            for (let k of ['隨機半庫', '分層子庫', '內容保持率', '兩側席次固定', '至少 6 個', '中位 < 0.5', '相位平均為負']) {
+                assert(d.includes(k) && defs.includes(k), `任務書與合約之判讀名詞皆含「${k}」`)
+            }
+            //合約之判讀名詞為節點任務書所指之唯一定義處(節點任務書不重述): 各名詞之語意字句(第 3 級須經組成位移重算才可稱挑選內容; 內容 = 組成對照之超額;
+            //  側別中性不同於同比例隨機時機之安慰劑; 組成位移 = 換一批成員重算同一個模組)
+            for (let k of ['須經下列之組成位移重算仍在,才可稱挑選內容', '內容 = 組成對照之超額;同一個模組、同一種對照', '它與「同比例、隨機時機之安慰劑」不同 —— 後者保留成品之狀態比例、只打亂時機。', '換一批成員重算同一個模組']) {
+                assert(defs.includes(k), `合約之判讀名詞含「${k}」`)
+            }
+            //合約之改寫錨點: 新增之字句不含 renderContract 之錨點字樣(含之者另一個專案之合約會殘留參考值; 殘留掃描見 unit-factsResidue)
+            assert(!/七相位|七個相位|p ≤ 0\.05|分為 10 層|名次 ±50/.test(sec5.slice(sec5.indexOf('- **判讀名詞**('), sec5.indexOf('- **selHash**'))), '判讀名詞一項不含改寫之錨點字樣')
+        })
     })
 })

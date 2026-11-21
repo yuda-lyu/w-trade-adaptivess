@@ -178,7 +178,32 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
             let FILL = '`fillRandom` 依各決策之兩側席數以活躍度匹配隨機填席(回可直接交給 `simulate` 之選集;同比例、隨機時機之安慰劑等用)、'
             //擴建一節「既有節點之擴充診斷之值」一句之替換(規則 R-REC-41: 輪末之附算一併處理待補算者為 FILL_BACKLOG_ON; 參考設定未給 settings.rsi.fillBacklogSec ⇒ 預設開啟):
             //  雜湊取「把該句換回改前之原文 FILL_BACKLOG_OFF」之後之全文 ⇒ 其餘文字仍與釘死之值逐字相同; 該句另斷言其出現次數(有共用工具區者 1、無者 0), 原文不殘留
-            let sha = (s, nFill) => {
+            //做夢任務書於 §3 新增「可疑方向」一段、並改兩處之句(規則 R-REC-47: 量尺句改為並列兩者、審計規程第 8 點末加一句):
+            //  雜湊取「去掉該段、把兩處之句換回改前之原文」之後之全文 ⇒ 其餘文字仍與釘死之值逐字相同(四個雜湊值未更新: 新舊之差只能是這三處); 各處另斷言恰出現一次
+            //  段之範圍 = 自標題列(SUSPECT_HEAD 起首)至 guidance.directions 之條目之前, 其間各列皆須為其子條(以兩個空格起首)
+            //  改前之原句(SUM_OLD)取自 1.0.40 之原文之字面值, 不由新碼推得
+            let SUSPECT_HEAD = '- **可疑方向**('
+            let DIRS_HEAD = '- `guidance.directions`:'
+            let SUM_OLD = '每輪在 `summary` 寫明**目前樹上回測期 S 最高且可信之成品是哪一個、S 與最差相位各多少**(進度之量尺)。'
+            let SUM_NEW = '每輪在 `summary` **並列**寫明**目前樹上「內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品各是哪一個、S 與最差相位各多少**(進度之量尺),並寫明兩者是否為同一個、後者是否命中下述「可疑方向」第 1 項(命中者只是側別曝險,不是進度)。'
+            let ITEM8_ADD = ' **迴圈檢查列「下單流量偏一側」、或擴充診斷之提示指出成品等同某一個固定狀態(例:`fixedState`)、同比例隨機時機之安慰劑(`placeboTiming`)無內容者,其優勢歸為側別曝險:彙整時不列 `worked`、不作為方向之起點;要保留其側內之機制者,於方向內指明以兩側席次固定之版本重做**(見 §3「可疑方向」)。'
+            let revertSuspect = (s) => {
+                let ls = s.split('\n')
+                let heads = ls.map((x, i) => (x.startsWith(SUSPECT_HEAD) ? i : -1)).filter((i) => i >= 0)
+                assert.equal(heads.length, 1, '「可疑方向」之標題列恰出現一次')
+                let i = heads[0]
+                let j = ls.findIndex((x) => x.startsWith(DIRS_HEAD))
+                assert(j > i + 1, '該段位於 guidance.directions 之條目之前、至少有一個子條')
+                assert(ls.slice(i + 1, j).every((x) => x.startsWith('  - ')), '該段之各列皆為其子條')
+                ls.splice(i, j - i)
+                let t = ls.join('\n')
+                assert.equal(t.split(SUM_NEW).length - 1, 1, '新量尺句恰出現一次')
+                assert.equal(t.split(ITEM8_ADD).length - 1, 1, '審計規程第 8 點新增之句恰出現一次')
+                assert.equal(t.split(SUM_OLD).length - 1, 0, '改前之量尺句不殘留')
+                return t.split(SUM_NEW).join(SUM_OLD).split(ITEM8_ADD).join('')
+            }
+            let sha = (s0, nFill) => {
+                let s = revertSuspect(s0)
                 let ls = s.split('\n')
                 assert.equal(ls.filter((x) => x === PRE_CHECK).length, 1, '新增之一句恰出現一次')
                 assert.equal(s.split(FILL).length - 1, nFill, 'fillRandom 之一段之出現次數')
