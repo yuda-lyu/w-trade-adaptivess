@@ -11,7 +11,9 @@
 - 起子行程一律 `windowsHide: true`.
 - 專案之路徑一律由 `src/cfg.mjs` 之 `FD_ROOT` / `P()` 展開;只有「定位套件自己之檔」才用 `import.meta.url`.
 - 新增或改動會寫專案之檔或起行程之命令列程式、工具或其模式時,同時更新 `src/domain/agentEntries.mjs` 之 `ENTRY_RULES`(判定須與該入口之實際解析一致)並於其開頭(讀設定之前)呼叫 `guardEntry`(R-RUN-11);操作掃描之「執行迴圈之寫檔入口」(R-BT-7)取同一張表.`unit-agentGuard` 之接線案核對表與入口一致.
-- 改操作掃描之指令解析(`src/domain/cmdScan.mjs`:`stripSearchPatterns`、`listRootExempt`、`entryExecOf`、`recursiveRootOf`、`toolListsRoot`、`scriptListsRoot`;規則 R-BT-6、R-BT-7、R-BT-8)之判定前,保存改前之函數(`git archive` 之舊版或複本於 `./tmp/`),改後以差異比對證明「除該次明定之修正外 0 差異」並植入會改變判定之變異證明比對有鑑別力(作法見 `sgud/exp/experience.md` 第 45 條);只搬移或重構者須 0 差異.引號遮蔽只經 `maskQuotes` / `unmaskQuotes`(守門:`unit-cmdScan` ③);解析函數不加入聚合入口.
+- 在 `src/domain/` 新增**迴圈驗證之判定檔**(判定、門檻、操作掃描之判法等不該讓節點讀到者)時,**檔名以 `verify` 起首**(`backtest` 起首亦可):節點之禁區字樣只涵蓋 `src/domain/verify*`、`src/domain/backtest*`(R-BT-10);非此起首之檔,節點讀之不被列(例:改名前之 `cmdScan.mjs`).節點任務書「不得讀取迴圈驗證之原始碼」一句所列之檔名樣式與禁區字樣同步(守門:`unit-verifyZone`).
+- 操作掃描之「可讀之他節點工作夾」(`allowWork`)只經 `src/domain/verify.mjs` 之 `allowWorkOf`(迴圈驗證、`rescanTraces`、`tools/scanCheck.mjs` 共用;R-BT-9),不在呼叫端另算;改其內容後三處之判定一併改(`unit-scanAllowWork` 之 scanCheck 與重掃同組之案守).
+- 改操作掃描之指令解析(`src/domain/verifyCmdScan.mjs`:`stripSearchPatterns`、`listRootExempt`、`entryExecOf`、`recursiveRootOf`、`toolListsRoot`、`scriptListsRoot`;規則 R-BT-6、R-BT-7、R-BT-8)之判定前,保存改前之函數(`git archive` 之舊版或複本於 `./tmp/`),改後以差異比對證明「除該次明定之修正外 0 差異」並植入會改變判定之變異證明比對有鑑別力(作法見 `sgud/exp/experience.md` 第 45 條);只搬移或重構者須 0 差異.引號遮蔽只經 `maskQuotes` / `unmaskQuotes`(守門:`unit-cmdScan` ③);解析函數不加入聚合入口.
 
 ## 2. 三層之分工(使用端)
 

@@ -7,7 +7,7 @@ import { runNodeProc } from './proc.mjs'
 import { makeBacktest } from './backtest.mjs'
 import { gradeLabel } from './backtestGrade.mjs'
 import { recentDiagOf, neutralDeltaOf } from './diagRead.mjs'
-import { absOf, stripSearchPatterns, listRootExempt, entryExecOf, recursiveRootOf, scriptListsRoot, toolListsRoot, LR_CD } from './cmdScan.mjs'
+import { absOf, stripSearchPatterns, listRootExempt, entryExecOf, recursiveRootOf, scriptListsRoot, toolListsRoot, LR_CD } from './verifyCmdScan.mjs'
 
 
 //節點成品之機械驗證(迴圈之正本數字): 以子行程重跑 g_eval.mjs --mode full, 不採信 agent 自報
@@ -1243,5 +1243,33 @@ let extBoardMeansOf = (m, replays) => {
     return out
 }
 
-export { makeVerify, scanTrace, deniedHalt, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, isHalfOf, runNodeProc, shortShareOf, sideFlowIssue, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD, replicaExtOf, replicaExtArgsOf, replayExtOf, boardMeanOf, extBoardMeansOf, REPLICA_EXT }
+//可讀之他節點工作夾(操作掃描之 allowWork; 規則 R-REC-13): 迴圈驗證(領域之 refsOf)、--mode validate 之重掃(領域之 rescanTraces)與 tools/scanCheck.mjs 共用下列三函數, 三處不各算各的
+//  workRel: 各節點工作夾之根相對於專案根之路徑(以 / 為分隔); ids: 可被方向指名之節點(已執行者)之 id
+//dirWorkIdsOf, 來源方向之全文(依據、預期)內提到之工作夾(<workRel>/<id>; 例: 做夢之診斷模組所在之 rsi/work/dream_rNNN)之 id: 任務書已把該方向交給節點, 其所指之檔可讀
+let dirWorkIdsOf = (direction, workRel) => {
+    if (!direction) {
+        return []
+    }
+    let base = String(workRel).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return [...new Set([...`${direction.rationale || ''} ${direction.expect || ''}`.matchAll(new RegExp(`${base}/([A-Za-z0-9_]+)`, 'g'))].map((m) => m[1]))]
+}
+//dirNodeIdsOf, 來源方向之全文(主張、依據、預期)內指名之節點(以完整 id 或其前 8 碼以上書寫, 且在 ids 中唯一對應一個)
+//  方向常寫「以某節點之 pick 為底 / 為對照」而不寫路徑: 迴圈把這些成品預先複製進節點之工作夾(ref_<id 前 8 碼>.mjs), 其工作夾亦列為可讀(規則 R-REC-13)
+let dirNodeIdsOf = (direction, ids) => {
+    if (!direction) {
+        return []
+    }
+    let out = []
+    for (let m of `${direction.claim || ''} ${direction.rationale || ''} ${direction.expect || ''}`.matchAll(/\b[0-9a-f]{8,16}\b/g)) {
+        let hit = (ids || []).filter((id) => id.startsWith(m[0]))
+        if (hit.length === 1 && !out.includes(hit[0])) {
+            out.push(hit[0])
+        }
+    }
+    return out
+}
+//allowWorkOf, 節點文件 d 可讀之他節點工作夾之 id: 起點(spec.base)、任務書列為參考之節點(task.refs)、方向內提到之工作夾與指名之節點
+let allowWorkOf = (d, { workRel, ids }) => [...(d.spec && d.spec.base ? [d.spec.base] : []), ...(((d.task && d.task.refs) || []).filter((r) => r.nodeId).map((r) => r.nodeId)), ...dirWorkIdsOf(d.task && d.task.direction, workRel), ...dirNodeIdsOf(d.task && d.task.direction, ids)]
+
+export { makeVerify, scanTrace, deniedHalt, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, isHalfOf, runNodeProc, shortShareOf, sideFlowIssue, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD, replicaExtOf, replicaExtArgsOf, replayExtOf, boardMeanOf, extBoardMeansOf, REPLICA_EXT, evalLines, dirWorkIdsOf, dirNodeIdsOf, allowWorkOf }
 export default makeVerify

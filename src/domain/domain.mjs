@@ -21,7 +21,8 @@ import { createResourceMonitor } from '../arsi/resources.mjs'
 import { resolveRunConfig } from '../arsi/runner.mjs'
 import { makeTexts, GUIDE, guideText, OUT_SATURATED_NOTE } from './texts.mjs'
 import { nullDrawsOf, nullFloorText } from './factsText.mjs'
-import { makeVerify, summaryOf, notesOf, isHalfOf, scanTrace, shortShareOf, sideFlowIssue, sideFlowCfgOf, extSurfaceOf, extFlagIssue, extBoardMeansOf, runNodeProc, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD } from './verify.mjs'
+import { makeVerify, summaryOf, notesOf, isHalfOf, scanTrace, shortShareOf, sideFlowIssue, sideFlowCfgOf, extSurfaceOf, extFlagIssue, extBoardMeansOf, runNodeProc, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD, dirWorkIdsOf, dirNodeIdsOf, allowWorkOf } from './verify.mjs'
+import { PEAK_HEAD, TWIN_HEAD, isEvalHint, evalHintBody, evalHintsOfDocs } from './verifyEvalHints.mjs'
 import { makeToolboxRules, TB_BASELINE } from './toolboxRules.mjs'
 import { archiveExperience, archiveFeedback } from './archiveDocs.mjs'
 import { activeTrial, assignTrial, variantFallback } from './briefTrials.mjs'
@@ -219,7 +220,8 @@ let rankKeyOf = (n) => {
  * @param {Object} [inject.run] 輸入執行規模覆寫,與 st.rsi 合併後由 resolveRunConfig 解析
  * @param {Function} [inject.runEval] 輸入輪末附算所用之「執行一次評估」之函數 async ({ nodeId, kind, args }) → { code, timeout }(規則 R-REC-34),測試可換為替身;未給則以 g_eval.mjs 之子行程
  * @param {Function} [inject.clock] 輸入輪末附算一併處理待補算之總時長之計時函數(回傳毫秒;規則 R-REC-41),測試可換為假時鐘;未給則用 Date.now
- * @returns {Object} 回傳專案物件,主要鍵:st、rsi、arsi、records、toolbox、run、monitor、catalog、selectable、idOf、taskFor(節點任務內容)、typeOf、setDirectionTypes、writeBoard(臂看板)、writeCatalogFile、writeSearchMap、validatePending(補算回測期旗標)、reverifyAll、extFill、fill(附算與補算;R-REC-34)、fillPlanOf(只求計畫)、fillParOf(併行數)、rescanTraces、rescanSideFlow、pendingDream、redream、requestDreamOnly(登記主控要求之只做夢輪次)、pendingReauditIds(待重審之節點 id)、claimedNodeIds(認領中之節點 id)、inactiveArmsOf、offDefArmsOf、migrateDocs、annotateDream、closeFrontier、rearmFrontier、proposeDirection、pickStore()、setStatus、getState、setState、log、envKey、layerOfSpec、domain
+ * @param {Function} [inject.evalHints] 輸入迴圈檢查之兩條機械提示之判定函數 (docs, workRoot) → Map(節點 id → 提示字串陣列)(規則 R-REC-43、R-REC-44),測試可換為替身(例:拋錯之情形);未給則用 verifyEvalHints.mjs 之 evalHintsOfDocs
+ * @returns {Object} 回傳專案物件,主要鍵:st、rsi、arsi、records、toolbox、run、monitor、catalog、selectable、idOf、taskFor(節點任務內容)、typeOf、setDirectionTypes、writeBoard(臂看板)、writeCatalogFile、writeSearchMap、validatePending(補算回測期旗標)、reverifyAll、extFill、fill(附算與補算;R-REC-34)、fillPlanOf(只求計畫)、fillParOf(併行數)、rescanTraces、refreshEvalHints(重產所指節點之兩條提示;R-REC-43、R-REC-44)、rescanSideFlow、pendingDream、redream、requestDreamOnly(登記主控要求之只做夢輪次)、pendingReauditIds(待重審之節點 id)、claimedNodeIds(認領中之節點 id)、inactiveArmsOf、offDefArmsOf、migrateDocs、annotateDream、closeFrontier、rearmFrontier、proposeDirection、pickStore()、setStatus、getState、setState、log、envKey、layerOfSpec、domain
  * @example
  * let project = makeProject(st)
  * let project2 = makeProject(st, { dispatch: myDispatch })
@@ -519,29 +521,13 @@ let makeProject = (st = getSettings(), inject = {}) => {
     }
 
     //dirWorkIds: 來源方向之全文內提到之工作夾(例如做夢之診斷模組所在之 rsi/work/dream_rNNN): 任務書已把該方向交給節點, 其所指之檔可讀
-    let dirWorkIds = (direction) => {
-        if (!direction) {
-            return []
-        }
-        let base = path.relative(FD_ROOT, st.records.workDir).replace(/\\/g, '/').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        return [...new Set([...`${direction.rationale || ''} ${direction.expect || ''}`.matchAll(new RegExp(`${base}/([A-Za-z0-9_]+)`, 'g'))].map((m) => m[1]))]
-    }
+    //  求法在 verify.mjs 之 dirWorkIdsOf / dirNodeIdsOf / allowWorkOf(迴圈驗證、重掃與 tools/scanCheck.mjs 共用; 規則 R-BT-9)
+    let workRelOf = () => path.relative(FD_ROOT, st.records.workDir).replace(/\\/g, '/')
+    let dirWorkIds = (direction) => dirWorkIdsOf(direction, workRelOf())
     //dirNodeIds: 來源方向之全文(主張、依據、預期)內指名之節點(以完整 id 或其前 8 碼以上書寫, 且在樹上唯一對應一個已執行之節點)
     //  方向常寫「以某節點之 pick 為底 / 為對照」而不寫路徑: 迴圈把這些成品預先複製進節點之工作夾(ref_<id 前 8 碼>.mjs), 其工作夾亦列為可讀(規則 R-REC-13)
-    let dirNodeIds = (direction) => {
-        if (!direction || !rsi) {
-            return []
-        }
-        let ids = rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => r.id)
-        let out = []
-        for (let m of `${direction.claim || ''} ${direction.rationale || ''} ${direction.expect || ''}`.matchAll(/\b[0-9a-f]{8,16}\b/g)) {
-            let hit = ids.filter((id) => id.startsWith(m[0]))
-            if (hit.length === 1 && !out.includes(hit[0])) {
-                out.push(hit[0])
-            }
-        }
-        return out
-    }
+    let executedIds = () => rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => r.id)
+    let dirNodeIds = (direction) => (!direction || !rsi ? [] : dirNodeIdsOf(direction, executedIds()))
     //refsOf: 任務書列為參考之節點(其工作夾可讀)與來源方向內提到之工作夾、指名之節點; 於驗證時呼叫(同輪內與派工時之參考相同; nodeId = 驗證之節點之 id, 同派工時之 taskFor)
     let verify = makeVerify({
         st,
@@ -888,6 +874,19 @@ let makeProject = (st = getSettings(), inject = {}) => {
             L.push('「正本與重放之均」一欄之末另列**各擴充診斷之看板值之多抽之均**(迴圈之重放一併載入擴充診斷者;格式「診斷名 值」,依看板值之數字逐位取均;未標抽數者 = 正本與各次重放皆有其值,標「(n 抽)」者只 n 抽有值;各次之值見 `harness_seed*.json` 與節點文件之迴圈判讀):**判定量會隨抽取而變之診斷,以這個均判讀,不以單抽**。')
             L.push('')
         }
+        //迴圈檢查之兩條機械提示(規則 R-REC-43、R-REC-44; 樹之 raw.issues 與節點文件之迴圈檢查同一份): 「S」一欄標「單峰交付」、「臂」一欄標「選集與他節點相同」, 表前各列一段(節點與提示之內容); 樹上皆無者看板逐字不變
+        //  看板是節點讀得到之檔 ⇒ 段落只定性描述, 不列門檻之值(規則 R-REC-43 ⑥)
+        let hintOf = (n, head) => (n.raw && Array.isArray(n.raw.issues) ? n.raw.issues : []).find((s) => String(s).startsWith(head)) || null
+        let peakRows = nodes.filter((n) => hintOf(n, PEAK_HEAD))
+        if (peakRows.length) {
+            L.push(`「S」一欄標「單峰交付」者:迴圈檢查列「提示(單峰交付)」之節點 —— 交付版之 S 為多次完整評估中之孤立高點(只提示、不否決;以鄰點與多抽之重放判其是否偶然):${peakRows.map((n) => `\`${n.id.slice(0, 8)}\`(${evalHintBody(hintOf(n, PEAK_HEAD))})`).join(';')}。`)
+            L.push('')
+        }
+        let twinRows = nodes.filter((n) => hintOf(n, TWIN_HEAD))
+        if (twinRows.length) {
+            L.push(`「臂」一欄標「選集與他節點相同」者:迴圈檢查列「提示(選集與他節點相同)」之節點 —— 交付版之選集與他節點之某次完整評估逐位相同(臂組合不同者:多出之臂於評估期間未作用;臂組合相同者:兩者為同一成品,不作互相獨立之佐證;只提示、不否決,「含此臂之節點」與「回測期最佳 S」之計法不變):${twinRows.map((n) => `\`${n.id.slice(0, 8)}\`(${evalHintBody(hintOf(n, TWIN_HEAD))})`).join(';')}。`)
+            L.push('')
+        }
         let keyNoteAt = L.length
         L.push(`| 節點 | 臂 | 起點 | S | 最差相位 | 七相位平均 | 階梯 | 否決 | 虛無均 | 超額 | z | 虛無 p | 同訊號量超額 / p | 同活躍度超額 / p | 組成對照之超額 / p / 可重現 | 幾何對照之超額 / p | 換種子與同分次序之 S | 正本與重放之 S 之均;超額之均(組成對照 / 近期活躍度版)${anyXm ? ';擴充診斷之看板值之均' : ''} | 擴充診斷之看板值 | 每隻訊號數 | 做多比例 | 下單之做空比例(訓練期 / 回測期) | 月均單 | 最大持倉 | 選集大小 | 可信度 | 輪 | 成品之機制(自述) |`)
         L.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
@@ -912,7 +911,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let m = n.raw && n.raw.metrics
             let nu = m && m.null
             let sd = n.raw && Array.isArray(n.raw.seedS) && n.raw.seedS.length ? n.raw.seedS.map((v) => f1(v)).join(' / ') : '—'
-            L.push(`| \`${n.id}\` | ${armsLabel(n)} | ${n.spec.base ? String(n.spec.base).slice(0, 8) : '無'} | **${n.score ? n.score.S : ''}**${keyNoteOf(n)} | ${m ? f1(m.op.eqYr.min) : ''} | ${m ? f1(m.op.eqYr.mean) : ''} | ${n.score ? n.score.ladder : ''} | ${vetoedOf(n) ? '是' : '否'} | ${nu ? f1(nu.mean) : ''} | ${nu ? f1(nu.excess) : ''} | ${nu ? f1(nu.z) : ''} | ${nu ? nu.p : ''} | ${m && m.nullVol ? `${f1(m.nullVol.excess)} / ${m.nullVol.p}` : '—'} | ${m && m.nullAct ? `${f1(m.nullAct.excess)} / ${m.nullAct.p}` : '—'} | ${m && m.nullSideAct ? `${f1(m.nullSideAct.excess)} / ${m.nullSideAct.p} / ${typeof m.nullSideAct.share === 'number' ? `${Math.round(m.nullSideAct.share * 100)}%` : '—'}${m.nullSideAct.triggered === false ? ' *' : ''}${ncOf(n).length ? ' ※' : ''}` : '—'}${actSplitOf(n) ? ' 活躍度定義不一致' : ''} | ${m && m.nullSideGeo ? `${f1(m.nullSideGeo.excess)} / ${m.nullSideGeo.p}` : '—'} | ${sd} | ${avgOf(n)} | ${extCellsOf(n).map((c) => `${c.name} ${c.value}`).join(';') || '—'} | ${m && m.sel && typeof m.sel.sigPerPick === 'number' ? m.sel.sigPerPick.toFixed(2) : ''} |${m && m.sel && typeof m.sel.longRatio === 'number' ? m.sel.longRatio.toFixed(2) : ''} | ${n.raw && n.raw.train && typeof n.raw.train.shortShare === 'number' && shortShareOf(m) !== null ? `${n.raw.train.shortShare.toFixed(2)} / ${shortShareOf(m).toFixed(2)}` : '—'} | ${m ? m.op.monthlyOrders.mean.toFixed(0) : ''} | ${m ? m.op.peakHold.max : ''} | ${m && m.sel ? f1(m.sel.sizeMean) : ''} | ${(n.evidence && n.evidence.trust) || '未審'} | ${roundName(n.round)} | ${descOf(n)} |`)
+            L.push(`| \`${n.id}\` | ${armsLabel(n)}${hintOf(n, TWIN_HEAD) ? ' 選集與他節點相同' : ''} | ${n.spec.base ? String(n.spec.base).slice(0, 8) : '無'} | **${n.score ? n.score.S : ''}**${keyNoteOf(n)}${hintOf(n, PEAK_HEAD) ? ' 單峰交付' : ''} | ${m ? f1(m.op.eqYr.min) : ''} | ${m ? f1(m.op.eqYr.mean) : ''} | ${n.score ? n.score.ladder : ''} | ${vetoedOf(n) ? '是' : '否'} | ${nu ? f1(nu.mean) : ''} | ${nu ? f1(nu.excess) : ''} | ${nu ? f1(nu.z) : ''} | ${nu ? nu.p : ''} | ${m && m.nullVol ? `${f1(m.nullVol.excess)} / ${m.nullVol.p}` : '—'} | ${m && m.nullAct ? `${f1(m.nullAct.excess)} / ${m.nullAct.p}` : '—'} | ${m && m.nullSideAct ? `${f1(m.nullSideAct.excess)} / ${m.nullSideAct.p} / ${typeof m.nullSideAct.share === 'number' ? `${Math.round(m.nullSideAct.share * 100)}%` : '—'}${m.nullSideAct.triggered === false ? ' *' : ''}${ncOf(n).length ? ' ※' : ''}` : '—'}${actSplitOf(n) ? ' 活躍度定義不一致' : ''} | ${m && m.nullSideGeo ? `${f1(m.nullSideGeo.excess)} / ${m.nullSideGeo.p}` : '—'} | ${sd} | ${avgOf(n)} | ${extCellsOf(n).map((c) => `${c.name} ${c.value}`).join(';') || '—'} | ${m && m.sel && typeof m.sel.sigPerPick === 'number' ? m.sel.sigPerPick.toFixed(2) : ''} |${m && m.sel && typeof m.sel.longRatio === 'number' ? m.sel.longRatio.toFixed(2) : ''} | ${n.raw && n.raw.train && typeof n.raw.train.shortShare === 'number' && shortShareOf(m) !== null ? `${n.raw.train.shortShare.toFixed(2)} / ${shortShareOf(m).toFixed(2)}` : '—'} | ${m ? m.op.monthlyOrders.mean.toFixed(0) : ''} | ${m ? m.op.peakHold.max : ''} | ${m && m.sel ? f1(m.sel.sizeMean) : ''} | ${(n.evidence && n.evidence.trust) || '未審'} | ${roundName(n.round)} | ${descOf(n)} |`)
         }
         L.push('')
         L.push('## 各可選臂')
@@ -1279,6 +1278,13 @@ let makeProject = (st = getSettings(), inject = {}) => {
         if (request) {
             lines.push(`${request.dreamOnly ? '只做夢輪次(主控要求;本輪無節點、審計 0)' : '主控對本輪做夢之要求'}:${request.why.split(/\r?\n/)[0].slice(0, 160)}`)
         }
+        //迴圈檢查之兩條機械提示(規則 R-REC-43、R-REC-44): 本輪之節點皆已交付(同輪他節點之評估紀錄已完整)⇒ 於派做夢之前以全部節點之評估紀錄重產本輪節點與待重審者之提示(做夢之審計範圍與看板即帶之); 失敗不影響輪次
+        try {
+            refreshEvalHints(nodeIds)
+        }
+        catch (err) {
+            log(`迴圈檢查之提示(單峰交付 / 選集與他節點相同)未能產生(派做夢之前;不影響輪次): ${String((err && err.message) || err).slice(0, 200)}`)
+        }
         setStatus({ round, stage: 'dream', dreamNodes: nodeIds })
         let before = mtimes()
         let ctxNodes = nodeIds.map((id) => {
@@ -1399,6 +1405,13 @@ let makeProject = (st = getSettings(), inject = {}) => {
         //appliedExtra: 記下方向寫定時之評估環境之鍵(其後鍵改變者, 節點任務書於來源方向加一句口徑提示; 見 directionOf)
         let ap = await arsi.applyDream({ doc: dr.doc, actions, appliedExtra: { envKey } })
         setState({ ...state, pendingReaudit: pending })
+        //迴圈檢查之兩條機械提示(規則 R-REC-43、R-REC-44): 重做者之新交付(與其評估紀錄)於此之後才有 ⇒ 本輪之節點、待重審者與重做者再重產一次(看板與共同儲存區之前); 失敗不影響輪次
+        try {
+            refreshEvalHints([...nodeIds, ...pending])
+        }
+        catch (err) {
+            log(`迴圈檢查之提示(單峰交付 / 選集與他節點相同)未能產生(做夢之處置之後;不影響輪次): ${String((err && err.message) || err).slice(0, 200)}`)
+        }
         //做夢 agent 之操作稽核(與節點同一套禁區掃描): 結果記入做夢文件之 harness.trace; 觸及禁區者另列於輪次摘要供主代理處置
         //  做夢 agent 所寫之程式檔內含禁區字樣者只列為待核對(fileNotes): 其自寫之稽核腳本以禁區字樣為搜尋目標(此類為常見之誤報), 工具呼叫之輸入仍照常列為問題
         let dtr = scanTrace({ workDir: arsi.dreamWorkDir(round), logFile: path.join(arsi.dreamWorkDir(round), 'agent.log'), privateRoot: backtestCfg(st).privateRoot, root: FD_ROOT, writeRoots: [arsi.dreamWorkDir(round), path.join(FD_ROOT, 'sgud'), toolboxDir], fileHits: 'note' })
@@ -1720,6 +1733,14 @@ let makeProject = (st = getSettings(), inject = {}) => {
             }
         }))
         out.sort((a, b) => a.order - b.order)
+        //迴圈檢查之兩條機械提示(規則 R-REC-43、R-REC-44)依重跑後之正本之選集指紋重產(評估器改版後指紋可能已變; 迴圈檢查之其餘項照留)
+        //  失敗(拋錯)只記錄: 重跑之結果已寫入, 其後之看板照常重產(同輪末之寫法)
+        try {
+            refreshEvalHints(rows.map((r) => r.id))
+        }
+        catch (err) {
+            log(`迴圈檢查之提示(單峰交付 / 選集與他節點相同)未能產生(reverify 之後;重跑之結果已寫入,看板照常重產): ${String((err && err.message) || err).slice(0, 200)}`)
+        }
         writeBoard()
         return out.map(({ order, ...x }) => x)
     }
@@ -2339,16 +2360,75 @@ let makeProject = (st = getSettings(), inject = {}) => {
         }
     }
 
+    //迴圈檢查之兩條機械提示(規則 R-REC-43 單峰交付、R-REC-44 選集與他節點相同; 判定在 verifyEvalHints.mjs 之 evalHintsOfDocs): 全部節點文件與其工作夾之評估紀錄(各計至該節點之 agent 結束之時刻)
+    //  withHints: 去掉舊之兩條提示、把本次所得補於末尾(無提示且原本無者與原陣列逐項相同 ⇒ 不寫檔)
+    let withHints = (issues, hs) => [...(issues || []).filter((s) => !isEvalHint(s)), ...(hs || [])]
+    //evalHintsAll: 判定之入口(預設 = evalHintsOfDocs); inject.evalHints 可換掉(測試注入拋錯之情形, 驗各呼叫點之失敗只記錄而主流程照常)
+    let evalHintsAll = typeof inject.evalHints === 'function' ? inject.evalHints : evalHintsOfDocs
+    //refreshEvalHints(ids), 以現行之評估紀錄重產所指節點之兩條提示, 更新節點文件之迴圈檢查與樹之 raw.issues(有變動者才寫); 回有變動之節點數
+    //  呼叫處: 輪末鉤子之派做夢之前(本輪之節點與待重審者; 同輪之節點皆已交付, 其評估紀錄已完整)、做夢之處置之後(另含重做者)、reverify 之後(選集指紋可能已變);
+    //  --mode validate 之重掃(rescanTraces)另對全樹為之; 其餘節點(較早入樹者)之文件不在輪末主動重寫
+    let refreshEvalHints = (ids) => {
+        let want = [...new Set(Array.isArray(ids) ? ids : [])]
+        if (!want.length) {
+            return 0
+        }
+        let hm = evalHintsAll(records.listNodeDocs(), st.records.workDir)
+        let k = 0
+        for (let id of want) {
+            let d = records.getNodeDoc(id)
+            if (!d || !d.harness || !d.harness.checks) {
+                continue
+            }
+            let old = d.harness.checks.issues || []
+            let next = withHints(old, hm.get(id))
+            //節點文件與樹之 raw.issues 各自比對、各自有變動才寫: 先寫文件、樹之更新拋錯者, 下次呼叫時樹補上(兩者須為同一份; 看板與共同儲存區之 status.issues 讀樹)
+            let tn = rsi.store.getNode(id)
+            let treeOld = tn && tn.raw ? (tn.raw.issues || []) : null
+            let docChanged = JSON.stringify(old) !== JSON.stringify(next)
+            let treeChanged = treeOld !== null && JSON.stringify(treeOld) !== JSON.stringify(withHints(treeOld, hm.get(id)))
+            if (!docChanged && !treeChanged) {
+                continue
+            }
+            if (docChanged) {
+                d.harness.checks = { ...d.harness.checks, issues: next }
+                records.putNodeDoc(d)
+            }
+            if (treeChanged) {
+                rsi.store.updateNode(id, (x) => {
+                    if (!x.raw) {
+                        return false
+                    }
+                    x.raw.issues = withHints(x.raw.issues, hm.get(id))
+                })
+            }
+            k++
+        }
+        return k
+    }
+
     //rescanTraces, 操作掃描之規則改版後, 重掃各節點最近一次交付之操作紀錄, 以新結果取代節點文件與樹上之舊掃描項(其餘檢查項不動)
+    //  迴圈檢查之兩條機械提示(規則 R-REC-43、R-REC-44)一併以現行之評估紀錄重產(同 refreshEvalHints; 置於末尾)
+    //    其判定失敗(拋錯)只記錄: 操作掃描照常重掃, 各節點文件與樹內既有之兩條提示照留(仍置於末尾)
     let rescanTraces = () => {
         let isScan = (s) => /^(觸及禁區|寫到工作夾外|存取其他節點之工作夾|規劃於評估後才寫)/.test(String(s))
         let k = 0
+        //可讀之他節點工作夾: 與 tools/scanCheck.mjs 同一求法(allowWorkOf; 規則 R-BT-9); 已執行之節點之 id 於迴圈外取一次
+        let workRel = workRelOf()
+        let ids = executedIds()
+        let hm = null
+        try {
+            hm = evalHintsAll(records.listNodeDocs(), st.records.workDir)
+        }
+        catch (err) {
+            log(`迴圈檢查之提示(單峰交付 / 選集與他節點相同)未能產生(重掃;既有之兩條提示照留,操作掃描照常): ${String((err && err.message) || err).slice(0, 200)}`)
+        }
         for (let d of records.listNodeDocs()) {
             let wd = path.join(st.records.workDir, d.nodeId)
             if (!d.harness || !d.harness.checks || !fs.existsSync(wd)) {
                 continue
             }
-            let allowWork = [...(d.spec && d.spec.base ? [d.spec.base] : []), ...(((d.task && d.task.refs) || []).filter((r) => r.nodeId).map((r) => r.nodeId)), ...dirWorkIds(d.task && d.task.direction), ...dirNodeIds(d.task && d.task.direction)]
+            let allowWork = allowWorkOf(d, { workRel, ids })
             //「規劃於評估後才寫」只適用於任務書已有此要求之節點(任務書之「交付版先定再跑」「先寫規劃再評估」要求; 更早之節點無此要求, 重掃時不追溯)
             let planRule = false
             try {
@@ -2357,7 +2437,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
             catch (err) {}
             let tr = scanTrace({ workDir: wd, attempt: d.attempt || 1, privateRoot: backtestCfg(st).privateRoot, root: FD_ROOT, writeRoots: [wd], workRoot: st.records.workDir, allowWork, nodeRules: true, planRule, stateRoot: st.rsi.root })
             let old = d.harness.checks.issues || []
-            let next = [...old.filter((s) => !isScan(s)), ...tr.issues]
+            let hs = hm ? (hm.get(d.nodeId) || []) : old.filter(isEvalHint)
+            let next = [...old.filter((s) => !isScan(s) && !isEvalHint(s)), ...tr.issues, ...hs]
             if (JSON.stringify(old) === JSON.stringify(next)) {
                 continue
             }
@@ -2367,7 +2448,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 if (!x.raw) {
                     return false
                 }
-                x.raw.issues = [...(x.raw.issues || []).filter((s) => !isScan(s)), ...tr.issues]
+                x.raw.issues = [...(x.raw.issues || []).filter((s) => !isScan(s) && !isEvalHint(s)), ...tr.issues, ...(hm ? hs : (x.raw.issues || []).filter(isEvalHint))]
             })
             k++
         }
@@ -2648,7 +2729,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         return { ok: true }
     }
 
-    return { st, rsi, arsi, records, toolbox, typeOf, setDirectionTypes, domain, catalog, selectable, run, monitor, idOf, taskFor, writeBoard, writeCatalogFile, writeSearchMap, validatePending, reverifyAll, extFill, fill, fillPlanOf, fillParOf, rescanTraces, rescanSideFlow, pendingDream, redream, requestDreamOnly, pendingReauditIds, claimedNodeIds, inactiveArmsOf, offDefArmsOf, migrateDocs, annotateDream, closeFrontier, rearmFrontier, proposeDirection, pickStore: () => buildPickStore(st), setStatus, getState, setState, log, envKey, layerOfSpec }
+    return { st, rsi, arsi, records, toolbox, typeOf, setDirectionTypes, domain, catalog, selectable, run, monitor, idOf, taskFor, writeBoard, writeCatalogFile, writeSearchMap, validatePending, reverifyAll, extFill, fill, fillPlanOf, fillParOf, rescanTraces, refreshEvalHints, rescanSideFlow, pendingDream, redream, requestDreamOnly, pendingReauditIds, claimedNodeIds, inactiveArmsOf, offDefArmsOf, migrateDocs, annotateDream, closeFrontier, rearmFrontier, proposeDirection, pickStore: () => buildPickStore(st), setStatus, getState, setState, log, envKey, layerOfSpec }
 }
 
 

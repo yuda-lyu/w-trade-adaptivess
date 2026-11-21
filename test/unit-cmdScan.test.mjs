@@ -1,19 +1,19 @@
 import assert from 'assert'
 import fs from 'fs'
 import path from 'path'
-import * as cmdScan from '../src/domain/cmdScan.mjs'
-import { stripSearchPatterns } from '../src/domain/cmdScan.mjs'
+import * as cmdScan from '../src/domain/verifyCmdScan.mjs'
+import { stripSearchPatterns } from '../src/domain/verifyCmdScan.mjs'
 import * as verify from '../src/domain/verify.mjs'
 import { scanTrace, forbiddenPats, setGuardExtra } from '../src/domain/verify.mjs'
 import { makeTmp, FD_ROOT } from './tools/synthLedger.mjs'
 
 
-//操作掃描所用之指令解析模組(src/domain/cmdScan.mjs; 規則 R-BT-6、R-BT-7 與做夢之搜尋樣式之去除)之本模組自有之判定:
+//操作掃描所用之指令解析模組(src/domain/verifyCmdScan.mjs; 規則 R-BT-6、R-BT-7 與做夢之搜尋樣式之去除; 檔名帶 verify 字首 ⇒ 節點之禁區字樣涵蓋之, 見 unit-verifyZone)之本模組自有之判定:
 //  ① 搜尋樣式取自檔(grep 族與 rg 之 -f / --file、findstr 之 /G:)或無位置樣式(rg --files): 其後之第一個非選項引數是路徑, 不得當成樣式去掉 ⇒ 禁區之路徑照查
 //  ② 迴圈專用之環境變數(ARSI_HARNESS 與 ARSI_AGENT_ROLE; 規則 R-RUN-11)同一條禁區字樣、同一個標籤
 //  ③ 結構: 引號遮蔽只留一份; 解析函數只在本模組(verify.mjs 不再定義、不再匯出)
 //  (搬移前後之判定不變, 以提交版對生成語料與全部測試語料之逐案比對為證, 見規則帳本 R-BT-7 之盤點; 既有之判定由 unit-guard、unit-guardInline、unit-scanListRoot、unit-scanEntryExec 之案守)
-describe('指令解析模組 cmdScan.mjs', function () {
+describe('指令解析模組 verifyCmdScan.mjs', function () {
     this.timeout(60000)
     let t
     let privateRoot = path.resolve(FD_ROOT, '..', 'proj-private')
@@ -171,8 +171,8 @@ describe('指令解析模組 cmdScan.mjs', function () {
         assert.deepEqual(scanTrace({ workDir: t.dir, logFile: fpL, privateRoot, fileHits: 'note' }).fileNotes, [`${label}(檔 x.mjs)`])
     })
 
-    it('③ 結構: 引號遮蔽只留一份(其餘皆經 maskQuotes / unmaskQuotes); 解析函數只在 cmdScan.mjs(verify.mjs 不再定義、不再匯出); 匯出面固定; 常數不重複', () => {
-        let src = fs.readFileSync(path.join(FD_ROOT, 'src', 'domain', 'cmdScan.mjs'), 'utf8')
+    it('③ 結構: 引號遮蔽只留一份(其餘皆經 maskQuotes / unmaskQuotes); 解析函數只在 verifyCmdScan.mjs(verify.mjs 不再定義、不再匯出); 匯出面固定; 常數不重複', () => {
+        let src = fs.readFileSync(path.join(FD_ROOT, 'src', 'domain', 'verifyCmdScan.mjs'), 'utf8')
         let count = (s, re) => (s.match(re) || []).length
         //遮蔽之正規式與佔位符之產生各一處
         assert.equal(count(src, /\/"\(\?:\[\^"\\\\\]\|\\\\\.\)\*"\|'\[\^'\]\*'\/g/g), 1, '引號遮蔽之正規式只一份')
@@ -195,6 +195,6 @@ describe('指令解析模組 cmdScan.mjs', function () {
         }
         //聚合入口不匯出解析函數
         let agg = fs.readFileSync(path.join(FD_ROOT, 'src', 'WTradeAdaptivess.mjs'), 'utf8')
-        assert(!/cmdScan/.test(agg), '聚合入口不加')
+        assert(!/cmdScan/i.test(agg), '聚合入口不加(檔名改為 verifyCmdScan 後仍須不分大小寫地擋)')
     })
 })

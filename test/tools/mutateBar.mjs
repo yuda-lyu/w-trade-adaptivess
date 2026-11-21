@@ -6,7 +6,7 @@ import { FD_ROOT, FD_TMP } from './synthLedger.mjs'
 import { dupIdsOf } from './mutateIds.mjs'
 
 
-//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(cmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); 指令解析已自 verify.mjs 搬入 cmdScan.mjs, 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
+//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(verifyCmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); EH 系列為 R-REC-43、R-REC-44(迴圈檢查之提示「單峰交付」「選集與他節點相同」; 判定在 verifyEvalHints.mjs, EH37 之錨點在 verify.mjs 之 dirNodeIdsOf); VZ 系列為 R-BT-10(節點之禁區涵蓋 verify* / backtest* 與任務書之檔名樣式一致)、AW 系列為 R-BT-9(可讀之他節點工作夾三處共用 verify.mjs 之 allowWorkOf; 皆為 Gitea #200 之主控另加); 指令解析已自 verify.mjs 搬入 verifyCmdScan.mjs[原 cmdScan.mjs], 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
 //  用法(測試以 quiet-run --lock 執行): node test/tools/mutateBar.mjs [--list] [--check] [--control-only] [--only <id,id…>] [--from <序> --to <序>] [--out <結果.json>]
 //    --check 只核對各變異之錨點(須恰出現一次; all 者至少一次), 不跑測試; 另核全部變異之編號唯一(重複者列出並以非 0 離開; R-PKG-9);未被殺者(survived)為測試之缺口 —— 補測試,不是補斷言(見 sgud/exp 之變異作法)
 //    --control-only 只跑對照(守門之測試與所選變異之優先測試, 不植入變異)並列出所選變異中「無法判定」者, 供不重跑全部變異而盤點分類
@@ -267,59 +267,59 @@ let M = [
     ['M17', 'src/domain/domain.mjs', [['c.share >= 0.8)', 'c.share > 0.8)']], ['unit-searchMapRecent']],
     ['M18', 'src/domain/domain.mjs', [['let nRecent = nodes.filter((n) => recentSideOf(n.raw && n.raw.metrics)).length', 'let nRecent = nodes.filter((n) => actSplitOf(n)).length']], ['unit-searchMapRecent']],
     ['M19', 'src/domain/domain.mjs', [['return s.builtin && s.recentOk !== false && ncOf(n).length === 0', 'return (s.builtin || s.recentOk === true) && ncOf(n).length === 0']], ['unit-searchMapRecent']],
-    //── 操作掃描之「列出工作夾之根」只列以之為目標者(規則 R-BT-6; cmdScan.mjs 之 listRootExempt 與 verify.mjs 之 scanTrace 接線)──
+    //── 操作掃描之「列出工作夾之根」只列以之為目標者(規則 R-BT-6; verifyCmdScan.mjs 之 listRootExempt 與 verify.mjs 之 scanTrace 接線)──
     //  R01 / R02 免列之接線(只限指令之欄); R03 ~ R06 搜尋指令之辨識; R07 ~ R09、R34 ~ R43、R46 / R47 樣式引數之定位(位置、-e、--regexp、帶值之選項、-f、findstr、Select-String、--、分段、選項表);
     //  R10 / R44 殘留與樣式含字樣之段; R12 ~ R16、R29 ~ R31 路徑引數之核對(上層、無路徑、讀標準輸入、遞迴、萬用字元、~); R17 ~ R28、R45、R48 保守回退(引號、變數、命令替換、跳脫、切換目錄、工作目錄、重導向、佔位符之控制字元)
     //  R11 為等價變異: 「樣式含字樣之段為 0 而殘留不命中」不可達(殘留 = 全部之字去掉樣式, 原指令之命中處若不在被去掉之樣式內即仍在殘留內); 保留以記錄此防線
     ['R01', 'src/domain/verify.mjs', [["if (reListRoot && reListRoot.test(v) && !(k === 'command' && listRootExempt(", 'if (reListRoot && reListRoot.test(v) && !(false && listRootExempt(']], ['unit-scanListRoot']],
     ['R02', 'src/domain/verify.mjs', [["!(k === 'command' && listRootExempt(", '!(listRootExempt(']], ['unit-scanListRoot']],
-    ['R03', 'src/domain/cmdScan.mjs', [['(?:grep|egrep|fgrep)', '(?:grepX|egrepX|fgrepX)']], ['unit-scanListRoot']],
-    ['R04', 'src/domain/cmdScan.mjs', [[')?rg(?:', ')?rgX(?:']], ['unit-scanListRoot']],
-    ['R05', 'src/domain/cmdScan.mjs', [[')?findstr(?:', ')?findstrX(?:']], ['unit-scanListRoot']],
-    ['R06', 'src/domain/cmdScan.mjs', [['(?:select-string|sls)', '(?:select-stringX|slsX)']], ['unit-scanListRoot']],
-    ['R07', 'src/domain/cmdScan.mjs', [['        pats.push(ops.shift())\n    }\n    return { pats, paths: ops.map((k) => ws[k]), stdin: tb.stdinOk', '        ops.shift()\n    }\n    return { pats, paths: ops.map((k) => ws[k]), stdin: tb.stdinOk']], ['unit-scanListRoot']],
-    ['R08', 'src/domain/cmdScan.mjs', [["                if (c === 'e') {\n                    pats.push(vi)\n                }", '                if (false) {\n                    pats.push(vi)\n                }']], ['unit-scanListRoot']],
-    ['R09', 'src/domain/cmdScan.mjs', [["                if (name === 'regexp') {\n                    pats.push(vi)\n                }", '                if (false) {\n                    pats.push(vi)\n                }']], ['unit-scanListRoot']],
-    ['R10', 'src/domain/cmdScan.mjs', [["if (!need.length || re.test(unq(rest.join(' ; ')))) {", 'if (!need.length) {']], ['unit-scanListRoot']],
-    ['R11', 'src/domain/cmdScan.mjs', [["if (!need.length || re.test(unq(rest.join(' ; ')))) {", "if (re.test(unq(rest.join(' ; ')))) {"]], ['unit-scanListRoot'], 'equiv'],
-    ['R12', 'src/domain/cmdScan.mjs', [["p.startsWith('~') || coversRoot(", "p.startsWith('~') || false && coversRoot("]], ['unit-scanListRoot']],
-    ['R13', 'src/domain/cmdScan.mjs', [[' || (!r.paths.length && !r.stdin)) {', ') {']], ['unit-scanListRoot']],
-    ['R14', 'src/domain/cmdScan.mjs', [['stdin: tb.stdinOk && !rec }', 'stdin: false }']], ['unit-scanListRoot']],
-    ['R15', 'src/domain/cmdScan.mjs', [['            if (!tb.flag.includes(c)) {\n                return null\n            }\n            rec = rec || tb.rec.includes(c)\n', '            if (!tb.flag.includes(c)) {\n                return null\n            }\n']], ['unit-scanListRoot']],
-    ['R16', 'src/domain/cmdScan.mjs', [['                rec = rec || tb.rec.includes(c)\n                i = vi\n', '                i = vi\n']], ['unit-scanListRoot']],
-    ['R17', 'src/domain/cmdScan.mjs', [["if (/[\"'`$^%<(){}]/.test(masked)", "if (/[\"'`^%<(){}]/.test(masked)"]], ['unit-scanListRoot']],
-    ['R18', 'src/domain/cmdScan.mjs', [["if (/[\"'`$^%<(){}]/.test(masked)", "if (/[\"'$^%<(){}]/.test(masked)"]], ['unit-scanListRoot']],
-    ['R19', 'src/domain/cmdScan.mjs', [["if (/[\"'`$^%<(){}]/.test(masked)", 'if (/[`$^%<(){}]/.test(masked)']], ['unit-scanListRoot']],
-    ['R20', 'src/domain/cmdScan.mjs', [["|| quoted.some((q) => q[0] === '\"' &&", "|| false && quoted.some((q) => q[0] === '\"' &&"]], ['unit-scanListRoot']],
-    ['R21', 'src/domain/cmdScan.mjs', [['if (!cwdKnown || LR_CD.test(s) || /', 'if (!cwdKnown || LR_CD.test(s) || false && /']], ['unit-scanListRoot']],
-    ['R22', 'src/domain/cmdScan.mjs', [['if (!cwdKnown || LR_CD.test(s) ||', 'if (!cwdKnown || false ||']], ['unit-scanListRoot']],
-    ['R23', 'src/domain/cmdScan.mjs', [['if (!cwdKnown || ', 'if (false || ']], ['unit-scanListRoot']],
+    ['R03', 'src/domain/verifyCmdScan.mjs', [['(?:grep|egrep|fgrep)', '(?:grepX|egrepX|fgrepX)']], ['unit-scanListRoot']],
+    ['R04', 'src/domain/verifyCmdScan.mjs', [[')?rg(?:', ')?rgX(?:']], ['unit-scanListRoot']],
+    ['R05', 'src/domain/verifyCmdScan.mjs', [[')?findstr(?:', ')?findstrX(?:']], ['unit-scanListRoot']],
+    ['R06', 'src/domain/verifyCmdScan.mjs', [['(?:select-string|sls)', '(?:select-stringX|slsX)']], ['unit-scanListRoot']],
+    ['R07', 'src/domain/verifyCmdScan.mjs', [['        pats.push(ops.shift())\n    }\n    return { pats, paths: ops.map((k) => ws[k]), stdin: tb.stdinOk', '        ops.shift()\n    }\n    return { pats, paths: ops.map((k) => ws[k]), stdin: tb.stdinOk']], ['unit-scanListRoot']],
+    ['R08', 'src/domain/verifyCmdScan.mjs', [["                if (c === 'e') {\n                    pats.push(vi)\n                }", '                if (false) {\n                    pats.push(vi)\n                }']], ['unit-scanListRoot']],
+    ['R09', 'src/domain/verifyCmdScan.mjs', [["                if (name === 'regexp') {\n                    pats.push(vi)\n                }", '                if (false) {\n                    pats.push(vi)\n                }']], ['unit-scanListRoot']],
+    ['R10', 'src/domain/verifyCmdScan.mjs', [["if (!need.length || re.test(unq(rest.join(' ; ')))) {", 'if (!need.length) {']], ['unit-scanListRoot']],
+    ['R11', 'src/domain/verifyCmdScan.mjs', [["if (!need.length || re.test(unq(rest.join(' ; ')))) {", "if (re.test(unq(rest.join(' ; ')))) {"]], ['unit-scanListRoot'], 'equiv'],
+    ['R12', 'src/domain/verifyCmdScan.mjs', [["p.startsWith('~') || coversRoot(", "p.startsWith('~') || false && coversRoot("]], ['unit-scanListRoot']],
+    ['R13', 'src/domain/verifyCmdScan.mjs', [[' || (!r.paths.length && !r.stdin)) {', ') {']], ['unit-scanListRoot']],
+    ['R14', 'src/domain/verifyCmdScan.mjs', [['stdin: tb.stdinOk && !rec }', 'stdin: false }']], ['unit-scanListRoot']],
+    ['R15', 'src/domain/verifyCmdScan.mjs', [['            if (!tb.flag.includes(c)) {\n                return null\n            }\n            rec = rec || tb.rec.includes(c)\n', '            if (!tb.flag.includes(c)) {\n                return null\n            }\n']], ['unit-scanListRoot']],
+    ['R16', 'src/domain/verifyCmdScan.mjs', [['                rec = rec || tb.rec.includes(c)\n                i = vi\n', '                i = vi\n']], ['unit-scanListRoot']],
+    ['R17', 'src/domain/verifyCmdScan.mjs', [["if (/[\"'`$^%<(){}]/.test(masked)", "if (/[\"'`^%<(){}]/.test(masked)"]], ['unit-scanListRoot']],
+    ['R18', 'src/domain/verifyCmdScan.mjs', [["if (/[\"'`$^%<(){}]/.test(masked)", "if (/[\"'$^%<(){}]/.test(masked)"]], ['unit-scanListRoot']],
+    ['R19', 'src/domain/verifyCmdScan.mjs', [["if (/[\"'`$^%<(){}]/.test(masked)", 'if (/[`$^%<(){}]/.test(masked)']], ['unit-scanListRoot']],
+    ['R20', 'src/domain/verifyCmdScan.mjs', [["|| quoted.some((q) => q[0] === '\"' &&", "|| false && quoted.some((q) => q[0] === '\"' &&"]], ['unit-scanListRoot']],
+    ['R21', 'src/domain/verifyCmdScan.mjs', [['if (!cwdKnown || LR_CD.test(s) || /', 'if (!cwdKnown || LR_CD.test(s) || false && /']], ['unit-scanListRoot']],
+    ['R22', 'src/domain/verifyCmdScan.mjs', [['if (!cwdKnown || LR_CD.test(s) ||', 'if (!cwdKnown || false ||']], ['unit-scanListRoot']],
+    ['R23', 'src/domain/verifyCmdScan.mjs', [['if (!cwdKnown || ', 'if (false || ']], ['unit-scanListRoot']],
     ['R24', 'src/domain/verify.mjs', [['                    cwdMoved = true\n', '                    void 0\n']], ['unit-scanListRoot']],
     ['R25', 'src/domain/verify.mjs', [["path.relative(path.resolve(listBase), absOf(listBase, wd)) === ''", 'true']], ['unit-scanListRoot']],
-    ['R26', 'src/domain/cmdScan.mjs', [['            else if (/^(?:\\d*|&)>>?$/.test(w)) {\n                i++\n', '            else if (/^(?:\\d*|&)>>?$/.test(w)) {\n                return false\n']], ['unit-scanListRoot']],
-    ['R27', 'src/domain/cmdScan.mjs', [['!(/^\\d*>&(?:\\d+|-)$/.test(w) || /^(?:\\d*|&)>>?[^>&]/.test(w))', '!(false)']], ['unit-scanListRoot']],
-    ['R28', 'src/domain/cmdScan.mjs', [['/^(?:\\d*|&)>>?[^>&]/.test(w))) {\n                return false\n', '/^(?:\\d*|&)>>?[^>&]/.test(w))) {\n                ws.push(i)\n']], ['unit-scanListRoot']],
-    ['R29', 'src/domain/cmdScan.mjs', [["pats.some((w) => /[*?[]/.test(dropQuotes(w))) || ", '']], ['unit-scanListRoot']],
-    ['R30', 'src/domain/cmdScan.mjs', [["(g < 0 ? p : p.slice(0, g).replace(/[^\\\\/]*$/, ''))", 'p']], ['unit-scanListRoot']],
-    ['R31', 'src/domain/cmdScan.mjs', [["if (!p || p.startsWith('~') || coversRoot(", 'if (!p || coversRoot(']], ['unit-scanListRoot']],
-    ['R32', 'src/domain/cmdScan.mjs', [['                continue\n            }\n            return null\n        }\n        for (let j = 1;', '                continue\n            }\n            continue\n        }\n        for (let j = 1;']], ['unit-scanListRoot']],
-    ['R33', 'src/domain/cmdScan.mjs', [['            if (!tb.flag.includes(c)) {\n                return null', '            if (false) {\n                return null']], ['unit-scanListRoot']],
-    ['R34', 'src/domain/cmdScan.mjs', [['                let vi = j + 1 < w.length ? i : i + 1', '                let vi = i']], ['unit-scanListRoot']],
-    ['R35', 'src/domain/cmdScan.mjs', [['                let vi = eq !== undefined ? i : i + 1', '                let vi = i']], ['unit-scanListRoot']],
-    ['R36', 'src/domain/cmdScan.mjs', [["given = given || c === 'e' || c === 'f'", "given = given || c === 'e'"]], ['unit-scanListRoot']],
-    ['R37', 'src/domain/cmdScan.mjs', [['            if (/^\\/c/i.test(w)) {\n                pats.push(i)', '            if (false) {\n                pats.push(i)']], ['unit-scanListRoot']],
-    ['R38', 'src/domain/cmdScan.mjs', [['[belrsixvnmop]+|a:[0-9a-f]{1,2})$/i.test(w)) {\n            return null', '[belrsixvnmop]+|a:[0-9a-f]{1,2})$/i.test(w)) {\n            continue']], ['unit-scanListRoot']],
-    ['R39', 'src/domain/cmdScan.mjs', [["        if (k === 'pattern') {\n            pats.push(i + 1)", '        if (false) {\n            pats.push(i + 1)']], ['unit-scanListRoot']],
-    ['R40', 'src/domain/cmdScan.mjs', [["if (!k || i + 1 >= ws.length || !['pattern', 'path', 'literalpath', ...LR_SLS_VAL].includes(k)) {", 'if (!k || i + 1 >= ws.length) {']], ['unit-scanListRoot']],
-    ['R41', 'src/domain/cmdScan.mjs', [["    if (paths === null && pos.length) {\n        paths = ws[pos.shift()].split(',')\n    }\n", '']], ['unit-scanListRoot']],
-    ['R42', 'src/domain/cmdScan.mjs', [["        if (w === '--') {", '        if (false) {']], ['unit-scanListRoot']],
-    ['R43', 'src/domain/cmdScan.mjs', [['masked.split(/&&|\\|\\||\\|&|[|;\\n]|(?<!>)&(?!>)/)', 'masked.split(/\\n/)']], ['unit-scanListRoot']],
-    ['R44', 'src/domain/cmdScan.mjs', [['        if ([...drop].some((i) => re.test(unq(words[i])))) {', '        if (false) {']], ['unit-scanListRoot']],
+    ['R26', 'src/domain/verifyCmdScan.mjs', [['            else if (/^(?:\\d*|&)>>?$/.test(w)) {\n                i++\n', '            else if (/^(?:\\d*|&)>>?$/.test(w)) {\n                return false\n']], ['unit-scanListRoot']],
+    ['R27', 'src/domain/verifyCmdScan.mjs', [['!(/^\\d*>&(?:\\d+|-)$/.test(w) || /^(?:\\d*|&)>>?[^>&]/.test(w))', '!(false)']], ['unit-scanListRoot']],
+    ['R28', 'src/domain/verifyCmdScan.mjs', [['/^(?:\\d*|&)>>?[^>&]/.test(w))) {\n                return false\n', '/^(?:\\d*|&)>>?[^>&]/.test(w))) {\n                ws.push(i)\n']], ['unit-scanListRoot']],
+    ['R29', 'src/domain/verifyCmdScan.mjs', [["pats.some((w) => /[*?[]/.test(dropQuotes(w))) || ", '']], ['unit-scanListRoot']],
+    ['R30', 'src/domain/verifyCmdScan.mjs', [["(g < 0 ? p : p.slice(0, g).replace(/[^\\\\/]*$/, ''))", 'p']], ['unit-scanListRoot']],
+    ['R31', 'src/domain/verifyCmdScan.mjs', [["if (!p || p.startsWith('~') || coversRoot(", 'if (!p || coversRoot(']], ['unit-scanListRoot']],
+    ['R32', 'src/domain/verifyCmdScan.mjs', [['                continue\n            }\n            return null\n        }\n        for (let j = 1;', '                continue\n            }\n            continue\n        }\n        for (let j = 1;']], ['unit-scanListRoot']],
+    ['R33', 'src/domain/verifyCmdScan.mjs', [['            if (!tb.flag.includes(c)) {\n                return null', '            if (false) {\n                return null']], ['unit-scanListRoot']],
+    ['R34', 'src/domain/verifyCmdScan.mjs', [['                let vi = j + 1 < w.length ? i : i + 1', '                let vi = i']], ['unit-scanListRoot']],
+    ['R35', 'src/domain/verifyCmdScan.mjs', [['                let vi = eq !== undefined ? i : i + 1', '                let vi = i']], ['unit-scanListRoot']],
+    ['R36', 'src/domain/verifyCmdScan.mjs', [["given = given || c === 'e' || c === 'f'", "given = given || c === 'e'"]], ['unit-scanListRoot']],
+    ['R37', 'src/domain/verifyCmdScan.mjs', [['            if (/^\\/c/i.test(w)) {\n                pats.push(i)', '            if (false) {\n                pats.push(i)']], ['unit-scanListRoot']],
+    ['R38', 'src/domain/verifyCmdScan.mjs', [['[belrsixvnmop]+|a:[0-9a-f]{1,2})$/i.test(w)) {\n            return null', '[belrsixvnmop]+|a:[0-9a-f]{1,2})$/i.test(w)) {\n            continue']], ['unit-scanListRoot']],
+    ['R39', 'src/domain/verifyCmdScan.mjs', [["        if (k === 'pattern') {\n            pats.push(i + 1)", '        if (false) {\n            pats.push(i + 1)']], ['unit-scanListRoot']],
+    ['R40', 'src/domain/verifyCmdScan.mjs', [["if (!k || i + 1 >= ws.length || !['pattern', 'path', 'literalpath', ...LR_SLS_VAL].includes(k)) {", 'if (!k || i + 1 >= ws.length) {']], ['unit-scanListRoot']],
+    ['R41', 'src/domain/verifyCmdScan.mjs', [["    if (paths === null && pos.length) {\n        paths = ws[pos.shift()].split(',')\n    }\n", '']], ['unit-scanListRoot']],
+    ['R42', 'src/domain/verifyCmdScan.mjs', [["        if (w === '--') {", '        if (false) {']], ['unit-scanListRoot']],
+    ['R43', 'src/domain/verifyCmdScan.mjs', [['masked.split(/&&|\\|\\||\\|&|[|;\\n]|(?<!>)&(?!>)/)', 'masked.split(/\\n/)']], ['unit-scanListRoot']],
+    ['R44', 'src/domain/verifyCmdScan.mjs', [['        if ([...drop].some((i) => re.test(unq(words[i])))) {', '        if (false) {']], ['unit-scanListRoot']],
     ['R45', 'src/domain/verify.mjs', [['return wd === undefined ? !cwdMoved :', 'return wd === undefined ? true :']], ['unit-scanListRoot']],
-    ['R46', 'src/domain/cmdScan.mjs', [["val: 'ABCEMTdefgjmrt',", "val: 'ABCEMTdefgjmt',"]], ['unit-scanListRoot']],
-    ['R47', 'src/domain/cmdScan.mjs', [["val: 'ABCEMTdefgjmrt',", "val: 'ABCEMTdefjmrt',"], ["flag: 'abcFHhIiLlNnoPpqSsUuVvwxz0',", "flag: 'abcFHhIiLlNnoPpqSsUuVvwxz0g',"]], ['unit-scanListRoot']],
+    ['R46', 'src/domain/verifyCmdScan.mjs', [["val: 'ABCEMTdefgjmrt',", "val: 'ABCEMTdefgjmt',"]], ['unit-scanListRoot']],
+    ['R47', 'src/domain/verifyCmdScan.mjs', [["val: 'ABCEMTdefgjmrt',", "val: 'ABCEMTdefjmrt',"], ["flag: 'abcFHhIiLlNnoPpqSsUuVvwxz0',", "flag: 'abcFHhIiLlNnoPpqSsUuVvwxz0g',"]], ['unit-scanListRoot']],
     //R48: 拿掉「指令本身含佔位符所用之控制字元者照列」之防呆 ⇒ 越界之佔位符拋錯(「不拋錯」之斷言殺)、偽造之佔位符被免列(「照列」之斷言殺)
-    ['R48', 'src/domain/cmdScan.mjs', [['if (MASK_CHARS.test(s)) {\n        return false', 'if (false) {\n        return false']], ['unit-scanListRoot']],
+    ['R48', 'src/domain/verifyCmdScan.mjs', [['if (MASK_CHARS.test(s)) {\n        return false', 'if (false) {\n        return false']], ['unit-scanListRoot']],
     //── 進入檔之拒跑(規則 R-RUN-11; agentRole.mjs、agentEntries.mjs、各入口)──
     //  G01 ~ G02 角色之辨識; G03 ~ G04 拒跑之條件與離開碼; G05 ~ G11 g_rsi 之模式表(唯讀之模式、預設模式、frontier 之兩旗標與「給了值」之判定、fill --dry、旗標之值);
     //  G12 ~ G21 表之各類(恆寫入之命令列與工具、有條件之工具); G22 理由不帶輸入值; G23 ~ G24、G42 輸入之防呆; G25 ~ G41 各入口之接線(拿掉 guardEntry 之呼叫)
@@ -371,76 +371,76 @@ let M = [
     ['H02', 'src/arsi/dispatchers.mjs', [["            ...(agentEnv ? { env: agentEnv } : {}),\n        }\n        if (entry.provider === 'opencode-go') {", "        }\n        if (entry.provider === 'opencode-go') {"]], ['unit-agentDispatchEnv']],
     ['H03', 'src/arsi/dispatchers.mjs', [['            ...(agentEnv ? { env: agentEnv } : {}),\n            model: cfg.model,', '            model: cfg.model,']], ['unit-agentDispatchEnv']],
     ['H04', 'src/arsi/agentRole.mjs', [['(AGENT_ROLES.includes(role) ? { [AGENT_ROLE_ENV]: role } : null)', '({ [AGENT_ROLE_ENV]: role })']], ['unit-agentGuard']],
-    //── 操作掃描:執行迴圈之寫檔入口(規則 R-BT-7 ①; cmdScan.mjs 之 entryExecOf)──
+    //── 操作掃描:執行迴圈之寫檔入口(規則 R-BT-7 ①; verifyCmdScan.mjs 之 entryExecOf)──
     //  N01 ~ N02 here-doc; N03 命令替換; N04 xargs; N05 變數之值; N06 ~ N07 直接執行; N08 讀取類; N09 npm exec; N10 ~ N11 前綴; N12 node 之帶值選項; N13 內嵌腳本之子行程;
     //  N14 ~ N15 腳本與引數含變數; N16 其他指令從嚴; N17 重導向之目標; N18 ~ N19 名稱之比對; N20 ~ N21 引號之處理; N22 接線
-    ['N01', 'src/domain/cmdScan.mjs', [['SHELLS.has(hc) ? entryExecOf(body) :', 'false ? entryExecOf(body) :']], ['unit-scanEntryExec']],
-    ['N02', 'src/domain/cmdScan.mjs', [['EX_RUNNERS.includes(hc) && EX_CHILD.test(body)', 'EX_RUNNERS.includes(hc) && false']], ['unit-scanEntryExec']],
-    ['N03', 'src/domain/cmdScan.mjs', [['    if (!q || q.sub) {\n        return true\n    }\n    let segs = exSegs(q.masked)', '    if (!q) {\n        return true\n    }\n    let segs = exSegs(q.masked)']], ['unit-scanEntryExec']],
-    ['N04', 'src/domain/cmdScan.mjs', [["let EX_WRAPS = new Set([...SHELLS, 'xargs', ", 'let EX_WRAPS = new Set([...SHELLS, ']], ['unit-scanEntryExec']],
-    ['N05', 'src/domain/cmdScan.mjs', [['            if (EX_MENTION.test(q.unq(ws[i]))) {\n                return true\n            }\n            i++', '            i++']], ['unit-scanEntryExec']],
-    ['N06', 'src/domain/cmdScan.mjs', [['                if (entryWrites(direct, ws.slice(i + 1).map(q.bare)) || ws.slice(i + 1).some(q.dyn)) {', '                if (false) {']], ['unit-scanEntryExec']],
-    ['N07', 'src/domain/cmdScan.mjs', [['if (entryWrites(direct, ws.slice(i + 1).map(q.bare)) ||', 'if (true ||']], ['unit-scanEntryExec']],
-    ['N08', 'src/domain/cmdScan.mjs', [["let EX_READERS = new Set(['cat', ", 'let EX_READERS = new Set([']], ['unit-scanEntryExec']],
-    ['N09', 'src/domain/cmdScan.mjs', [["            else if (c === 'npm' && /^(exec|x)$/.test(q.bare(ws[i + 1] || ''))) {", '            else if (false) {']], ['unit-scanEntryExec']],
-    ['N10', 'src/domain/cmdScan.mjs', [["let EX_SKIP = new Set([...CMD_PREFIXES, 'npx'])", 'let EX_SKIP = new Set([...CMD_PREFIXES])']], ['unit-scanEntryExec']],
-    ['N11', 'src/domain/cmdScan.mjs', [["(c === 'npx' && /^(-p|--package)$/.test(ws[i])) ? 2 : 1", 'false ? 2 : 1']], ['unit-scanEntryExec']],
-    ['N12', 'src/domain/cmdScan.mjs', [['                    j += EX_NODE_VAL.has(ws[j]) ? 2 : 1', '                    j += 1']], ['unit-scanEntryExec']],
-    ['N13', 'src/domain/cmdScan.mjs', [['                    if (EX_CHILD.test(inline)) {', '                    if (false) {']], ['unit-scanEntryExec']],
-    ['N14', 'src/domain/cmdScan.mjs', [['                else if (j < ws.length) {\n                    if (q.dyn(ws[j])) {\n                        return true\n                    }\n', '                else if (j < ws.length) {\n']], ['unit-scanEntryExec']],
-    ['N15', 'src/domain/cmdScan.mjs', [['if (name && (entryWrites(name, ws.slice(j + 1).map(q.bare)) || ws.slice(j + 1).some(q.dyn))) {', 'if (name && entryWrites(name, ws.slice(j + 1).map(q.bare))) {']], ['unit-scanEntryExec']],
-    ['N16', 'src/domain/cmdScan.mjs', [['                done = true\n            }\n            else {\n                return true\n            }\n        }\n    }\n    return false\n}', '                done = true\n            }\n            else {\n                done = true\n            }\n        }\n    }\n    return false\n}']], ['unit-scanEntryExec']],
-    ['N17', 'src/domain/cmdScan.mjs', [['        let ws = exArgs(ws0)\n        let i = 0', '        let ws = ws0\n        let i = 0']], ['unit-scanEntryExec']],
-    ['N18', 'src/domain/cmdScan.mjs', [["\\\\.mjs`, 'i')", "\\\\.mjs`, '')"]], ['unit-scanEntryExec']],
-    ['N19', 'src/domain/cmdScan.mjs', [[' || /(?:^|\\/)cli\\/(rsi|launch|build|backtest)\\.mjs$/i.exec(s)', '']], ['unit-scanEntryExec']],
-    ['N20', 'src/domain/cmdScan.mjs', [['    if (MASK_CHARS.test(s)) {\n        return null', '    if (false) {\n        return null']], ['unit-scanEntryExec']],
-    ['N21', 'src/domain/cmdScan.mjs', [["? x.replace(/\\\\[\\s\\S]/g, '') : ''", "? x : ''"]], ['unit-scanEntryExec']],
+    ['N01', 'src/domain/verifyCmdScan.mjs', [['SHELLS.has(hc) ? entryExecOf(body) :', 'false ? entryExecOf(body) :']], ['unit-scanEntryExec']],
+    ['N02', 'src/domain/verifyCmdScan.mjs', [['EX_RUNNERS.includes(hc) && EX_CHILD.test(body)', 'EX_RUNNERS.includes(hc) && false']], ['unit-scanEntryExec']],
+    ['N03', 'src/domain/verifyCmdScan.mjs', [['    if (!q || q.sub) {\n        return true\n    }\n    let segs = exSegs(q.masked)', '    if (!q) {\n        return true\n    }\n    let segs = exSegs(q.masked)']], ['unit-scanEntryExec']],
+    ['N04', 'src/domain/verifyCmdScan.mjs', [["let EX_WRAPS = new Set([...SHELLS, 'xargs', ", 'let EX_WRAPS = new Set([...SHELLS, ']], ['unit-scanEntryExec']],
+    ['N05', 'src/domain/verifyCmdScan.mjs', [['            if (EX_MENTION.test(q.unq(ws[i]))) {\n                return true\n            }\n            i++', '            i++']], ['unit-scanEntryExec']],
+    ['N06', 'src/domain/verifyCmdScan.mjs', [['                if (entryWrites(direct, ws.slice(i + 1).map(q.bare)) || ws.slice(i + 1).some(q.dyn)) {', '                if (false) {']], ['unit-scanEntryExec']],
+    ['N07', 'src/domain/verifyCmdScan.mjs', [['if (entryWrites(direct, ws.slice(i + 1).map(q.bare)) ||', 'if (true ||']], ['unit-scanEntryExec']],
+    ['N08', 'src/domain/verifyCmdScan.mjs', [["let EX_READERS = new Set(['cat', ", 'let EX_READERS = new Set([']], ['unit-scanEntryExec']],
+    ['N09', 'src/domain/verifyCmdScan.mjs', [["            else if (c === 'npm' && /^(exec|x)$/.test(q.bare(ws[i + 1] || ''))) {", '            else if (false) {']], ['unit-scanEntryExec']],
+    ['N10', 'src/domain/verifyCmdScan.mjs', [["let EX_SKIP = new Set([...CMD_PREFIXES, 'npx'])", 'let EX_SKIP = new Set([...CMD_PREFIXES])']], ['unit-scanEntryExec']],
+    ['N11', 'src/domain/verifyCmdScan.mjs', [["(c === 'npx' && /^(-p|--package)$/.test(ws[i])) ? 2 : 1", 'false ? 2 : 1']], ['unit-scanEntryExec']],
+    ['N12', 'src/domain/verifyCmdScan.mjs', [['                    j += EX_NODE_VAL.has(ws[j]) ? 2 : 1', '                    j += 1']], ['unit-scanEntryExec']],
+    ['N13', 'src/domain/verifyCmdScan.mjs', [['                    if (EX_CHILD.test(inline)) {', '                    if (false) {']], ['unit-scanEntryExec']],
+    ['N14', 'src/domain/verifyCmdScan.mjs', [['                else if (j < ws.length) {\n                    if (q.dyn(ws[j])) {\n                        return true\n                    }\n', '                else if (j < ws.length) {\n']], ['unit-scanEntryExec']],
+    ['N15', 'src/domain/verifyCmdScan.mjs', [['if (name && (entryWrites(name, ws.slice(j + 1).map(q.bare)) || ws.slice(j + 1).some(q.dyn))) {', 'if (name && entryWrites(name, ws.slice(j + 1).map(q.bare))) {']], ['unit-scanEntryExec']],
+    ['N16', 'src/domain/verifyCmdScan.mjs', [['                done = true\n            }\n            else {\n                return true\n            }\n        }\n    }\n    return false\n}', '                done = true\n            }\n            else {\n                done = true\n            }\n        }\n    }\n    return false\n}']], ['unit-scanEntryExec']],
+    ['N17', 'src/domain/verifyCmdScan.mjs', [['        let ws = exArgs(ws0)\n        let i = 0', '        let ws = ws0\n        let i = 0']], ['unit-scanEntryExec']],
+    ['N18', 'src/domain/verifyCmdScan.mjs', [["\\\\.mjs`, 'i')", "\\\\.mjs`, '')"]], ['unit-scanEntryExec']],
+    ['N19', 'src/domain/verifyCmdScan.mjs', [[' || /(?:^|\\/)cli\\/(rsi|launch|build|backtest)\\.mjs$/i.exec(s)', '']], ['unit-scanEntryExec']],
+    ['N20', 'src/domain/verifyCmdScan.mjs', [['    if (MASK_CHARS.test(s)) {\n        return null', '    if (false) {\n        return null']], ['unit-scanEntryExec']],
+    ['N21', 'src/domain/verifyCmdScan.mjs', [["? x.replace(/\\\\[\\s\\S]/g, '') : ''", "? x : ''"]], ['unit-scanEntryExec']],
     ['N22', 'src/domain/verify.mjs', [["if (typeof inp.command === 'string' && entryExecOf(inp.command)) {", 'if (false) {']], ['unit-scanEntryExec']],
-    //── 操作掃描:遞迴列出狀態根或其上層(規則 R-BT-7 ②; cmdScan.mjs 之 recursiveRootOf、rlCovers、scriptListsRoot、toolListsRoot 與 verify.mjs 之 scanTrace 接線)──
+    //── 操作掃描:遞迴列出狀態根或其上層(規則 R-BT-7 ②; verifyCmdScan.mjs 之 recursiveRootOf、rlCovers、scriptListsRoot、toolListsRoot 與 verify.mjs 之 scanTrace 接線)──
     //  O01 ~ O06 ls / dir / gci 之遞迴選項與其值; O07 ~ O08 find 與無路徑; O09 ~ O10 tree; O12 ~ O16 grep / rg / findstr; O17 ~ O18 xargs; O19 殼層之 -c; O20 eval 類; O21 指令名含變數;
     //  O22 ~ O24 切換目錄; O25 ~ O26 內嵌腳本; O27 ~ O28 無法解析; O29 ~ O30 here-doc; O31 ~ O33 路徑之判定; O34 ~ O40 腳本之線索; O41 ~ O42 搜尋 / 列目錄工具;
     //  O43 ~ O49 scanTrace 之接線(只在節點、工作目錄、寫入之程式檔); O50 ~ O52 三個呼叫點傳狀態根
-    ['O01', 'src/domain/cmdScan.mjs', [[': /^-[A-Za-z]*R[A-Za-z]*$/.test(w) ||', ': /^-[A-Za-z]*X[A-Za-z]*$/.test(w) ||']], ['unit-scanEntryExec']],
-    ['O02', 'src/domain/cmdScan.mjs', [['(isGci ? /^-r(e(c(u(r(se?)?)?)?)?)?$/i.test(w) :', '(true ? /^-r(e(c(u(r(se?)?)?)?)?)?$/i.test(w) :']], ['unit-scanEntryExec']],
-    ['O03', 'src/domain/cmdScan.mjs', [["(c === 'dir' && /^\\/s$/i.test(w))", 'false']], ['unit-scanEntryExec']],
-    ['O04', 'src/domain/cmdScan.mjs', [["w === '--recursive' || ", '']], ['unit-scanEntryExec']],
-    ['O05', 'src/domain/cmdScan.mjs', [[' || /^-depth$/i.test(w)', '']], ['unit-scanEntryExec']],
-    ['O06', 'src/domain/cmdScan.mjs', [['else if (/^-(filter|include|exclude|depth)$/i.test(ws[k])) {', 'else if (false) {']], ['unit-scanEntryExec']],
-    ['O07', 'src/domain/cmdScan.mjs', [['let ops = k < 0 ? ws : ws.slice(0, k)', 'let ops = ws']], ['unit-scanEntryExec']],
-    ['O08', 'src/domain/cmdScan.mjs', [["paths = ops.length ? ops : ['.']", 'paths = ops', true]], ['unit-scanEntryExec']],
-    ['O09', 'src/domain/cmdScan.mjs', [["        else if (c === 'tree') {", '        else if (false) {']], ['unit-scanEntryExec']],
-    ['O10', 'src/domain/cmdScan.mjs', [["let RL_VAL = new Set(['-L', '-P', ", "let RL_VAL = new Set(['-L', "]], ['unit-scanEntryExec']],
-    ['O12', 'src/domain/cmdScan.mjs', [["            else if (c === 'rg' || !r.stdin) {", "            else if (c === 'rg') {"]], ['unit-scanEntryExec']],
-    ['O13', 'src/domain/cmdScan.mjs', [["            else if (c === 'rg' || !r.stdin) {", '            else if (true) {']], ['unit-scanEntryExec']],
-    ['O14', 'src/domain/cmdScan.mjs', [["? ['~'] : null", '? null : null']], ['unit-scanEntryExec']],
-    ['O15', 'src/domain/cmdScan.mjs', [["                paths = r.paths.length ? r.paths : ['.']", '                paths = r.paths']], ['unit-scanEntryExec']],
-    ['O16', 'src/domain/cmdScan.mjs', [["        else if (c === 'findstr' &&", '        else if (false &&']], ['unit-scanEntryExec']],
-    ['O17', 'src/domain/cmdScan.mjs', [["            paths.push('~')", '            void 0']], ['unit-scanEntryExec']],
-    ['O18', 'src/domain/cmdScan.mjs', [['i += RL_XARGS_VAL.has(ws0[i]) ? 2 : 1', 'i += 1']], ['unit-scanEntryExec']],
-    ['O19', 'src/domain/cmdScan.mjs', [['                if (recursiveRootOf(rest.length === 1 ?', '                if (false && recursiveRootOf(rest.length === 1 ?']], ['unit-scanEntryExec']],
-    ['O20', 'src/domain/cmdScan.mjs', [['        if (EVAL_WRAPS.has(c)) {', "        if (c !== 'eval' && EVAL_WRAPS.has(c)) {"]], ['unit-scanEntryExec']], //包裝之集合已與 entryExecOf 共用(EVAL_WRAPS), 故改於 recursiveRootOf 之使用處去掉 eval(效果同原: 只影響遞迴列出之判定)
-    ['O21', 'src/domain/cmdScan.mjs', [['        if (q.dyn(ws0[i])) {', '        if (false) {']], ['unit-scanEntryExec']],
-    ['O22', 'src/domain/cmdScan.mjs', [["dir = !t || t === '-' || /[$`~]/.test(t) || dir === null ? null : absOf(dir, t)", 'dir = dir']], ['unit-scanEntryExec']],
-    ['O23', 'src/domain/cmdScan.mjs', [["t === '-' || /[$`~]/.test(t) || dir === null", "t === '-' || dir === null"]], ['unit-scanEntryExec']],
-    ['O24', 'src/domain/cmdScan.mjs', [["        if (c === 'popd' || c === 'pop-location') {\n            dir = null", "        if (c === 'popd' || c === 'pop-location') {\n            dir = dir"]], ['unit-scanEntryExec']],
-    ['O25', 'src/domain/cmdScan.mjs', [["let k = ws.findIndex((w) => EX_NODE_INLINE.has(w) || w === '-c')", 'let k = -1']], ['unit-scanEntryExec']],
-    ['O26', 'src/domain/cmdScan.mjs', [["EX_NODE_INLINE.has(w) || w === '-c')", 'EX_NODE_INLINE.has(w))']], ['unit-scanEntryExec']],
-    ['O27', 'src/domain/cmdScan.mjs', [['return { hit: hit || RL_LISTER.test(s), dir: LR_CD.test(s) ? null : base }', 'return { hit, dir: LR_CD.test(s) ? null : base }']], ['unit-scanEntryExec']],
-    ['O28', 'src/domain/cmdScan.mjs', [['return { hit: hit || RL_LISTER.test(s), dir: LR_CD.test(s) ? null : base }', 'return { hit: hit || RL_LISTER.test(s), dir: base }']], ['unit-scanEntryExec']],
-    ['O29', 'src/domain/cmdScan.mjs', [['if (SHELLS.has(hc) ? recursiveRootOf(body, { base, stateRoot }).hit :', 'if (false ? recursiveRootOf(body, { base, stateRoot }).hit :']], ['unit-scanEntryExec']],
-    ['O30', 'src/domain/cmdScan.mjs', [['.includes(hc) && scriptListsRoot(body, base, stateRoot)) {', '.includes(hc) && false) {']], ['unit-scanEntryExec']],
-    ['O31', 'src/domain/cmdScan.mjs', [['    if (!isAbs && base === null) {\n        return true\n    }\n', '']], ['unit-scanEntryExec']],
-    ['O32', 'src/domain/cmdScan.mjs', [["    if (!p || p.startsWith('~') || /[$`]/.test(p)) {", '    if (!p) {']], ['unit-scanEntryExec']],
-    ['O33', 'src/domain/cmdScan.mjs', [["    let d = g < 0 ? p : p.slice(0, g).replace(/[^\\\\/]*$/, '')", '    let d = p']], ['unit-scanEntryExec']],
-    ['O34', 'src/domain/cmdScan.mjs', [['    if (!SC_LIST.test(s) || !SC_REC.test(s)) {', '    if (!SC_LIST.test(s)) {']], ['unit-scanEntryExec']],
-    ['O35', 'src/domain/cmdScan.mjs', [['    if (!SC_LIST.test(s) || !SC_REC.test(s)) {', '    if (!SC_REC.test(s)) {']], ['unit-scanEntryExec']],
-    ['O36', 'src/domain/cmdScan.mjs', [["&& rlCovers('.', base, stateRoot)) {", '&& false) {']], ['unit-scanEntryExec']],
-    ['O37', 'src/domain/cmdScan.mjs', [["(?!\\s*(?:\\+|,\\s*['\"`]))/.test(s)", '/.test(s)']], ['unit-scanEntryExec']],
-    ['O38', 'src/domain/cmdScan.mjs', [["        if (/^\\s*(?:\\+|,\\s*['\"`])/.test(after)) {\n            continue\n        }\n", '']], ['unit-scanEntryExec']],
-    ['O39', 'src/domain/cmdScan.mjs', [['let pathy = dots ? SC_CALL.test(s.slice(Math.max(0, m.index - 40), m.index)) :', 'let pathy = dots ? true :']], ['unit-scanEntryExec']],
-    ['O40', 'src/domain/cmdScan.mjs', [['!/^[\\\\/]+$/.test(v) && ', '']], ['unit-scanEntryExec']],
-    ['O41', 'src/domain/cmdScan.mjs', [[" || (isGlob && !(typeof inp.pattern === 'string' && inp.pattern.includes('**')))", '']], ['unit-scanEntryExec']],
-    ['O42', 'src/domain/cmdScan.mjs', [['if (!/grep|search|glob|^list$|^ls$/i.test(tool)', 'if (!/grep|search|glob/i.test(tool)']], ['unit-scanEntryExec']],
+    ['O01', 'src/domain/verifyCmdScan.mjs', [[': /^-[A-Za-z]*R[A-Za-z]*$/.test(w) ||', ': /^-[A-Za-z]*X[A-Za-z]*$/.test(w) ||']], ['unit-scanEntryExec']],
+    ['O02', 'src/domain/verifyCmdScan.mjs', [['(isGci ? /^-r(e(c(u(r(se?)?)?)?)?)?$/i.test(w) :', '(true ? /^-r(e(c(u(r(se?)?)?)?)?)?$/i.test(w) :']], ['unit-scanEntryExec']],
+    ['O03', 'src/domain/verifyCmdScan.mjs', [["(c === 'dir' && /^\\/s$/i.test(w))", 'false']], ['unit-scanEntryExec']],
+    ['O04', 'src/domain/verifyCmdScan.mjs', [["w === '--recursive' || ", '']], ['unit-scanEntryExec']],
+    ['O05', 'src/domain/verifyCmdScan.mjs', [[' || /^-depth$/i.test(w)', '']], ['unit-scanEntryExec']],
+    ['O06', 'src/domain/verifyCmdScan.mjs', [['else if (/^-(filter|include|exclude|depth)$/i.test(ws[k])) {', 'else if (false) {']], ['unit-scanEntryExec']],
+    ['O07', 'src/domain/verifyCmdScan.mjs', [['let ops = k < 0 ? ws : ws.slice(0, k)', 'let ops = ws']], ['unit-scanEntryExec']],
+    ['O08', 'src/domain/verifyCmdScan.mjs', [["paths = ops.length ? ops : ['.']", 'paths = ops', true]], ['unit-scanEntryExec']],
+    ['O09', 'src/domain/verifyCmdScan.mjs', [["        else if (c === 'tree') {", '        else if (false) {']], ['unit-scanEntryExec']],
+    ['O10', 'src/domain/verifyCmdScan.mjs', [["let RL_VAL = new Set(['-L', '-P', ", "let RL_VAL = new Set(['-L', "]], ['unit-scanEntryExec']],
+    ['O12', 'src/domain/verifyCmdScan.mjs', [["            else if (c === 'rg' || !r.stdin) {", "            else if (c === 'rg') {"]], ['unit-scanEntryExec']],
+    ['O13', 'src/domain/verifyCmdScan.mjs', [["            else if (c === 'rg' || !r.stdin) {", '            else if (true) {']], ['unit-scanEntryExec']],
+    ['O14', 'src/domain/verifyCmdScan.mjs', [["? ['~'] : null", '? null : null']], ['unit-scanEntryExec']],
+    ['O15', 'src/domain/verifyCmdScan.mjs', [["                paths = r.paths.length ? r.paths : ['.']", '                paths = r.paths']], ['unit-scanEntryExec']],
+    ['O16', 'src/domain/verifyCmdScan.mjs', [["        else if (c === 'findstr' &&", '        else if (false &&']], ['unit-scanEntryExec']],
+    ['O17', 'src/domain/verifyCmdScan.mjs', [["            paths.push('~')", '            void 0']], ['unit-scanEntryExec']],
+    ['O18', 'src/domain/verifyCmdScan.mjs', [['i += RL_XARGS_VAL.has(ws0[i]) ? 2 : 1', 'i += 1']], ['unit-scanEntryExec']],
+    ['O19', 'src/domain/verifyCmdScan.mjs', [['                if (recursiveRootOf(rest.length === 1 ?', '                if (false && recursiveRootOf(rest.length === 1 ?']], ['unit-scanEntryExec']],
+    ['O20', 'src/domain/verifyCmdScan.mjs', [['        if (EVAL_WRAPS.has(c)) {', "        if (c !== 'eval' && EVAL_WRAPS.has(c)) {"]], ['unit-scanEntryExec']], //包裝之集合已與 entryExecOf 共用(EVAL_WRAPS), 故改於 recursiveRootOf 之使用處去掉 eval(效果同原: 只影響遞迴列出之判定)
+    ['O21', 'src/domain/verifyCmdScan.mjs', [['        if (q.dyn(ws0[i])) {', '        if (false) {']], ['unit-scanEntryExec']],
+    ['O22', 'src/domain/verifyCmdScan.mjs', [["dir = !t || t === '-' || /[$`~]/.test(t) || dir === null ? null : absOf(dir, t)", 'dir = dir']], ['unit-scanEntryExec']],
+    ['O23', 'src/domain/verifyCmdScan.mjs', [["t === '-' || /[$`~]/.test(t) || dir === null", "t === '-' || dir === null"]], ['unit-scanEntryExec']],
+    ['O24', 'src/domain/verifyCmdScan.mjs', [["        if (c === 'popd' || c === 'pop-location') {\n            dir = null", "        if (c === 'popd' || c === 'pop-location') {\n            dir = dir"]], ['unit-scanEntryExec']],
+    ['O25', 'src/domain/verifyCmdScan.mjs', [["let k = ws.findIndex((w) => EX_NODE_INLINE.has(w) || w === '-c')", 'let k = -1']], ['unit-scanEntryExec']],
+    ['O26', 'src/domain/verifyCmdScan.mjs', [["EX_NODE_INLINE.has(w) || w === '-c')", 'EX_NODE_INLINE.has(w))']], ['unit-scanEntryExec']],
+    ['O27', 'src/domain/verifyCmdScan.mjs', [['return { hit: hit || RL_LISTER.test(s), dir: LR_CD.test(s) ? null : base }', 'return { hit, dir: LR_CD.test(s) ? null : base }']], ['unit-scanEntryExec']],
+    ['O28', 'src/domain/verifyCmdScan.mjs', [['return { hit: hit || RL_LISTER.test(s), dir: LR_CD.test(s) ? null : base }', 'return { hit: hit || RL_LISTER.test(s), dir: base }']], ['unit-scanEntryExec']],
+    ['O29', 'src/domain/verifyCmdScan.mjs', [['if (SHELLS.has(hc) ? recursiveRootOf(body, { base, stateRoot }).hit :', 'if (false ? recursiveRootOf(body, { base, stateRoot }).hit :']], ['unit-scanEntryExec']],
+    ['O30', 'src/domain/verifyCmdScan.mjs', [['.includes(hc) && scriptListsRoot(body, base, stateRoot)) {', '.includes(hc) && false) {']], ['unit-scanEntryExec']],
+    ['O31', 'src/domain/verifyCmdScan.mjs', [['    if (!isAbs && base === null) {\n        return true\n    }\n', '']], ['unit-scanEntryExec']],
+    ['O32', 'src/domain/verifyCmdScan.mjs', [["    if (!p || p.startsWith('~') || /[$`]/.test(p)) {", '    if (!p) {']], ['unit-scanEntryExec']],
+    ['O33', 'src/domain/verifyCmdScan.mjs', [["    let d = g < 0 ? p : p.slice(0, g).replace(/[^\\\\/]*$/, '')", '    let d = p']], ['unit-scanEntryExec']],
+    ['O34', 'src/domain/verifyCmdScan.mjs', [['    if (!SC_LIST.test(s) || !SC_REC.test(s)) {', '    if (!SC_LIST.test(s)) {']], ['unit-scanEntryExec']],
+    ['O35', 'src/domain/verifyCmdScan.mjs', [['    if (!SC_LIST.test(s) || !SC_REC.test(s)) {', '    if (!SC_REC.test(s)) {']], ['unit-scanEntryExec']],
+    ['O36', 'src/domain/verifyCmdScan.mjs', [["&& rlCovers('.', base, stateRoot)) {", '&& false) {']], ['unit-scanEntryExec']],
+    ['O37', 'src/domain/verifyCmdScan.mjs', [["(?!\\s*(?:\\+|,\\s*['\"`]))/.test(s)", '/.test(s)']], ['unit-scanEntryExec']],
+    ['O38', 'src/domain/verifyCmdScan.mjs', [["        if (/^\\s*(?:\\+|,\\s*['\"`])/.test(after)) {\n            continue\n        }\n", '']], ['unit-scanEntryExec']],
+    ['O39', 'src/domain/verifyCmdScan.mjs', [['let pathy = dots ? SC_CALL.test(s.slice(Math.max(0, m.index - 40), m.index)) :', 'let pathy = dots ? true :']], ['unit-scanEntryExec']],
+    ['O40', 'src/domain/verifyCmdScan.mjs', [['!/^[\\\\/]+$/.test(v) && ', '']], ['unit-scanEntryExec']],
+    ['O41', 'src/domain/verifyCmdScan.mjs', [[" || (isGlob && !(typeof inp.pattern === 'string' && inp.pattern.includes('**')))", '']], ['unit-scanEntryExec']],
+    ['O42', 'src/domain/verifyCmdScan.mjs', [['if (!/grep|search|glob|^list$|^ls$/i.test(tool)', 'if (!/grep|search|glob/i.test(tool)']], ['unit-scanEntryExec']],
     ['O43', 'src/domain/verify.mjs', [["let rlOn = nodeRules && typeof stateRoot === 'string'", "let rlOn = typeof stateRoot === 'string'"]], ['unit-scanEntryExec']],
     ['O44', 'src/domain/verify.mjs', [['(rlDir === rlRoot ? [rlRoot] : [rlRoot, rlDir])', '(rlDir === rlRoot ? [rlRoot] : [rlDir])']], ['unit-scanEntryExec']],
     ['O45', 'src/domain/verify.mjs', [['                            rlDir = rs[rs.length - 1].dir', '                            void 0']], ['unit-scanEntryExec']],
@@ -470,27 +470,27 @@ let M = [
     ['U14', 'src/domain/domain.mjs', [['(?<=[。；;！!？?\\n])/).some', '(?<=[。；！!？?\\n])/).some']], ['unit-signsNarrow']],
     ['U15', 'src/domain/domain.mjs', [["!(m[0] === '號' && (s[m.index - 1]", '!((s[m.index - 1]']], ['unit-signsNarrow']],
     ['U16', 'src/domain/domain.mjs', [['    let ms = [...s.matchAll(SIGN_ALL)]\n    if (!ms.length) {\n        return false\n    }\n', '    let ms = [...s.matchAll(SIGN_ALL)]\n']], ['unit-signsNarrow']],
-    //── 搜尋樣式取自檔或無位置樣式(Y 系列; cmdScan.mjs 之 patFileOf 與 stripSearchPatterns; Gitea #198 之另見 2)──
-    ['Y01', 'src/domain/cmdScan.mjs', [['            if (pf) {\n                removed = true', '            if (false) {\n                removed = true']], ['unit-cmdScan']],
-    ['Y02', 'src/domain/cmdScan.mjs', [['                skipNext = pf === 2\n', '                skipNext = false\n']], ['unit-cmdScan']],
-    ['Y03', 'src/domain/cmdScan.mjs', [["        return fam === 'rg' ? 3 : 0", '        return 3']], ['unit-cmdScan']],
-    ['Y04', 'src/domain/cmdScan.mjs', [["    if (t === '--file') {\n        return 2\n    }\n", '']], ['unit-cmdScan']],
-    ['Y05', 'src/domain/cmdScan.mjs', [["    if (t.startsWith('--file=')) {\n        return 1\n    }\n", '']], ['unit-cmdScan']],
-    ['Y06', 'src/domain/cmdScan.mjs', [['    if (/^-[A-Za-z0-9]/.test(t)) {', '    if (/^-[A-Za-z0-9]+$/.test(t)) {']], ['unit-cmdScan']],
-    ['Y07', 'src/domain/cmdScan.mjs', [["return t[j] === 'f' ? (j === t.length - 1 ? 2 : 1) : 0", "return t[j] === 'f' ? 2 : 0"]], ['unit-cmdScan']],
-    ['Y08', 'src/domain/cmdScan.mjs', [["return t[j] === 'f' ? (j === t.length - 1 ? 2 : 1) : 0", "return t[j] === 'f' ? 1 : 0"]], ['unit-cmdScan']],
-    ['Y09', 'src/domain/cmdScan.mjs', [['if (LR_GNU[fam].val.includes(t[j])) {', "if ((fam === 'grep' ? 'ABCDdem' : LR_GNU.rg.val).includes(t[j])) {"]], ['unit-cmdScan']],
-    ['Y10', 'src/domain/cmdScan.mjs', [['if (LR_GNU[fam].val.includes(t[j])) {', "if ((fam === 'rg' ? 'ABCEMTdegjmrt' : LR_GNU.grep.val).includes(t[j])) {"]], ['unit-cmdScan']],
-    ['Y11', 'src/domain/cmdScan.mjs', [["/(?:^|[\\\\/])rg(?:\\.exe)?$/i.test(head) ? 'rg'", "/(?:^|[\\\\/])rg$/i.test(head) ? 'rg'"]], ['unit-cmdScan']],
-    ['Y12', 'src/domain/cmdScan.mjs', [["(/grep(?:\\.exe)?$/i.test(head) ? 'grep' : null)", "(/grep$/i.test(head) ? 'grep' : null)"]], ['unit-cmdScan']],
-    ['Y13', 'src/domain/cmdScan.mjs', [['                else if (/^\\/G:/i.test(t)) {', '                else if (false) {']], ['unit-cmdScan']],
-    ['Y14', 'src/domain/cmdScan.mjs', [['                else if (/^\\/G:/i.test(t)) {', '                else if (/^\\/G:/.test(t)) {']], ['unit-cmdScan']],
-    ['Y15', 'src/domain/cmdScan.mjs', [['            if (pf) {\n                removed = true\n', '            if (pf) {\n']], ['unit-cmdScan']],
-    ['Y16', 'src/domain/cmdScan.mjs', [["    if (t === '--files') {\n        return fam === 'rg' ? 3 : 0\n    }\n", '']], ['unit-cmdScan']],
-    ['Y17', 'src/domain/cmdScan.mjs', [["k < toks.length && toks[k] !== '--'; k++) {", 'k < toks.length; k++) {']], ['unit-cmdScan']],
-    ['Y18', 'src/domain/cmdScan.mjs', [['                        later = true\n                        break', '                        later = false\n                        break']], ['unit-cmdScan']],
-    ['Y19', 'src/domain/cmdScan.mjs', [['(patFileOf(m0[0], toks[k]) || (isFindstr && /^\\/G:/i.test(toks[k])))', '(patFileOf(m0[0], toks[k]))']], ['unit-cmdScan']],
-    ['Y20', 'src/domain/cmdScan.mjs', [['(patFileOf(m0[0], toks[k]) || (isFindstr && /^\\/G:/i.test(toks[k])))', '((isFindstr && /^\\/G:/i.test(toks[k])))']], ['unit-cmdScan']],
+    //── 搜尋樣式取自檔或無位置樣式(Y 系列; verifyCmdScan.mjs 之 patFileOf 與 stripSearchPatterns; Gitea #198 之另見 2)──
+    ['Y01', 'src/domain/verifyCmdScan.mjs', [['            if (pf) {\n                removed = true', '            if (false) {\n                removed = true']], ['unit-cmdScan']],
+    ['Y02', 'src/domain/verifyCmdScan.mjs', [['                skipNext = pf === 2\n', '                skipNext = false\n']], ['unit-cmdScan']],
+    ['Y03', 'src/domain/verifyCmdScan.mjs', [["        return fam === 'rg' ? 3 : 0", '        return 3']], ['unit-cmdScan']],
+    ['Y04', 'src/domain/verifyCmdScan.mjs', [["    if (t === '--file') {\n        return 2\n    }\n", '']], ['unit-cmdScan']],
+    ['Y05', 'src/domain/verifyCmdScan.mjs', [["    if (t.startsWith('--file=')) {\n        return 1\n    }\n", '']], ['unit-cmdScan']],
+    ['Y06', 'src/domain/verifyCmdScan.mjs', [['    if (/^-[A-Za-z0-9]/.test(t)) {', '    if (/^-[A-Za-z0-9]+$/.test(t)) {']], ['unit-cmdScan']],
+    ['Y07', 'src/domain/verifyCmdScan.mjs', [["return t[j] === 'f' ? (j === t.length - 1 ? 2 : 1) : 0", "return t[j] === 'f' ? 2 : 0"]], ['unit-cmdScan']],
+    ['Y08', 'src/domain/verifyCmdScan.mjs', [["return t[j] === 'f' ? (j === t.length - 1 ? 2 : 1) : 0", "return t[j] === 'f' ? 1 : 0"]], ['unit-cmdScan']],
+    ['Y09', 'src/domain/verifyCmdScan.mjs', [['if (LR_GNU[fam].val.includes(t[j])) {', "if ((fam === 'grep' ? 'ABCDdem' : LR_GNU.rg.val).includes(t[j])) {"]], ['unit-cmdScan']],
+    ['Y10', 'src/domain/verifyCmdScan.mjs', [['if (LR_GNU[fam].val.includes(t[j])) {', "if ((fam === 'rg' ? 'ABCEMTdegjmrt' : LR_GNU.grep.val).includes(t[j])) {"]], ['unit-cmdScan']],
+    ['Y11', 'src/domain/verifyCmdScan.mjs', [["/(?:^|[\\\\/])rg(?:\\.exe)?$/i.test(head) ? 'rg'", "/(?:^|[\\\\/])rg$/i.test(head) ? 'rg'"]], ['unit-cmdScan']],
+    ['Y12', 'src/domain/verifyCmdScan.mjs', [["(/grep(?:\\.exe)?$/i.test(head) ? 'grep' : null)", "(/grep$/i.test(head) ? 'grep' : null)"]], ['unit-cmdScan']],
+    ['Y13', 'src/domain/verifyCmdScan.mjs', [['                else if (/^\\/G:/i.test(t)) {', '                else if (false) {']], ['unit-cmdScan']],
+    ['Y14', 'src/domain/verifyCmdScan.mjs', [['                else if (/^\\/G:/i.test(t)) {', '                else if (/^\\/G:/.test(t)) {']], ['unit-cmdScan']],
+    ['Y15', 'src/domain/verifyCmdScan.mjs', [['            if (pf) {\n                removed = true\n', '            if (pf) {\n']], ['unit-cmdScan']],
+    ['Y16', 'src/domain/verifyCmdScan.mjs', [["    if (t === '--files') {\n        return fam === 'rg' ? 3 : 0\n    }\n", '']], ['unit-cmdScan']],
+    ['Y17', 'src/domain/verifyCmdScan.mjs', [["k < toks.length && toks[k] !== '--'; k++) {", 'k < toks.length; k++) {']], ['unit-cmdScan']],
+    ['Y18', 'src/domain/verifyCmdScan.mjs', [['                        later = true\n                        break', '                        later = false\n                        break']], ['unit-cmdScan']],
+    ['Y19', 'src/domain/verifyCmdScan.mjs', [['(patFileOf(m0[0], toks[k]) || (isFindstr && /^\\/G:/i.test(toks[k])))', '(patFileOf(m0[0], toks[k]))']], ['unit-cmdScan']],
+    ['Y20', 'src/domain/verifyCmdScan.mjs', [['(patFileOf(m0[0], toks[k]) || (isFindstr && /^\\/G:/i.test(toks[k])))', '((isFindstr && /^\\/G:/i.test(toks[k])))']], ['unit-cmdScan']],
     //── 近期版之超額之取值(J 系列; domain.mjs 之 recentDiagOf / recentExcessOf; contentOf 與 avgOf 與「有內容」共用; Gitea #198 之另見 1)──
     ['J01', 'src/domain/domain.mjs', [['    return s ? s.excess : null\n}', '    return s ? s.excess : 0\n}']], ['unit-searchMapRecent']],
     ['J02', 'src/domain/domain.mjs', [['            let r0 = recentExcessOf(m)\n            return `${mean(', "            let r0 = m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null\n            return `${mean("]], ['unit-searchMapRecent']],
@@ -621,6 +621,110 @@ let M = [
     ['NX04', 'src/domain/verify.mjs', [["let names = scope === 'board' ?", "let names = scope === 'board' || scope === 'none' ?"]], ['unit-replayExt']], //none 亦載入看板值之診斷與 neutralExec
     ['NX05', 'src/domain/verify.mjs', [['out.neutralExec = { ...(out.neutralExec || {}), delta }', 'out.neutralExec = { delta }']], ['unit-replayExt']], //紀錄之 neutralExec 丟掉看板值
     ['NX06', 'src/domain/verify.mjs', [["let ns = [...new Set(names.filter((nm) => nm !== 'nullRecentAct' && !/[,\\s]/.test(nm)))].sort()", "let ns = names.filter((nm) => nm !== 'nullRecentAct' && !/[,\\s]/.test(nm)).sort()"]], ['unit-replayExt']], //不去重(有看板值又有 delta 之 neutralExec 列兩次)
+    //── 迴圈檢查之兩條機械提示(EH 系列; R-REC-43 單峰交付、R-REC-44 選集與他節點相同)──
+    //  參考檔之定義(兩條共用之單一來源)與所計之列
+    ['EH01', 'src/domain/verifyEvalHints.mjs', [["let REF_PICK = /^(?:control|base_pick|ref_.*)\\.mjs$/i", "let REF_PICK = /^(?:base_pick|ref_.*)\\.mjs$/i"]], ['unit-evalHints']], //不排除 control.mjs
+    ['EH02', 'src/domain/verifyEvalHints.mjs', [["let REF_PICK = /^(?:control|base_pick|ref_.*)\\.mjs$/i", "let REF_PICK = /^(?:control|ref_.*)\\.mjs$/i"]], ['unit-evalHints']], //不排除 base_pick.mjs
+    ['EH03', 'src/domain/verifyEvalHints.mjs', [["let REF_PICK = /^(?:control|base_pick|ref_.*)\\.mjs$/i", "let REF_PICK = /^(?:control|base_pick)\\.mjs$/i"]], ['unit-evalHints']], //不排除 ref_*.mjs
+    ['EH04', 'src/domain/verifyEvalHints.mjs', [["let REF_PICK = /^(?:control|base_pick|ref_.*)\\.mjs$/i", "let REF_PICK = /^(?:control|base_pick|ref_.*)\\.mjs$/"]], ['unit-evalHints']], //分大小寫
+    ['EH05', 'src/domain/verifyEvalHints.mjs', [["if (!j || j.ok !== true || j.mode !== 'full' ||", "if (!j || j.mode !== 'full' ||"]], ['unit-evalHints']], //計失敗之列
+    ['EH06', 'src/domain/verifyEvalHints.mjs', [["j.mode !== 'full' || (j.period && j.period !== 'backtest') || (j.member", "(j.period && j.period !== 'backtest') || (j.member"]], ['unit-evalHints']], //計快速評估之列
+    ['EH07', 'src/domain/verifyEvalHints.mjs', [["|| (j.period && j.period !== 'backtest') || (j.member !== undefined", "|| (j.member !== undefined"]], ['unit-evalHints']], //計其他期間之列
+    ['EH08', 'src/domain/verifyEvalHints.mjs', [["(j.member !== undefined && j.member !== null) || typeof j.selHash", "typeof j.selHash"]], ['unit-evalHints']], //計帶成員抽樣之列
+    ['EH09', 'src/domain/verifyEvalHints.mjs', [["typeof j.selHash !== 'string' || !j.selHash || isRefPick(j.pick)) {", "typeof j.selHash !== 'string' || isRefPick(j.pick)) {"]], ['unit-evalHints']], //計空之選集指紋
+    ['EH10', 'src/domain/verifyEvalHints.mjs', [["typeof j.selHash !== 'string' || !j.selHash || isRefPick(j.pick)) {", "typeof j.selHash !== 'string' || !j.selHash) {"]], ['unit-evalHints']], //計參考檔之列
+    ['EH11', 'src/domain/verifyEvalHints.mjs', [["S: typeof j.S === 'number' && Number.isFinite(j.S) ? j.S : null })", "S: j.S })"]], ['unit-evalHints']], //S 不檢數值
+    //  單峰交付之四個條件、同一指紋多列之取法、中位
+    ['EH12', 'src/domain/verifyEvalHints.mjs', [["Object.freeze({ peakMinSel: 6,", "Object.freeze({ peakMinSel: 5,"]], ['unit-evalHints']], //相異之指紋之下限 5
+    ['EH13', 'src/domain/verifyEvalHints.mjs', [["bySel.size < EVAL_HINT.peakMinSel", "bySel.size <= EVAL_HINT.peakMinSel"]], ['unit-evalHints']], //恰 6 個不提示
+    ['EH14', 'src/domain/verifyEvalHints.mjs', [["if (!(dS > 0) ||", "if (!(dS >= 0) ||"]], ['unit-evalHints']], //S 為 0 亦提示
+    ['EH15', 'src/domain/verifyEvalHints.mjs', [["rest.some((v) => v > dS)", "rest.some((v) => v >= dS)"]], ['unit-evalHints']], //同分不算最高
+    ['EH16', 'src/domain/verifyEvalHints.mjs', [["if (!(dS > 0) || rest.some((v) => v > dS)) {", "if (!(dS > 0)) {"]], ['unit-evalHints']], //不查是否最高
+    ['EH17', 'src/domain/verifyEvalHints.mjs', [["if (!(med < dS * EVAL_HINT.peakRatio)) {", "if (!(med <= dS * EVAL_HINT.peakRatio)) {"]], ['unit-evalHints']], //中位恰為一半亦提示
+    ['EH18', 'src/domain/verifyEvalHints.mjs', [["peakRatio: 0.5,", "peakRatio: 0.6,"]], ['unit-evalHints']], //倍數 0.6
+    ['EH19', 'src/domain/verifyEvalHints.mjs', [["            bySel.set(r.selHash, r.S)", "            if (!bySel.has(r.selHash)) {\n                bySel.set(r.selHash, r.S)\n            }"]], ['unit-evalHints']], //同一指紋取第一列
+    ['EH20', 'src/domain/verifyEvalHints.mjs', [["return k % 2 ? s[(k - 1) / 2] : (s[k / 2 - 1] + s[k / 2]) / 2", "return s[Math.floor((k - 1) / 2)]"]], ['unit-evalHints']], //偶數個取中間偏低之一數
+    ['EH21', 'src/domain/verifyEvalHints.mjs', [["let med = medianOf(rest)", "let med = rest.reduce((a, b) => a + b, 0) / rest.length"]], ['unit-evalHints']], //以平均代中位
+    //  選集與他節點相同: 不比之對象、句式、所列之檔、次序與上限
+    ['EH22', 'src/domain/verifyEvalHints.mjs', [["let pairExcluded = (a, b) => (a.type", "let pairExcluded = (a, b) => false && (a.type"]], ['unit-evalHints']], //驗證類之指名不排除
+    ['EH23', 'src/domain/verifyEvalHints.mjs', [["(a.type === 'verify' && (a.targets || []).includes(b.id)) || (b.type", "(b.type"]], ['unit-evalHints']], //只排除一個方向(對方為驗證類)
+    ['EH24', 'src/domain/verifyEvalHints.mjs', [[" || (b.type === 'verify' && (b.targets || []).includes(a.id))", '']], ['unit-evalHints']], //只排除一個方向(本節點為驗證類)
+    ['EH25', 'src/domain/verifyEvalHints.mjs', [["if (oid === self.id || pairExcluded(self, h.o)) {", "if (pairExcluded(self, h.o)) {"]], ['unit-evalHints']], //自身之列亦命中
+    ['EH26', 'src/domain/verifyEvalHints.mjs', [["        if (mine.length === 0 && theirs.length > 0) {\n            continue\n        }\n", '']], ['unit-evalHints']], //本節點為真子集者亦列
+    ['EH27', 'src/domain/verifyEvalHints.mjs', [["let pick = h.o.fingerprint === self.fingerprint && h.picks.includes('pick.mjs') ? 'pick.mjs' : h.picks[h.picks.length - 1]", "let pick = h.picks[h.picks.length - 1]"]], ['unit-evalHints']], //不以交付檔之列優先
+    ['EH28', 'src/domain/verifyEvalHints.mjs', [["? 'pick.mjs' : h.picks[h.picks.length - 1]", "? 'pick.mjs' : h.picks[0]"]], ['unit-evalHints']], //取第一列
+    ['EH29', 'src/domain/verifyEvalHints.mjs', [["${h.nPick > 1 ? `(另 ${h.nPick - 1} 個檔亦同)` : ''}", '']], ['unit-evalHints']], //不註多個檔
+    ['EH30', 'src/domain/verifyEvalHints.mjs', [["(Number(a.same) - Number(b.same))", "(Number(b.same) - Number(a.same))"]], ['unit-evalHints']], //臂組合相同者在前
+    ['EH31', 'src/domain/verifyEvalHints.mjs', [["twinMaxList: 3 })", "twinMaxList: 2 })"]], ['unit-evalHints']], //列至 2 個
+    ['EH32', 'src/domain/verifyEvalHints.mjs', [["more.slice(0, 10)", "more.slice(0, 11)"]], ['unit-evalHints']], //其餘之 id 列至 11 個
+    //  讀各節點之工作夾: agent 結束之時刻、驗證類之辨識與其指名、未通過之節點、兩條之次序、看板用之內容
+    ['EH33', 'src/domain/verifyEvalHints.mjs', [["d.agent && typeof d.agent.endedAt === 'string' ? d.agent.endedAt : null))", 'null))']], ['unit-evalHints']], //不限 agent 結束之前
+    ['EH34', 'src/domain/verifyEvalHints.mjs', [["let type = d.task && d.task.type === 'verify' ? 'verify' : 'explore'", "let type = 'explore'"]], ['unit-evalHints']], //不辨識驗證類
+    ['EH35', 'src/domain/verifyEvalHints.mjs', [["...(d.spec && d.spec.base ? [d.spec.base] : []), ...namedOf", '...namedOf']], ['unit-evalHints']], //起點不算指名
+    ['EH36', 'src/domain/verifyEvalHints.mjs', [[", ...namedOf(d.task && d.task.direction)] : []", '] : []']], ['unit-evalHints']], //方向內之節點不算指名
+    ['EH37', 'src/domain/verify.mjs', [["        if (hit.length === 1 && !out.includes(hit[0])) {\n            out.push(hit[0])", "        if (hit.length >= 1 && !out.includes(hit[0])) {\n            out.push(hit[0])"]], ['unit-evalHints']], //前綴對應多個亦算指名(方向內指名之節點之共用求法 dirNodeIdsOf; 兩條提示之 namedOf 經之)
+    ['EH38', 'src/domain/verifyEvalHints.mjs', [["fingerprint: d.harness && d.harness.ok === true && typeof d.harness.fingerprint", "fingerprint: d.harness && typeof d.harness.fingerprint"]], ['unit-evalHints']], //未通過之節點亦提示
+    ['EH39', 'src/domain/verifyEvalHints.mjs', [["[peakHintOf(o.rows, o.fingerprint), twinHintOf(o, ix)]", "[twinHintOf(o, ix), peakHintOf(o.rows, o.fingerprint)]"]], ['unit-evalHints']], //兩條之次序
+    ['EH40', 'src/domain/verifyEvalHints.mjs', [["return t.endsWith(HINT_TAIL) ? t.slice(0, t.length - HINT_TAIL.length) : t", 'return t']], ['unit-evalHints']], //看板之一段留「不否決」之註
+    ['EH41', 'src/domain/verifyEvalHints.mjs', [["let isEvalHint = (s) => String(s).startsWith(PEAK_HEAD) || String(s).startsWith(TWIN_HEAD)", "let isEvalHint = (s) => String(s).startsWith(PEAK_HEAD)"]], ['unit-evalHints']], //舊之「選集與他節點相同」不被認出(重產時重複)
+    //  領域之接線(各呼叫點)與看板、唯讀之對照
+    ['EH42', 'src/domain/domain.mjs', [["        try {\n            refreshEvalHints(nodeIds)\n", "        try {\n            void 0\n"]], ['unit-evalHints']], //派做夢之前不重產
+    ['EH43', 'src/domain/domain.mjs', [['refreshEvalHints([...nodeIds, ...pending])', 'void 0']], ['unit-evalHints']], //處置之後不重產
+    ['EH44', 'src/domain/domain.mjs', [['refreshEvalHints([...nodeIds, ...pending])', 'refreshEvalHints(pending)']], ['unit-evalHints']], //處置之後只重產重做者
+    ['EH45', 'src/domain/domain.mjs', [['            refreshEvalHints(rows.map((r) => r.id))\n', '']], ['unit-evalHints']], //reverify 之後不重產
+    ['EH46', 'src/domain/domain.mjs', [['let next = [...old.filter((s) => !isScan(s) && !isEvalHint(s)), ...tr.issues, ...hs]', 'let next = [...old.filter((s) => !isScan(s) && !isEvalHint(s)), ...tr.issues]']], ['unit-evalHints']], //重掃不補提示(節點文件)
+    ['EH47', 'src/domain/domain.mjs', [['let next = [...old.filter((s) => !isScan(s) && !isEvalHint(s)), ...tr.issues, ...hs]', 'let next = [...old.filter((s) => !isScan(s)), ...tr.issues, ...hs]']], ['unit-evalHints']], //重掃不移除舊之提示
+    ['EH48', 'src/domain/domain.mjs', [['...tr.issues, ...(hm ? hs : (x.raw.issues || []).filter(isEvalHint))]', '...tr.issues]']], ['unit-evalHints']], //重掃不補提示(樹)
+    ['EH49', 'src/domain/domain.mjs', [['x.raw.issues = withHints(x.raw.issues, hm.get(id))', 'void 0']], ['unit-evalHints']], //輪末之重產不更新樹
+    ['EH50', 'src/domain/domain.mjs', [['let withHints = (issues, hs) => [...(issues || []).filter((s) => !isEvalHint(s)), ...(hs || [])]', 'let withHints = (issues, hs) => [...(issues || []), ...(hs || [])]']], ['unit-evalHints']], //不移除舊之提示(重複)
+    ['EH51', 'src/domain/domain.mjs', [["${hintOf(n, PEAK_HEAD) ? ' 單峰交付' : ''}", '']], ['unit-evalHints']], //看板之 S 一欄不標
+    ['EH52', 'src/domain/domain.mjs', [["${hintOf(n, TWIN_HEAD) ? ' 選集與他節點相同' : ''}", '']], ['unit-evalHints']], //看板之臂一欄不標
+    ['EH53', 'src/domain/domain.mjs', [['        if (peakRows.length) {', '        if (false) {']], ['unit-evalHints']], //看板之表前不列單峰交付之一段
+    ['EH54', 'src/domain/domain.mjs', [['        if (twinRows.length) {', '        if (false) {']], ['unit-evalHints']], //看板之表前不列選集與他節點相同之一段
+    ['EH55', 'src/domain/domain.mjs', [['            if (!docChanged && !treeChanged) {\n                continue\n            }\n            if (docChanged) {\n', '            if (true) {\n'], ['            if (treeChanged) {\n                rsi.store.updateNode', '            if (true) {\n                rsi.store.updateNode']], ['unit-evalHints']], //無變動者亦重寫(文件與樹)
+    ['EH56', 'src/tools/scanCheck.mjs', [['let now = [...tr.issues, ...(hints.get(d.nodeId) || [])]', 'let now = [...tr.issues]']], ['unit-evalHints']], //唯讀之對照不含提示
+    ['EH57', 'src/tools/scanCheck.mjs', [['.filter((s) => isScan(s) || isEvalHint(s))', '.filter(isScan)']], ['unit-evalHints']], //唯讀之對照不讀節點文件內之提示
+    //  兩方皆為驗證類而臂組合相同者不列(主控之裁定)
+    ['EH58', 'src/domain/verifyEvalHints.mjs', [["        if (self.type === 'verify' && h.o.type === 'verify' && mine.length === 0 && theirs.length === 0) {\n            continue\n        }\n", '']], ['unit-evalHints']], //兩方皆驗證類而同臂者亦列
+    ['EH59', 'src/domain/verifyEvalHints.mjs', [["if (self.type === 'verify' && h.o.type === 'verify' && mine.length === 0", "if (self.type === 'verify' && mine.length === 0"]], ['unit-evalHints']], //只看本節點之類型
+    ['EH60', 'src/domain/verifyEvalHints.mjs', [["if (self.type === 'verify' && h.o.type === 'verify' && mine.length === 0", "if (h.o.type === 'verify' && mine.length === 0"]], ['unit-evalHints']], //只看對方之類型
+    ['EH61', 'src/domain/verifyEvalHints.mjs', [["h.o.type === 'verify' && mine.length === 0 && theirs.length === 0) {", "h.o.type === 'verify') {"]], ['unit-evalHints']], //兩方皆驗證類者不論臂組合皆不列
+    //  提示之字串與看板之文字不列門檻之值
+    ['EH62', 'src/domain/verifyEvalHints.mjs', [['(遠低於交付版)⇒', '(不到交付版之 S 之 ${EVAL_HINT.peakRatio} 倍)⇒']], ['unit-evalHints']], //提示之字串列出倍數
+    ['EH63', 'src/domain/domain.mjs', [['交付版之 S 為多次完整評估中之孤立高點(只提示、不否決;', '交付版之 S 為多次完整評估中之孤立高點(完整評估之相異選集 ≥ 6 個;只提示、不否決;']], ['unit-evalHints']], //看板之段落列出個數之門檻
+    //  判定拋錯時之各呼叫點(只記錄、主流程照常)與重掃之保留
+    ['EH64', 'src/domain/domain.mjs', [['        try {\n            refreshEvalHints(rows.map((r) => r.id))\n        }\n        catch (err) {', '        {\n            refreshEvalHints(rows.map((r) => r.id))\n        }\n        if (false) {']], ['unit-evalHints']], //reverify 之後之失敗中斷主流程
+    ['EH65', 'src/domain/domain.mjs', [['        try {\n            hm = evalHintsAll(records.listNodeDocs(), st.records.workDir)\n        }\n        catch (err) {', '        {\n            hm = evalHintsAll(records.listNodeDocs(), st.records.workDir)\n        }\n        if (false) {']], ['unit-evalHints']], //重掃之失敗中斷重掃
+    ['EH66', 'src/domain/domain.mjs', [['let hs = hm ? (hm.get(d.nodeId) || []) : old.filter(isEvalHint)', 'let hs = hm ? (hm.get(d.nodeId) || []) : []']], ['unit-evalHints']], //重掃失敗時丟掉既有之提示(節點文件)
+    ['EH67', 'src/domain/domain.mjs', [['...(hm ? hs : (x.raw.issues || []).filter(isEvalHint))]', '...(hm ? hs : [])]']], ['unit-evalHints']], //重掃失敗時丟掉既有之提示(樹)
+    ['EH68', 'src/domain/domain.mjs', [['        try {\n            refreshEvalHints(nodeIds)\n        }\n        catch (err) {', '        {\n            refreshEvalHints(nodeIds)\n        }\n        if (false) {']], ['unit-evalHints']], //派做夢之前之失敗中斷輪末鉤子
+    ['EH69', 'src/domain/domain.mjs', [['        try {\n            refreshEvalHints([...nodeIds, ...pending])\n        }\n        catch (err) {', '        {\n            refreshEvalHints([...nodeIds, ...pending])\n        }\n        if (false) {']], ['unit-evalHints']], //處置之後之失敗中斷輪末鉤子
+    ['EH70', 'src/domain/domain.mjs', [["let evalHintsAll = typeof inject.evalHints === 'function' ? inject.evalHints : evalHintsOfDocs", 'let evalHintsAll = evalHintsOfDocs']], ['unit-evalHints']], //不採注入之判定
+    //── 節點之禁區涵蓋迴圈驗證之全部原始碼(VZ 系列; 規則 R-BT-10; Gitea #200 之主控另加 2、4): 禁區字樣之 verify 起首之涵蓋、任務書之檔名樣式與之一致 ──
+    ['VZ01', 'src/domain/verify.mjs', [["+(backtest|verify)/i, '回測期重放 / 迴圈驗證之程式'", "+(backtest|verify\\.mjs)/i, '回測期重放 / 迴圈驗證之程式'"]], ['unit-verifyZone']], //禁區只涵蓋 verify.mjs 單檔(verifyCmdScan.mjs、verifyEvalHints.mjs 不涵蓋)
+    ['VZ02', 'src/domain/verify.mjs', [["+(backtest|verify)/i, '回測期重放 / 迴圈驗證之程式'", "+(backtest)/i, '回測期重放 / 迴圈驗證之程式'"]], ['unit-verifyZone']], //禁區不含 verify 起首者
+    ['VZ03', 'src/domain/verify.mjs', [["+(backtest|verify)/i, '回測期重放 / 迴圈驗證之程式'", "+(verify)/i, '回測期重放 / 迴圈驗證之程式'"]], ['unit-verifyZone']], //禁區不含 backtest 起首者
+    ['VZ04', 'src/domain/texts.mjs', [["codeRel + '/verify*.mjs`", "codeRel + '/verify.mjs`"]], ['unit-verifyZone']], //任務書只寫 verify.mjs 單檔(與禁區字樣不一致)
+    ['VZ05', 'src/domain/texts.mjs', [["'/backtest*.mjs`、`' + codeRel", "'/backtest.mjs`、`' + codeRel"]], ['unit-verifyZone']], //任務書之 backtest 樣式改為單檔
+    ['VZ06', 'src/domain/texts.mjs', [["codeRel + '/verify*.mjs` —— 評估時", "codeRel + '/verify*.mjs`、`' + codeRel + '/cmdScan.mjs` —— 評估時"]], ['unit-verifyZone']], //任務書另列禁區字樣未涵蓋之檔名
+    //── 可讀之他節點工作夾(AW 系列; 規則 R-BT-9; Gitea #200 之主控另加 5): 迴圈驗證、重掃與 scanCheck 共用 verify.mjs 之三函數 ──
+    ['AW01', 'src/domain/verify.mjs', [[', ...dirNodeIdsOf(d.task && d.task.direction, ids)]', ']']], ['unit-scanAllowWork']], //可讀之列不含方向指名之節點
+    ['AW02', 'src/domain/verify.mjs', [['...dirWorkIdsOf(d.task && d.task.direction, workRel), ', '']], ['unit-scanAllowWork']], //可讀之列不含方向內提到之工作夾
+    ['AW03', 'src/domain/verify.mjs', [['let allowWorkOf = (d, { workRel, ids }) => [...(d.spec && d.spec.base ? [d.spec.base] : []), ', 'let allowWorkOf = (d, { workRel, ids }) => [']], ['unit-scanAllowWork']], //可讀之列不含起點
+    ['AW04', 'src/domain/verify.mjs', [['...(((d.task && d.task.refs) || []).filter((r) => r.nodeId).map((r) => r.nodeId)), ', '']], ['unit-scanAllowWork']], //可讀之列不含任務書列為參考之節點
+    ['AW05', 'src/domain/verify.mjs', [['if (hit.length === 1 && !out.includes(hit[0])) {', 'if (hit.length >= 1 && !out.includes(hit[0])) {']], ['unit-scanAllowWork']], //前綴對應不唯一者亦算指名
+    ['AW06', 'src/domain/verify.mjs', [['.matchAll(/\\b[0-9a-f]{8,16}\\b/g)) {\n        let hit = (ids || [])', '.matchAll(/\\b[0-9a-f]{6,16}\\b/g)) {\n        let hit = (ids || [])']], ['unit-scanAllowWork']], //前綴少至 6 碼即算指名
+    ['AW07', 'src/domain/verify.mjs', [['.matchAll(/\\b[0-9a-f]{8,16}\\b/g)) {\n        let hit = (ids || [])', '.matchAll(/\\b[0-9a-f]{8,12}\\b/g)) {\n        let hit = (ids || [])']], ['unit-scanAllowWork']], //完整 id(16 碼)不算指名
+    ['AW08', 'src/domain/verify.mjs', [["`${direction.claim || ''} ${direction.rationale || ''} ${direction.expect || ''}`.matchAll(/\\b", "`${direction.rationale || ''} ${direction.expect || ''}`.matchAll(/\\b"]], ['unit-scanAllowWork']], //指名只看依據與預期(不看主張)
+    ['AW09', 'src/domain/verify.mjs', [["`${direction.rationale || ''} ${direction.expect || ''}`.matchAll(new RegExp(", "`${direction.claim || ''} ${direction.rationale || ''} ${direction.expect || ''}`.matchAll(new RegExp("]], ['unit-scanAllowWork']], //方向內之工作夾亦看主張
+    ['AW10', 'src/domain/verify.mjs', [["let base = String(workRel).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')", 'let base = String(workRel)']], ['unit-scanAllowWork']], //工作夾之根之字元不當字面(「.」當萬用字元)
+    ['AW11', 'src/tools/scanCheck.mjs', [['let allowWork = allowWorkOf(d, { workRel, ids })', 'let allowWork = allowWorkOf(d, { workRel, ids: [] })']], ['unit-scanAllowWork']], //scanCheck 不認方向指名之節點(修前之現象)
+    ['AW12', 'src/tools/scanCheck.mjs', [["let workRel = path.relative(root, workRoot).replace(/\\\\/g, '/')", 'let workRel = path.relative(root, workRoot)']], ['unit-scanAllowWork']], //scanCheck 之工作夾之根不轉為 /
+    ['AW13', 'src/domain/domain.mjs', [['let allowWork = allowWorkOf(d, { workRel, ids })', 'let allowWork = allowWorkOf(d, { workRel, ids: [] })']], ['unit-scanAllowWork']], //重掃不認方向指名之節點
+    ['AW14', 'src/domain/domain.mjs', [['dirNodeIdsOf(direction, executedIds())', 'dirNodeIdsOf(direction, [])']], ['unit-scanAllowWork']], //任務書之參考不列方向指名之節點
+    ['AW15', 'src/domain/domain.mjs', [["let dirWorkIds = (direction) => dirWorkIdsOf(direction, workRelOf())", "let dirWorkIds = (direction) => dirWorkIdsOf(direction, '')"]], ['unit-scanAllowWork']], //迴圈驗證之 refsOf 之工作夾之根為空(只由結構之案守: 該路徑於單元測試中無法不跑評估而觸及)
+    //── 兩條提示之寫入: 文件與樹各自比對(R-REC-44 ⑦; Gitea #200 之複審所見)──
+    ['EH71', 'src/domain/domain.mjs', [['let treeChanged = treeOld !== null && JSON.stringify(treeOld) !== JSON.stringify(withHints(treeOld, hm.get(id)))', 'let treeChanged = docChanged']], ['unit-evalHints']], //樹只隨文件之變動而更新(文件已寫、樹之更新拋錯者不補)
 ]
 
 let args = process.argv.slice(2)

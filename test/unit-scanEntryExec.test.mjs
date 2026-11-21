@@ -1,7 +1,7 @@
 import assert from 'assert'
 import fs from 'fs'
 import path from 'path'
-import { entryExecOf, recursiveRootOf } from '../src/domain/cmdScan.mjs'
+import { entryExecOf, recursiveRootOf } from '../src/domain/verifyCmdScan.mjs'
 import { scanTrace } from '../src/domain/verify.mjs'
 import { makeTmp } from './tools/synthLedger.mjs'
 
