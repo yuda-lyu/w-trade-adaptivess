@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>domain/verifyMember.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#AGENT_ROLES">AGENT_ROLES</a></li><li><a href="global.html#AGENT_ROLE_ENV">AGENT_ROLE_ENV</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#CROSS_COLUMNS">CROSS_COLUMNS</a></li><li><a href="global.html#CROSS_FIELD_DEFS">CROSS_FIELD_DEFS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EVAL_HINT">EVAL_HINT</a></li><li><a href="global.html#EVAL_VERSION">EVAL_VERSION</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#EXPOSURE_DEFAULT">EXPOSURE_DEFAULT</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#FILL_BACKLOG_OFF">FILL_BACKLOG_OFF</a></li><li><a href="global.html#FILL_BACKLOG_ON">FILL_BACKLOG_ON</a></li><li><a href="global.html#FILL_BACKLOG_SEC">FILL_BACKLOG_SEC</a></li><li><a href="global.html#FILL_DIR">FILL_DIR</a></li><li><a href="global.html#FILL_NO_RETRY_KINDS">FILL_NO_RETRY_KINDS</a></li><li><a href="global.html#FILL_SCHEMA">FILL_SCHEMA</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#LIB_DIR_HI">LIB_DIR_HI</a></li><li><a href="global.html#LIB_DIR_LO">LIB_DIR_LO</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#MEMBER_DEFAULT">MEMBER_DEFAULT</a></li><li><a href="global.html#MEMBER_HEAD">MEMBER_HEAD</a></li><li><a href="global.html#MEMBER_SALTS">MEMBER_SALTS</a></li><li><a href="global.html#MUTABLE_SNAPS">MUTABLE_SNAPS</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#OUT_SATURATED_NOTE">OUT_SATURATED_NOTE</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#POSTFIT_HEAD">POSTFIT_HEAD</a></li><li><a href="global.html#REPLICA_EXT">REPLICA_EXT</a></li><li><a href="global.html#SIDE_READ_DEFAULT">SIDE_READ_DEFAULT</a></li><li><a href="global.html#SIGNS_CLAUSE">SIGNS_CLAUSE</a></li><li><a href="global.html#SUBSET_MEMBER_MSG">SUBSET_MEMBER_MSG</a></li><li><a href="global.html#SUBSET_MSG">SUBSET_MSG</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#VIOL">VIOL</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#adoptError">adoptError</a></li><li><a href="global.html#agentEnvOf">agentEnvOf</a></li><li><a href="global.html#agentRoleOf">agentRoleOf</a></li><li><a href="global.html#alignSeries">alignSeries</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#argStrOf">argStrOf</a></li><li><a href="global.html#autoFillOf">autoFillOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#bodyOf">bodyOf</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#bytesAs">bytesAs</a></li><li><a href="global.html#cadenceOf">cadenceOf</a></li><li><a href="global.html#cfgNumLoose">cfgNumLoose</a></li><li><a href="global.html#cfgNumOf">cfgNumOf</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkEvalSettings">checkEvalSettings</a></li><li><a href="global.html#checkIntrinsics">checkIntrinsics</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#configMsgOf">configMsgOf</a></li><li><a href="global.html#copyAll">copyAll</a></li><li><a href="global.html#copyRange">copyRange</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#crossOf">crossOf</a></li><li><a href="global.html#dateOf">dateOf</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#diagsOf">diagsOf</a></li><li><a href="global.html#directionalOf">directionalOf</a></li><li><a href="global.html#entryWrites">entryWrites</a></li><li><a href="global.html#evalCfgNumsOf">evalCfgNumsOf</a></li><li><a href="global.html#evalHintsOfDocs">evalHintsOfDocs</a></li><li><a href="global.html#evalNumsOf">evalNumsOf</a></li><li><a href="global.html#evaluatorFpOf">evaluatorFpOf</a></li><li><a href="global.html#exposureCfgOf">exposureCfgOf</a></li><li><a href="global.html#exposureHintOf">exposureHintOf</a></li><li><a href="global.html#exposureOf">exposureOf</a></li><li><a href="global.html#extRowOf">extRowOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#fillBacklogSecOf">fillBacklogSecOf</a></li><li><a href="global.html#fillDocOf">fillDocOf</a></li><li><a href="global.html#fillFileOf">fillFileOf</a></li><li><a href="global.html#fillLinesOf">fillLinesOf</a></li><li><a href="global.html#fillSigSrcOf">fillSigSrcOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#gridCheck">gridCheck</a></li><li><a href="global.html#guardEntry">guardEntry</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#handOut">handOut</a></li><li><a href="global.html#holdMedianOf">holdMedianOf</a></li><li><a href="global.html#horizonsOf">horizonsOf</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#integrityError">integrityError</a></li><li><a href="global.html#isCapitalError">isCapitalError</a></li><li><a href="global.html#isIntegrityError">isIntegrityError</a></li><li><a href="global.html#isMutableSnap">isMutableSnap</a></li><li><a href="global.html#isSrcIdx">isSrcIdx</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#libReportOf">libReportOf</a></li><li><a href="global.html#libSizeText">libSizeText</a></li><li><a href="global.html#libTextOf">libTextOf</a></li><li><a href="global.html#loadExt">loadExt</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#memberCfgOfSt">memberCfgOfSt</a></li><li><a href="global.html#memberCheckOf">memberCheckOf</a></li><li><a href="global.html#memberEligibleOf">memberEligibleOf</a></li><li><a href="global.html#memberHintOf">memberHintOf</a></li><li><a href="global.html#memberInfoOf">memberInfoOf</a></li><li><a href="global.html#memberKeyOf">memberKeyOf</a></li><li><a href="global.html#memberLedger">memberLedger</a></li><li><a href="global.html#memberLineOf">memberLineOf</a></li><li><a href="global.html#memberOfFill">memberOfFill</a></li><li><a href="global.html#memberRecentCapableOf">memberRecentCapableOf</a></li><li><a href="global.html#memberRowOf">memberRowOf</a></li><li><a href="global.html#memberRowOfTree">memberRowOfTree</a></li><li><a href="global.html#memberSigOf">memberSigOf</a></li><li><a href="global.html#memberTagsOf">memberTagsOf</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#normBarHours">normBarHours</a></li><li><a href="global.html#normUnit">normUnit</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#ntStaticOf">ntStaticOf</a></li><li><a href="global.html#nullDrawsOf">nullDrawsOf</a></li><li><a href="global.html#nullFloorText">nullFloorText</a></li><li><a href="global.html#objOf">objOf</a></li><li><a href="global.html#onBarGrid">onBarGrid</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#parseSubsetRule">parseSubsetRule</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#periodAt">periodAt</a></li><li><a href="global.html#periodLenText">periodLenText</a></li><li><a href="global.html#phaseCountOf">phaseCountOf</a></li><li><a href="global.html#phaseText">phaseText</a></li><li><a href="global.html#pickHashOf">pickHashOf</a></li><li><a href="global.html#planFill">planFill</a></li><li><a href="global.html#planGateOf">planGateOf</a></li><li><a href="global.html#postfitFileOf">postfitFileOf</a></li><li><a href="global.html#postfitInfoOf">postfitInfoOf</a></li><li><a href="global.html#postfitLineOf">postfitLineOf</a></li><li><a href="global.html#postfitOfFill">postfitOfFill</a></li><li><a href="global.html#postfitRowOf">postfitRowOf</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#rankCompareOf">rankCompareOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readFill">readFill</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#registryOf">registryOf</a></li><li><a href="global.html#renderContract">renderContract</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#roundOkOf">roundOkOf</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#safeJson">safeJson</a></li><li><a href="global.html#sameKey">sameKey</a></li><li><a href="global.html#sameUnit">sameUnit</a></li><li><a href="global.html#saturatedLineOf">saturatedLineOf</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#sideReadCfgOf">sideReadCfgOf</a></li><li><a href="global.html#sideReadOf">sideReadOf</a></li><li><a href="global.html#sideReadTextOf">sideReadTextOf</a></li><li><a href="global.html#signsMentionOf">signsMentionOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#subsetLedger">subsetLedger</a></li><li><a href="global.html#subsetMaskOf">subsetMaskOf</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tieBaseOf">tieBaseOf</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#trainFromBarOf">trainFromBarOf</a></li><li><a href="global.html#unitKeyOf">unitKeyOf</a></li><li><a href="global.html#unitNotionalOf">unitNotionalOf</a></li><li><a href="global.html#violationMark">violationMark</a></li><li><a href="global.html#violationSince">violationSince</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">domain/verifyMember.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import iseint from 'wsemi/src/iseint.mjs'
+import isenum from 'wsemi/src/isenum.mjs'
+import { recentDiagOf } from './diagRead.mjs'
+
+
+//成員穩健性之判定(規則 R-REC-51; 純函數): 合格之成品以隨機半庫(數種切法 × 兩半; 評估器之 --member &lt;鹽>:&lt;0|1>)重跑完整評估, 量其內容是否依賴特定成員
+//  ⇒ 命中者於迴圈檢查列「提示(成員依賴)」; 只提示、不否決: 不改 S、階梯、否決、可信度、排序鍵、選集指紋
+//  獨立成檔(檔名以 verify 起首): 節點之禁區字樣涵蓋 src/domain/verify*(同 verifyExposure.mjs), 判定之組合與門檻不被節點讀到而刻意規避
+//  量(皆由評估之結果檔取值, 不剖析字串):
+//    內容之種類 = 正本之選集之每隻訊號數為全體隨機之 2 倍以上、且正本有近期活躍度版之組成對照之值者 ⇒ recent(nullRecentAct.side.excess), 其餘 ⇒ builtin(nullSideAct.excess)
+//      (與搜尋地圖之挑選內容 contentOf 同一規則; 各半庫取同一種)
+//    全庫之內容 = 正本之該值(單抽); ≤ 0、非有限或缺者 ⇒ 保持率不適用(applicable: false), 整條「成員依賴」不判(列仍寫入, 含相位平均為負之半庫數)
+//    各半之保持率 = 半庫之內容 ÷ 全庫之內容(半庫缺該值者 null); 中位(偶數個取中間兩數之均)與最小只計非 null 者
+//    相位平均為負之半庫數 nNeg = metrics.op.eqYr.mean(各相位之等效年化之平均)&lt; 0 之半庫數(恰為 0 不計)
+//  提示 = 保持率之中位 &lt; minRetention, 或 nNeg > maxNegHalves(恰為門檻者不命中); 提示之字樣不列門檻之值(看板、節點文件為節點讀得到之檔)
+/**
+ * 隨機半庫之預設之鹽(三種切法;K = 2 × 鹽數 = 6 個半庫)
+ *
+ * @type {Array&lt;Integer>}
+ */
+let MEMBER_SALTS = Object.freeze([0x5bd1e995, 0x2545f491, 0x9e3779b9])
+
+/**
+ * 成員穩健性之附算之預設設定(settings.rsi.memberCheck 未給或其鍵不合時所用;nullDraws 未給者取 settings.eval.replicaNullDraws,再無則 32)
+ *
+ * @type {Object}
+ */
+let MEMBER_DEFAULT = Object.freeze({ salts: MEMBER_SALTS, minLadder: 1, minRetention: 0.5, maxNegHalves: 0 })
+
+let isObj = (v) => !!v &amp;&amp; typeof v === 'object' &amp;&amp; !Array.isArray(v)
+let fin = (v) => (typeof v === 'number' &amp;&amp; Number.isFinite(v) ? v : null)
+//設定之數值(跨套件規格〈輸入參數之檢測機制〉K1、K4、K7; 設定檔來自 JSON、環境變數或網頁表單, 數字類一律收數字字串): 通過者轉為數值, 其後只用轉換值
+//  整數鍵 intOf 依 wsemi iseint(安全整數之數字或其數字字串)、實數鍵 numOf 依 wsemi isenum(十進位寫法之有限數之數字或其數字字串; 去頭尾空白後 Number);
+//  布林、NaN、±Infinity、空字串、非數字字串(含 0x10)、BigInt、物件、陣列皆無效 ⇒ 該鍵用預設(不拋錯, 不當 0 或 1)
+let intOf = (v, lo, hi) => (iseint(v) &amp;&amp; Number(v) >= lo &amp;&amp; Number(v) &lt;= hi ? Number(v) : null)
+let numOf = (v) => (isenum(v) ? Number(v) : null)
+
+/**
+ * 成員穩健性之附算之設定(settings.rsi.memberCheck 之解讀;無效即用預設、不拋錯)
+ *
+ * false 或 salts 為空陣列者回 null(關閉);salts 須為 0 ~ 4294967295 之整數(或其數字字串)之陣列(重複者只取一次),不合者用預設;
+ * nullDraws 須為正整數,未給或不合者取 evalCfg.replicaNullDraws(正整數者),再無則 32;minLadder、maxNegHalves 須為非負整數、minRetention 須為有限數值(數字或其數字字串,轉為數值後使用),不合者用預設。
+ *
+ * @param {*} v 輸入 settings.rsi.memberCheck 之值
+ * @param {Object|null} [evalCfg=null] 輸入 settings.eval(讀取 replicaNullDraws)
+ * @returns {Object|null} 回傳 { salts, nullDraws, minLadder, minRetention, maxNegHalves } 或 null(關閉)
+ * @example
+ * let c = memberCheckOf({ minRetention: 0.6 }, { replicaNullDraws: 32 })
+ * // => { salts: [0x5bd1e995, 0x2545f491, 0x9e3779b9], nullDraws: 32, minLadder: 1, minRetention: 0.6, maxNegHalves: 0 }
+ */
+let memberCheckOf = (v, evalCfg = null) => {
+    if (v === false) {
+        return null
+    }
+    let o = isObj(v) ? v : {}
+    let salts = MEMBER_DEFAULT.salts.slice()
+    if (Array.isArray(o.salts)) {
+        if (o.salts.length === 0) {
+            return null
+        }
+        let xs = o.salts.map((x) => intOf(x, 0, 0xFFFFFFFF))
+        if (xs.every((x) => x !== null)) {
+            salts = [...new Set(xs)]
+        }
+    }
+    let rd = isObj(evalCfg) ? intOf(evalCfg.replicaNullDraws, 1, Number.MAX_SAFE_INTEGER) : null
+    let nd = intOf(o.nullDraws, 1, Number.MAX_SAFE_INTEGER)
+    let ml = intOf(o.minLadder, 0, Number.MAX_SAFE_INTEGER)
+    let mn = intOf(o.maxNegHalves, 0, Number.MAX_SAFE_INTEGER)
+    let mr = numOf(o.minRetention)
+    return {
+        salts,
+        nullDraws: nd !== null ? nd : (rd !== null ? rd : 32),
+        minLadder: ml !== null ? ml : MEMBER_DEFAULT.minLadder,
+        minRetention: mr !== null ? mr : MEMBER_DEFAULT.minRetention,
+        maxNegHalves: mn !== null ? mn : MEMBER_DEFAULT.maxNegHalves,
+    }
+}
+
+/**
+ * 由整份設定求成員穩健性之附算之設定(領域層與做夢任務書共用之單一來源;settings.rsi.memberCheck 與 settings.eval.replicaNullDraws)
+ *
+ * @param {Object|null} st 輸入整份設定(讀取 rsi.memberCheck、eval)
+ * @returns {Object|null} 回傳 memberCheckOf 之結果(關閉者 null)
+ * @example
+ * memberCfgOfSt({ rsi: { memberCheck: false } }) // => null
+ */
+let memberCfgOfSt = (st) => memberCheckOf(isObj(st) &amp;&amp; isObj(st.rsi) ? st.rsi.memberCheck : undefined, isObj(st) ? st.eval : null)
+
+//hex, 鹽之標記(評估器之 --member 之標記同一寫法: 0x&lt;十六進位>)
+let hex = (s) => `0x${s.toString(16)}`
+
+/**
+ * 成員穩健性之快取之鍵之成分(各鹽之標記依序以逗號相接 + 「|n」+ 虛無抽數;鹽或抽數改變 ⇒ 鍵不同 ⇒ 重算)
+ *
+ * @param {Object} cfg 輸入 memberCheckOf 之結果
+ * @returns {String} 回傳鍵之成分字串
+ * @example
+ * memberSigOf({ salts: [1, 255], nullDraws: 32 }) // => '0x1,0xff|n32'
+ */
+let memberSigOf = (cfg) => `${cfg.salts.map(hex).join(',')}|n${cfg.nullDraws}`
+
+/**
+ * 各半庫之評估之標記(與評估器之 --member 之寫法相同:0x&lt;鹽>:&lt;半>;依鹽之次序、每鹽先甲半後乙半)
+ *
+ * @param {Object} cfg 輸入 memberCheckOf 之結果
+ * @returns {Array&lt;String>} 回傳標記之陣列(長度 = 2 × 鹽數)
+ * @example
+ * memberTagsOf({ salts: [1], nullDraws: 32 }) // => ['0x1:0', '0x1:1']
+ */
+let memberTagsOf = (cfg) => cfg.salts.flatMap((s) => [`${hex(s)}:0`, `${hex(s)}:1`])
+
+/**
+ * 成品是否合格(成員穩健性之附算之對象):未被否決、評估期之階梯(score.flags.trainLadder,無則 score.ladder)≥ cfg.minLadder
+ *
+ * 工作夾有無成品檔由呼叫端判定(附算之節點之列只含有成品檔者)。
+ *
+ * @param {Object} n 輸入樹上之節點(讀 score)
+ * @param {Object|null} cfg 輸入 memberCheckOf 之結果;null(關閉)者回 false
+ * @returns {Boolean} 回傳是否合格
+ * @example
+ * memberEligibleOf({ score: { S: 20, ladder: 1, flags: { vetoed: false } } }, memberCheckOf()) // => true
+ */
+let memberEligibleOf = (n, cfg) => {
+    let sc = n &amp;&amp; n.score
+    if (!cfg || !sc || (sc.flags &amp;&amp; sc.flags.vetoed)) {
+        return false
+    }
+    let ld = sc.flags &amp;&amp; typeof sc.flags.trainLadder === 'number' ? sc.flags.trainLadder : sc.ladder
+    return typeof ld === 'number' &amp;&amp; ld >= cfg.minLadder
+}
+
+//activeOf, 正本之選集之每隻訊號數為全體隨機之 2 倍以上(內容可取近期活躍度版; 搜尋地圖之 contentOf 同一判準)
+let activeOf = (m) => !!(m &amp;&amp; m.sel &amp;&amp; m.null &amp;&amp; typeof m.sel.sigPerPick === 'number' &amp;&amp; typeof m.null.sigPerPick === 'number' &amp;&amp; m.null.sigPerPick > 0 &amp;&amp; m.sel.sigPerPick >= 2 * m.null.sigPerPick)
+
+/**
+ * 成品之讀數是否依近期活躍度版之診斷(nullRecentAct;快取之鍵須併該診斷之內容雜湊之判準)
+ *
+ * 讀數所依之值:內容之種類為 recent 者,全庫與各半之內容取診斷之輸出(ext.nullRecentAct.side.excess),診斷被改寫 ⇒ 既有之讀數過時;
+ * 種類為 builtin 者,內容取評估器內建之組成對照(nullSideAct.excess;其變動由評估器之指紋涵蓋)與各半之相位平均,不依該診斷。
+ * 而種類本身隨「正本有無該診斷之值」而定,故選集之每隻訊號數為全體隨機之 2 倍以上者(種類可為 recent)一律視為依該診斷(診斷改寫後由無值變有值、或反之,種類即改變);
+ * 未達 2 倍者種類恆為 builtin ⇒ 不依該診斷(診斷被改寫不使其重算)。
+ *
+ * @param {Object|null} n 輸入樹上之節點(讀 raw.metrics.sel、raw.metrics.null)
+ * @returns {Boolean} 回傳是否依該診斷
+ * @example
+ * memberRecentCapableOf({ raw: { metrics: { sel: { sigPerPick: 9 }, null: { sigPerPick: 3 } } } }) // => true
+ */
+let memberRecentCapableOf = (n) => activeOf(n &amp;&amp; isObj(n.raw) &amp;&amp; isObj(n.raw.metrics) ? n.raw.metrics : null)
+
+//kindOf, 內容之種類(與搜尋地圖之 contentOf 同一規則): 正本之選集之每隻訊號數為全體隨機之 2 倍以上且正本有近期活躍度版之值 ⇒ recent; 其餘 ⇒ builtin
+let kindOf = (m) => (activeOf(m) &amp;&amp; recentDiagOf(m) ? 'recent' : 'builtin')
+let builtinOf = (m) => (m &amp;&amp; isObj(m.nullSideAct) ? fin(m.nullSideAct.excess) : null)
+let recentOf = (m) => {
+    let s = recentDiagOf(m); return s ? s.excess : null
+}
+let medianOf = (xs) => {
+    let s = xs.slice().sort((a, b) => a - b)
+    let k = s.length
+    return k === 0 ? null : (k % 2 === 1 ? s[(k - 1) / 2] : (s[k / 2 - 1] + s[k / 2]) / 2)
+}
+
+/**
+ * 成員穩健性之讀數(純函數;各半庫之完整評估之結果 → 一列)
+ *
+ * @param {Object} canon 輸入正本之 metrics(讀 sel、null、nullSideAct、ext.nullRecentAct)
+ * @param {Array&lt;Object>} halves 輸入各半庫 [{ tag, n, metrics }](tag = 評估器之 member.tag;n = 半庫之策略數;metrics = 該次評估之 metrics)
+ * @param {Object} cfg 輸入 memberCheckOf 之結果(讀 salts、nullDraws)
+ * @returns {Object} 回傳 { K, salts, nullDraws, kind, full, applicable, halves: [{ tag, n, eqYrMean, excess, recent, retention }], retention: { median, min, n }, nNeg }
+ * @example
+ * let row = memberRowOf(canonMetrics, [{ tag: '0x1:0', n: 50, metrics: m0 }, { tag: '0x1:1', n: 50, metrics: m1 }], cfg)
+ */
+let memberRowOf = (canon, halves, cfg) => {
+    let kind = kindOf(canon)
+    let valOf = kind === 'recent' ? recentOf : builtinOf
+    let full = valOf(canon)
+    let applicable = full !== null &amp;&amp; full > 0
+    let hs = (Array.isArray(halves) ? halves : []).map((h) => {
+        let m = isObj(h) &amp;&amp; isObj(h.metrics) ? h.metrics : null
+        let v = valOf(m)
+        let eq = m &amp;&amp; isObj(m.op) &amp;&amp; isObj(m.op.eqYr) ? fin(m.op.eqYr.mean) : null
+        return { tag: isObj(h) &amp;&amp; typeof h.tag === 'string' ? h.tag : null, n: isObj(h) ? fin(h.n) : null, eqYrMean: eq, excess: builtinOf(m), recent: recentOf(m), retention: applicable &amp;&amp; v !== null ? v / full : null }
+    })
+    let rs = hs.map((h) => h.retention).filter((v) => v !== null)
+    return {
+        K: hs.length,
+        salts: cfg.salts.map(hex),
+        nullDraws: cfg.nullDraws,
+        kind,
+        full,
+        applicable,
+        halves: hs,
+        retention: { median: medianOf(rs), min: rs.length ? Math.min(...rs) : null, n: rs.length },
+        nNeg: hs.filter((h) => h.eqYrMean !== null &amp;&amp; h.eqYrMean &lt; 0).length,
+    }
+}
+
+let MEMBER_HINT_HEAD = '提示(成員依賴): '
+let isMemberHint = (s) => String(s).startsWith(MEMBER_HINT_HEAD)
+let f2 = (v) => (v === null || v === undefined ? '—' : v.toFixed(2))
+
+/**
+ * 迴圈檢查之「提示(成員依賴)」一條(純函數):命中者回字串,其餘(含保持率不適用、cfg 為 null)回 null
+ *
+ * @param {Object|null} row 輸入 memberRowOf 之結果
+ * @param {Object|null} cfg 輸入 memberCheckOf 之結果(讀 minRetention、maxNegHalves)
+ * @returns {String|null} 回傳提示字串或 null
+ * @example
+ * let s = memberHintOf(row, memberCheckOf())
+ */
+let memberHintOf = (row, cfg) => {
+    if (!cfg || !isObj(row) || row.applicable !== true || !isObj(row.retention)) {
+        return null
+    }
+    let md = row.retention.median
+    let hit = (md !== null &amp;&amp; md &lt; cfg.minRetention) || row.nNeg > cfg.maxNegHalves
+    return hit ? `${MEMBER_HINT_HEAD}隨機半庫 ${row.K} 個(${row.K / 2} 種切法 × 兩半)之內容保持率 中位 ${f2(md)}、最小 ${f2(row.retention.min)};相位平均為負之半庫 ${row.nNeg} 個 ⇒ 內容可能依賴特定成員;以子庫(--subset)核對其成立之範圍(不否決,由審計判定)` : null
+}
+
+/**
+ * 樹上之節點之現行之成員穩健性之讀數(raw.member 為物件、帶 row,且其所記之選集指紋 = 正本之選集指紋者;其餘回 null)
+ *
+ * @param {Object} n 輸入樹上之節點(讀 raw.member、raw.metrics.selHash)
+ * @returns {Object|null} 回傳 memberRowOf 之結果或 null
+ * @example
+ * let row = memberRowOfTree(node)
+ */
+let memberRowOfTree = (n) => {
+    let raw = n &amp;&amp; isObj(n.raw) ? n.raw : null
+    let mb = raw &amp;&amp; isObj(raw.member) ? raw.member : null
+    let sel = raw &amp;&amp; isObj(raw.metrics) &amp;&amp; typeof raw.metrics.selHash === 'string' ? raw.metrics.selHash : null
+    return mb &amp;&amp; isObj(mb.row) &amp;&amp; typeof mb.selHash === 'string' &amp;&amp; mb.selHash === sel ? mb.row : null
+}
+
+
+export { MEMBER_SALTS, MEMBER_DEFAULT, memberCheckOf, memberCfgOfSt, memberRecentCapableOf, memberSigOf, memberTagsOf, memberEligibleOf, memberRowOf, MEMBER_HINT_HEAD, isMemberHint, memberHintOf, memberRowOfTree }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 22 2026 10:55:37 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>
