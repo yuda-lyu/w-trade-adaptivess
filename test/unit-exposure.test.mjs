@@ -44,9 +44,17 @@ describe('側別曝險之判定(verifyExposure.mjs;規則 R-REC-48)', function (
         }
         assert.deepEqual(exposureCfgOf({ minShift: 0.25, flags: ['diagA'] }), { flags: ['diagA'], minShift: 0.25 })
         assert.deepEqual(exposureCfgOf({ minShift: 1, flags: [] }), { flags: [], minShift: 1 })
-        for (let bad of [0, -0.1, 1.5, NaN, Infinity, '0.2']) {
-            assert.equal(exposureCfgOf({ minShift: bad }).minShift, 0.1, String(bad))
+        //minShift 為 (0, 1] 之數值: 範圍外、布林、NaN、±Infinity、空字串與純空白、非數字字串(含十六進位)、BigInt、包裝物件 ⇒ 預設(不當 0 或 1、不拋錯)
+        for (let bad of [0, -0.1, 1.5, NaN, Infinity, -Infinity, true, false, null, '', '  ', 'abc', 'Infinity', 'NaN', '0x10', '0', '-0.1', '1.5', '0.2abc', 2n, [0.2], Object(0.2), {}]) {
+            assert.equal(exposureCfgOf({ minShift: bad }).minShift, 0.1, `${typeof bad}: ${String(bad)}`)
         }
+        //數字字串(跨套件規格〈輸入參數之檢測機制〉K1、K4、K7): 與數值得同一結果、且為數值(其後只用轉換值)
+        for (let v of ['0.2', ' 0.2 ', '2e-1', '+0.2', '.2']) {
+            assert.deepEqual(exposureCfgOf({ minShift: v }), exposureCfgOf({ minShift: 0.2 }), JSON.stringify(v))
+            assert.strictEqual(typeof exposureCfgOf({ minShift: v }).minShift, 'number', JSON.stringify(v))
+        }
+        assert.equal(exposureCfgOf({ minShift: '1' }).minShift, 1, '上界含')
+        assert.deepEqual(exposureCfgOf({ minShift: '0.25', flags: ['diagA'] }), { flags: ['diagA'], minShift: 0.25 })
         for (let bad of [[1], [''], ['  '], 'fixedState', { a: 1 }]) {
             assert.deepEqual(exposureCfgOf({ flags: bad }).flags, ['fixedState', 'placeboTiming'], JSON.stringify(bad))
         }
@@ -91,6 +99,10 @@ describe('側別曝險之判定(verifyExposure.mjs;規則 R-REC-48)', function (
         assert.equal(exposureOf(nodeOf({ a: 0.5, lr: 0.5999, ...sfUp }), cfg).hit, false)
         assert.equal(exposureOf(nodeOf({ a: 0.5, lr: 0.6, ...sfUp }), exposureCfgOf({ minShift: 0.2 })).hit, false)
         assert.equal(exposureOf(nodeOf({ a: 0.3, lr: 0.5, ...sfUp }), exposureCfgOf({ minShift: 0.2 })).hit, true)
+        //門檻為數字字串者與數值同(跨套件規格 K4: 檢測通過者轉為數值後才用於判定; 差恰為門檻者成立)
+        assert.equal(exposureOf(nodeOf({ a: 0.5, lr: 0.6, ...sfUp }), exposureCfgOf({ minShift: ' 0.2 ' })).hit, false)
+        assert.equal(exposureOf(nodeOf({ a: 0.3, lr: 0.5, ...sfUp }), exposureCfgOf({ minShift: ' 0.2 ' })).hit, true)
+        assert.equal(exposureOf(nodeOf({ a: 0.5, lr: 0.6, ...sfUp }), exposureCfgOf({ minShift: '0.1' })).hit, true)
         //flags 改設定: 只採計所列之名
         let fl = { a: 0.3, lr: 0.6, bt: 0.2, tr: 0.25, flags: { diagA: '某提示' } }
         assert.equal(exposureOf(nodeOf(fl), cfg).hit, false)
@@ -539,7 +551,8 @@ describe('放行之工具 tools/exposure.mjs(規則 R-REC-48)', function () {
         let s8 = (id) => id.slice(0, 8)
         let f2 = (v) => (v === null ? '—' : v.toFixed(2))
         let L = r.stdout.split('\n')
-        assert.equal(L[1], '候選(可信、未被否決、有挑選內容之值)2 個')
+        //候選之列(規則 R-REC-49 ⑤: 候選另須「有內容」, 並列不符者之個數; 本樹之兩者皆有內容)
+        assert.equal(L[1], '候選(可信、未被否決、有內容且有挑選內容之值)2 個;另有挑選內容之值而不符「有內容」者 0 個(不計入;主鍵視同無其值)')
         assert.equal(L[2], `第一名:排序鍵 ${s8(w.firstKey)} / 挑選內容 ${s8(w.firstContent)}(${w.sameFirst ? '相同' : '不同'})`)
         assert.equal(L[3], `兩種次序之相關:Spearman ρ ${f2(w.spearman)}、Kendall τ-b ${f2(w.kendall)}`)
         assert.equal(L[4], `前 1 名之交集 ${w.overlap} 個;其中側別曝險者:排序鍵之前 1 名 ${w.exposureKey} 個、挑選內容之前 1 名 ${w.exposureContent} 個`)

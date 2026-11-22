@@ -4,7 +4,8 @@ import { fileURLToPath } from 'url'
 import { roundName, armProposalLine } from '../arsi/records.mjs'
 import { TRIALS } from './briefTrials.mjs'
 import { libSizeText, periodLenText, cadenceOf, nullDrawsOf, phaseCountOf, phaseText, horizonsOf, dateOf } from './factsText.mjs'
-import { POSTFIT_HEAD, fillBacklogSecOf } from './fillPlan.mjs'
+import { POSTFIT_HEAD, fillBacklogSecOf, autoFillOf } from './fillPlan.mjs'
+import { memberCfgOfSt } from './verifyMember.mjs'
 
 
 //OUT_SATURATED_NOTE, 輪末摘要「配比」一列之附註: 可選之臂皆已試過、向外 0 條, 而做夢本輪宣告(或續存)「現行資訊範圍內已無可試之向外方向」(規則 R-REC-29)
@@ -122,7 +123,11 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
     let sc = st.score
     let guidesOn = !(st.rsi && st.rsi.guides === false)
     //輪末之附算一併處理待補算(規則 R-REC-41): 開啟者(上限 > 0 且未關閉附算)做夢任務書之擴建一節改寫「既有節點之值由輪末之附算一併補入」; 關閉者為改前之原文
-    let backlogOn = fillBacklogSecOf(st.rsi) > 0 && !(st.rsi && st.rsi.autoFill === false)
+    let autoFillOn = autoFillOf(st.rsi)
+    let backlogOn = fillBacklogSecOf(st.rsi) > 0 && autoFillOn
+    //成員穩健性(規則 R-REC-51): 於該輪執行者(settings.rsi.memberCheck 未關閉〔false、salts 為空陣列〕且附算開啟〔autoFill 非 false〕; 判定與領域層同一來源 memberCfgOfSt、autoFillOf)才於「可疑方向」第 5 項寫「迴圈之讀數」一句;
+    //  不執行者略去整句(含「無迴圈之讀數者以 --member 自行核對」之後半)⇒ 其做夢任務書與未加入本項時(1.0.43)全文逐位相同; 開啟而尚無合格之成品者照寫(所述為機制, 非本輪已有讀數)
+    let memberOn = autoFillOn && memberCfgOfSt(st) !== null
 
     //期間: 訓練期 = 策略庫之求解期(其資訊已濃縮在策略庫內); **回測期 = 挑選方法之評估期**(節點可直接回測、看完整數字);
     //  回測外(保留期)與其他標的之數字只供監控日後檢定, 任務書不提其數字與用法; 兩者之正負號只在「共同儲存區」之說明內提及(規則 R-BT-4、R-REC-30; 不寫其他標的之名稱)
@@ -461,7 +466,7 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
         L.push('  - **2. 以庫彙總量定側別或席次**(例:依整側之彙總損益或全庫之做多比例配兩側之席次):屬第 3 級,同上之要求(隨機半庫與分層子庫重算仍在才可稱挑選內容,否則只是候選)。')
         L.push('  - **3. 以落後之延續規則定側別**(依近期已實現損益之好壞決定側別或席次):須有兩種以上行情段(走勢方向不同之期間)之證據;只在單一行情段成立者列 `patterns`,不列 `worked`。')
         L.push('  - **4. 同一個底之連續疊加**(近數輪之方向與預先核對皆以同一成品或同一側別層為底):**探索類之方向與預先核對至少一半改用側別中性之底**(兩側席次固定之版本);做不到須在 `adjust` 寫理由。')
-        L.push('  - **5. 成員依賴**(隨機半庫之內容保持率之中位 < 0.5,或任一半庫之相位平均為負):不列 `worked`。**「顯著」不等於穩健**:各半庫內之 p 皆小只說明各半內有超額,不說明超額之量級仍在;判定看內容保持率之量級。')
+        L.push('  - **5. 成員依賴**(隨機半庫之內容保持率之中位 < 0.5,或任一半庫之相位平均為負):不列 `worked`。' + (memberOn ? '迴圈之讀數:合格之新成品於派做夢之前已以隨機半庫重跑 —— 命中者 §1 之「迴圈檢查」列「提示(成員依賴)」,其餘見節點文件之迴圈判讀之「成員穩健性」一列;無迴圈之讀數者以 `--member` 自行核對。' : '') + '**「顯著」不等於穩健**:各半庫內之 p 皆小只說明各半內有超額,不說明超額之量級仍在;判定看內容保持率之量級。')
         L.push('  - **6. 內容只在庫之某一類成員成立**(某止盈止損帶、某持倉長度、某求解批次、某因子家族):標示其範圍,不外推為一般之挑選內容。')
         L.push(`- \`guidance.directions\`:給下一輪之方向 ${x.maxDirections} 條以內,每條 \`{ type, newFamily, arms: [臂 id…], base: 節點 id 或 null, claim, rationale, expect }\`:`)
         L.push('  - `type`(任務類型;節點任務書依此給不同之做法要求):`explore`(探索:寫出新機制,或在起點上加臂、改進;節點可試 3 ~ 12 個變體,依機制先定交付版)或 `verify`(驗證:檢驗一項既有之主張 —— 消融、以不同定義重複、穩健性;**設計由你在 `expect` 定死**(交付版、對照版、評估次數、判定方式),節點不得另試變體;**須寫明交付清單之 `control.mjs` 是哪一檔**(方向所指之對照版,或起點成品之逐位複本並完整評估一次以核可重現 —— 計入評估次數;不得寫「起點不重跑」,那與節點之交付清單牴觸);方向指名之節點成品,迴圈會複製到節點工作夾之 `ref_<節點 id 前 8 碼>.mjs`,寫方向時以節點 id 指名即可;**判定只設兩帶:門檻即主張本身,達到 ⇒ 成立、未達 ⇒ 不成立,不設「部分成立」之中間帶**(下一輪回顧之判定無中間值可對應;要報之範圍與差另列為「另須報」))。`verify` 須另給 `claim`:一句話寫出要檢驗之主張(例:「某成品之回測期優勢來自其排序鍵之內容,而非只是排除了休眠之策略」)。單一成品之高分在被重複(換亂數種子、鄰近參數、以不同定義重做)之前只是候選:先排驗證,再疊加機制。')

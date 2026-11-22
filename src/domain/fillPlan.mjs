@@ -3,8 +3,9 @@
 //    postfit  求解窗後段之值(評估器之 --period postfit; 規則 R-EV-41): 所留 / 所捨之席、所留之席之組成對照之超額 / z / p、前段 / 後段之超額 / z / p;
 //             評估器另帶近期活躍度版之組成對照(afterFit.sideActRecent)者一併帶出(有則帶、無則不帶)
 //    ext      擴充診斷(共用工具區 metrics/)之補算(規則 R-REC-27): 只補所缺或已過時之診斷
+//    member   成員穩健性(規則 R-REC-51; 選配 —— planFill 之 member 未給者無此項, 計畫、鍵與補算檔之形與未加入本項時相同): 合格之成品以隨機半庫重跑之讀數(判定在 verifyMember.mjs)
 //  每個成品之附算 / 補算之結果另存於狀態根之 fill/<節點 id>.json(fillDocOf 之結果; agent 不可寫之處 —— 節點之工作夾內之同名檔一律不讀), 以「快取之鍵」判定是否過時:
-//    鍵 = { pick: 成品檔之內容雜湊, evaluator: 評估器之指紋, diag?: 該診斷檔之內容雜湊(只 ext)} —— 成品重做、評估器改版、診斷改寫 ⇒ 鍵不同 ⇒ 重算
+//    鍵 = { pick: 成品檔之內容雜湊, evaluator: 評估器之指紋, diag?: 該診斷檔之內容雜湊(ext; member 之讀數依近期活躍度版之診斷者另帶 nullRecentAct 之雜湊), member?: 鹽與虛無抽數(只 member; verifyMember.mjs 之 memberSigOf)} —— 成品重做、評估器改版、診斷改寫、鹽或抽數改變 ⇒ 鍵不同 ⇒ 重算
 //  擴充診斷之正本值(完整評估所得之 raw.metrics.ext[名])之是否過時以「診斷之登錄」判定: 登錄 = { <名>: { hash, since } }(since = 迴圈首次見到此雜湊之時刻;
 //    第一次建立登錄時 since 為 null = 既有之正本值皆視為現行); 正本之評估時刻早於 since 者視為過時(該診斷於其後被改寫)
 //  呼叫端(迴圈之輪末、補算工具)依 planFill 之 tasks 執行評估(以參數注入), 以 fillDocOf 產生補算檔之內容、以 postfitRowOf / postfitLineOf 產生共同儲存區與節點文件之值
@@ -29,6 +30,12 @@ let FILL_DIR = 'fill'
  * @type {String}
  */
 let POSTFIT_HEAD = '求解窗後段(佐證;非正本):'
+/**
+ * 節點文件之迴圈判讀(harness.notes)中, 成員穩健性一列之開頭字樣(規則 R-REC-51;重算時以此取代舊列)
+ *
+ * @type {String}
+ */
+let MEMBER_HEAD = '成員穩健性(佐證;非正本):'
 /**
  * 不入待重試之失敗之分類:config(參數或設定不合)、capital(持倉超過研究用本金)、integrity(內建物件被改)、reverify(選集指紋與正本不同;屬重驗)—— 重跑結果相同,重試無益
  *
@@ -58,13 +65,24 @@ let fillBacklogSecOf = (rsiCfg) => {
     return iseint(v) && Number(v) >= 0 ? Number(v) : FILL_BACKLOG_SEC
 }
 
+//autoFillOf, 輪末之附算(settings.rsi.autoFill)是否開啟(單一來源: 領域層之輪末鉤子與做夢任務書共用): 只有確切為 false 者關閉; 未給或其他值皆開啟
+/**
+ * 輪末之附算是否開啟(settings.rsi.autoFill 確切為 false 者關閉)
+ *
+ * @param {Object|null} rsiCfg 輸入設定之 rsi 物件(讀取 autoFill)
+ * @returns {Boolean} 回傳是否開啟
+ * @example
+ * autoFillOf({ autoFill: false }) // => false
+ */
+let autoFillOf = (rsiCfg) => !(rsiCfg && rsiCfg.autoFill === false)
+
 let isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
 let isStr = (v) => typeof v === 'string' && v.length > 0
 let fin = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
-//sameKey, 兩個快取之鍵是否相同(比 pick、evaluator、diag、nulls 四鍵; 缺鍵視同 null; nulls = 擴充診斷之補算所用之虛無抽數〔未縮減者無此鍵〕)
+//sameKey, 兩個快取之鍵是否相同(比 pick、evaluator、diag、nulls、member 五鍵; 缺鍵視同 null; nulls = 擴充診斷之補算所用之虛無抽數〔未縮減者無此鍵〕; member = 成員穩健性之鹽與抽數〔只 member 之鍵有〕)
 /**
- * 判定兩個快取之鍵是否相同(比對 pick、evaluator、diag、nulls 四鍵;缺鍵視同 null)
+ * 判定兩個快取之鍵是否相同(比對 pick、evaluator、diag、nulls、member 五鍵;缺鍵視同 null)
  *
  * @param {Object} a 輸入快取之鍵
  * @param {Object} b 輸入快取之鍵
@@ -77,16 +95,29 @@ let sameKey = (a, b) => {
         return false
     }
     let v = (o, k) => (o[k] === undefined ? null : o[k])
-    return v(a, 'pick') === v(b, 'pick') && v(a, 'evaluator') === v(b, 'evaluator') && v(a, 'diag') === v(b, 'diag') && v(a, 'nulls') === v(b, 'nulls')
+    return v(a, 'pick') === v(b, 'pick') && v(a, 'evaluator') === v(b, 'evaluator') && v(a, 'diag') === v(b, 'diag') && v(a, 'nulls') === v(b, 'nulls') && v(a, 'member') === v(b, 'member')
 }
 
-//fillSigSrcOf, 一個任務之待算之鍵之正規字串(規則 R-REC-41; 呼叫端以之取雜湊為「不重試之失敗之紀錄」之 sig): 求解窗後段之鍵與各診斷之鍵(依名排序; 各鍵取 pick、evaluator、diag、nulls, 缺鍵視同 null)
-//  only(選配)= { postfit: 布林, ext: [名] }: 只取其中之項目(記入時只取該次失敗之項目 ⇒ 其後之計畫只剩這些項目而鍵相同者, 正規字串相同)
 /**
- * 一個任務之待算之鍵之正規字串(求解窗後段之鍵與各診斷之鍵;同一組項目、同一組鍵者相同)
+ * 成員穩健性之快取之鍵(計畫與節點文件之補回共用之單一來源)
  *
- * @param {Object} task 輸入 planFill 之 tasks 之一項 { postfit, ext: [名], keys: { postfit, ext: { <名>: 鍵 } } }
- * @param {Object|null} [only=null] 輸入只取之項目 { postfit: Boolean, ext: [名] },預設null(全部項目)
+ * 鍵 = { pick, evaluator, member: 鹽與抽數 }; 讀數依近期活躍度版之診斷者(dep)另帶 diag(該診斷檔之內容雜湊;診斷檔不存在者 null),其餘不帶 diag。
+ *
+ * @param {Object} o 輸入 { pick(成品檔之雜湊), evaluator(評估器之指紋), sig(verifyMember.mjs 之 memberSigOf), dep(是否依診斷), diag(診斷之雜湊或 null) }
+ * @returns {Object} 回傳鍵
+ * @example
+ * memberKeyOf({ pick: 'p', evaluator: 'e', sig: '0x1|n32', dep: true, diag: 'h' }) // => { pick: 'p', evaluator: 'e', member: '0x1|n32', diag: 'h' }
+ */
+let memberKeyOf = ({ pick, evaluator, sig, dep = false, diag = null }) => ({ pick, evaluator, member: sig, ...(dep ? { diag: diag === undefined ? null : diag } : {}) })
+
+//fillSigSrcOf, 一個任務之待算之鍵之正規字串(規則 R-REC-41; 呼叫端以之取雜湊為「不重試之失敗之紀錄」之 sig): 求解窗後段之鍵與各診斷之鍵(依名排序; 各鍵取 pick、evaluator、diag、nulls, 缺鍵視同 null)
+//  only(選配)= { postfit: 布林, ext: [名], member?: 布林 }: 只取其中之項目(記入時只取該次失敗之項目 ⇒ 其後之計畫只剩這些項目而鍵相同者, 正規字串相同)
+//  成員穩健性之鍵(keys.member; 規則 R-REC-51)只在任務帶此鍵、且 only 未給或 only.member === true 時另列 member(取 pick、evaluator、member; 鍵帶 diag〔讀數依近期活躍度版之診斷者〕者另接其值); 其餘之正規字串與未加入本項時逐字相同
+/**
+ * 一個任務之待算之鍵之正規字串(求解窗後段之鍵、各診斷之鍵與成員穩健性之鍵;同一組項目、同一組鍵者相同)
+ *
+ * @param {Object} task 輸入 planFill 之 tasks 之一項 { postfit, ext: [名], keys: { postfit, ext: { <名>: 鍵 }, member? } }
+ * @param {Object|null} [only=null] 輸入只取之項目 { postfit: Boolean, ext: [名], member?: Boolean },預設null(全部項目)
  * @returns {String} 回傳正規字串
  * @example
  * fillSigSrcOf({ postfit: true, ext: [], keys: { postfit: { pick: 'p', evaluator: 'e' }, ext: {} } }) // => '{"postfit":["p","e",null,null],"ext":[]}'
@@ -97,7 +128,8 @@ let fillSigSrcOf = (task, only = null) => {
     let ex = isObj(k.ext) ? k.ext : {}
     let names = Object.keys(ex).filter((nm) => !isObj(only) || (Array.isArray(only.ext) && only.ext.includes(nm))).sort()
     let pf = !isObj(only) || only.postfit === true ? kv(k.postfit) : null
-    return JSON.stringify({ postfit: pf, ext: names.map((nm) => [nm, kv(ex[nm])]) })
+    let mb = isObj(k.member) && (!isObj(only) || only.member === true) ? [...['pick', 'evaluator', 'member'].map((x) => (k.member[x] === undefined ? null : k.member[x])), ...(k.member.diag === undefined ? [] : [k.member.diag])] : null
+    return JSON.stringify({ postfit: pf, ext: names.map((nm) => [nm, kv(ex[nm])]), ...(mb ? { member: mb } : {}) })
 }
 
 //registryOf, 診斷之登錄之更新: 雜湊相同者沿用其 since; 新增或改寫者 since = now; 前次無登錄(null)⇒ 全部 since 為 null(既有之正本值皆視為現行); 已移除之診斷不留
@@ -154,7 +186,9 @@ let extCurrent = (n, name, key, reg) => {
  * @param {Boolean} [opt.force=false] 輸入是否不論是否現行皆重算(只作用於 targets 內之成品)
  * @param {Object|null} [opt.forced=null] 輸入前次強制重算而失敗、須續為強制重算者 { <節點 id>: { postfit?: true, ext?: [診斷名] } }(狀態檔之待重試所記;只作用於 targets 內之成品與本次所計畫之項目:所列之項目不論是否現行皆重算,直至成功),預設null
  * @param {Integer|null} [opt.nullDraws=null] 輸入擴充診斷之補算所用之虛無抽數(縮減者;正整數),預設null(未縮減)—— 併入擴充診斷之鍵(nulls),與所存之鍵不同者須補
- * @returns {Object} 回傳 { tasks: [{ nodeId, postfit, ext: [名], keys: { postfit, ext: { <名>: 鍵 } }, [forced: { postfit, ext: [名] }] }], backlog: { postfit: [id], ext: { <名>: [id] } }, registry, nCurrent }(forced = 該任務內因強制(force 或 forced)而計畫之項目;無者不帶此鍵)
+ * @param {Object|null} [opt.member=null] 輸入成員穩健性之計畫 { sig(鹽與抽數;verifyMember.mjs 之 memberSigOf), eligible: [合格之成品 id], recent?: [讀數依近期活躍度版之診斷之成品 id(eligible 之子集;verifyMember.mjs 之 memberRecentCapableOf)], diagName?: 該診斷之名(給了 recent 者必給;diagRead.mjs 之 RECENT_DIAG) }(規則 R-REC-51),預設null(不計畫;任務、待補算與鍵之形與未加入本項時相同)—— 合格之成品於補算檔無同鍵之值、或所記之正本之選集指紋與現況不同者須算;
+ *   recent 所列者之鍵另帶該診斷之內容雜湊(diag;診斷被改寫 ⇒ 鍵不同 ⇒ 重算;診斷檔不存在者為 null),且該成品之正本之診斷值非現行而本次不補該診斷者延後(不計畫、列入 backlog.member;全庫之值取正本、各半之值取現行之診斷,兩者不同版則讀數無意義 —— 與該診斷之補算同一個任務內才算,先補診斷、後算讀數);未給 recent 者鍵不帶 diag
+ * @returns {Object} 回傳 { tasks: [{ nodeId, postfit, ext: [名], keys: { postfit, ext: { <名>: 鍵 }, [member: 鍵] }, [member: true], [forced: { postfit, ext: [名], [member: true] }] }], backlog: { postfit: [id], ext: { <名>: [id] }, [member: [id]] }, registry, nCurrent }(forced = 該任務內因強制(force 或 forced)而計畫之項目;無者不帶此鍵;成員穩健性之項目與待補算只在有者才帶)
  * @example
  * let p = planFill({ nodes: [{ id: 'a1', pickHash: 'p', evaluatedAt: null, extNames: [], fill: null }], evaluator: 'e', now: '2026-01-01T00:00:00Z' })
  * p.tasks[0].postfit // => true
@@ -210,11 +244,19 @@ let planFill = (opt) => {
     if (nd !== null && !(Number.isInteger(nd) && nd > 0)) {
         throw new Error('invalid opt.nullDraws: must be a positive integer or null')
     }
+    let mopt = opt.member === undefined || opt.member === null ? null : opt.member
+    if (mopt !== null && !(isObj(mopt) && isStr(mopt.sig) && Array.isArray(mopt.eligible) && (mopt.recent === undefined || (Array.isArray(mopt.recent) && isStr(mopt.diagName))))) {
+        throw new Error('invalid opt.member: must be null or { sig, eligible }')
+    }
+    let mElig = mopt ? new Set(mopt.eligible) : null
+    let mRecent = mopt && mopt.recent ? new Set(mopt.recent) : null
+    let mDiag = mRecent ? mopt.diagName : null
     let registry = registryOf(opt.registry === undefined ? null : opt.registry, diags, opt.now)
     let hashOf = Object.fromEntries(diags.map((x) => [x.name, x.hash]))
     let tset = targets === null ? null : new Set(targets)
     let tasks = []
     let backlog = { postfit: [], ext: Object.fromEntries(names.map((nm) => [nm, []])) }
+    let blMember = []
     let nCurrent = 0
     for (let n of [...nodes].sort((p, q) => (p.id < q.id ? -1 : p.id > q.id ? 1 : 0))) {
         if (!isObj(n) || !isStr(n.id) || !isStr(n.pickHash)) {
@@ -243,13 +285,31 @@ let planFill = (opt) => {
                 }
             }
         }
-        if (!needPf && !needExt.length) {
-            nCurrent++
+        //成員穩健性(規則 R-REC-51; opt.member 給了才計畫): 合格之成品於補算檔無同鍵之值、或所記之正本之選集指紋與現況不同者須算; 強制(force、forced.member)者不論是否現行
+        //  讀數依近期活躍度版之診斷者(mRecent; verifyMember.mjs 之 memberRecentCapableOf): 鍵另帶該診斷之內容雜湊(診斷檔不存在者 null)—— 診斷被改寫 ⇒ 鍵不同 ⇒ 重算;
+        //  該成品之正本之診斷值非現行(extCurrent 為否)而本次不補該診斷(names 不含)者延後: 全庫之值取正本、各半之值取現行之診斷, 兩者不同版則保持率無意義(且鍵已是新雜湊, 其後不再重算)⇒ 不計畫、列入待補算(blMember),
+        //  待與該診斷之補算同一個任務(names 含; 先補診斷、後算讀數)才算; 診斷檔不存在者無「現行」可言(種類恆取內建)⇒ 不延後
+        let dep = !!(mElig && mElig.has(n.id) && mRecent && mRecent.has(n.id))
+        let dh = dep ? (hashOf[mDiag] === undefined ? null : hashOf[mDiag]) : null
+        let kM = mElig && mElig.has(n.id) ? memberKeyOf({ pick: n.pickHash, evaluator: opt.evaluator, sig: mopt.sig, dep, diag: dh }) : null
+        let fM = kM && isObj(n.fill) && isObj(n.fill.member) ? n.fill.member : null
+        let foM = !!(fo && fo.member === true)
+        let needM0 = !!kM && (fz || foM || !(fM && sameKey(fM.key, kM) && isObj(fM.row) && canonOk(fM, isStr(n.selHash) ? n.selHash : null)))
+        let deferM = needM0 && dep && dh !== null && !names.includes(mDiag) && !extCurrent(n, mDiag, { pick: n.pickHash, evaluator: opt.evaluator, diag: dh, ...(nd !== null ? { nulls: nd } : {}) }, registry)
+        let needM = needM0 && !deferM
+        if (needM0 && (deferM || !inT)) {
+            blMember.push(n.id)
+        }
+        if (!needPf && !needExt.length && !needM) {
+            if (!needM0) {
+                nCurrent++
+            }
             continue
         }
         if (inT) {
             let forcedPf = needPf && (fz || foPf)
-            tasks.push({ nodeId: n.id, postfit: needPf, ext: needExt, keys: { postfit: needPf ? kPf : null, ext: kExt }, ...(forcedPf || forcedExt.length ? { forced: { postfit: forcedPf, ext: forcedExt } } : {}) })
+            let forcedM = needM && (fz || foM)
+            tasks.push({ nodeId: n.id, postfit: needPf, ext: needExt, keys: { postfit: needPf ? kPf : null, ext: kExt, ...(needM ? { member: kM } : {}) }, ...(needM ? { member: true } : {}), ...(forcedPf || forcedExt.length || forcedM ? { forced: { postfit: forcedPf, ext: forcedExt, ...(forcedM ? { member: true } : {}) } } : {}) })
         }
         else {
             if (needPf) {
@@ -260,7 +320,7 @@ let planFill = (opt) => {
             }
         }
     }
-    return { tasks, backlog, registry, nCurrent }
+    return { tasks, backlog: blMember.length ? { ...backlog, member: blMember } : backlog, registry, nCurrent }
 }
 
 //pick3, 一組對照之 { excess, z, p }(缺者 null)
@@ -330,11 +390,12 @@ let postfitLineOf = (row) => {
  * @param {String} opt.at 輸入此刻(ISO 字串)
  * @param {Object} [opt.postfit] 輸入 { key, row }
  * @param {Object} [opt.ext] 輸入 { <名>: { key, value } }
- * @returns {Object} 回傳 { schema, nodeId, postfit: { key, at, row } | null, ext: { <名>: { key, at, value } } }(ext 依名排序)
+ * @param {Object} [opt.member] 輸入成員穩健性之 { key, row, canon }(規則 R-REC-51)
+ * @returns {Object} 回傳 { schema, nodeId, postfit: { key, at, row } | null, ext: { <名>: { key, at, value } }, [member: { key, at, row, canon }] }(ext 依名排序;member 只在本次或前次有其值時才帶)
  * @example
  * fillDocOf(null, { nodeId: 'a1', at: '2026-01-01T00:00:00Z', postfit: { key, row } })
  */
-let fillDocOf = (prev, { nodeId, at, postfit = undefined, ext = undefined }) => {
+let fillDocOf = (prev, { nodeId, at, postfit = undefined, ext = undefined, member = undefined }) => {
     let p = isObj(prev) && prev.schema === FILL_SCHEMA && prev.nodeId === nodeId ? prev : null
     let ex = { ...(p && isObj(p.ext) ? p.ext : {}) }
     if (isObj(ext)) {
@@ -348,6 +409,8 @@ let fillDocOf = (prev, { nodeId, at, postfit = undefined, ext = undefined }) => 
         nodeId,
         postfit: isObj(postfit) ? { key: postfit.key, at, row: postfit.row, ...(isObj(postfit.canon) ? { canon: postfit.canon } : {}) } : (p && isObj(p.postfit) ? p.postfit : null),
         ext: exSorted,
+        //成員穩健性(規則 R-REC-51): 本次有其值者取代, 否則沿用前次之值; 兩者皆無者不帶此鍵(補算檔與未加入本項時逐位相同)
+        ...(isObj(member) ? { member: { key: member.key, at, row: member.row, ...(isObj(member.canon) ? { canon: member.canon } : {}) } } : (p && isObj(p.member) ? { member: p.member } : {})),
     }
 }
 
@@ -390,6 +453,57 @@ let postfitInfoOf = (fill, key, canonSel = null) => {
     return { ...f.row, at: isStr(f.at) ? f.at : null, current: f.key.evaluator === key.evaluator && canonOk(f, canonSel) }
 }
 
+//memberOfFill, 補算檔 → 現行之成員穩健性之值(規則 R-REC-51; 鍵〔成品、評估器、鹽與抽數〕與現況相同、且所記之正本之選集指紋與現況相容者; 否則 null)
+/**
+ * 由補算檔取出現行之成員穩健性之值(鍵與現況相同、且所記之正本之選集指紋與現況相容者才回傳)
+ *
+ * @param {Object|null} fill 輸入補算檔之內容
+ * @param {Object} key 輸入現況之鍵 { pick, evaluator, member }
+ * @param {String|null} [canonSel=null] 輸入現況之正本之選集指紋,預設null(不核)
+ * @returns {Object|null} 回傳 { at, row, canon } 或 null
+ * @example
+ * memberOfFill(fill, { pick: 'p', evaluator: 'e', member: '0x1,0x2|n32' })
+ */
+let memberOfFill = (fill, key, canonSel = null) => {
+    let f = isObj(fill) && fill.schema === FILL_SCHEMA && isObj(fill.member) ? fill.member : null
+    return f && sameKey(f.key, key) && isObj(f.row) && canonOk(f, canonSel) ? { at: f.at, row: f.row, canon: isObj(f.canon) ? f.canon : null } : null
+}
+
+//memberInfoOf, 補算檔 → 共同儲存區之 member 欄(規則 R-REC-51; 同 postfitInfoOf: 成品之雜湊相符者取其值另帶 at 與 current〔評估器之指紋相符、且所記之正本之選集指紋與現況相容〕; 其餘 null)
+/**
+ * 由補算檔取出共同儲存區之 member 欄(成品之雜湊相符者才有;另帶 at 與 current)
+ *
+ * @param {Object|null} fill 輸入補算檔之內容
+ * @param {Object} key 輸入現況之鍵 { pick, evaluator }
+ * @param {String|null} [canonSel=null] 輸入現況之正本之選集指紋,預設null(不核)
+ * @returns {Object|null} 回傳 { ...row, at, current } 或 null
+ * @example
+ * memberInfoOf(fill, { pick: 'p', evaluator: 'e' })
+ */
+let memberInfoOf = (fill, key, canonSel = null) => {
+    let f = isObj(fill) && fill.schema === FILL_SCHEMA && isObj(fill.member) ? fill.member : null
+    if (!f || !isObj(f.key) || !isObj(f.row) || !isObj(key) || f.key.pick !== key.pick) {
+        return null
+    }
+    return { ...f.row, at: isStr(f.at) ? f.at : null, current: f.key.evaluator === key.evaluator && canonOk(f, canonSel) }
+}
+
+//memberLineOf, 成員穩健性之值 → 節點文件之迴圈判讀之一列(以 MEMBER_HEAD 開頭; 規則 R-REC-51; 不列門檻之值)
+/**
+ * 成員穩健性之值轉為節點文件之迴圈判讀之一列
+ *
+ * @param {Object} row 輸入 verifyMember.mjs 之 memberRowOf 之結果
+ * @returns {String} 回傳以 MEMBER_HEAD 開頭之一列
+ * @example
+ * memberLineOf(row) // => '成員穩健性(佐證;非正本):隨機半庫 6 個(3 種切法 × 兩半)之內容保持率 中位 0.82、最小 0.41(…'
+ */
+let memberLineOf = (row) => {
+    let hs = Array.isArray(row.halves) ? row.halves : []
+    let ret = row.applicable === true && isObj(row.retention) ? `中位 ${f2(fin(row.retention.median))}、最小 ${f2(fin(row.retention.min))}` : '不適用(全庫之內容 ≤ 0 或無值)'
+    let f1 = (v) => (fin(v) === null ? '—' : v.toFixed(1))
+    return `${MEMBER_HEAD}隨機半庫 ${row.K} 個(${row.K / 2} 種切法 × 兩半)之內容保持率 ${ret}(${row.kind === 'recent' ? '近期活躍度版' : '內建組成對照'}之超額;全庫之內容 ${sgn(fin(row.full))});各半之相位平均 ${hs.map((h) => f1(h.eqYrMean)).join(' / ') || '—'}(為負者 ${row.nNeg} 個);不入 S、階梯與看板之排序`
+}
+
 //fillLinesOf, 一次附算 / 補算之結果 → 一頁摘要之列(輪末)與命令列之輸出
 /**
  * 一次附算或補算之結果轉為摘要之列
@@ -397,13 +511,21 @@ let postfitInfoOf = (fill, key, canonSel = null) => {
  * @param {Object} r 輸入 { tasks(計畫之 tasks), results: [{ nodeId, postfit: 'ok' | 'failed' | null, ext: { ok: [名], failed: [名] }, error, kind }], backlog, sec, skipped: [字串], source('round' = 輪末之附算;其餘 = 命令列之補算), retryInfo(執行後之待重試 [{ id, n, last, source, [force] }]; 輪末之摘要據以列「來源為命令列之待重試」之個數), [backlogRun](輪末一併處理待補算者 { n: 本次處理之成品數, rest: 尚餘之成品數, capSec: 總時長之上限, [skipped]: 前次失敗而不重試、原因未變而未取之成品數(有者才帶), [failed]: 本次取用之待補算中失敗者之個數(有者才帶) }; 規則 R-REC-41) }
  * @param {Object} [opt={}] 輸入設定物件
  * @param {String} [opt.cmd='node g_rsi.mjs --mode fill'] 輸入補齊待補算之指令(列於待補算之後)
- * @returns {Array<String>} 回傳摘要之列(0 ~ 4 列;無待算亦無待補算者為空陣列)
+ * @param {String|null} [opt.stage=null] 輸入 'preDream' = 輪末之派做夢之前之一次(規則 R-REC-51:本輪之節點之求解窗後段與成員穩健性;首列標「派做夢之前」、不列擴充診斷之項,待補算與來源為命令列之待重試之列不列 —— 由做夢之後之一次列出),預設null
+ * @param {String|null} [opt.retryAt=null] 輸入失敗者之重試時機之字樣(括號內)之取代,預設null(依 source:輪末為「下一次輪末重試」,其餘為「再執行補算工具時重試」);
+ *   輪末之派做夢之前之一次而做夢未交付者,其失敗未記入待重試(補做夢時依計畫重算),領域層以此改為與處置相符之字樣(規則 R-REC-51)
+ * @returns {Array<String>} 回傳摘要之列(0 ~ 5 列;無待算亦無待補算者為空陣列)
  * @example
  * fillLinesOf({ tasks: [], results: [], backlog: { postfit: [], ext: {} }, sec: 0 }) // => []
  */
-let fillLinesOf = (r, { cmd = 'node g_rsi.mjs --mode fill' } = {}) => {
+let fillLinesOf = (r, { cmd = 'node g_rsi.mjs --mode fill', stage = null, retryAt = null } = {}) => {
     let out = []
-    let res = Array.isArray(r.results) ? r.results : []
+    let all = Array.isArray(r.results) ? r.results : []
+    let pre = stage === 'preDream'
+    let retryText = typeof retryAt === 'string' && retryAt !== '' ? retryAt : (r.source === 'round' ? '下一次輪末重試' : '再執行補算工具時重試')
+    //成員穩健性(規則 R-REC-51): 結果帶 member 者另列一列; 只有成員穩健性之項目之成品不計入首列(未計畫成員穩健性者之結果不帶 member ⇒ 首列與未加入本項時逐字相同)
+    let extN = (x) => (x.ext && Array.isArray(x.ext.ok) ? x.ext.ok.length : 0) + (x.ext && Array.isArray(x.ext.failed) ? x.ext.failed.length : 0)
+    let res = all.filter((x) => !(x.member !== undefined && x.postfit === null && extN(x) === 0))
     if (res.length) {
         let pfOk = res.filter((x) => x.postfit === 'ok').length
         let pfBad = res.filter((x) => x.postfit === 'failed').length
@@ -411,7 +533,18 @@ let fillLinesOf = (r, { cmd = 'node g_rsi.mjs --mode fill' } = {}) => {
         let exBad = res.reduce((s, x) => s + (x.ext && Array.isArray(x.ext.failed) ? x.ext.failed.length : 0), 0)
         //重試之列只列暫時性之失敗(重跑結果相同之失敗與須重驗者不入待重試, 呼叫端另列); 重試之時機依本次之來源: 輪末之失敗 ⇒ 下一次輪末, 命令列之失敗 ⇒ 再執行補算工具時
         let bad = res.filter((x) => (x.postfit === 'failed' || (x.ext && Array.isArray(x.ext.failed) && x.ext.failed.length)) && !FILL_NO_RETRY_KINDS.includes(x.kind))
-        out.push(`附算(求解窗後段與擴充診斷;佐證,不改 S):${res.length} 個成品;求解窗後段 成功 ${pfOk}${pfBad ? `、**失敗 ${pfBad}**` : ''};擴充診斷 補入 ${exOk} 項${exBad ? `、**失敗 ${exBad} 項**` : ''};${Math.round(r.sec || 0)} 秒${bad.length ? `;失敗者(${r.source === 'round' ? '下一次輪末重試' : '再執行補算工具時重試'}):${bad.map((x) => `${String(x.nodeId).slice(0, 8)}${x.error ? `(${String(x.error).split('\n')[0].slice(0, 80)})` : ''}`).join('、').slice(0, 300)}` : ''}`)
+        out.push(`${pre ? '附算(派做夢之前;求解窗後段;佐證,不改 S)' : '附算(求解窗後段與擴充診斷;佐證,不改 S)'}:${res.length} 個成品;求解窗後段 成功 ${pfOk}${pfBad ? `、**失敗 ${pfBad}**` : ''}${pre && !exOk && !exBad ? '' : `;擴充診斷 補入 ${exOk} 項${exBad ? `、**失敗 ${exBad} 項**` : ''}`};${Math.round(r.sec || 0)} 秒${bad.length ? `;失敗者(${retryText}):${bad.map((x) => `${String(x.nodeId).slice(0, 8)}${x.error ? `(${String(x.error).split('\n')[0].slice(0, 80)})` : ''}`).join('、').slice(0, 300)}` : ''}`)
+    }
+    let mres = all.filter((x) => x.member === 'ok' || x.member === 'failed')
+    if (mres.length) {
+        let mOk = mres.filter((x) => x.member === 'ok').length
+        let mBad = mres.length - mOk
+        let nHit = mres.filter((x) => x.member === 'ok' && x.memberHit === true).length
+        let badM = mres.filter((x) => x.member === 'failed' && !FILL_NO_RETRY_KINDS.includes(x.kind))
+        out.push(`附算(${pre ? '派做夢之前;' : ''}成員穩健性;佐證,不改 S):${mres.length} 個成品;成功 ${mOk}${mBad ? `、**失敗 ${mBad}**` : ''};其中命中「提示(成員依賴)」${nHit} 個${res.length ? '' : `;${Math.round(r.sec || 0)} 秒`}${badM.length ? `;失敗者(${retryText}):${badM.map((x) => `${String(x.nodeId).slice(0, 8)}${x.error ? `(${String(x.error).split('\n')[0].slice(0, 80)})` : ''}`).join('、').slice(0, 300)}` : ''}`)
+    }
+    if (pre) {
+        return out
     }
     //輪末之附算一併處理待補算(規則 R-REC-41; 有 backlogRun 才列 = 本次有待補算且上限 > 0): 本次處理之成品數(含於上列之個數)與尚餘之個數; 尚餘者之各項照列於下一列之「待補算之成品」
     //  skipped(選配)= 前次失敗而不重試、原因未變而未取之成品數: 有者另註, 且不寫「已補齊」(其仍待算, 照列於「待補算之成品」); 無者不帶此鍵、該列與無此欄時逐字相同
@@ -425,8 +558,10 @@ let fillLinesOf = (r, { cmd = 'node g_rsi.mjs --mode fill' } = {}) => {
     let bl = r.backlog || { postfit: [], ext: {} }
     let nPf = Array.isArray(bl.postfit) ? bl.postfit.length : 0
     let exParts = Object.keys(bl.ext || {}).filter((nm) => bl.ext[nm].length).map((nm) => `${nm} ${bl.ext[nm].length} 個`)
-    if (nPf || exParts.length) {
-        out.push(`待補算之成品(不在本次之範圍;以 \`${cmd}\` 補齊,可中斷續跑):求解窗後段 ${nPf} 個${exParts.length ? `;擴充診斷 ${exParts.join('、')}` : ''}`)
+    //成員穩健性之待補算(規則 R-REC-51; 輪末之一併處理待補算不取, 只列)
+    let nMem = Array.isArray(bl.member) ? bl.member.length : 0
+    if (nPf || exParts.length || nMem) {
+        out.push(`待補算之成品(不在本次之範圍;以 \`${cmd}\` 補齊,可中斷續跑):求解窗後段 ${nPf} 個${exParts.length ? `;擴充診斷 ${exParts.join('、')}` : ''}${nMem ? `;成員穩健性 ${nMem} 個` : ''}`)
     }
     //輪末(source 'round')另列「來源為命令列之待重試」之個數: 輪末只自動重試來源為輪末者, 命令列之補算所留者須再執行補算工具才會重試(其中帶強制者重試時仍為強制重算); 升版前之待重試紀錄(無來源欄)一律視為命令列
     if (r.source === 'round' && Array.isArray(r.retryInfo)) {
@@ -438,4 +573,4 @@ let fillLinesOf = (r, { cmd = 'node g_rsi.mjs --mode fill' } = {}) => {
     return out
 }
 
-export { planFill, registryOf, sameKey, fillSigSrcOf, postfitRowOf, postfitLineOf, fillDocOf, postfitOfFill, postfitInfoOf, fillLinesOf, fillBacklogSecOf, FILL_SCHEMA, FILL_DIR, POSTFIT_HEAD, FILL_NO_RETRY_KINDS, FILL_BACKLOG_SEC }
+export { planFill, registryOf, sameKey, fillSigSrcOf, postfitRowOf, postfitLineOf, fillDocOf, postfitOfFill, postfitInfoOf, memberOfFill, memberInfoOf, memberLineOf, memberKeyOf, fillLinesOf, fillBacklogSecOf, autoFillOf, FILL_SCHEMA, FILL_DIR, POSTFIT_HEAD, MEMBER_HEAD, FILL_NO_RETRY_KINDS, FILL_BACKLOG_SEC }

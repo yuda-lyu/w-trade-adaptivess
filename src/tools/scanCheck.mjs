@@ -11,6 +11,7 @@ import { evalHintsOfDocs, isEvalHint } from '../domain/verifyEvalHints.mjs'
 //  planRule 與寫回時相同: 只適用於任務書已有「先寫規劃再評估」/「交付版先定再跑」之節點
 //  迴圈檢查之兩條機械提示(規則 R-REC-43 單峰交付、R-REC-44 選集與他節點相同)與寫回時同一判定(evalHintsOfDocs; 以全部節點文件與其評估紀錄求得), 列於掃描項之後一併對照
 //  側別曝險之提示(規則 R-REC-48)須以樹上之值(raw.metrics、raw.train、evidence)判定, 本工具唯讀而無樹 ⇒ 不在此對照之內(--mode validate 寫回時才併入; 已知限制見 sgud/state/state_REC2.md)
+//  成員依賴之提示(規則 R-REC-51)同(判定讀樹上之 raw.member): 不在此對照之內 —— 節點文件內之該條不列入「節點文件內」之項、不使該份判為不同; --mode validate 之重掃以樹上之值重產(現行者照留一條, 不重複)
 let st = getSettings()
 setGuardExtra(guardExtraOf(st)) //專案另加之禁區字樣(與迴圈之掃描同一組)
 let root = st.FD_ROOT

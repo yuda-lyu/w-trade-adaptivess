@@ -167,4 +167,32 @@ describe('節點之禁區涵蓋迴圈驗證之全部原始碼(規則 R-BT-10)', 
         //禁區字樣之標籤條數不變(同一條字樣)
         assert.equal(forbiddenPats(privateRoot, true).filter(([, label]) => label === LABEL).length, 1)
     })
+
+    //成員依賴之判定(規則 R-REC-51; 比照 ⑤): 判定之組合與門檻在 src/domain/verifyMember.mjs(檔名以 verify 起首 ⇒ 節點之禁區涵蓋)
+    //  規格: ①節點讀取或匯入 verifyMember.mjs(路徑與指令;套件裝於 node_modules 者亦然;內嵌腳本之匯入;共用工具區之逐檔檢查)皆列「觸及禁區: 回測期重放 / 迴圈驗證之程式」(同一條禁區字樣、同一標籤)
+    //    ②判定與其門檻之預設只在該檔內(領域、附算之計畫、共同儲存區、命令列只讀設定、呼叫其函數, 不內嵌門檻之名)
+    //    ③邊界: 附算之計畫與寫入(fillPlan.mjs; 讀數之列、補算檔、共同儲存區之欄, 無門檻)不在禁區內(節點得讀)
+    it('⑥ 成員依賴之判定(verifyMember.mjs):節點讀取或匯入之(路徑與指令、node_modules、內嵌匯入、逐檔檢查)皆列;判定與門檻只在該檔;附算之計畫之檔不列', () => {
+        let FD = FD_ROOT.replace(/\\/g, '/')
+        let f = 'src/domain/verifyMember.mjs'
+        //①讀取與匯入
+        assert(hit(nodeIssues({ file_path: `${FD}/${f}` }, 'Read')), 'Read 絕對路徑')
+        assert(hit(nodeIssues({ filePath: f }, 'Read')), 'Read 相對路徑')
+        assert(hit(nodeIssues({ command: `cat ./${f}` })), 'cat')
+        assert(hit(nodeIssues({ command: `head -n 40 node_modules/w-trade-adaptivess/${f}` })), '套件裝於 node_modules')
+        assert(hit(nodeIssues({ command: `node -e "import('./node_modules/w-trade-adaptivess/${f}').then((m) => console.log(Object.keys(m)))"` })), '內嵌腳本匯入')
+        assert(contentHits('import { memberHintOf } from \'../../node_modules/w-trade-adaptivess/src/domain/verifyMember.mjs\'\nexport default () => memberHintOf', privateRoot).includes(LABEL))
+        assert(domainFiles(/^verify.*\.mjs$/).includes('verifyMember.mjs'), '檔名以 verify 起首(禁區字樣涵蓋)')
+        //②判定與門檻只在該檔
+        let read = (p) => fs.readFileSync(path.join(FD_ROOT, p), 'utf8')
+        assert(/^let memberHintOf = /m.test(read(f)) && /^let MEMBER_DEFAULT = Object\.freeze/m.test(read(f)), '判定與門檻之預設在判定之檔內')
+        for (let p of ['src/domain/domain.mjs', 'src/domain/fillPlan.mjs', 'src/domain/pickStore.mjs', 'src/cli/rsi.mjs', 'src/domain/texts.mjs']) {
+            assert(!/minRetention|maxNegHalves/.test(read(p)), `${p} 不內嵌判定之門檻之名`)
+        }
+        //③邊界: 附算之計畫之檔(無門檻)不列
+        for (let c of ['cat src/domain/fillPlan.mjs', 'cat src/domain/pickStore.mjs']) {
+            assert.equal(hit(nodeIssues({ command: c })), false, `不列: ${c}`)
+        }
+        assert.equal(forbiddenPats(privateRoot, true).filter(([, label]) => label === LABEL).length, 1)
+    })
 })

@@ -10,8 +10,8 @@ import { checkEvalSettings, configMsgOf } from '../eval/barGrid.mjs'
 import { createFileRecords, roundName, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_LABELS, ARM_KINDS, ARM_LABELS, CLAIM_VERDICTS } from '../arsi/records.mjs'
 import { proposalOf } from './armCatalog.mjs'
 import { buildPickStore } from './pickStore.mjs'
-import { recentDiagOf, neutralDeltaOf } from './diagRead.mjs'
-import { planFill, postfitRowOf, postfitLineOf, fillDocOf, fillLinesOf, postfitOfFill, fillBacklogSecOf, fillSigSrcOf, FILL_DIR, POSTFIT_HEAD, FILL_NO_RETRY_KINDS } from './fillPlan.mjs'
+import { RECENT_DIAG, recentDiagOf, neutralDeltaOf } from './diagRead.mjs'
+import { planFill, postfitRowOf, postfitLineOf, fillDocOf, fillLinesOf, postfitOfFill, memberOfFill, memberLineOf, memberKeyOf, fillBacklogSecOf, autoFillOf, fillSigSrcOf, FILL_DIR, POSTFIT_HEAD, MEMBER_HEAD, FILL_NO_RETRY_KINDS } from './fillPlan.mjs'
 import { pickHashOf, evaluatorFpOf, diagsOf, readFill, fillFileOf, postfitFileOf } from './fillKeys.mjs'
 import { EVAL_VERSION } from './evalVersion.mjs'
 import { createArsi } from '../arsi/arsi.mjs'
@@ -24,6 +24,7 @@ import { nullDrawsOf, nullFloorText } from './factsText.mjs'
 import { makeVerify, summaryOf, notesOf, isHalfOf, scanTrace, shortShareOf, sideFlowIssue, sideFlowCfgOf, extSurfaceOf, extFlagIssue, extBoardMeansOf, runNodeProc, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD, dirWorkIdsOf, dirNodeIdsOf, allowWorkOf } from './verify.mjs'
 import { PEAK_HEAD, TWIN_HEAD, isEvalHint as isTwoHint, evalHintBody, evalHintsOfDocs } from './verifyEvalHints.mjs'
 import { exposureCfgOf, exposureOf, isExposureHint, exposureHintOf } from './verifyExposure.mjs'
+import { memberCfgOfSt, memberRecentCapableOf, memberSigOf, memberTagsOf, memberEligibleOf, memberRowOf, isMemberHint, memberHintOf, memberRowOfTree } from './verifyMember.mjs'
 import { sideReadCfgOf, sideReadOf, sideReadTextOf } from './sideRead.mjs'
 import { makeToolboxRules, TB_BASELINE } from './toolboxRules.mjs'
 import { archiveExperience, archiveFeedback } from './archiveDocs.mjs'
@@ -39,8 +40,8 @@ import { gradeLabel } from './backtestGrade.mjs'
 //  算子: 每個可選臂一個 add:<臂>(於父節點之成品上加該臂)與 refine(同臂再改進); 載體: 各可選臂之單臂根節點(依層輪替排序)
 //  做夢: 輪末鉤子 afterRound = 派做夢 agent 審計本輪節點 → 寫回可信度 / 重做 / 刪除 → 方向入前緣(下一輪優先取用)→ 專案回調(更新看板、查 sgud)
 let LAYER_ORDER = 'ABCDEFG'
-//isEvalHint, 本檔所替換之迴圈檢查之機械提示: 兩條提示(單峰交付、選集與他節點相同; verifyEvalHints.mjs)與側別曝險之一條(規則 R-REC-48; verifyExposure.mjs)—— 同一組產生之時點與替換
-let isEvalHint = (s) => isTwoHint(s) || isExposureHint(s)
+//isEvalHint, 本檔所替換之迴圈檢查之機械提示: 兩條提示(單峰交付、選集與他節點相同; verifyEvalHints.mjs)、側別曝險之一條(規則 R-REC-48; verifyExposure.mjs)與成員依賴之一條(規則 R-REC-51; verifyMember.mjs)—— 同一組產生之時點與替換
+let isEvalHint = (s) => isTwoHint(s) || isExposureHint(s) || isMemberHint(s)
 //OUT_CHECK_MIN, 「每輪至少 1 條向外」之例外所需之最少種數: 做夢該輪已預先核對而皆無內容之向外候選(規則 R-REC-26; 任務書之文字見 texts.mjs 之配比)
 /**
  * 「每輪至少 1 條向外」之例外所需之最少預先核對種數
@@ -222,6 +223,12 @@ let compSplitOf = (m, pMax) => {
     let recentOk = recent ? recent.excess > 0 && recent.p <= pMax : null
     return { builtin, recent, recentOk, split: recent !== null && builtin !== recentOk }
 }
+//hasContentOf, 「有內容」(規則 R-REC-14、R-REC-38; 純函數; 單一定義 —— 搜尋地圖之量尺與各處之「有內容」、看板與輪末摘要之並列、選配之主鍵 rsi.rankBy 與補位之底共用; 規則 R-REC-49 ⑤):
+//  內建之組成對照之現行條件成立、未自述 notContent, 且有近期活躍度版之值者其條件亦成立(無其值者不看此項); pMax = 階梯 1 之虛無 p
+let hasContentOf = (n, pMax) => {
+    let m = n && n.raw && n.raw.metrics
+    let s = compSplitOf(m, pMax); return s.builtin && s.recentOk !== false && extSurfaceOf(m).notContent.length === 0
+}
 //neutralDeltaOf(排序鍵所讀之「成品 − 中性執行」之差; 規則 R-REC-40; 取值之唯一來源)於 diagRead.mjs 定義(排序鍵、重放之紀錄與重放另載入 neutralExec 與否之判定共用; 不各自內嵌)
 //rankKeyOf, 排序鍵(規則 R-REC-40; 純函數; 看板與搜尋地圖之「最佳 / 最高」、節點任務書之參考節點、補位之底共用此單一定義): n = 樹上之節點(讀 score.S、raw.replays、raw.metrics)
 //  = 各抽(正本與各次重放)之值之均; 一抽之值 = 該抽之 S, 正本有中性執行之差者先減去該抽之差(該次重放未帶其值者用正本之差)⇒ 有其值者 = 中性執行之 S 之多抽之均
@@ -275,7 +282,7 @@ let contentOf = (n) => {
  * @param {Function} [inject.runEval] 輸入輪末附算所用之「執行一次評估」之函數 async ({ nodeId, kind, args }) → { code, timeout }(規則 R-REC-34),測試可換為替身;未給則以 g_eval.mjs 之子行程
  * @param {Function} [inject.clock] 輸入輪末附算一併處理待補算之總時長之計時函數(回傳毫秒;規則 R-REC-41),測試可換為假時鐘;未給則用 Date.now
  * @param {Function} [inject.evalHints] 輸入迴圈檢查之兩條機械提示之判定函數 (docs, workRoot) → Map(節點 id → 提示字串陣列)(規則 R-REC-43、R-REC-44),測試可換為替身(例:拋錯之情形);未給則用 verifyEvalHints.mjs 之 evalHintsOfDocs
- * @returns {Object} 回傳專案物件,主要鍵:st、rsi、arsi、records、toolbox、run、monitor、catalog、selectable、idOf、taskFor(節點任務內容)、typeOf、setDirectionTypes、writeBoard(臂看板)、writeCatalogFile、writeSearchMap、validatePending(補算回測期旗標)、reverifyAll、extFill、fill(附算與補算;R-REC-34)、fillPlanOf(只求計畫)、fillParOf(併行數)、rescanTraces、refreshEvalHints(重產所指節點之兩條提示;R-REC-43、R-REC-44)、rescanSideFlow、pendingDream、redream、requestDreamOnly(登記主控要求之只做夢輪次)、pendingReauditIds(待重審之節點 id)、claimedNodeIds(認領中之節點 id)、inactiveArmsOf、offDefArmsOf、migrateDocs、annotateDream、closeFrontier、rearmFrontier、proposeDirection、exposureOf(側別曝險之判定;R-REC-48)、exposureOn(其是否開啟)、rankBy(選配之主鍵;R-REC-49)、gaugeDualOf(量尺之並列)、sideReadOfTree(側別讀數;R-REC-50)、pickStore()、setStatus、getState、setState、log、envKey、layerOfSpec、domain
+ * @returns {Object} 回傳專案物件,主要鍵:st、rsi、arsi、records、toolbox、run、monitor、catalog、selectable、idOf、taskFor(節點任務內容)、typeOf、setDirectionTypes、writeBoard(臂看板)、writeCatalogFile、writeSearchMap、validatePending(補算回測期旗標)、reverifyAll、extFill、fill(附算與補算;R-REC-34)、fillPlanOf(只求計畫)、fillParOf(併行數)、rescanTraces、refreshEvalHints(重產所指節點之兩條提示;R-REC-43、R-REC-44)、rescanSideFlow、pendingDream、redream、requestDreamOnly(登記主控要求之只做夢輪次)、pendingReauditIds(待重審之節點 id)、claimedNodeIds(認領中之節點 id)、inactiveArmsOf、offDefArmsOf、migrateDocs、annotateDream、closeFrontier、rearmFrontier、proposeDirection、exposureOf(側別曝險之判定;R-REC-48)、exposureOn(其是否開啟)、memberCheck(成員穩健性之設定之解讀;關閉者 null;R-REC-51)、hasContent(「有內容」之單一定義;R-REC-49)、rankBy(選配之主鍵;R-REC-49)、gaugeDualOf(量尺之並列)、sideReadOfTree(側別讀數;R-REC-50)、pickStore()、setStatus、getState、setState、log、envKey、layerOfSpec、domain
  * @example
  * let project = makeProject(st)
  * let project2 = makeProject(st, { dispatch: myDispatch })
@@ -483,12 +490,19 @@ let makeProject = (st = getSettings(), inject = {}) => {
     let expCfg = exposureCfgOf(st.rsi ? st.rsi.exposure : undefined)
     let exposureOfNode = (n) => exposureOf(n, expCfg, st.score && st.score.sideFlow)
     let exposureWhyOf = (id, e) => `起點 ${String(id).slice(0, 8)} 為側別曝險之成品(${e.why});不作為起點(主控可經 tools/exposure.mjs 逐案放行)`
+    //成員穩健性(規則 R-REC-51; 判定在 verifyMember.mjs): settings.rsi.memberCheck(false 或 salts 為空陣列 = 關閉; 不合之鍵用預設)於組裝時解讀一次
+    //  memberHintOfNode(n): 樹上之現行之讀數(raw.member 所記之選集指紋 = 正本)命中者回「提示(成員依賴)」, 其餘 null
+    let mcfg = memberCfgOfSt(st)
+    let memberHintOfNode = (n) => memberHintOf(memberRowOfTree(n), mcfg)
     //選配之主鍵(規則 R-REC-49): settings.rsi.rankBy === 'content' ⇒ 看板與搜尋地圖之「最高」與補位之底改以挑選內容(contentOf)為主鍵、排序鍵為次鍵; 其餘之值(含未給)= 排序鍵(行為與改前逐位相同)
     //  byContent(kv)(a, b): 有挑選內容之值者在前、其值高者在前; 同值或皆無其值者依 kv 由高至低; 仍同者回 0(由呼叫端續判)
+    //  contentValOf(n): 主鍵與並列所用之值 = 「有內容」(hasContentNode; 搜尋地圖之量尺之同一定義)者之挑選內容, 不符「有內容」者視同無其值(規則 R-REC-49 ⑤)
     let rankBy = st.rsi && st.rsi.rankBy === 'content' ? 'content' : 'key'
     let contentValOf = (n) => {
-        let c = contentOf(n); return c ? c.v : null
+        let c = contentOf(n); return c && hasContentNode(n) ? c.v : null
     }
+    //noValueWhy, 主鍵視同無其值之理由(看板與搜尋地圖於 rankBy = content 時之註記): 無挑選內容之值 / 有其值而不符「有內容」
+    let noValueWhy = (n) => (contentOf(n) ? '不符「有內容」' : '無其值')
     let byContent = (kv) => (a, b) => {
         let ca = contentValOf(a)
         let cb = contentValOf(b)
@@ -526,7 +540,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         return cands.find((n) => !alias.has(n.id)) || null
     }
     //gaugeDualOf, 量尺之並列(規則 R-REC-49; 看板之表前一段與輪末摘要之一列共用): 候選 = 可信(trusted)、未被否決、S 為有限數值之成品
-    //  key = 排序鍵最高者(rankKeyOf, 無其值者用 S; 同值依 id); content = 有挑選內容之值者之中其值最高者(同值依排序鍵、再依 id; 無則 null)
+    //  key = 排序鍵最高者(rankKeyOf, 無其值者用 S; 同值依 id); content = 「有內容」且有挑選內容之值者之中其值最高者(contentValOf; 同值依排序鍵、再依 id; 無則 null; 規則 R-REC-49 ⑤)
     //  show = 兩者皆有而不同、或排序鍵最高者為側別曝險(規則 R-REC-48)⇒ 列出; 其餘不列(看板與輪末摘要逐字不變); 不受 rsi.rankBy 影響
     let gaugeDualOf = (nodes) => {
         let kv = (n) => (rankKeyOf(n) === null ? n.score.S : rankKeyOf(n))
@@ -535,12 +549,13 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let key = cands.slice().sort((a, b) => (kv(b) - kv(a)) || idCmp(a, b))[0] || null
         let content = cands.filter((n) => contentValOf(n) !== null).sort((a, b) => byContent(kv)(a, b) || idCmp(a, b))[0] || null
         let keyEx = key ? exposureOfNode(key) : null
-        return { key, content, keyEx, show: !!key && ((!!content && content.id !== key.id) || keyEx.hit) }
+        //anyValue: 候選中有挑選內容之值者(不論是否「有內容」; 無「有內容」之候選時並列句之註記據以區分兩種情形)
+        return { key, content, keyEx, anyValue: !content && cands.some((n) => contentOf(n) !== null), show: !!key && ((!!content && content.id !== key.id) || keyEx.hit) }
     }
     let gaugeDualText = (gd) => {
         let f1 = (x) => x.toFixed(1)
         let ct = gd.content ? contentOf(gd.content) : null
-        let c = ct ? `挑選內容最高且可信者 \`${gd.content.id.slice(0, 8)}\`(挑選內容 ${f1(ct.v)},${ct.kind},${ct.n} 抽之均;S ${f1(gd.content.score.S)})` : '挑選內容最高且可信者 —(可信者皆無挑選內容之值)'
+        let c = ct ? `挑選內容最高且可信者 \`${gd.content.id.slice(0, 8)}\`(挑選內容 ${f1(ct.v)},${ct.kind},${ct.n} 抽之均;S ${f1(gd.content.score.S)})` : (gd.anyValue ? '挑選內容最高且可信者 —(可信者之挑選內容皆不符「有內容」)' : '挑選內容最高且可信者 —(可信者皆無挑選內容之值)')
         let kv = rankKeyOf(gd.key)
         let x = gd.keyEx.hit ? `;**後者為側別曝險**(${gd.keyEx.why}${gd.keyEx.released ? ';主控已放行' : ''})` : ''
         return `${c} / 排序鍵最高且可信者 \`${gd.key.id.slice(0, 8)}\`(S ${f1(gd.key.score.S)}${kv === null ? '' : `;排序鍵 ${f1(kv)}`})${x}`
@@ -943,6 +958,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
 
     //contentPMax, 「有內容」之 p 之門檻 = 階梯 1 之虛無 p(未給為 0.05; 搜尋地圖之「有內容」與看板之「活躍度定義不一致」同一個值)
     let contentPMax = () => (st.score && st.score.ladder1 && st.score.ladder1.nullP) || 0.05
+    //hasContentNode, 「有內容」(模組層之 hasContentOf; 搜尋地圖、並列、主鍵、補位之底共用; 規則 R-REC-49 ⑤)
+    let hasContentNode = (n) => hasContentOf(n, contentPMax())
     //actSplitOf, 「活躍度定義不一致」(規則 R-REC-38): 有近期活躍度版之值、且其條件與內建之組成對照之現行條件一過一不過者回 compSplitOf 之結果, 否則 null;
     //  擴充診斷自述 notContent 者不標(其組成對照本即不計為挑選內容; 規則 R-REC-22)
     let actSplitOf = (n) => {
@@ -1059,9 +1076,20 @@ let makeProject = (st = getSettings(), inject = {}) => {
             L.push(`**量尺(並列)**:${gaugeDualText(gd)} —— 兩者不同時,排序鍵之高低可能只是組成之水準或側別之曝險;判進度以挑選內容為準(同搜尋地圖之量尺)。`)
             L.push('')
         }
+        //成員穩健性(規則 R-REC-51): 樹上有任一現行之讀數(raw.member 所記之選集指紋 = 正本)者才加一欄與表前一段(看板是節點讀得到之檔 ⇒ 不列門檻之值); 無者表頭與各列逐字不變
+        let anyMember = nodes.some((n) => memberRowOfTree(n) !== null)
+        let memberCellOf = (n) => {
+            let r = memberRowOfTree(n)
+            let f2 = (x) => (typeof x === 'number' ? x.toFixed(2) : '—')
+            return r ? `${r.applicable ? `${f2(r.retention.median)} / ${f2(r.retention.min)}` : '不適用'};${r.nNeg} / ${r.K}` : '—'
+        }
+        if (anyMember) {
+            L.push('「成員穩健性」一欄 = 迴圈以隨機半庫(數種切法 × 兩半;評估器之 `--member`)重跑合格之成品之讀數(佐證,不入 S、階梯與排序):**內容保持率**之中位 / 最小(各半庫之挑選內容 ÷ 全庫之挑選內容;選集極活躍者用近期活躍度版,同搜尋地圖;「不適用」= 全庫之挑選內容 ≤ 0 或無值),其後為相位平均為負之半庫數 / 半庫數;命中者迴圈檢查列「提示(成員依賴)」(只提示、不否決);「—」= 尚無現行之讀數(不合格、未算,或正本重算後尚未重算)。各半之值見節點文件之迴圈判讀與共同儲存區之 `member` 欄。')
+            L.push('')
+        }
         let keyNoteAt = L.length
-        L.push(`| 節點 | 臂 | 起點 | S | 最差相位 | 七相位平均 | 階梯 | 否決 | 虛無均 | 超額 | z | 虛無 p | 同訊號量超額 / p | 同活躍度超額 / p | 組成對照之超額 / p / 可重現 | 幾何對照之超額 / p | 換種子與同分次序之 S | 正本與重放之 S 之均;超額之均(組成對照 / 近期活躍度版)${anyXm ? ';擴充診斷之看板值之均' : ''} | 擴充診斷之看板值 | 每隻訊號數 | 做多比例 | 下單之做空比例(訓練期 / 回測期) | 月均單 | 最大持倉 | 選集大小 | 可信度 | 輪 | 成品之機制(自述) |`)
-        L.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+        L.push(`| 節點 | 臂 | 起點 | S | 最差相位 | 七相位平均 | 階梯 | 否決 | 虛無均 | 超額 | z | 虛無 p | 同訊號量超額 / p | 同活躍度超額 / p | 組成對照之超額 / p / 可重現 | 幾何對照之超額 / p | 換種子與同分次序之 S | 正本與重放之 S 之均;超額之均(組成對照 / 近期活躍度版)${anyXm ? ';擴充診斷之看板值之均' : ''} | 擴充診斷之看板值 |${anyMember ? ' 成員穩健性(保持率 中位 / 最小;負之半庫 / 半庫數) |' : ''} 每隻訊號數 | 做多比例 | 下單之做空比例(訓練期 / 回測期) | 月均單 | 最大持倉 | 選集大小 | 可信度 | 輪 | 成品之機制(自述) |`)
+        L.push(`|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|${anyMember ? '---|' : ''}`)
         //正本與各次重放之平均(規則 R-EV-24): S、組成對照之超額、近期活躍度之組成對照之超額; 無重放(結果不依賴種子與同分次序)者即正本
         let avgOf = (n) => {
             let m = n.raw && n.raw.metrics
@@ -1083,7 +1111,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let m = n.raw && n.raw.metrics
             let nu = m && m.null
             let sd = n.raw && Array.isArray(n.raw.seedS) && n.raw.seedS.length ? n.raw.seedS.map((v) => f1(v)).join(' / ') : '—'
-            L.push(`| \`${n.id}\` | ${armsLabel(n)}${hintOf(n, TWIN_HEAD) ? ' 選集與他節點相同' : ''} | ${n.spec.base ? String(n.spec.base).slice(0, 8) : '無'} | **${n.score ? n.score.S : ''}**${keyNoteOf(n)}${hintOf(n, PEAK_HEAD) ? ' 單峰交付' : ''}${expoMark(n)} | ${m ? f1(m.op.eqYr.min) : ''} | ${m ? f1(m.op.eqYr.mean) : ''} | ${n.score ? n.score.ladder : ''} | ${vetoedOf(n) ? '是' : '否'} | ${nu ? f1(nu.mean) : ''} | ${nu ? f1(nu.excess) : ''} | ${nu ? f1(nu.z) : ''} | ${nu ? nu.p : ''} | ${m && m.nullVol ? `${f1(m.nullVol.excess)} / ${m.nullVol.p}` : '—'} | ${m && m.nullAct ? `${f1(m.nullAct.excess)} / ${m.nullAct.p}` : '—'} | ${m && m.nullSideAct ? `${f1(m.nullSideAct.excess)} / ${m.nullSideAct.p} / ${typeof m.nullSideAct.share === 'number' ? `${Math.round(m.nullSideAct.share * 100)}%` : '—'}${m.nullSideAct.triggered === false ? ' *' : ''}${ncOf(n).length ? ' ※' : ''}` : '—'}${actSplitOf(n) ? ' 活躍度定義不一致' : ''} | ${m && m.nullSideGeo ? `${f1(m.nullSideGeo.excess)} / ${m.nullSideGeo.p}` : '—'} | ${sd} | ${avgOf(n)} | ${extCellsOf(n).map((c) => `${c.name} ${c.value}`).join(';') || '—'} | ${m && m.sel && typeof m.sel.sigPerPick === 'number' ? m.sel.sigPerPick.toFixed(2) : ''} |${m && m.sel && typeof m.sel.longRatio === 'number' ? m.sel.longRatio.toFixed(2) : ''} | ${n.raw && n.raw.train && typeof n.raw.train.shortShare === 'number' && shortShareOf(m) !== null ? `${n.raw.train.shortShare.toFixed(2)} / ${shortShareOf(m).toFixed(2)}` : '—'} | ${m ? m.op.monthlyOrders.mean.toFixed(0) : ''} | ${m ? m.op.peakHold.max : ''} | ${m && m.sel ? f1(m.sel.sizeMean) : ''} | ${(n.evidence && n.evidence.trust) || '未審'} | ${roundName(n.round)} | ${descOf(n)} |`)
+            L.push(`| \`${n.id}\` | ${armsLabel(n)}${hintOf(n, TWIN_HEAD) ? ' 選集與他節點相同' : ''} | ${n.spec.base ? String(n.spec.base).slice(0, 8) : '無'} | **${n.score ? n.score.S : ''}**${keyNoteOf(n)}${hintOf(n, PEAK_HEAD) ? ' 單峰交付' : ''}${expoMark(n)} | ${m ? f1(m.op.eqYr.min) : ''} | ${m ? f1(m.op.eqYr.mean) : ''} | ${n.score ? n.score.ladder : ''} | ${vetoedOf(n) ? '是' : '否'} | ${nu ? f1(nu.mean) : ''} | ${nu ? f1(nu.excess) : ''} | ${nu ? f1(nu.z) : ''} | ${nu ? nu.p : ''} | ${m && m.nullVol ? `${f1(m.nullVol.excess)} / ${m.nullVol.p}` : '—'} | ${m && m.nullAct ? `${f1(m.nullAct.excess)} / ${m.nullAct.p}` : '—'} | ${m && m.nullSideAct ? `${f1(m.nullSideAct.excess)} / ${m.nullSideAct.p} / ${typeof m.nullSideAct.share === 'number' ? `${Math.round(m.nullSideAct.share * 100)}%` : '—'}${m.nullSideAct.triggered === false ? ' *' : ''}${ncOf(n).length ? ' ※' : ''}` : '—'}${actSplitOf(n) ? ' 活躍度定義不一致' : ''} | ${m && m.nullSideGeo ? `${f1(m.nullSideGeo.excess)} / ${m.nullSideGeo.p}` : '—'} | ${sd} | ${avgOf(n)} | ${extCellsOf(n).map((c) => `${c.name} ${c.value}`).join(';') || '—'} |${anyMember ? ` ${memberCellOf(n)} |` : ''} ${m && m.sel && typeof m.sel.sigPerPick === 'number' ? m.sel.sigPerPick.toFixed(2) : ''} |${m && m.sel && typeof m.sel.longRatio === 'number' ? m.sel.longRatio.toFixed(2) : ''} | ${n.raw && n.raw.train && typeof n.raw.train.shortShare === 'number' && shortShareOf(m) !== null ? `${n.raw.train.shortShare.toFixed(2)} / ${shortShareOf(m).toFixed(2)}` : '—'} | ${m ? m.op.monthlyOrders.mean.toFixed(0) : ''} | ${m ? m.op.peakHold.max : ''} | ${m && m.sel ? f1(m.sel.sizeMean) : ''} | ${(n.evidence && n.evidence.trust) || '未審'} | ${roundName(n.round)} | ${descOf(n)} |`)
         }
         L.push('')
         L.push('## 各可選臂')
@@ -1111,7 +1139,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             }
             let kbHit = !!kb && ss.length > 0 && kb.score.S !== Math.max(...ss)
             armHit = armHit || kbHit
-            let kbNote = (n) => (byC ? `(依挑選內容;${contentValOf(n) === null ? `無其值,排序鍵 ${kvOf(n).toFixed(1)}` : `內容 ${contentValOf(n).toFixed(1)}`})` : `(依排序鍵;排序鍵 ${kvOf(n).toFixed(1)})`)
+            let kbNote = (n) => (byC ? `(依挑選內容;${contentValOf(n) === null ? `${noValueWhy(n)},排序鍵 ${kvOf(n).toFixed(1)}` : `內容 ${contentValOf(n).toFixed(1)}`})` : `(依排序鍵;排序鍵 ${kvOf(n).toFixed(1)})`)
             L.push(`| ${a.id} | ${a.layer} | ${a.title} | ${ns.length} | ${ns.length - act.length || '—'} | ${ss.length ? (kbHit ? `${kb.score.S.toFixed(1)}${kbNote(kb)}` : Math.max(...ss).toFixed(1)) : '—'} | ${ex.length ? Math.max(...ex).toFixed(1) : '—'} |`)
         }
         L.push('')
@@ -1123,7 +1151,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         }
         //rsi.rankBy = content(規則 R-REC-49): 「主鍵」一段取代「排序鍵」一段(同一個出現條件)
         if (byC && (byKey || armHit)) {
-            L.splice(keyNoteAt, 0, `**主鍵 = 挑選內容**(設定 \`rsi.rankBy\` = \`content\`;${byKey ? '節點一覽之次序' : ''}${byKey && armHit ? '、' : ''}${armHit ? '各可選臂之「回測期最佳 S」' : ''}依此;搜尋地圖之「最高」與補位之底同一個鍵)= 搜尋地圖之「挑選內容」(超額之均:選集之每隻訊號數為全體隨機之 2 倍以上者用近期活躍度版之組成對照,其餘用內建者,取正本與各次重放之平均;擴充診斷自述組成對照不是挑選內容之量者無其值);無其值者排在有其值者之後;同值與無其值者之間依排序鍵(正本與各次重放之 S 之均,成品有擴充診斷 \`neutralExec\` 之值者先減去其 \`delta\`)。S 照列(不改 S、階梯與否決)${byKey ? ';有挑選內容之值者於 S 之後註「(內容 …)」' : ''}。`, '')
+            L.splice(keyNoteAt, 0, `**主鍵 = 挑選內容**(設定 \`rsi.rankBy\` = \`content\`;${byKey ? '節點一覽之次序' : ''}${byKey && armHit ? '、' : ''}${armHit ? '各可選臂之「回測期最佳 S」' : ''}依此;搜尋地圖之「最高」與補位之底同一個鍵)= 搜尋地圖之「挑選內容」(超額之均:選集之每隻訊號數為全體隨機之 2 倍以上者用近期活躍度版之組成對照,其餘用內建者,取正本與各次重放之平均;擴充診斷自述組成對照不是挑選內容之量者無其值),只計搜尋地圖之「有內容」者(不符者視同無其值);無其值者排在有其值者之後;同值與無其值者之間依排序鍵(正本與各次重放之 S 之均,成品有擴充診斷 \`neutralExec\` 之值者先減去其 \`delta\`)。S 照列(不改 S、階梯與否決)${byKey ? ';有挑選內容之值者於 S 之後註「(內容 …)」' : ''}。`, '')
         }
         else if (byKey || armHit) {
             L.splice(keyNoteAt, 0, `**排序鍵**(${byKey ? '節點一覽之次序' : ''}${byKey && armHit ? '、' : ''}${armHit ? '各可選臂之「回測期最佳 S」' : ''}依此;搜尋地圖之量尺與「最高」、節點任務書之參考節點、補位之底同一個鍵)= 正本與各次重放之 S 之均(無重放者即正本之 S);成品有擴充診斷 \`neutralExec\` 之值者(其 \`delta\` = 成品之 S − 中性執行之 S),各抽之 S 先減去該抽之 \`delta\`(重放未帶其值者用正本之值)= 中性執行之 S 之均 —— 單抽之擺動與執行層之旋鈕(持倉上限等經等效年化之分母抬高 S)不決定次序。S 照列(不改 S、階梯與否決)${byKey ? ';排序鍵與 S 不同者於 S 之後註「(排序鍵 …)」' : ''}。`, '')
@@ -1158,9 +1186,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
         //  (例: 執行規則非中性且本身帶來大增益之成品, 其組成對照共用該規則 ⇒ 超額含執行層之增益; 判準由診斷自述, 迴圈不寫死哪一個診斷)
         let ncOf = (n) => extSurfaceOf(n.raw && n.raw.metrics).notContent
         //hasContent, 「有內容」(規則 R-REC-14、R-REC-38): 內建之組成對照之現行條件成立、未自述 notContent, 且有近期活躍度版之值者其條件亦成立(無其值者不看此項)
-        let hasContent = (n) => {
-            let s = compSplitOf(n.raw && n.raw.metrics, pMax); return s.builtin && s.recentOk !== false && ncOf(n).length === 0
-        }
+        //  定義在模組層之 hasContentOf(並列、主鍵與補位之底共用同一定義; 規則 R-REC-49 ⑤)
+        let hasContent = (n) => hasContentOf(n, pMax)
         let trustOf = (n) => (n.evidence && n.evidence.trust) || null
         let vetoedOf = (n) => !!(n.score && n.score.flags && n.score.flags.vetoed)
         let sOf = (n) => (n.score && typeof n.score.S === 'number' ? n.score.S : null)
@@ -1193,11 +1220,21 @@ let makeProject = (st = getSettings(), inject = {}) => {
         }
         let keyMark = (n) => `〔依排序鍵 ${f1(kvOf(n))}〕`
         if (byC) {
-            keyMark = (n) => (contentValOf(n) === null ? `〔依挑選內容:無其值,排序鍵 ${f1(kvOf(n))}〕` : `〔依挑選內容 ${f1(contentValOf(n))}〕`)
+            keyMark = (n) => (contentValOf(n) === null ? `〔依挑選內容:${noValueWhy(n)},排序鍵 ${f1(kvOf(n))}〕` : `〔依挑選內容 ${f1(contentValOf(n))}〕`)
         }
         //側別曝險之註記(規則 R-REC-48): 量尺之格與譜系之列; 未命中者無註記
         let xMark = (n) => {
             let e = exposureOfNode(n); return e.hit ? (e.released ? '(側別曝險;已放行)' : '(側別曝險)') : ''
+        }
+        //成員穩健性之註記(規則 R-REC-51): 該節點有現行之讀數者才加(量尺之格: 中位; 譜系之列: 中位 / 最小與負之半庫數); 無者無註記(搜尋地圖逐字不變)
+        let memberMark = (n, full) => {
+            let r = memberRowOfTree(n)
+            let f2 = (x) => (typeof x === 'number' ? x.toFixed(2) : '—')
+            if (!r) {
+                return ''
+            }
+            let v = r.applicable ? (full ? `中位 ${f2(r.retention.median)} / 最小 ${f2(r.retention.min)}` : `中位 ${f2(r.retention.median)}`) : '不適用'
+            return `;成員保持率 ${v}${full ? `(負 ${r.nNeg} / ${r.K})` : ''}`
         }
         let tag = (n) => (n ? `${f1(sOf(n))}(\`${n.id.slice(0, 8)}\`)` : '—')
         let tagOf = (xs) => {
@@ -1244,7 +1281,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 let m = top.raw.metrics
                 let c = compOf(top)
                 let ct = contentOf(top)
-                gauge = `\`${top.id.slice(0, 8)}\`${xMark(top)}:${f1(sOf(top))}${byKeyOf(top, cand) ? keyMark(top) : ''} / ${f1(m.op.eqYr.min)} / ${f1(m.op.eqYr.mean)} / ${f1(c.excess)} / ${f1(c.mean)}${ct ? `;挑選內容 ${f1(ct.v)}(${ct.kind};${ct.n} 抽之均)` : ''}`
+                gauge = `\`${top.id.slice(0, 8)}\`${xMark(top)}:${f1(sOf(top))}${byKeyOf(top, cand) ? keyMark(top) : ''} / ${f1(m.op.eqYr.min)} / ${f1(m.op.eqYr.mean)} / ${f1(c.excess)} / ${f1(c.mean)}${ct ? `;挑選內容 ${f1(ct.v)}(${ct.kind};${ct.n} 抽之均)` : ''}${memberMark(top, false)}`
                 //挑選內容(超額之均)最高者不等於 S 最高者時並列(S 之升幅可能只是組成之水準)
                 let topC = cand.map((n) => ({ n, c: contentOf(n) })).filter((x) => x.c).sort((a, b) => b.c.v - a.c.v)[0]
                 if (topC && topC.n.id !== top.id) {
@@ -1353,7 +1390,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let xs = extSurfaceOf(n.raw && n.raw.metrics).cells.map((x) => `${x.name} ${x.value}`).join('、')
             //兩版一過一不過(規則 R-REC-38): 於組成對照之後標「活躍度定義不一致」與兩版之判定(notContent 者不標; 兩者不並存)
             let sp = actSplitOf(n)
-            L.push(`${'  '.repeat(lv)}- \`${n.id.slice(0, 8)}\` ${armsLabel(n)}(${roundName(n.round)};${typeOfNode(n) === 'verify' ? '驗證' : '探索'};S ${f1(sOf(n))};組成對照 ${c ? `${f1(c.excess)} / p ${c.p}` : '—'}${ncOf(n).length ? `(不計為挑選內容 —— ${ncOf(n).map((x) => `${x.name}: ${x.text}`).join(';')})` : ''}${sp ? `(活躍度定義不一致 —— 內建版${sp.builtin ? '過' : '不過'}、近期活躍度版${sp.recentOk ? '過' : '不過'}:近期版之超額 ${f1(sp.recent.excess)} / p ${sp.recent.p})` : ''};${trustOf(n) || '未審'}${vetoedOf(n) ? ';否決' : ''}${xMark(n) ? `;**${xMark(n).slice(1, -1)}**` : ''}${hasContent(n) ? ';**有內容**' : ''}${delta}${xs ? `;擴充診斷 ${xs}` : ''})〔${famOf(n) || '未歸類'}〕${use.length ? `;用到 ${use.join('、')}` : ''}${ds ? `;${ds}` : ''}`)
+            L.push(`${'  '.repeat(lv)}- \`${n.id.slice(0, 8)}\` ${armsLabel(n)}(${roundName(n.round)};${typeOfNode(n) === 'verify' ? '驗證' : '探索'};S ${f1(sOf(n))};組成對照 ${c ? `${f1(c.excess)} / p ${c.p}` : '—'}${ncOf(n).length ? `(不計為挑選內容 —— ${ncOf(n).map((x) => `${x.name}: ${x.text}`).join(';')})` : ''}${sp ? `(活躍度定義不一致 —— 內建版${sp.builtin ? '過' : '不過'}、近期活躍度版${sp.recentOk ? '過' : '不過'}:近期版之超額 ${f1(sp.recent.excess)} / p ${sp.recent.p})` : ''};${trustOf(n) || '未審'}${vetoedOf(n) ? ';否決' : ''}${xMark(n) ? `;**${xMark(n).slice(1, -1)}**` : ''}${hasContent(n) ? ';**有內容**' : ''}${delta}${xs ? `;擴充診斷 ${xs}` : ''}${memberMark(n, true)})〔${famOf(n) || '未歸類'}〕${use.length ? `;用到 ${use.join('、')}` : ''}${ds ? `;${ds}` : ''}`)
             for (let k of (kids.get(n.id) || []).slice().sort((a, b) => a.round - b.round)) {
                 line(k, lv + 1)
             }
@@ -1401,7 +1438,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         L.push('')
         //排序鍵之說明(規則 R-REC-40): 只在至少一處之「最高 / 最佳」因排序鍵而改選時加一句(否則逐字不變); rsi.rankBy = content 者改為主鍵之說明(規則 R-REC-49)
         if (keyHits) {
-            L[keyNoteAt] += byC ? '標「〔依挑選內容 …〕」者:該處之「最高」以**主鍵 = 挑選內容**選取(設定 `rsi.rankBy` = `content`;同上之「挑選內容」;無其值者排在有其值者之後,同值與無其值者之間依排序鍵;看板與補位之底同一個鍵),與 S 最高者不同,列其 S 與挑選內容。' : '標「〔依排序鍵 …〕」者:該處之「最高」以**排序鍵**選取(正本與各次重放之 S 之均;成品有擴充診斷 `neutralExec` 之值者,各抽之 S 先減去其 `delta` = 成品之 S − 中性執行之 S;看板、節點任務書之參考節點與補位之底同一個鍵),與 S 最高者不同,列其 S 與排序鍵 —— 單抽之擺動與執行層之旋鈕不決定誰是最高者。'
+            L[keyNoteAt] += byC ? '標「〔依挑選內容 …〕」者:該處之「最高」以**主鍵 = 挑選內容**選取(設定 `rsi.rankBy` = `content`;同上之「挑選內容」,只計「有內容」者 —— 不符者視同無其值;無其值者排在有其值者之後,同值與無其值者之間依排序鍵;看板與補位之底同一個鍵),與 S 最高者不同,列其 S 與挑選內容。' : '標「〔依排序鍵 …〕」者:該處之「最高」以**排序鍵**選取(正本與各次重放之 S 之均;成品有擴充診斷 `neutralExec` 之值者,各抽之 S 先減去其 `delta` = 成品之 S − 中性執行之 S;看板、節點任務書之參考節點與補位之底同一個鍵),與 S 最高者不同,列其 S 與排序鍵 —— 單抽之擺動與執行層之旋鈕不決定誰是最高者。'
         }
         fs.writeFileSync(path.join(st.rsi.root, 'SEARCH_MAP.md'), L.join('\n'), 'utf8')
         return { nNodes: nodes.length, nContent: contentNodes.length, nRoots: roots.length }
@@ -1465,6 +1502,32 @@ let makeProject = (st = getSettings(), inject = {}) => {
         if (request) {
             lines.push(`${request.dreamOnly ? '只做夢輪次(主控要求;本輪無節點、審計 0)' : '主控對本輪做夢之要求'}:${request.why.split(/\r?\n/)[0].slice(0, 160)}`)
         }
+        //附算之派做夢之前之一次(規則 R-REC-51; R-REC-34 ④ 之時點): 本輪之節點與待重審者之求解窗後段與成員穩健性(合格者)—— 做夢只審本輪之節點, 做夢之後才算者其值到不了該節點之審計
+        //  擴充診斷之補算、重做者、待重試者與一併處理待補算仍在做夢之後(做夢可能改寫共用工具區之診斷); 計畫無待算者不執行(摘要、狀態檔皆不變); settings.rsi.autoFill === false 關閉
+        //  於兩條提示之重產之前 ⇒ 成員依賴之提示(判定讀樹上之 raw.member)與求解窗後段之列即入做夢之審計範圍與節點文件; 失敗不影響輪次(做夢之後之附算照常, 其範圍含這些節點)
+        let preFill = null
+        if (autoFillOf(st.rsi) && nodeIds.length) {
+            try {
+                if (fillPlanOf({ targets: nodeIds, postfit: true, ext: false, member: true }).tasks.length) {
+                    setStatus({ round, stage: 'fill-pre' })
+                    preFill = await fill({ targets: nodeIds, postfit: true, ext: false, member: true, storeAfter: false, source: 'round', stage: 'preDream', ...(typeof inject.runEval === 'function' ? { runEval: inject.runEval } : {}) })
+                    lines.push(...preFill.lines)
+                }
+            }
+            catch (err) {
+                log(`附算(派做夢之前)未能執行(不影響輪次;做夢之後之附算照常): ${String((err && err.message) || err).slice(0, 200)}`)
+                lines.push(`附算(派做夢之前;求解窗後段與成員穩健性):**未能執行**(${String((err && err.message) || err).split('\n')[0].slice(0, 200)});做夢之後之附算照常`)
+                preFill = { error: String((err && err.message) || err).split('\n')[0].slice(0, 200) }
+            }
+        }
+        //memberSumOf, 成員穩健性之作為之摘要(鉤子之回傳與 round-done 事件之 fill.member; 派做夢之前與之後兩次合計; 有作為或有待補算者才帶): { n, failed, hint, backlog }
+        let memberSumOf = (runs, last) => {
+            let rs = runs.filter((r) => r && Array.isArray(r.results)).flatMap((r) => r.results).filter((x) => x.member === 'ok' || x.member === 'failed')
+            let nBl = last && last.backlog && Array.isArray(last.backlog.member) ? last.backlog.member.length : 0
+            return rs.length || nBl ? { n: rs.length, failed: rs.filter((x) => x.member === 'failed').length, hint: rs.filter((x) => x.member === 'ok' && x.memberHit === true).length, backlog: nBl } : null
+        }
+        //preSum, 派做夢之前之一次之回傳之摘要(鉤子之回傳與 round-done 事件之 fill.preDream; 有作為者才帶)
+        let preSum = !preFill ? null : (preFill.error ? { error: preFill.error } : { n: preFill.results.length, failed: preFill.results.filter((x) => x.postfit === 'failed' || x.member === 'failed').length, sec: Math.round(preFill.sec), ...(preFill.stateError ? { stateError: preFill.stateError } : {}) })
         //迴圈檢查之兩條機械提示(規則 R-REC-43、R-REC-44): 本輪之節點皆已交付(同輪他節點之評估紀錄已完整)⇒ 於派做夢之前以全部節點之評估紀錄重產本輪節點與待重審者之提示(做夢之審計範圍與看板即帶之); 失敗不影響輪次
         try {
             refreshEvalHints(nodeIds)
@@ -1549,7 +1612,17 @@ let makeProject = (st = getSettings(), inject = {}) => {
         if (!dr.ok) {
             lines.push(`代理式做夢:**未交付做夢文件**(${dr.doc.agent && dr.doc.agent.error ? dr.doc.agent.error : dr.issues.join(';')});本輪節點維持未審`)
             setStatus({ stage: 'dream-failed' })
-            return { lines, dream: null, failed: true, errors: dr.issues }
+            //派做夢之前之附算已執行者(規則 R-REC-51): 其結果已寫入(補做夢時現行者不重算), 回傳帶 fill(只有 preDream 與 member)
+            //  其失敗未記入待重試(派做夢之前之一次不更新待重試之紀錄; 做夢之後之一次未執行 ⇒ 無併入之一次): 失敗者於補做夢時依計畫重算(不計入待重試之次數上限)⇒ 摘要列之重試時機字樣改為與處置相符者(不改處置)
+            if (preFill && Array.isArray(preFill.results) && Array.isArray(preFill.lines)) {
+                let nPre = fillLinesOf(preFill, { stage: 'preDream' }).length
+                let iPre = nPre ? lines.indexOf(preFill.lines[0]) : -1
+                if (iPre >= 0) {
+                    lines.splice(iPre, nPre, ...fillLinesOf(preFill, { stage: 'preDream', retryAt: '做夢未交付,未記入待重試;補做夢時重算' }))
+                }
+            }
+            let msF = memberSumOf([preFill], null)
+            return { lines, dream: null, failed: true, errors: dr.issues, ...(preSum ? { fill: { preDream: preSum, ...(msF ? { member: msF } : {}) } } : {}) }
         }
         setStatus({ stage: 'apply' })
         let pending = []
@@ -1610,27 +1683,32 @@ let makeProject = (st = getSettings(), inject = {}) => {
         if (dtr.issues.length) {
             log(`做夢 ${roundName(round)} 之操作觸及禁區 ${dtr.issues.length} 項: ${dtr.issues.join(';').slice(0, 400)}`)
         }
-        //附算(規則 R-REC-34): 本輪審計之節點(含重做者)與前次附算失敗而待重試者之求解窗後段之值、所缺或已過時之擴充診斷(做夢於本輪新增或改寫 metrics/ 者亦在其內)
+        //附算(規則 R-REC-34): 本輪審計之節點(含重做者)與前次附算失敗而待重試者之求解窗後段之值、所缺或已過時之擴充診斷(做夢於本輪新增或改寫 metrics/ 者亦在其內)、合格者之成員穩健性(規則 R-REC-51)
+        //  本輪之節點之求解窗後段與成員穩健性已於派做夢之前執行(上方之 preFill; 此處不再執行同一項, 重做者除外)
         //  其後接著處理樹上其餘之成品之待補算(規則 R-REC-41; 同一套計畫與執行; 依成品之先後; 總時長之上限 settings.rsi.fillBacklogSec〔預設 1800 秒; 0 = 不處理, 待補算只列於一頁摘要, 同改前〕;
         //  尚餘者列於摘要, 下一次輪末續算; 前次失敗而不重試、原因未變者不取〔狀態檔之 blocked〕; 全樹之補齊亦可走 node g_rsi.mjs --mode fill); 失敗不影響輪次(記於摘要與 round-done 事件之 fill, 下一次輪末重試)
         //  於看板與共同儲存區重產之前(兩者即帶本次之值)、下一輪之計畫之前(輪末鉤子返回後才起下一輪)⇒ 下一輪之任務書、補位與量尺讀得到新補之值; settings.rsi.autoFill === false 關閉
         let fillSum = null
-        if (st.rsi.autoFill !== false) {
+        if (autoFillOf(st.rsi)) {
             setStatus({ stage: 'fill' })
             try {
                 //待重試: 只取來源為輪末、且連續失敗未達上限者(命令列之補算所留者只列於待補算, 再執行補算工具時才重試; 輪末之時長才可預期)
                 let retry = readFillState().retry.filter((x) => x.source === 'round' && x.n < FILL_RETRY_MAX).map((x) => x.id)
-                let fr = await fill({ targets: [...new Set([...nodeIds, ...pending, ...retry])], storeAfter: false, source: 'round', backlogSec: fillBacklogSecOf(st.rsi), ...(typeof inject.runEval === 'function' ? { runEval: inject.runEval } : {}) })
+                //成員穩健性(規則 R-REC-51): 範圍內之合格者(重做者於此補); skip = 派做夢之前已執行過之項目(重做者除外: 成品已換)—— 每一項每輪至多執行一次, 其失敗由下一次輪末重試
+                let preDone = (isPf) => (preFill && Array.isArray(preFill.results) ? preFill.results.filter((x) => (isPf ? x.postfit !== null : x.member !== undefined)).map((x) => x.nodeId).filter((id) => !pending.includes(id)) : [])
+                let skip = preFill && Array.isArray(preFill.results) && preFill.results.length ? { postfit: preDone(true), member: preDone(false) } : null
+                let fr = await fill({ targets: [...new Set([...nodeIds, ...pending, ...retry])], storeAfter: false, source: 'round', backlogSec: fillBacklogSecOf(st.rsi), member: true, ...(skip ? { skip, prior: preFill } : {}), ...(typeof inject.runEval === 'function' ? { runEval: inject.runEval } : {}) })
                 lines.push(...fr.lines)
                 let nBad = fr.results.filter((x) => x.postfit === 'failed' || x.ext.failed.length > 0).length
-                //無任何作為(無待算、無待重試、無摘要之列)⇒ 不帶 fill(摘要與 round-done 事件與未加入本功能時相同)
+                //無任何作為(無待算、無待重試、無摘要之列)⇒ 不帶 fill(摘要與 round-done 事件與未加入本功能時相同); 派做夢之前之一次有作為者另帶 preDream、成員穩健性有作為者另帶 member
                 let active = fr.results.length > 0 || fr.retry.length > 0 || fr.lines.length > 0
-                fillSum = active ? { n: fr.results.length, failed: nBad, retry: fr.retry.length, backlog: { postfit: fr.backlog.postfit.length, ext: Object.values(fr.backlog.ext).reduce((s, v) => s + v.length, 0) }, sec: Math.round(fr.sec), ...(fr.stateError ? { stateError: fr.stateError } : {}) } : null
+                let ms = memberSumOf([preFill, fr], fr)
+                fillSum = active || preSum ? { n: fr.results.length, failed: nBad, retry: fr.retry.length, backlog: { postfit: fr.backlog.postfit.length, ext: Object.values(fr.backlog.ext).reduce((s, v) => s + v.length, 0) }, sec: Math.round(fr.sec), ...(fr.stateError ? { stateError: fr.stateError } : {}), ...(preSum ? { preDream: preSum } : {}), ...(ms ? { member: ms } : {}) } : null
             }
             catch (err) {
                 log(`附算未能執行(不影響輪次): ${String((err && err.message) || err).slice(0, 200)}`)
                 lines.push(`附算(求解窗後段與擴充診斷):**未能執行**(${String((err && err.message) || err).split('\n')[0].slice(0, 200)});下一次輪末重試`)
-                fillSum = { error: String((err && err.message) || err).split('\n')[0].slice(0, 200) }
+                fillSum = { error: String((err && err.message) || err).split('\n')[0].slice(0, 200), ...(preSum ? { preDream: preSum } : {}) }
             }
         }
         let board = writeBoard()
@@ -1964,12 +2042,13 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //retryOf, 狀態檔之待重試 → [{ id, n, last, source, [force] }](n = 連續失敗之次數、last = 最後之錯誤、source = 最近一次失敗來自輪末之附算 'round' 或命令列之補算 'cli';
     //  輪末只自動重試來源為輪末者, 輪末之時長才可預期; 舊格式之字串陣列視為 n 1; 無來源者視為命令列;
     //  force = 強制重算(--force)而失敗之項目 { postfit?: true, ext?: [診斷名] }: 其後之重試(輪末或命令列)對這些項目續為強制重算, 直到成功(不判為「已現行」而移出待重試); 無者不帶此鍵)
+    //  成員穩健性(規則 R-REC-51)之強制重算而失敗者另帶 member: true(有者才帶; 其餘之形不變)
     let forceOf = (v) => {
         if (!isObjF(v)) {
             return null
         }
         let ext = Array.isArray(v.ext) ? [...new Set(v.ext.filter((s) => typeof s === 'string' && s.length > 0))].sort() : []
-        let out = { ...(v.postfit === true ? { postfit: true } : {}), ...(ext.length ? { ext } : {}) }
+        let out = { ...(v.postfit === true ? { postfit: true } : {}), ...(ext.length ? { ext } : {}), ...(v.member === true ? { member: true } : {}) }
         return Object.keys(out).length ? out : null
     }
     let retryOf = (arr) => (Array.isArray(arr) ? arr : []).map((x) => (typeof x === 'string' ? { id: x, n: 1, last: null, source: 'cli' } : (x && typeof x === 'object' && typeof x.id === 'string' ? { id: x.id, n: Number.isInteger(x.n) && x.n > 0 ? x.n : 1, last: typeof x.last === 'string' ? x.last : null, source: x.source === 'round' ? 'round' : 'cli', ...(forceOf(x.force) ? { force: forceOf(x.force) } : {}) } : null))).filter(Boolean)
@@ -2099,6 +2178,38 @@ let makeProject = (st = getSettings(), inject = {}) => {
         }
         return { nodes, skipped }
     }
+    //memberPlanOf, 成員穩健性之計畫(planFill 之 member; 規則 R-REC-51): 關閉者 null; 否則 { sig, eligible, recent }
+    //  eligible = 附算之節點之列(有成品檔、有正本之數字)中合格者(未被否決、評估期之階梯達下限; verifyMember.mjs 之 memberEligibleOf)
+    //  recent = eligible 中讀數依近期活躍度版之診斷(nullRecentAct)者(verifyMember.mjs 之 memberRecentCapableOf: 選集之每隻訊號數為全體隨機之 2 倍以上): 其快取之鍵另帶該診斷之內容雜湊(診斷改寫 ⇒ 重算)
+    let memberPlanOf = (nodes) => {
+        if (!mcfg) {
+            return null
+        }
+        let eligible = nodes.map((x) => x.id).filter((id) => memberEligibleOf(rsi.store.getNode(id), mcfg))
+        return { sig: memberSigOf(mcfg), eligible, recent: eligible.filter((id) => memberRecentCapableOf(rsi.store.getNode(id))), diagName: RECENT_DIAG }
+    }
+    //mergeMember, 成員穩健性之值寫入節點文件與樹(規則 R-REC-51): 節點文件之 harness.member = { key, at, row, canon } 與迴圈判讀(harness.notes)之一列(MEMBER_HEAD 起首; 同前綴之舊列取代)、
+    //  樹之 raw.member = { at, row, selHash(附算時之正本之選集指紋)}; 迴圈檢查(節點文件與樹之 raw.issues)之「提示(成員依賴)」去舊、命中者補於末尾(所記之選集指紋與現況之正本不同者不補);
+    //  不動其他數字; 寫入之序同 mergeExt(先節點文件、後樹)
+    let mergeMember = (nodeId, mb) => {
+        let tn = rsi.store.getNode(nodeId)
+        let selAt = isObjF(mb.canon) && typeof mb.canon.selHash === 'string' ? mb.canon.selHash : null
+        let selNow = tn && tn.raw && isObjF(tn.raw.metrics) && typeof tn.raw.metrics.selHash === 'string' ? tn.raw.metrics.selHash : null
+        let hint = selAt !== null && selAt === selNow ? memberHintOf(mb.row, mcfg) : null
+        let withM = (xs) => [...xs.filter((s) => !isMemberHint(s)), ...(hint ? [hint] : [])]
+        let d = records.getNodeDoc(nodeId)
+        if (d && d.harness) {
+            let notes = (Array.isArray(d.harness.notes) ? d.harness.notes : []).filter((s) => !String(s).startsWith(MEMBER_HEAD))
+            d.harness = { ...d.harness, notes: [...notes, memberLineOf(mb.row)], member: mb }
+            if (d.harness.checks && Array.isArray(d.harness.checks.issues)) {
+                d.harness.checks = { ...d.harness.checks, issues: withM(d.harness.checks.issues) }
+            }
+            records.putNodeDoc(d)
+        }
+        rsi.store.updateNode(nodeId, (x) => {
+            x.raw = { ...x.raw, member: { at: mb.at, row: mb.row, selHash: selAt }, ...(Array.isArray(x.raw.issues) ? { issues: withM(x.raw.issues) } : (hint ? { issues: [hint] } : {})) }
+        })
+    }
     //mergeExt, 補算所得之擴充診斷之值併入樹與節點文件(原 extFill 之併法; 新補之診斷所帶之提示列入迴圈檢查, 同名之舊提示先移除)
     let mergeExt = (nodeId, got) => {
         let filled = Object.keys(got)
@@ -2143,16 +2254,17 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //fillPlanOf, 只求計畫(不評估、不寫任何檔; 命令列 --mode fill --dry): planFill 之結果另帶 skipped
     //forcedOfRetry, 待重試之 force 欄 → planFill 之 forced { <節點 id>: { postfit?, ext? } }(強制重算而失敗者續為強制重算)
     let forcedOfRetry = (retry) => Object.fromEntries(retry.filter((x) => x.force).map((x) => [x.id, x.force]))
-    let fillPlanOf = ({ targets = null, postfit = true, ext = true, force = false, nullDraws = null } = {}) => {
+    //  member(選配; 規則 R-REC-51): true 且成員穩健性開啟(settings.rsi.memberCheck)者另計畫合格之成品之成員穩健性; 未給或 false 者計畫與未加入本項時相同
+    let fillPlanOf = ({ targets = null, postfit = true, ext = true, force = false, nullDraws = null, member = false } = {}) => {
         let { nodes, skipped } = fillNodesOf()
         let fst = readFillState()
-        let p = planFill({ nodes, diags: diagsOf(toolboxDir), registry: fst.registry, evaluator: evaluatorFpOf(st), now: new Date().toISOString(), targets, postfit, ext, force, forced: forcedOfRetry(fst.retry), nullDraws: Number.isInteger(nullDraws) && nullDraws > 0 ? nullDraws : null })
+        let p = planFill({ nodes, diags: diagsOf(toolboxDir), registry: fst.registry, evaluator: evaluatorFpOf(st), now: new Date().toISOString(), targets, postfit, ext, force, forced: forcedOfRetry(fst.retry), nullDraws: Number.isInteger(nullDraws) && nullDraws > 0 ? nullDraws : null, member: member === true ? memberPlanOf(nodes) : null })
         return { ...p, skipped }
     }
     //fill, 附算與補算之執行
     //  targets(選配; 節點 id 之陣列)= 本次要執行者(null = 全部; 輪末 = 本輪審計之節點 + 待重試者); 其餘之須算者列為待補算(backlog; 不執行)
     //  postfit / ext(布林或診斷名之陣列)/ force: 同 planFill; nullDraws: 只作用於擴充診斷之補算(同 extFill; 用到虛無之診斷不得縮減)
-    //  par: 併行數(預設 settings.rsi.fillParallel, 否則 3; 上限 8; 第 2 個以後之工作者先過資源閘); runEval(選配): 執行一次評估之函數 async ({ nodeId, kind, args }) → { code, timeout }(測試以之替換評估之執行本身)
+    //  par: 併行數(預設 settings.rsi.fillParallel, 否則 3; 上限 8; 第 2 個以後之工作者先過資源閘); runEval(選配): 執行一次評估之函數 async ({ nodeId, kind, args }) → { code, timeout }(kind = 'postfit' | 'ext' | 'member'; 測試以之替換評估之執行本身)
     //  每個成品算完即寫入 ⇒ 可中斷續跑(已算者之鍵與現況相同, 下一次不重算); 個別之失敗不拋錯: 記入回傳之 results 與待重試(fill_state.json 之 retry)
     //  storeAfter: 結束後重產共同儲存區與看板(失敗不影響補算; 回傳之 store 帶其結果或錯誤)
     //  回 { evaluator, plan: { nTasks, nCurrent }, results, backlog, skipped, retry, lines, sec, store, [stateError] }(stateError: 狀態檔未寫成之原因; 已算之結果照常回傳, 命令列之離開碼依「有失敗」)
@@ -2166,7 +2278,12 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //    未給、0 或無待補算者行為與改前相同(--mode fill / extfill 不給 ⇒ 不略過)
     //  不重試之失敗之紀錄(規則 R-REC-41): 每次(輪末或命令列)執行後更新 —— 本次得不重試之失敗者以該次失敗之項目之指紋記入(取代舊者);
     //    已不需計算(完整選項之計畫中為現行)或已不在樹上者移除; 其餘沿用。無紀錄者狀態檔不帶此欄(與改前逐位相同)
-    let fill = async ({ targets = null, postfit = true, ext = true, force = false, nullDraws = null, par = null, runEval = runEvalDefault, storeAfter = true, onEach = null, source = 'cli', backlogSec = 0 } = {}) => {
+    //  member(選配; 規則 R-REC-51; 預設 false = 與未加入本項時相同): true 且成員穩健性開啟者另計畫合格之成品之成員穩健性(targets 內者執行: 每個成品依序 K 次半庫之完整評估, 全部成功才算成功;
+    //    targets 以外者入待補算之 member, 一併處理待補算不取); 待重試與不重試之失敗之紀錄之重算計畫(完整選項)於本次計畫此項者另含之
+    //  skip(選配; 輪末之做夢之後之一次所用)= { postfit: [id], member: [id] }: 計畫中所列成品之該項目不執行(同一輪之派做夢之前已執行過者; 失敗者照舊於待重試, 下一次輪末重試)
+    //  stage(選配)= 'preDream': 輪末之派做夢之前之一次(摘要之列之寫法見 fillLinesOf; 不更新待重試與不重試之失敗之紀錄, 回傳另帶 tasks; 待重試已達上限之列由做夢之後之一次列出)
+    //  prior(選配; 輪末之做夢之後之一次所用)= 同一輪之派做夢之前之一次之回傳(results、tasks): 併入本次之結果以記待重試與不重試之失敗(每輪記一次)
+    let fill = async ({ targets = null, postfit = true, ext = true, force = false, nullDraws = null, par = null, runEval = runEvalDefault, storeAfter = true, onEach = null, source = 'cli', backlogSec = 0, member = false, skip = null, stage = null, prior = null } = {}) => {
         let t0 = Date.now()
         let tCap0 = clockOf()
         let now = new Date().toISOString()
@@ -2177,7 +2294,21 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let evaluator = evaluatorFpOf(st)
         let { nodes, skipped } = fillNodesOf()
         //forced: 前次強制重算而失敗者(待重試之 force 欄)續為強制重算, 直到成功
-        let plan = planFill({ nodes, diags: diagsOf(toolboxDir), registry: prevReg, evaluator, now, targets, postfit, ext, force, forced: forcedOfRetry(fsr.retry), nullDraws: Number.isInteger(nullDraws) && nullDraws > 0 ? nullDraws : null })
+        let plan = planFill({ nodes, diags: diagsOf(toolboxDir), registry: prevReg, evaluator, now, targets, postfit, ext, force, forced: forcedOfRetry(fsr.retry), nullDraws: Number.isInteger(nullDraws) && nullDraws > 0 ? nullDraws : null, member: member === true ? memberPlanOf(nodes) : null })
+        //skip(輪末之做夢之後之一次): 同一輪之派做夢之前已執行過之項目不再執行(每一項每輪至多一次; 未給者計畫不變)
+        let skipPf = isObjF(skip) && Array.isArray(skip.postfit) ? new Set(skip.postfit) : null
+        let skipM = isObjF(skip) && Array.isArray(skip.member) ? new Set(skip.member) : null
+        if (skipPf || skipM) {
+            plan = {
+                ...plan,
+                tasks: plan.tasks.map((t) => {
+                    let pf = t.postfit && !(skipPf && skipPf.has(t.nodeId))
+                    let mb = !!t.member && !(skipM && skipM.has(t.nodeId))
+                    let fo = t.forced ? { postfit: t.forced.postfit === true && pf, ext: t.forced.ext, ...(t.forced.member === true && mb ? { member: true } : {}) } : null
+                    return { nodeId: t.nodeId, postfit: pf, ext: t.ext, keys: { postfit: pf ? t.keys.postfit : null, ext: t.keys.ext, ...(mb ? { member: t.keys.member } : {}) }, ...(mb ? { member: true } : {}), ...(fo && (fo.postfit || fo.ext.length || fo.member) ? { forced: fo } : {}) }
+                }).filter((t) => t.postfit || t.ext.length > 0 || t.member === true),
+            }
+        }
         //待補算之一併處理(規則 R-REC-41): 待補算之成品(plan.backlog)依樹之索引之序, 以同一套計畫求其待算(force 不及於此)
         //  待重試之紀錄中之成品不在此列: 來源為輪末而未達上限者已在 targets 內; 來源為命令列或已達上限者照現行只列(輪末不自動重試; 輪末之時長才可預期)
         //  不重試之失敗之紀錄中之成品: 現行之待算之指紋與紀錄相同者不取(重跑結果相同; 計入 nSkipBl), 不同者(診斷修訂、評估器更新、待算項目改變)照常取
@@ -2304,10 +2435,70 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 }
                 res.ext = { ok: task.ext.filter((nm) => got[nm]), failed: task.ext.filter((nm) => !got[nm]) }
             }
+            //成員穩健性(規則 R-REC-51): 各半庫依序一次完整評估(評估器之 --member <鹽>:<半>; 帶等號之寫法會被拒 ⇒ 以空白分隔); 任一次失敗即止、整項失敗(失敗之分類同上)
+            //  採信之條件: 未逾時、離開碼 0、結果檔為本次之輸出、ok 且 member.tag 與所給者相同; 讀數 = verifyMember.mjs 之 memberRowOf(正本之 metrics 為全庫之內容之來源)
+            let mrow = null
+            //讀數依近期活躍度版之診斷者(鍵帶 diag; fillPlan.mjs 之 memberKeyOf)且同任務補該診斷(task.ext 含)者: 全庫之值須取本次補得之診斷之值(其併入樹在本任務之後段; 樹上仍為舊版),
+            //  各半取現行之診斷 —— 兩者同版才有意義; 該診斷於本次未補入(失敗)者不算讀數(整項失敗; 與該診斷之失敗同入待重試, 下一次一併重算)
+            let memberDep = !!(task.member && isObjF(task.keys) && isObjF(task.keys.member) && task.keys.member.diag !== undefined)
+            let diagNew = memberDep && task.ext.includes(RECENT_DIAG) ? got[RECENT_DIAG] : undefined
+            if (memberDep && task.ext.includes(RECENT_DIAG) && !diagNew) {
+                res.member = 'failed'
+                kinds.push('transient')
+                errs.push(`成員穩健性:同任務之擴充診斷 ${RECENT_DIAG} 未補入,讀數待其補入後再算`)
+            }
+            else if (task.member) {
+                let tags = memberTagsOf(mcfg)
+                let halves = []
+                for (let tag of tags) {
+                    let fpOut = path.join(st.rsi.root, FILL_DIR, `${id}.member.tmp-${process.pid}.json`)
+                    rmQuiet(fpOut)
+                    let rr = null
+                    let tRun = Date.now()
+                    try {
+                        rr = await runEval({ nodeId: id, kind: 'member', args: ['--pick', fpPick, '--mode', 'full', '--null', String(mcfg.nullDraws), '--ext-only', RECENT_DIAG, '--member', tag, '--out', fpOut, '--no-log'] })
+                    }
+                    catch (err) {
+                        rr = { code: null, timeout: false, error: String((err && err.message) || err) }
+                    }
+                    let o = readJson(fpOut, null)
+                    let fresh = freshSince(fpOut, tRun)
+                    rmQuiet(fpOut)
+                    let why = null
+                    if (rr && rr.timeout) {
+                        why = '逾時'
+                    }
+                    else if (!rr || rr.code !== 0) {
+                        why = String((o && o.error) || (rr && rr.error) || `離開碼 ${rr ? rr.code : '—'}`)
+                    }
+                    else if (!fresh) {
+                        why = '結果檔不是本次之輸出(未寫出或早於本次之起算)'
+                    }
+                    else if (!o || o.ok !== true || !isObjF(o.metrics) || !isObjF(o.member) || o.member.tag !== tag) {
+                        why = '結果檔不是該半庫之評估(member 之標記不符)'
+                    }
+                    if (why) {
+                        kinds.push(failKindOf(rr, o))
+                        errs.push(`成員穩健性(${tag}):${why.split('\n')[0].slice(0, 200)}`)
+                        break
+                    }
+                    halves.push({ tag, n: o.member.n, metrics: o.metrics })
+                }
+                if (halves.length === tags.length) {
+                    let cn = rsi.store.getNode(id)
+                    let cm = cn && cn.raw && isObjF(cn.raw.metrics) ? cn.raw.metrics : {}
+                    mrow = memberRowOf(diagNew ? { ...cm, ext: { ...(isObjF(cm.ext) ? cm.ext : {}), [RECENT_DIAG]: diagNew } } : cm, halves, mcfg)
+                    res.member = 'ok'
+                    res.memberHit = memberHintOf(mrow, mcfg) !== null
+                }
+                else {
+                    res.member = 'failed'
+                }
+            }
             let gotNames = Object.keys(got)
-            if (row || gotNames.length) {
+            if (row || gotNames.length || mrow) {
                 let at = new Date().toISOString()
-                let doc = fillDocOf(readFill(st.rsi.root, id), { nodeId: id, at, ...(row ? { postfit: { key: task.keys.postfit, row, canon: { selHash: typeof canonSel.get(id) === 'string' ? canonSel.get(id) : null, at: evalAt.get(id) || null } } } : {}), ...(gotNames.length ? { ext: Object.fromEntries(gotNames.map((nm) => [nm, { key: task.keys.ext[nm], value: got[nm] }])) } : {}) })
+                let doc = fillDocOf(readFill(st.rsi.root, id), { nodeId: id, at, ...(row ? { postfit: { key: task.keys.postfit, row, canon: { selHash: typeof canonSel.get(id) === 'string' ? canonSel.get(id) : null, at: evalAt.get(id) || null } } } : {}), ...(gotNames.length ? { ext: Object.fromEntries(gotNames.map((nm) => [nm, { key: task.keys.ext[nm], value: got[nm] }])) } : {}), ...(mrow ? { member: { key: task.keys.member, row: mrow, canon: { selHash: typeof canonSel.get(id) === 'string' ? canonSel.get(id) : null, at: evalAt.get(id) || null } } } : {}) })
                 //寫入之序: 先併入樹與節點文件、最後才寫補算檔 —— 計畫見補算檔有同鍵之值即判現行, 補算檔先寫而併入失敗者, 樹上之舊值就不再修正;
                 //  反向之失敗(已併入而補算檔未寫成)⇒ 下一次重算一次, 結果相同
                 if (gotNames.length) {
@@ -2317,13 +2508,17 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 if (row) {
                     mergePostfit(id, doc.postfit)
                 }
+                if (mrow) {
+                    mergeMember(id, doc.member)
+                }
                 writeJsonAtomic(fillFileOf(st.rsi.root, id), doc)
             }
         }
         //one, 一個成品之執行之包裝: 整段攔截 —— 寫檔失敗(檔被占用、磁碟滿)等拋錯一律轉為該成品之失敗(入待重試), 不拋出; 工作者因而皆跑完才返回
         let one = async (task, order) => {
             let id = task.nodeId
-            let res = { order, nodeId: id, postfit: null, ext: { ok: [], failed: [] }, error: null }
+            //member: 只在任務有成員穩健性之項目時才帶此鍵(其餘之結果之形與未加入本項時相同)
+            let res = { order, nodeId: id, postfit: null, ext: { ok: [], failed: [] }, error: null, ...(task.member ? { member: null } : {}) }
             let errs = []
             let kinds = []
             try {
@@ -2337,11 +2532,15 @@ let makeProject = (st = getSettings(), inject = {}) => {
                     res.postfit = 'failed'
                 }
                 res.ext = { ok: [], failed: task.ext.slice() }
+                if (task.member) {
+                    res.member = 'failed'
+                    delete res.memberHit
+                }
             }
             res.error = errs.length ? errs.join(';') : null
             //kind: 有暫時性之失敗者 'transient'(入待重試); 只有重跑結果相同之失敗或須重驗者為其類(不入待重試); 無失敗為 null
             res.kind = kinds.includes('transient') ? 'transient' : (FILL_NO_RETRY_KINDS.find((k) => kinds.includes(k)) || null)
-            log(`附算 ${id.slice(0, 8)}: ${[task.postfit ? `求解窗後段 ${res.postfit === 'ok' ? '成功' : '失敗'}` : null, task.ext.length ? `擴充診斷 補入 ${res.ext.ok.join('、') || '無'}${res.ext.failed.length ? `、失敗 ${res.ext.failed.join('、')}` : ''}` : null].filter(Boolean).join(';')}${res.error ? `(${res.error.slice(0, 200)})` : ''}`)
+            log(`附算 ${id.slice(0, 8)}: ${[task.postfit ? `求解窗後段 ${res.postfit === 'ok' ? '成功' : '失敗'}` : null, task.ext.length ? `擴充診斷 補入 ${res.ext.ok.join('、') || '無'}${res.ext.failed.length ? `、失敗 ${res.ext.failed.join('、')}` : ''}` : null, task.member ? `成員穩健性 ${res.member === 'ok' ? `成功${res.memberHit ? '(命中成員依賴之提示)' : ''}` : '失敗'}` : null].filter(Boolean).join(';')}${res.error ? `(${res.error.slice(0, 200)})` : ''}`)
             results.push(res)
         }
         //併行數: 依 fillParOf(跨套件規格 K3、K4、K7: 無效用預設、數字字串轉型、上限 8)
@@ -2376,8 +2575,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
         //節點文件之求解窗後段之列之補回: 重驗(reverify)以新之摘要重寫節點文件而未帶此列 ⇒ 補算檔有現行之值(鍵與現況相同)而節點文件之 harness.postfit 不同或摘要無此列者,
         //  只重寫節點文件(不評估、不動補算檔與樹); 全部已執行之節點皆核(不限本次之範圍); 失敗不影響附算
         let docFixed = []
+        let nsFix = []
         try {
-            for (let n of fillNodesOf().nodes) {
+            nsFix = fillNodesOf().nodes
+            for (let n of nsFix) {
                 let pf = postfitOfFill(n.fill, { pick: n.pickHash, evaluator }, n.selHash)
                 let d = pf ? records.getNodeDoc(n.id) : null
                 if (!pf || !d || !d.harness) {
@@ -2393,12 +2594,79 @@ let makeProject = (st = getSettings(), inject = {}) => {
         catch (err) {
             log(`附算之節點文件之補回失敗(不影響附算): ${String((err && err.message) || err).slice(0, 200)}`)
         }
+        //成員穩健性之值之補回(規則 R-REC-51; 同上): 補算檔有現行之值(鍵與現況相同、所記之正本之選集指紋相容)而節點文件之 harness.member 不同或迴圈判讀無其列、或樹之 raw.member 不同者 ⇒ 只重寫(不評估、不動補算檔);
+        //  重驗(reverify)以新之迴圈判讀重寫節點文件而未帶此列、重做之成品與前次逐位相同而樹為新節點者皆由此補回; 成員穩健性關閉者不核; 失敗不影響附算
+        let memberFixed = []
+        if (mcfg) {
+            try {
+                let sig = memberSigOf(mcfg)
+                //鍵與計畫同一來源(memberKeyOf): 讀數依近期活躍度版之診斷者另帶該診斷之內容雜湊(診斷檔不存在者 null)
+                let dgHash = (diagsOf(toolboxDir).find((x) => x.name === RECENT_DIAG) || {}).hash
+                for (let n of nsFix) {
+                    let fm = memberOfFill(n.fill, memberKeyOf({ pick: n.pickHash, evaluator, sig, dep: memberRecentCapableOf(rsi.store.getNode(n.id)), diag: dgHash === undefined ? null : dgHash }), n.selHash)
+                    if (!fm) {
+                        continue
+                    }
+                    let d = records.getNodeDoc(n.id)
+                    let tn = rsi.store.getNode(n.id)
+                    let okDoc = !d || !d.harness || (isObjF(d.harness.member) && d.harness.member.at === fm.at && Array.isArray(d.harness.notes) && d.harness.notes.some((s) => String(s).startsWith(MEMBER_HEAD)))
+                    let okTree = !!(tn && tn.raw && isObjF(tn.raw.member) && tn.raw.member.at === fm.at && tn.raw.member.selHash === n.selHash)
+                    if (!okDoc || !okTree) {
+                        mergeMember(n.id, n.fill.member)
+                        memberFixed.push(n.id)
+                    }
+                }
+            }
+            catch (err) {
+                log(`附算之成員穩健性之補回失敗(不影響附算): ${String((err && err.message) || err).slice(0, 200)}`)
+            }
+        }
+        //同一輪之兩次(規則 R-REC-51): 派做夢之前之一次(stage 'preDream')不更新待重試與不重試之失敗之紀錄(其結果不計入 ⇒ 紀錄只依前次);
+        //  做夢之後之一次以 prior(派做夢之前之一次之 results 與 tasks)併入本次之結果再記 —— 同一成品之兩次之項目合為一筆(各項取執行了該項之一次之結果; 分類: 任一為暫時性者為暫時性),
+        //  每輪記一次(同改前之一次附算: 連續失敗之次數每輪至多 +1、不重試之失敗之指紋涵蓋兩次之失敗之項目); 未給 prior 者(命令列、extFill)與改前相同
+        let preRun = stage === 'preDream'
+        //  併入之範圍: 只併 skip 所列者(派做夢之前之結果仍屬現行之成品)且仍在附算之節點之列者 —— 做夢判重做者(成品已換; 不在 skip)與做夢刪除者之舊結果與現行之成品無關,
+        //  不併(否則舊成品之失敗入回傳之 blocked 與摘要之「附算之失敗而不重試」之列); 未給 skip 者(直接呼叫)全併
+        let carriedIds = skipPf || skipM ? new Set([...(skipPf || []), ...(skipM || [])]) : null
+        let liveIds = new Set(nodes.map((n) => n.id))
+        let keepPr = (x) => liveIds.has(x.nodeId) && (carriedIds === null || carriedIds.has(x.nodeId))
+        let pr0 = !preRun && isObjF(prior) && Array.isArray(prior.results) && Array.isArray(prior.tasks) ? prior : null
+        let pr = pr0 ? { ...pr0, results: pr0.results.filter(keepPr), tasks: pr0.tasks.filter(keepPr) } : null
+        let mergeRes = (cur, prev) => {
+            let byP = new Map(prev.map((x) => [x.nodeId, x]))
+            let seen = new Set(cur.map((x) => x.nodeId))
+            let out = cur.map((x) => {
+                let p = byP.get(x.nodeId)
+                if (!p) {
+                    return x
+                }
+                let ks = [p.kind, x.kind].filter(Boolean)
+                return { ...x, postfit: x.postfit !== null ? x.postfit : p.postfit, ...(x.member !== undefined || p.member !== undefined ? { member: x.member !== undefined ? x.member : p.member } : {}), error: [p.error, x.error].filter(Boolean).join(';') || null, kind: ks.includes('transient') ? 'transient' : (ks[0] || null) }
+            })
+            return [...out, ...prev.filter((p) => !seen.has(p.nodeId))]
+        }
+        let mergeTasks = (cur, prev) => {
+            let byP = new Map(prev.map((t) => [t.nodeId, t]))
+            let seen = new Set(cur.map((t) => t.nodeId))
+            let out = cur.map((t) => {
+                let p = byP.get(t.nodeId)
+                if (!p) {
+                    return t
+                }
+                let km = t.keys.member || p.keys.member
+                let fo = { postfit: !!((t.forced && t.forced.postfit) || (p.forced && p.forced.postfit)), ext: t.forced ? t.forced.ext : [], ...((t.forced && t.forced.member) || (p.forced && p.forced.member) ? { member: true } : {}) }
+                return { nodeId: t.nodeId, postfit: t.postfit || p.postfit, ext: t.ext, keys: { postfit: t.keys.postfit || p.keys.postfit, ext: t.keys.ext, ...(km ? { member: km } : {}) }, ...(t.member || p.member ? { member: true } : {}), ...(fo.postfit || fo.ext.length || fo.member ? { forced: fo } : {}) }
+            })
+            return [...out, ...prev.filter((p) => !seen.has(p.nodeId))]
+        }
+        let resB = preRun ? [] : (pr ? mergeRes(results, pr.results) : results)
+        let tasksB = preRun ? [] : (pr ? mergeTasks(tasks, pr.tasks) : tasks)
         //待重試: 候選 = 前次之待重試 ∪ 本次有暫時性失敗者(重跑結果相同之失敗與須重驗者不入, 另列 blocked); 以完整選項(求解窗後段 + 全部診斷)對候選重算一次計畫, 仍有待算者才留
         //  本次失敗者之次數 +1、記最後之錯誤與本次之來源; 前次之待重試而本次未失敗者沿用其次數與來源(只做部分項目而其他項仍待算者照留, 已不需計算者移除)
         let alive = new Set(nodes.map((n) => n.id))
         let prevRetry = new Map(fsr.retry.map((x) => [x.id, x]))
-        let failT = new Map(results.filter((x) => x.kind === 'transient').map((x) => [x.nodeId, x]))
-        let blocked = results.filter((x) => FILL_NO_RETRY_KINDS.includes(x.kind)).map((x) => ({ id: x.nodeId, kind: x.kind, error: x.error }))
+        let failT = new Map(resB.filter((x) => x.kind === 'transient').map((x) => [x.nodeId, x]))
+        let blocked = resB.filter((x) => FILL_NO_RETRY_KINDS.includes(x.kind)).map((x) => ({ id: x.nodeId, kind: x.kind, error: x.error }))
         let blockedIds = new Set(blocked.map((x) => x.id))
         let cand = [...new Set([...prevRetry.keys(), ...failT.keys()])].filter((id) => alive.has(id) && !blockedIds.has(id))
         //待重試之 force 欄(強制重算而失敗者續為強制重算, 直到成功): 以前次所記者為底; 本次已執行之項目以本次之結果取代 ——
@@ -2407,20 +2675,23 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let forceNext = new Map()
         for (let [id, p0] of prevRetry) {
             if (p0.force) {
-                forceNext.set(id, { postfit: p0.force.postfit === true, ext: new Set(p0.force.ext || []) })
+                forceNext.set(id, { postfit: p0.force.postfit === true, ext: new Set(p0.force.ext || []), member: p0.force.member === true })
             }
         }
         {
-            let resById = new Map(results.map((x) => [x.nodeId, x]))
-            for (let tk of tasks) {
+            let resById = new Map(resB.map((x) => [x.nodeId, x]))
+            for (let tk of tasksB) {
                 let x = resById.get(tk.nodeId)
                 if (!x) {
                     continue
                 }
-                let cur = forceNext.get(tk.nodeId) || { postfit: false, ext: new Set() }
+                let cur = forceNext.get(tk.nodeId) || { postfit: false, ext: new Set(), member: false }
                 let fo = tk.forced || { postfit: false, ext: [] }
                 if (tk.postfit) {
                     cur.postfit = fo.postfit === true && x.postfit === 'failed'
+                }
+                if (tk.member) {
+                    cur.member = fo.member === true && x.member === 'failed'
                 }
                 for (let nm of tk.ext) {
                     if (fo.ext.includes(nm) && x.ext.failed.includes(nm)) {
@@ -2435,12 +2706,14 @@ let makeProject = (st = getSettings(), inject = {}) => {
         }
         let forceOfId = (id) => {
             let c = forceNext.get(id)
-            return c ? forceOf({ postfit: c.postfit, ext: [...c.ext] }) : null
+            return c ? forceOf({ postfit: c.postfit, ext: [...c.ext], member: c.member }) : null
         }
         let pendingIds = null
         try {
             let forced2 = Object.fromEntries(cand.map((id) => [id, forceOfId(id)]).filter((x) => x[1]))
-            let p2 = planFill({ nodes: fillNodesOf().nodes, diags: diagsOf(toolboxDir), registry: plan.registry, evaluator, now, targets: cand, postfit: true, ext: true, force: false, forced: forced2 })
+            //完整選項: 本次計畫成員穩健性者(member: true 且開啟)另含之(規則 R-REC-51); 未計畫者與未加入本項時相同(--mode fill --no-member、extFill 與直接呼叫 fill 而未給 member 者)
+            let ns2 = fillNodesOf().nodes
+            let p2 = planFill({ nodes: ns2, diags: diagsOf(toolboxDir), registry: plan.registry, evaluator, now, targets: cand, postfit: true, ext: true, force: false, forced: forced2, member: member === true ? memberPlanOf(ns2) : null })
             pendingIds = new Set(p2.tasks.map((x) => x.nodeId))
         }
         catch (err) {
@@ -2458,17 +2731,18 @@ let makeProject = (st = getSettings(), inject = {}) => {
         //  其後以完整選項(求解窗後段 + 全部診斷)對紀錄中之成品重算一次計畫(本次寫入後之現況): 已不需計算(現行)或已不在附算之節點之列(樹上無、或無成品檔)者不在其 tasks ⇒ 移除, 其餘沿用(重算失敗者照留)
         let blMap = new Map(fsr.blocked.map((x) => [x.id, x]))
         {
-            let taskById = new Map(tasks.map((x) => [x.nodeId, x]))
-            for (let x of results.filter((r) => FILL_NO_RETRY_KINDS.includes(r.kind))) {
+            let taskById = new Map(tasksB.map((x) => [x.nodeId, x]))
+            for (let x of resB.filter((r) => FILL_NO_RETRY_KINDS.includes(r.kind))) {
                 let tk = taskById.get(x.nodeId)
                 if (tk) {
-                    blMap.set(x.nodeId, { id: x.nodeId, kind: x.kind, sig: fillSigOf(tk, { postfit: x.postfit === 'failed', ext: x.ext.failed }) })
+                    blMap.set(x.nodeId, { id: x.nodeId, kind: x.kind, sig: fillSigOf(tk, { postfit: x.postfit === 'failed', ext: x.ext.failed, member: x.member === 'failed' }) })
                 }
             }
         }
         if (blMap.size) {
             try {
-                let p3 = planFill({ nodes: fillNodesOf().nodes, diags: diagsOf(toolboxDir), registry: plan.registry, evaluator, now, targets: [...blMap.keys()], postfit: true, ext: true, force: false, forced: null })
+                let ns3 = fillNodesOf().nodes
+                let p3 = planFill({ nodes: ns3, diags: diagsOf(toolboxDir), registry: plan.registry, evaluator, now, targets: [...blMap.keys()], postfit: true, ext: true, force: false, forced: null, member: member === true ? memberPlanOf(ns3) : null })
                 let still = new Set(p3.tasks.map((x) => x.nodeId))
                 for (let id of [...blMap.keys()]) {
                     if (!still.has(id)) {
@@ -2502,11 +2776,12 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let blDone = new Set(tasks.slice(nMain, Math.max(nMain, Math.min(next, tasks.length))).map((x) => x.nodeId))
         //取用之待補算中失敗者之個數(求解窗後段或任一診斷失敗者; 不分暫時性或重跑結果相同; 本次之範圍內之成品之失敗不計): 摘要於其不為 0 時不寫「已補齊」、改註此數(規則 R-REC-41 ⑦; fillLinesOf)
         let nFailBl = results.filter((x) => blDone.has(x.nodeId) && (x.postfit === 'failed' || (x.ext && x.ext.failed.length > 0))).length
-        let backlog = blDone.size ? { postfit: plan.backlog.postfit.filter((id) => !blDone.has(id)), ext: Object.fromEntries(Object.entries(plan.backlog.ext).map(([nm, ids]) => [nm, ids.filter((id) => !blDone.has(id))])) } : plan.backlog
-        let out = { evaluator, source: src, par: nPar, plan: { nTasks: nMain + blDone.size, nCurrent: plan.nCurrent }, results: results.map(({ order, ...x }) => x), backlog, skipped, retry, retryInfo, capped, blocked, ...(fsr.note ? { stateNote: fsr.note } : {}), ...(stateError ? { stateError } : {}), sec, ...(blTasks.length || nSkipBl ? { backlogRun: { n: blDone.size, rest: blTasks.length - blDone.size, capSec: backlogSec, ...(nSkipBl ? { skipped: nSkipBl } : {}), ...(nFailBl ? { failed: nFailBl } : {}) } } : {}) }
-        out.lines = fillLinesOf(out)
-        //其餘之摘要: 待重試已達上限者(只列、不再於輪末自動重試)、不入待重試之失敗、狀態檔之重建與未寫成
-        if (capped.length) {
+        //  成員穩健性之待補算(規則 R-REC-51; 有者才帶)一併處理不取 ⇒ 照列
+        let backlog = blDone.size ? { postfit: plan.backlog.postfit.filter((id) => !blDone.has(id)), ext: Object.fromEntries(Object.entries(plan.backlog.ext).map(([nm, ids]) => [nm, ids.filter((id) => !blDone.has(id))])), ...(plan.backlog.member ? { member: plan.backlog.member } : {}) } : plan.backlog
+        let out = { evaluator, source: src, par: nPar, plan: { nTasks: nMain + blDone.size, nCurrent: plan.nCurrent }, results: results.map(({ order, ...x }) => x), ...(preRun ? { tasks } : {}), backlog, skipped, retry, retryInfo, capped, blocked, ...(fsr.note ? { stateNote: fsr.note } : {}), ...(stateError ? { stateError } : {}), sec, ...(blTasks.length || nSkipBl ? { backlogRun: { n: blDone.size, rest: blTasks.length - blDone.size, capSec: backlogSec, ...(nSkipBl ? { skipped: nSkipBl } : {}), ...(nFailBl ? { failed: nFailBl } : {}) } } : {}) }
+        out.lines = fillLinesOf(out, stage === 'preDream' ? { stage } : {})
+        //其餘之摘要: 待重試已達上限者(只列、不再於輪末自動重試; 派做夢之前之一次不列 —— 由同一輪做夢之後之一次列出)、不入待重試之失敗、狀態檔之重建與未寫成
+        if (capped.length && stage !== 'preDream') {
             out.lines.push(`附算之待重試已達上限(連續失敗 ${FILL_RETRY_MAX} 次;只列、不再於輪末自動重試,以 \`node g_rsi.mjs --mode fill --only <id>\` 個別處理):${capped.map((id) => id.slice(0, 8)).join('、')}`)
         }
         if (blocked.length) {
@@ -2522,6 +2797,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
         if (docFixed.length) {
             out.docFixed = docFixed
             out.lines.push(`附算:補回節點文件之求解窗後段之列 ${docFixed.length} 個(節點文件未帶而補算檔有現行之值;未評估):${docFixed.map((id) => id.slice(0, 8)).join('、')}`)
+        }
+        if (memberFixed.length) {
+            out.memberFixed = memberFixed
+            out.lines.push(`附算:補回成員穩健性之值 ${memberFixed.length} 個(節點文件或樹未帶而補算檔有現行之值;未評估):${memberFixed.map((id) => id.slice(0, 8)).join('、')}`)
         }
         if (storeAfter) {
             //看板之寫入亦在攔截之內: 其失敗不使附算拋出(補算檔與狀態檔已寫), 記於 out.store
@@ -2575,6 +2854,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
     let evalHintsAll = typeof inject.evalHints === 'function' ? inject.evalHints : evalHintsOfDocs
     //側別曝險之提示(規則 R-REC-48): 與兩條提示同一組產生之時點(派做夢之前、處置之後、reverify 之後、--mode validate 之重掃)與替換(本檔之 isEvalHint 含其標頭; 置於兩條提示之後)
     //  ⇒ 判定之入口之結果另併各節點(樹上已執行者)之一條(命中且未放行者); 入口拋錯者照舊拋出(各呼叫點只記錄); 樹上無命中者與改前逐項相同
+    //  成員依賴之提示(規則 R-REC-51)同一組時點與替換: 樹上之現行之讀數(raw.member 所記之選集指紋 = 正本)命中者另併一條(置於側別曝險之後); 無讀數或未命中者不併 ⇒ 樹上皆無讀數者與改前逐項相同
     let evalHintsTwo = evalHintsAll
     evalHintsAll = (docs, workRoot) => {
         let out = new Map(evalHintsTwo(docs, workRoot))
@@ -2583,6 +2863,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let xh = n && n.status === 'executed' ? exposureHintOf(exposureOfNode(n)) : null
             if (xh) {
                 out.set(d.nodeId, [...(out.get(d.nodeId) || []), xh])
+            }
+            let mh = n && n.status === 'executed' ? memberHintOfNode(n) : null
+            if (mh) {
+                out.set(d.nodeId, [...(out.get(d.nodeId) || []), mh])
             }
         }
         return out
@@ -2987,7 +3271,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         return { ok: true }
     }
 
-    return { st, rsi, arsi, records, toolbox, typeOf, setDirectionTypes, domain, catalog, selectable, run, monitor, idOf, taskFor, writeBoard, writeCatalogFile, writeSearchMap, validatePending, reverifyAll, extFill, fill, fillPlanOf, fillParOf, rescanTraces, refreshEvalHints, rescanSideFlow, pendingDream, redream, requestDreamOnly, pendingReauditIds, claimedNodeIds, inactiveArmsOf, offDefArmsOf, migrateDocs, annotateDream, closeFrontier, rearmFrontier, proposeDirection, exposureOf: exposureOfNode, exposureOn: expCfg !== null, rankBy, gaugeDualOf, sideReadOfTree, pickStore: () => buildPickStore(st), setStatus, getState, setState, log, envKey, layerOfSpec }
+    return { st, rsi, arsi, records, toolbox, typeOf, setDirectionTypes, domain, catalog, selectable, run, monitor, idOf, taskFor, writeBoard, writeCatalogFile, writeSearchMap, validatePending, reverifyAll, extFill, fill, fillPlanOf, fillParOf, rescanTraces, refreshEvalHints, rescanSideFlow, pendingDream, redream, requestDreamOnly, pendingReauditIds, claimedNodeIds, inactiveArmsOf, offDefArmsOf, migrateDocs, annotateDream, closeFrontier, rearmFrontier, proposeDirection, exposureOf: exposureOfNode, exposureOn: expCfg !== null, memberCheck: mcfg, hasContent: hasContentNode, rankBy, gaugeDualOf, sideReadOfTree, pickStore: () => buildPickStore(st), setStatus, getState, setState, log, envKey, layerOfSpec }
 }
 
 

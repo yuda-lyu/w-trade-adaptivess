@@ -44,8 +44,9 @@ describe('附算與補算之強健性(位置、攔截、待重試、心跳、狀
         let st = getSettings()
         let d = path.join(t.dir, 'proj')
         //資源閘關閉、併行 1(參考設定之資源閘會使工作者等待全機之負載降下, 測試之耗時與成敗隨機器之負載而變)
+        //成員穩健性(規則 R-REC-51; 預設開啟)關閉: 本檔之範圍為求解窗後段與擴充診斷(成員穩健性見 unit-memberCheck)
         st.resources = {}
-        st.rsi = { ...st.rsi, fillParallel: 1 }
+        st.rsi = { ...st.rsi, fillParallel: 1, memberCheck: false }
         st.rsi.root = path.join(d, 'rsi')
         st.rsi.docLimits = false //輪末鉤子之專案文件自動整理(R-REC-17)取本庫自身之 sgud; 測試不得改寫入版控之文件(R-PKG-10)
         st.records = { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), trashDir: path.join(d, 'rsi/records/trash'), workDir: path.join(d, 'rsi/work'), toolboxDir: path.join(d, 'rsi/toolbox') }
@@ -296,7 +297,7 @@ describe('附算與補算之採信條件與邊界', function () {
         let st = getSettings()
         let d = path.join(t.dir, 'proj')
         st.resources = {}
-        st.rsi = { ...st.rsi, fillParallel: 1 }
+        st.rsi = { ...st.rsi, fillParallel: 1, memberCheck: false }
         st.rsi.root = path.join(d, 'rsi')
         st.rsi.docLimits = false //輪末鉤子之專案文件自動整理(R-REC-17)取本庫自身之 sgud; 測試不得改寫入版控之文件(R-PKG-10)
         st.records = { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), trashDir: path.join(d, 'rsi/records/trash'), workDir: path.join(d, 'rsi/work'), toolboxDir: path.join(d, 'rsi/toolbox') }
@@ -565,8 +566,10 @@ describe('附算與補算之採信條件與邊界', function () {
         let { P, st, ids, runEval } = mk2()
         await P.fill({ runEval, storeAfter: false })
         let calls = 0
+        let kinds = []
         let re = async (x) => {
             calls++
+            kinds.push(x.kind)
             return runEval(x)
         }
         let dispatchOf = (ok) => async (role, { prompt }) => {
@@ -587,14 +590,17 @@ describe('附算與補算之採信條件與邊界', function () {
         assert.equal(calls, 0)
         assert.equal('fill' in hk, false, JSON.stringify(hk.fill))
         assert(!hk.lines.some((l) => l.startsWith('附算') || l.startsWith('待補算')), JSON.stringify(hk.lines))
-        //做夢未交付 ⇒ 不附算(使節點 0 待算: 成品改動)
+        //做夢未交付(時點: 規則 R-REC-51; 原載「不附算(不評估)」隨求解窗後段之時點移到派做夢之前而改): 派做夢之前之一次照常執行(本輪之節點之求解窗後段; 其結果寫入,
+        //  補做夢時現行者不重算), 做夢之後之一次(擴充診斷等)不執行 —— 使節點 0 兩項皆待算: 成品改動(求解窗後段)、診斷改寫(擴充診斷)
         fs.appendFileSync(path.join(st.records.workDir, ids[0], 'pick.mjs'), '// v2\n', 'utf8')
+        fs.writeFileSync(path.join(st.records.toolboxDir, 'metrics', 'dA.mjs'), 'export default { v: 11 }\n', 'utf8')
         let P2 = makeProject(st, { dispatch: dispatchOf(false), gate: null, catalogFile: path.join(t.dir, 'proj', 'catalogH2.json'), runEval: re })
+        assert(P2.fillPlanOf().tasks.some((x) => x.nodeId === ids[0] && x.postfit && x.ext.length > 0), '節點 0 兩項皆待算(鑑別前提)')
         let hk2 = await P2.domain.hooks.afterRound({ round: 2, nodes: [{ id: ids[0], status: 'executed', spec: { arms: ARMS[0], base: null } }] })
         assert(!hk2.dream, '做夢未交付(鑑別前提)')
-        assert.equal(calls, 0, '不評估')
-        assert.equal('fill' in hk2, false)
-        assert(P2.fillPlanOf().tasks.some((x) => x.nodeId === ids[0]), '節點 0 確為待算(鑑別前提)')
+        assert.deepEqual(kinds, ['postfit'], '只執行派做夢之前之一次(求解窗後段)')
+        assert.deepEqual(hk2.fill, { preDream: { n: 1, failed: 0, sec: hk2.fill.preDream.sec } })
+        assert(P2.fillPlanOf().tasks.some((x) => x.nodeId === ids[0] && !x.postfit && x.ext.length > 0), '擴充診斷仍待算(做夢之後之一次未執行)')
     })
 
     it('附算之值記正本之選集指紋與時刻;正本重算而指紋改變 ⇒ 該成品之求解窗後段須重算、共同儲存區標為非現行;重算後恢復現行', async () => {

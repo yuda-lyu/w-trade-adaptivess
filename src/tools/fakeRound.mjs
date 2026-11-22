@@ -307,7 +307,7 @@ console.log('做夢方向之處置:', JSON.stringify((Pj.records.getDreamDoc(rou
     let cs = Pj.domain.carriers()
     //eligOf / btOf, 可為底之成品(每次讀樹)與預期之底(其中排序鍵最高者)
     //  別名(選集與較早之節點相同者)不可為底(規則 R-REC-45): 排除之; 側別曝險且未放行者亦不可為底(規則 R-REC-48)
-    //  rsi.rankBy = content(規則 R-REC-49): 預期之底依挑選內容(無其值者在後)、次依排序鍵
+    //  rsi.rankBy = content(規則 R-REC-49): 預期之底依挑選內容(無其值者與不符「有內容」者在後; 同主鍵之定義 —— P.hasContent)、次依排序鍵
     let eligOf = () => {
         let al = Pj.rsi.aliasMap()
         return idx.map((r) => Pj.rsi.store.getNode(r.id)).filter((n) => n && n.status === 'executed' && n.score && !(n.score.flags && n.score.flags.vetoed) && n.evidence && n.evidence.trust === 'trusted' && n.spec.arms.length < 4 && !al.has(n.id)).filter((n) => !Pj.exposureOf(n).blocked)
@@ -315,7 +315,7 @@ console.log('做夢方向之處置:', JSON.stringify((Pj.records.getDreamDoc(rou
     let btOf = () => eligOf().sort((a, b) => rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))[0] || null
     if (Pj.rankBy === 'content') {
         let cvOf = (n) => {
-            let c = contentOf(n); return c ? c.v : null
+            let c = contentOf(n); return c && Pj.hasContent(n) ? c.v : null
         }
         let byC = (a, b) => ((cvOf(a) === null) !== (cvOf(b) === null) ? (cvOf(a) === null ? 1 : -1) : ((cvOf(a) === null ? 0 : cvOf(b) - cvOf(a)) || (rankKeyOf(b) - rankKeyOf(a))))
         btOf = () => eligOf().sort((a, b) => byC(a, b) || (a.id < b.id ? -1 : 1))[0] || null

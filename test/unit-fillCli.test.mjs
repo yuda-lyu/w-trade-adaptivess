@@ -36,7 +36,8 @@ describe('附算與補算之命令列:g_rsi.mjs --mode fill(規則 R-REC-34)', f
             ...st0,
             periods: { train: { start: '2022-07-01T00:00:00', end: '2023-01-17T00:00:00' }, backtest: { start: '2023-02-01T00:00:00', end: '2023-08-05T00:00:00' } },
             eval: { ledgerDir: './ledger/eval', warmupDays: 60, cadenceDays: 7, phases: [0, 3], horizons: [7], nullDraws: 8, seed: 1, fitEnd: { long: '2022-11-01T00:00:00', short: '2023-02-01T00:00:00' }, limits: { monthlyOrders: 400, peakHold: 50 }, timeoutSec: 240 },
-            rsi: { ...st0.rsi, root: './rsi', fillParallel: 1 },
+            //成員穩健性(規則 R-REC-51; 預設開啟)關閉: 本檔之範圍為求解窗後段與擴充診斷之命令列(--no-member 與成員穩健性之實跑見 unit-memberCheck)
+            rsi: { ...st0.rsi, root: './rsi', fillParallel: 1, memberCheck: false },
             records: { nodeDir: './rsi/records/nodes', dreamDir: './rsi/records/dreams', trashDir: './rsi/records/trash', workDir: './rsi/work', toolboxDir: './rsi/toolbox' },
             dispatch: { skillsRoot: path.join(root, 'skills'), envFile: path.join(root, '.env') },
             resources: {},

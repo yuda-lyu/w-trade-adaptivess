@@ -48,7 +48,8 @@ describe('輪末之附算一併處理待補算(規則 R-REC-41)', function () {
         let st = getSettings()
         let d = path.join(t.dir, `proj_${Math.random().toString(36).slice(2, 8)}`)
         st.resources = {}
-        st.rsi = { ...st.rsi, fillParallel: 1, ...rsiOver }
+        //成員穩健性(規則 R-REC-51; 預設開啟)關閉: 本檔之範圍為求解窗後段與擴充診斷之一併處理(成員穩健性之待補算只列、不取, 見 unit-memberCheck)
+        st.rsi = { ...st.rsi, fillParallel: 1, memberCheck: false, ...rsiOver }
         st.rsi.root = path.join(d, 'rsi')
         st.rsi.docLimits = false //輪末鉤子之專案文件自動整理(R-REC-17)取本庫自身之 sgud; 測試不得改寫入版控之文件(R-PKG-10)
         st.records = { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), trashDir: path.join(d, 'rsi/records/trash'), workDir: path.join(d, 'rsi/work'), toolboxDir: path.join(d, 'rsi/toolbox') }
@@ -265,13 +266,16 @@ describe('輪末之附算一併處理待補算(規則 R-REC-41)', function () {
         //假時鐘: 每次評估前進 400 秒; 上限 600 秒。工作者 1 取本輪之節點 2(其第一次評估 ⇒ 400 秒)後, 工作者 2 於 400 秒時核上限(未達)而過資源閘;
         //  過閘之後工作者 1 已做第二次評估(800 秒)⇒ 工作者 2 再核一次即達上限而不取 ⇒ 待補算 0 個
         //  (資源閘於無門檻時立即放行; 先後由微任務之次序決定, 不依計時器)
+        //  時點(規則 R-REC-51): 本輪之節點之求解窗後段移到派做夢之前 ⇒ 輪末鉤子之做夢之後之一次只剩一次評估, 本案之先後不再出現 ⇒
+        //  以 fill 直接呼叫(輪末之做夢之後之一次之同一組參數: targets、source 'round'、backlogSec)保留「本次之待算兩次評估 + 待補算」之先後
+        let run = (x) => x.P.fill({ targets: [x.ids[2]], storeAfter: false, source: 'round', backlogSec: FP.fillBacklogSecOf(x.st.rsi), runEval: x.runEval })
         let x = mk({ rsiOver: { fillBacklogSec: 600, fillParallel: 2 }, tick: 400000 })
-        let hk = await x.hook(1, [2])
+        let hk = await run(x)
         assert.deepEqual([...new Set(x.calls.map((c) => x.ids.indexOf(c.nodeId)))], [2])
         assert(hk.lines.includes('附算一併處理待補算(樹上既有之成品,依成品之先後;總時長上限 600 秒):本次 0 個成品;**尚餘 3 個成品**(已達上限,留待下一次輪末)'), JSON.stringify(hk.lines))
         //對照(鑑別前提): 上限足夠 ⇒ 兩個工作者把待補算全部取完
         let y = mk({ rsiOver: { fillBacklogSec: 1000000, fillParallel: 2 }, tick: 400000 })
-        await y.hook(1, [2])
+        await run(y)
         assert.deepEqual([...new Set(y.calls.map((c) => y.ids.indexOf(c.nodeId)))].sort(), [0, 1, 2, 3])
     })
 

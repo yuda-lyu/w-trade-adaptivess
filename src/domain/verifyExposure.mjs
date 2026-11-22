@@ -1,3 +1,4 @@
+import isenum from 'wsemi/src/isenum.mjs'
 import { fixedSideOf, shortShareOf, sideFlowIssue, extSurfaceOf } from './verify.mjs'
 
 
@@ -22,7 +23,8 @@ let EXPOSURE_DEFAULT = Object.freeze({ flags: Object.freeze(['fixedState', 'plac
 /**
  * 側別曝險之判定之設定(settings.rsi.exposure 之解讀;無效即用預設、不拋錯)
  *
- * false 回 null(關閉);物件之 flags 須為非空字串之陣列(可為空陣列 = 不採計時機旗標)、minShift 須為 (0, 1] 之數值,不合之鍵用預設;其餘(未給、非物件)回預設。
+ * false 回 null(關閉);物件之 flags 須為非空字串之陣列(可為空陣列 = 不採計時機旗標)、minShift 須為 (0, 1] 之數值(數字或其數字字串,依 wsemi isenum 判定、轉為數值後使用;
+ * 跨套件規格〈輸入參數之檢測機制〉K4、K7),不合之鍵(布林、NaN、±Infinity、空字串、非數字字串、範圍外)用預設;其餘(未給、非物件)回預設。
  *
  * @param {*} v 輸入 settings.rsi.exposure 之值
  * @returns {Object|null} 回傳 { flags, minShift } 或 null(關閉)
@@ -36,7 +38,7 @@ let exposureCfgOf = (v) => {
     }
     let o = v && typeof v === 'object' && !Array.isArray(v) ? v : {}
     let flags = Array.isArray(o.flags) && o.flags.every((s) => typeof s === 'string' && s.trim() !== '') ? o.flags.slice() : EXPOSURE_DEFAULT.flags.slice()
-    let minShift = typeof o.minShift === 'number' && Number.isFinite(o.minShift) && o.minShift > 0 && o.minShift <= 1 ? o.minShift : EXPOSURE_DEFAULT.minShift
+    let minShift = isenum(o.minShift, { gt: 0, max: 1 }) ? Number(o.minShift) : EXPOSURE_DEFAULT.minShift
     return { flags, minShift }
 }
 

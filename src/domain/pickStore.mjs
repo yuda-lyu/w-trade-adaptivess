@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { loadPick } from '../eval/pickLoader.mjs'
 import { isIntegrityError, integrityError, assertIntrinsics, pushOwn } from '../eval/intrinsics.mjs'
-import { postfitInfoOf, FILL_DIR } from './fillPlan.mjs'
+import { postfitInfoOf, memberInfoOf, FILL_DIR } from './fillPlan.mjs'
 import { pickHashOf, evaluatorFpOf, readFill } from './fillKeys.mjs'
 import { recentDiagOf } from './diagRead.mjs'
 
@@ -19,7 +19,7 @@ import { recentDiagOf } from './diagRead.mjs'
 //    _cross.json          其他標的之正負號(選配; 同一挑選模組原樣不改、於另一標的之策略庫上評估; 回測期與保留期各給績效與挑選內容之號;
 //                         由使用端之上層以其工具寫入; 本模組只讀、不產生、不刪; 只收 "+" / "-" / "0" 之字串, 其他值一律忽略〔視為未算〕; 規則 R-REC-30)
 //                         無此檔(或檔之形狀不合)者, 共同儲存區之各檔與未支援此檔之版本逐位相同(欄、說明、info.json 之 cross 鍵皆不出現)
-//  擴充: 欄位於 infoOf 內分組(identity / status / design / backtest / ext / postfit / holdout / [cross] / files; ext = 各擴充診斷自帶之看板值, 見 extRowOf; 規則 R-REC-31;
+//  擴充: 欄位於 infoOf 內分組(identity / status / design / backtest / ext / postfit / [member] / holdout / [cross] / files; member = 成員穩健性之佐證〔規則 R-REC-51; 有任一補算檔帶此項者才帶; fillPlan.mjs 之 memberInfoOf〕; ext = 各擴充診斷自帶之看板值, 見 extRowOf; 規則 R-REC-31;
 //        postfit = 求解窗後段之佐證〔狀態根之補算檔 fill/<節點 id>.json(agent 不可寫之處; 檔內之 nodeId 須相符); 成品之雜湊相符者; 不入總表〕, 見 fillPlan.mjs 之 postfitInfoOf; 規則 R-REC-34);
 //        新增欄位 = 在該組加一鍵並於 FIELD_DEFS 補一列說明;
 //        INDEX.md 之欄由 COLUMNS 決定。讀取端應以鍵取值、容許未知之鍵與 null(舊節點文件可能無某欄)
@@ -244,6 +244,7 @@ let extRowOf = (m) => {
  * @param {String|null} [opt.fam=null] 輸入家族名,預設null
  * @param {Object|null} [opt.ho=null] 輸入保留期之正負號(perf、content、asOf),預設null;perf、content 只收 "+" / "-" / "0",其他值為 null
  * @param {Object|null} [opt.postfit=null] 輸入求解窗後段之佐證(fillPlan.mjs 之 postfitInfoOf 之結果),預設null;非物件者為 null
+ * @param {Object|null} [opt.member] 輸入成員穩健性之佐證(fillPlan.mjs 之 memberInfoOf 之結果;規則 R-REC-51);未給(undefined)者回傳物件不含 member 鍵,非物件者為 null
  * @param {Object} [opt.cross] 輸入其他標的之正負號(crossOf 之 signsOf 之結果:backtest、holdout 各 { perf, content });未給(undefined)者回傳物件不含 cross 鍵,給 null 者四值皆 null;只帶出 "+" / "-" / "0"
  * @param {Function} [opt.rel] 輸入路徑轉相對路徑之函數,預設原樣回傳
  * @param {String} [opt.storeRel=''] 輸入儲存區之相對路徑,預設''
@@ -251,7 +252,7 @@ let extRowOf = (m) => {
  * @example
  * let info = infoOf(nodeDoc, { meta, fam: null, ho: null, storeRel: 'picks' })
  */
-let infoOf = (d, { meta = null, fam = null, ho = null, cross = undefined, postfit = undefined, rel = (p) => p, storeRel = '' } = {}) => {
+let infoOf = (d, { meta = null, fam = null, ho = null, cross = undefined, postfit = undefined, member = undefined, rel = (p) => p, storeRel = '' } = {}) => {
     let h = d.harness || {}
     let m = (h.raw && h.raw.metrics) || {}
     let op = m.op || {}
@@ -308,6 +309,8 @@ let infoOf = (d, { meta = null, fam = null, ho = null, cross = undefined, postfi
         //求解窗後段之佐證(規則 R-REC-34): 補算檔之值(postfitInfoOf 之結果)或 null; 不入總表之欄
         //  未給 postfit(undefined; 狀態根無任何補算檔)⇒ 不帶此鍵(與未加入本功能時逐位相同; 同其他標的之號之作法)
         ...(postfit === undefined ? {} : { postfit: postfit && typeof postfit === 'object' && !Array.isArray(postfit) ? postfit : null }),
+        //成員穩健性之佐證(規則 R-REC-51): 補算檔之值(memberInfoOf 之結果)或 null; 不入總表之欄; 未給 member(undefined; 無任何補算檔帶此項)⇒ 不帶此鍵(逐位不變)
+        ...(member === undefined ? {} : { member: member && typeof member === 'object' && !Array.isArray(member) ? member : null }),
         //保留期: perf / content 只收正負號(signOf; 數字不入專案, 與其他標的之 _cross.json 之界線相同)
         holdout: ho ? { perf: signOf(ho.perf), content: signOf(ho.content), asOf: ho.asOf || null } : { perf: null, content: null, asOf: null },
         //其他標的之正負號(規則 R-REC-30): 只在給了 cross 時才有此鍵(無 _cross.json 者 info.json 與舊版逐位相同); 只取四個號, 不帶其他欄
@@ -358,10 +361,14 @@ let columnsOf = (crossOn) => {
 let POSTFIT_FIELD_DEFS = [
     ['postfit.from / to / seatsKept / seatsDropped / comp / halves / selHash / recent / at / current', '求解窗後段(回測期以前、各策略之求解窗終點之後;評估器之 --period postfit)之佐證,**不是成績:不入 S、階梯、總表與看板之排序**:所留 / 所捨之席(每次決策之平均)、所留之席之組成對照(同側同活躍度)之超額 / z / p(comp)、前段 / 後段之同一組量(halves)、評估器有近期活躍度版之組成對照者另有 recent(comp、halves);at = 算出之時刻、current = 與現行之評估器相符、且附算時所記之正本之選集指紋與現況之正本相同(false = 評估器改版或正本重算後尚未重算);迴圈附算(輪末:本輪之新成品)與補算(--mode fill)所得,存於狀態根之 fill/<節點 id>.json(迴圈所寫;agent 不可寫之處);尚無者為 null'],
 ]
-//fieldDefsOf, 本次之欄位定義(crossOn: 有可用之 _cross.json; fillOn: 狀態根有補算檔)
-let fieldDefsOf = (crossOn, fillOn = false) => {
+//MEMBER_FIELD_DEFS, 成員穩健性之佐證之欄位定義(規則 R-REC-51): 有任一補算檔帶此項時才插於求解窗後段之欄位定義之後(無者與未加入本項時相同; 不列門檻之值)
+let MEMBER_FIELD_DEFS = [
+    ['member.K / salts / nullDraws / kind / full / applicable / halves / retention / nNeg / at / current', '成員穩健性(迴圈以隨機半庫〔K 個 = 鹽數 × 兩半;評估器之 `--member`〕重跑合格之成品)之佐證,**不是成績:不入 S、階梯、總表與看板之排序**:kind = 內容之種類(`builtin` = 內建之組成對照、`recent` = 近期活躍度版;選集極活躍者用後者,同搜尋地圖之挑選內容)、full = 全庫(正本)之該值、applicable = 保持率是否適用(full > 0)、halves = 各半庫之 tag / n(策略數)/ eqYrMean(相位平均)/ excess / recent / retention(保持率 = 該半庫之值 ÷ full)、retention = 保持率之 median / min / n、nNeg = 相位平均為負之半庫數;at = 算出之時刻、current = 與現行之評估器相符、且所記之正本之選集指紋與現況之正本相同;迴圈附算(輪末:本輪之合格之新成品,派做夢之前)與補算(--mode fill)所得,存於狀態根之 fill/<節點 id>.json;尚無者為 null'],
+]
+//fieldDefsOf, 本次之欄位定義(crossOn: 有可用之 _cross.json; fillOn: 狀態根有補算檔; memberOn: 有補算檔帶成員穩健性)
+let fieldDefsOf = (crossOn, fillOn = false, memberOn = false) => {
     let i = FIELD_DEFS.findIndex(([k]) => k.startsWith('ext.'))
-    let base = fillOn ? [...FIELD_DEFS.slice(0, i + 1), ...POSTFIT_FIELD_DEFS, ...FIELD_DEFS.slice(i + 1)] : FIELD_DEFS
+    let base = fillOn ? [...FIELD_DEFS.slice(0, i + 1), ...POSTFIT_FIELD_DEFS, ...(memberOn ? MEMBER_FIELD_DEFS : []), ...FIELD_DEFS.slice(i + 1)] : FIELD_DEFS
     return crossOn ? [...base, ...CROSS_FIELD_DEFS] : base
 }
 //hasFillFiles, 狀態根之補算夾(fill/)是否有補算檔(暫存檔不算)
@@ -386,7 +393,7 @@ let crossReadme = () => [
 ]
 
 //  hoFrom, 保留期之起點(settings.periods.holdoutFrom 之日期部分; 規則 R-REC-36: 不寫死期間); 未給者略去括號
-let readmeText = (storeRel, n, asOf, crossOn = false, fillOn = false, hoFrom = null) => [
+let readmeText = (storeRel, n, asOf, crossOn = false, fillOn = false, hoFrom = null, memberOn = false) => [
     '# 共同儲存「自適應挑選策略」區',
     '',
     `> 由迴圈產生(每輪結束與主控審定後重產),**agent 唯讀**。目前 ${n} 個策略。來源 = 各節點之交付版 \`pick.mjs\`(逐位複本)與節點文件內**迴圈以同一評估器重跑**之回測期數字(不是 agent 自報)。`,
@@ -412,7 +419,7 @@ let readmeText = (storeRel, n, asOf, crossOn = false, fillOn = false, hoFrom = n
     '',
     '| 欄位 | 說明 |',
     '|---|---|',
-    ...fieldDefsOf(crossOn, fillOn).map(([k, v]) => `| \`${k}\` | ${v} |`),
+    ...fieldDefsOf(crossOn, fillOn, memberOn).map(([k, v]) => `| \`${k}\` | ${v} |`),
     '',
     '讀取端請以鍵取值、容許未知之鍵與 null(欄位會擴充;舊節點可能無某欄)。',
     '',
@@ -494,12 +501,16 @@ let buildPickStore = async (st) => {
     }
     //fillOn, 狀態根有補算檔才帶 postfit 之鍵與欄位定義(無者與未加入本功能時逐位相同)
     let fillOn = hasFillFiles(st.rsi.root)
+    //memberOn, 有任一補算檔帶成員穩健性(規則 R-REC-51)才帶 member 之鍵與欄位定義(無者與未加入本項時逐位相同)
+    let fills = new Map(cands.map(({ d }) => [d.nodeId, readFill(st.rsi.root, d.nodeId)]))
+    let memberOn = fillOn && [...fills.values()].some((f) => !!f && !!f.member && typeof f.member === 'object' && !Array.isArray(f.member))
     fs.mkdirSync(dir, { recursive: true })
     for (let { d, code, meta } of cands) {
         //正本之選集指紋: 補算檔所記者與之不同 ⇒ 此段之值與正本出自不同代之評估, 標為非現行
         let hr = d.harness && d.harness.raw ? d.harness.raw : null
         let canonSel = hr && hr.metrics && typeof hr.metrics.selHash === 'string' ? hr.metrics.selHash : (hr && typeof hr.selHash === 'string' ? hr.selHash : null)
-        let postfit = postfitInfoOf(readFill(st.rsi.root, d.nodeId), { pick: pickHashOf(code), evaluator }, canonSel)
+        let postfit = postfitInfoOf(fills.get(d.nodeId), { pick: pickHashOf(code), evaluator }, canonSel)
+        let member = memberOn ? memberInfoOf(fills.get(d.nodeId), { pick: pickHashOf(code), evaluator }, canonSel) : undefined
         let dst = path.join(dir, d.nodeId, 'pick.mjs')
         if (!fs.existsSync(dst) || !fs.readFileSync(dst).equals(code)) {
             fs.mkdirSync(path.dirname(dst), { recursive: true })
@@ -508,13 +519,13 @@ let buildPickStore = async (st) => {
         }
         d.__docMd = path.join(st.records.nodeDir, `${d.nodeId}.md`)
         let ho = hoItems[d.nodeId] ? { ...hoItems[d.nodeId], asOf: hoFile.asOf || null } : null
-        let info = infoOf(d, { meta, fam: fams.get(String(d.nodeId).slice(0, 8)) || null, ho, ...(cr ? { cross: cr.signsOf(d.nodeId) } : {}), ...(fillOn ? { postfit } : {}), rel, storeRel })
+        let info = infoOf(d, { meta, fam: fams.get(String(d.nodeId).slice(0, 8)) || null, ho, ...(cr ? { cross: cr.signsOf(d.nodeId) } : {}), ...(fillOn ? { postfit } : {}), ...(memberOn ? { member } : {}), rel, storeRel })
         fs.writeFileSync(path.join(dir, d.nodeId, 'info.json'), JSON.stringify(info, null, 1), 'utf8')
         items.push(info)
     }
     items.sort((p, q) => (q.backtest.S === null ? -Infinity : q.backtest.S) - (p.backtest.S === null ? -Infinity : p.backtest.S) || (p.id < q.id ? -1 : 1))
     let updatedAt = new Date().toISOString()
-    fs.writeFileSync(path.join(dir, 'index.json'), JSON.stringify({ schema: SCHEMA, updatedAt, holdoutAsOf: (hoFile && hoFile.asOf) || null, fields: fieldDefsOf(!!cr, fillOn).map(([key, note]) => ({ key, note })), items }, null, 1), 'utf8')
+    fs.writeFileSync(path.join(dir, 'index.json'), JSON.stringify({ schema: SCHEMA, updatedAt, holdoutAsOf: (hoFile && hoFile.asOf) || null, fields: fieldDefsOf(!!cr, fillOn, memberOn).map(([key, note]) => ({ key, note })), items }, null, 1), 'utf8')
     let cols = columnsOf(!!cr)
     let L = []
     L.push('# 自適應挑選策略總表')
@@ -531,7 +542,7 @@ let buildPickStore = async (st) => {
     }
     L.push('')
     fs.writeFileSync(path.join(dir, 'INDEX.md'), L.join('\n'), 'utf8')
-    fs.writeFileSync(path.join(dir, 'README.md'), readmeText(storeRel, items.length, (hoFile && hoFile.asOf) || null, !!cr, fillOn, st.periods && typeof st.periods.holdoutFrom === 'string' && st.periods.holdoutFrom ? st.periods.holdoutFrom.slice(0, 10) : null), 'utf8')
+    fs.writeFileSync(path.join(dir, 'README.md'), readmeText(storeRel, items.length, (hoFile && hoFile.asOf) || null, !!cr, fillOn, st.periods && typeof st.periods.holdoutFrom === 'string' && st.periods.holdoutFrom ? st.periods.holdoutFrom.slice(0, 10) : null, memberOn), 'utf8')
     //cross: 無 _cross.json ⇒ null; 有而形狀不合 ⇒ { invalid: true, signed: 0, ignored: 0 }(總表不列其欄); 可用 ⇒ { invalid: false, signed〔至少有一個號之策略數〕, ignored〔區內策略之檔內不是號而被忽略之值之數〕}
     let cross = !crExists ? null : (cr ? { invalid: false, signed: cr.signed(), ignored: cr.ignored() } : { invalid: true, signed: 0, ignored: 0 })
     return { dir, n: items.length, copied, skipped, holdoutSigned: items.filter((x) => x.holdout.perf !== null).length, cross }

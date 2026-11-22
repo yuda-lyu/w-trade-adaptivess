@@ -6,7 +6,7 @@ import { FD_ROOT, FD_TMP } from './synthLedger.mjs'
 import { dupIdsOf } from './mutateIds.mjs'
 
 
-//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(verifyCmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); EH 系列為 R-REC-43、R-REC-44(迴圈檢查之提示「單峰交付」「選集與他節點相同」; 判定在 verifyEvalHints.mjs, EH37 之錨點在 verify.mjs 之 dirNodeIdsOf); VZ 系列為 R-BT-10(節點之禁區涵蓋 verify* / backtest* 與任務書之檔名樣式一致)、AW 系列為 R-BT-9(可讀之他節點工作夾三處共用 verify.mjs 之 allowWorkOf; 皆為 Gitea #200 之主控另加); SD 系列為 R-REC-47(任務書之「可疑方向」、資訊來源之三級、量尺句、審組成之一句與合約之判讀名詞; 錨點在 texts.mjs 與 contract/pick-contract.md); SB 系列為 R-EV-47(子庫之規則與 --subset)與 R-EV-48(庫況體檢與其拒跑);EX 系列為 R-REC-48(側別曝險之判定、效果與放行)、SR 系列為 R-REC-50(全樹之側別讀數)、GD 系列為 R-REC-49(量尺之並列與選配之主鍵); 指令解析已自 verify.mjs 搬入 verifyCmdScan.mjs[原 cmdScan.mjs], 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
+//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(verifyCmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); EH 系列為 R-REC-43、R-REC-44(迴圈檢查之提示「單峰交付」「選集與他節點相同」; 判定在 verifyEvalHints.mjs, EH37 之錨點在 verify.mjs 之 dirNodeIdsOf); VZ 系列為 R-BT-10(節點之禁區涵蓋 verify* / backtest* 與任務書之檔名樣式一致)、AW 系列為 R-BT-9(可讀之他節點工作夾三處共用 verify.mjs 之 allowWorkOf; 皆為 Gitea #200 之主控另加); SD 系列為 R-REC-47(任務書之「可疑方向」、資訊來源之三級、量尺句、審組成之一句與合約之判讀名詞; 錨點在 texts.mjs 與 contract/pick-contract.md); SB 系列為 R-EV-47(子庫之規則與 --subset)與 R-EV-48(庫況體檢與其拒跑);EX 系列為 R-REC-48(側別曝險之判定、效果與放行)、SR 系列為 R-REC-50(全樹之側別讀數)、GD 系列為 R-REC-49(量尺之並列與選配之主鍵); MC 系列為 R-REC-51(成員穩健性之附算與「成員依賴」之提示)、PD 系列為 R-REC-51 ⑤(附算之時點: 求解窗後段與成員穩健性移到派做夢之前、同一項每輪至多一次、紀錄每輪記一次)、HC 系列為 R-REC-49 ⑤(「有內容」之單一定義: 並列、主鍵、補位之底、估法之候選)、VZ08 為 R-BT-10 ⑥(成員依賴之判定與門檻在禁區內之檔); 指令解析已自 verify.mjs 搬入 verifyCmdScan.mjs[原 cmdScan.mjs], 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
 //  用法(測試以 quiet-run --lock 執行): node test/tools/mutateBar.mjs [--list] [--check] [--control-only] [--only <id,id…>] [--from <序> --to <序>] [--out <結果.json>]
 //    --check 只核對各變異之錨點(須恰出現一次; all 者至少一次), 不跑測試; 另核全部變異之編號唯一(重複者列出並以非 0 離開; R-PKG-9);未被殺者(survived)為測試之缺口 —— 補測試,不是補斷言(見 sgud/exp 之變異作法)
 //    --control-only 只跑對照(守門之測試與所選變異之優先測試, 不植入變異)並列出所選變異中「無法判定」者, 供不重跑全部變異而盤點分類
@@ -248,7 +248,7 @@ let M = [
     //── 搜尋地圖之「有內容」與近期活躍度版之組成對照(規則 R-REC-38; domain.mjs)──
     //  M01 不看近期版、M19 兩版任一過即計; M02 ~ M04 近期版之條件之比較與且 / 或; M05 不一致之判定(一過一不過); M06 ~ M08 「有值」之判定(error、excess、p)
     //  M09 notContent 者亦標; M10 / M18 說明之新增句之出現條件與計數; M11 / M12 看板之表前一段與欄內之標記; M13 譜系之標記; M14 門檻不取設定; M15 ~ M17 內建版之條件之邊界(搬移之原式)
-    ['M01', 'src/domain/domain.mjs', [['return s.builtin && s.recentOk !== false && ncOf(n).length === 0', 'return s.builtin && ncOf(n).length === 0']], ['unit-searchMapRecent']],
+    ['M01', 'src/domain/domain.mjs', [['return s.builtin && s.recentOk !== false && extSurfaceOf(m).notContent.length === 0', 'return s.builtin && extSurfaceOf(m).notContent.length === 0']], ['unit-searchMapRecent']], //錨點隨「有內容」上提為模組層之單一定義(R-REC-49 ⑤; hasContentOf)而改; 語意不變
     ['M02', 'src/domain/domain.mjs', [['let recentOk = recent ? recent.excess > 0 && recent.p <= pMax : null', 'let recentOk = recent ? recent.excess >= 0 && recent.p <= pMax : null']], ['unit-searchMapRecent']],
     ['M03', 'src/domain/domain.mjs', [['let recentOk = recent ? recent.excess > 0 && recent.p <= pMax : null', 'let recentOk = recent ? recent.excess > 0 && recent.p < pMax : null']], ['unit-searchMapRecent']],
     ['M04', 'src/domain/domain.mjs', [['let recentOk = recent ? recent.excess > 0 && recent.p <= pMax : null', 'let recentOk = recent ? recent.excess > 0 || recent.p <= pMax : null']], ['unit-searchMapRecent']],
@@ -266,7 +266,7 @@ let M = [
     ['M16', 'src/domain/domain.mjs', [["c.excess > 0 && typeof c.p === 'number' && c.p <= pMax", "c.excess > 0 && typeof c.p === 'number' && c.p < pMax"]], ['unit-searchMapRecent']],
     ['M17', 'src/domain/domain.mjs', [['c.share >= 0.8)', 'c.share > 0.8)']], ['unit-searchMapRecent']],
     ['M18', 'src/domain/domain.mjs', [['let nRecent = nodes.filter((n) => recentSideOf(n.raw && n.raw.metrics)).length', 'let nRecent = nodes.filter((n) => actSplitOf(n)).length']], ['unit-searchMapRecent']],
-    ['M19', 'src/domain/domain.mjs', [['return s.builtin && s.recentOk !== false && ncOf(n).length === 0', 'return (s.builtin || s.recentOk === true) && ncOf(n).length === 0']], ['unit-searchMapRecent']],
+    ['M19', 'src/domain/domain.mjs', [['return s.builtin && s.recentOk !== false && extSurfaceOf(m).notContent.length === 0', 'return (s.builtin || s.recentOk === true) && extSurfaceOf(m).notContent.length === 0']], ['unit-searchMapRecent']], //錨點同 M01 而改; 語意不變
     //── 操作掃描之「列出工作夾之根」只列以之為目標者(規則 R-BT-6; verifyCmdScan.mjs 之 listRootExempt 與 verify.mjs 之 scanTrace 接線)──
     //  R01 / R02 免列之接線(只限指令之欄); R03 ~ R06 搜尋指令之辨識; R07 ~ R09、R34 ~ R43、R46 / R47 樣式引數之定位(位置、-e、--regexp、帶值之選項、-f、findstr、Select-String、--、分段、選項表);
     //  R10 / R44 殘留與樣式含字樣之段; R12 ~ R16、R29 ~ R31 路徑引數之核對(上層、無路徑、讀標準輸入、遞迴、萬用字元、~); R17 ~ R28、R45、R48 保守回退(引號、變數、命令替換、跳脫、切換目錄、工作目錄、重導向、佔位符之控制字元)
@@ -365,6 +365,7 @@ let M = [
     ['G40', 'src/tools/quota.mjs', [["guardEntry('quota')", 'void 0']], ['unit-agentGuard']],
     ['G41', 'src/tools/roundDigest.mjs', [["guardEntry('roundDigest')", 'void 0']], ['unit-agentGuard']],
     ['G42', 'src/arsi/agentRole.mjs', [["env && typeof env === 'object' ? env[AGENT_ROLE_ENV] : undefined", 'env[AGENT_ROLE_ENV]']], ['unit-agentGuard']],
+    ['G43', 'src/domain/agentEntries.mjs', [["        return !has(args, '--dry')\n    }\n    return true", "        return !has(args, '--dry') && !has(args, '--no-member')\n    }\n    return true"]], ['unit-agentGuard']], //--mode fill --no-member(規則 R-REC-51)只少算成員穩健性, 仍為寫檔之模式
     //── 派工器設角色之環境變數(規則 R-RUN-11; dispatchers.mjs、agentRole.mjs)── H01 不設; H02 opencode 之選項不帶; H03 claude 之選項不帶; H04 其他角色亦帶
     //  H01 ~ H03 之守門為 unit-agentDispatchEnv(H02 只有其真 w-dispatch-ai 之一案看得到: 跑變異時須給 WTA_TEST_WDA_DIR 或家目錄下之技能根有之, 否則該案略過而存活)
     ['H01', 'src/arsi/dispatchers.mjs', [['let oe = { ...o, agentEnv: agentEnvOf(role) }', 'let oe = { ...o, agentEnv: null }']], ['unit-agentDispatchEnv']],
@@ -496,7 +497,7 @@ let M = [
     ['J02', 'src/domain/domain.mjs', [['            let r0 = recentExcessOf(m)\n            return `${mean(', "            let r0 = m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null\n            return `${mean("]], ['unit-searchMapRecent']],
     ['J03', 'src/domain/domain.mjs', [['    let r0 = recentExcessOf(m)\n    let useRecent', "    let r0 = m.ext && m.ext.nullRecentAct && m.ext.nullRecentAct.side ? m.ext.nullRecentAct.side.excess : null\n    let useRecent"]], ['unit-searchMapRecent']],
     ['J04', 'src/domain/domain.mjs', [['let recentExcessOf = (m) => {\n    let s = recentDiagOf(m)', 'let recentExcessOf = (m) => {\n    let s = recentSideOf(m)']], ['unit-searchMapRecent']],
-    ['J05', 'src/domain/diagRead.mjs', [["let e = m && m.ext && typeof m.ext === 'object' ? m.ext.nullRecentAct : null\n    let s = e && typeof e === 'object' && !e.error ? e.side : null\n    return s && typeof s === 'object' && Number.isFinite(s.excess)", "let e = m && m.ext && typeof m.ext === 'object' ? m.ext.nullRecentAct : null\n    let s = e && typeof e === 'object' ? e.side : null\n    return s && typeof s === 'object' && Number.isFinite(s.excess)"]], ['unit-searchMapRecent', 'unit-recentDiag']], //移至 diagRead.mjs(錨點隨之)
+    ['J05', 'src/domain/diagRead.mjs', [["let e = m && m.ext && typeof m.ext === 'object' ? m.ext[RECENT_DIAG] : null\n    let s = e && typeof e === 'object' && !e.error ? e.side : null\n    return s && typeof s === 'object' && Number.isFinite(s.excess)", "let e = m && m.ext && typeof m.ext === 'object' ? m.ext[RECENT_DIAG] : null\n    let s = e && typeof e === 'object' ? e.side : null\n    return s && typeof s === 'object' && Number.isFinite(s.excess)"]], ['unit-searchMapRecent', 'unit-recentDiag']], //移至 diagRead.mjs(錨點隨之)
     //── 迴圈專用之環境變數(Z 系列; verify.mjs 之 forbiddenPats; 規則 R-RUN-11 之清除角色變數)──
     ['Z01', 'src/domain/verify.mjs', [['[/ARSI_HARNESS|ARSI_AGENT_ROLE/, ', '[/ARSI_HARNESS/, ']], ['unit-cmdScan']],
     ['Z02', 'src/domain/verify.mjs', [['[/ARSI_HARNESS|ARSI_AGENT_ROLE/, ', '[/ARSI_AGENT_ROLE/, ']], ['unit-cmdScan']],
@@ -545,7 +546,7 @@ let M = [
     ['BL09', 'src/domain/fillPlan.mjs', [['iseint(v) && Number(v) >= 0 ? Number(v) : FILL_BACKLOG_SEC', 'iseint(v) ? Number(v) : FILL_BACKLOG_SEC']], ['unit-fillBacklog']],
     ['BL10', 'src/domain/fillPlan.mjs', [['let FILL_BACKLOG_SEC = 1800', 'let FILL_BACKLOG_SEC = 0']], ['unit-fillBacklog']],
     ['BL11', 'src/domain/fillPlan.mjs', [["    if (br && typeof br === 'object') {", '    if (false) {']], ['unit-fillBacklog']],
-    ['BL12', 'src/domain/texts.mjs', [['let backlogOn = fillBacklogSecOf(st.rsi) > 0 && !(st.rsi && st.rsi.autoFill === false)', 'let backlogOn = fillBacklogSecOf(st.rsi) > 0']], ['unit-fillBacklog']],
+    ['BL12', 'src/domain/texts.mjs', [['let backlogOn = fillBacklogSecOf(st.rsi) > 0 && autoFillOn', 'let backlogOn = fillBacklogSecOf(st.rsi) > 0']], ['unit-fillBacklog']],
     ['BL13', 'src/domain/texts.mjs', [['(backlogOn ? FILL_BACKLOG_ON : FILL_BACKLOG_OFF)', '(FILL_BACKLOG_OFF)']], ['unit-fillBacklog', 'unit-dreamOnly']],
     ['BL14', 'src/domain/domain.mjs', [['if (next >= tasks.length || capped0()) {', 'if (next >= tasks.length) {']], ['unit-fillBacklog']],
     ['BL15', 'src/domain/domain.mjs', [['while (next < tasks.length && !capped0()) {', 'while (next < tasks.length) {']], ['unit-fillBacklog']],
@@ -553,8 +554,8 @@ let M = [
     //不重試之失敗之紀錄(R-REC-41 之補充): 略過之判定、記入、移除、只限輪末之一併處理、狀態檔之比較與寫法、摘要
     ['BL17', 'src/domain/domain.mjs', [['if (blRec.has(tk.nodeId) && blRec.get(tk.nodeId) === fillSigOf(tk)) {', 'if (false) {']], ['unit-fillBacklog']],
     ['BL18', 'src/domain/domain.mjs', [['if (blRec.has(tk.nodeId) && blRec.get(tk.nodeId) === fillSigOf(tk)) {', 'if (blRec.has(tk.nodeId)) {']], ['unit-fillBacklog']],
-    ['BL19', 'src/domain/domain.mjs', [['for (let x of results.filter((r) => FILL_NO_RETRY_KINDS.includes(r.kind))) {', 'for (let x of []) {']], ['unit-fillBacklog']],
-    ['BL20', 'src/domain/domain.mjs', [["sig: fillSigOf(tk, { postfit: x.postfit === 'failed', ext: x.ext.failed })", 'sig: fillSigOf(tk)']], ['unit-fillBacklog']],
+    ['BL19', 'src/domain/domain.mjs', [['for (let x of resB.filter((r) => FILL_NO_RETRY_KINDS.includes(r.kind))) {', 'for (let x of []) {']], ['unit-fillBacklog']], //錨點隨同一輪兩次之結果之合併(R-REC-51; results → resB)而改; 語意不變
+    ['BL20', 'src/domain/domain.mjs', [["sig: fillSigOf(tk, { postfit: x.postfit === 'failed', ext: x.ext.failed, member: x.member === 'failed' })", 'sig: fillSigOf(tk)']], ['unit-fillBacklog']], //錨點隨成員穩健性(R-REC-51)之項目併入而改; 語意不變
     ['BL21', 'src/domain/domain.mjs', [['                    if (!still.has(id)) {', '                    if (false) {']], ['unit-fillBacklog']],
     ['BL22', 'src/domain/domain.mjs', [['let tasks = blTasks.length ? [...plan.tasks, ...blTasks] : plan.tasks', 'let tasks = [...plan.tasks.filter((t) => !fsr.blocked.some((b) => b.id === t.nodeId && b.sig === fillSigOf(t))), ...blTasks]']], ['unit-fillBacklog']],
     ['BL23', 'src/domain/domain.mjs', [['retryInfo, blockedInfo])', 'retryInfo, stOld.blocked === undefined ? [] : stOld.blocked])']], ['unit-fillBacklog']],
@@ -926,6 +927,98 @@ let M = [
     ['GD16', 'src/domain/rankCompare.mjs', [["let den = Math.sqrt((c + d + tx) * (c + d + ty))", "let den = Math.sqrt((c + d) * (c + d))"]], ['unit-gaugeDual']], //τ-b 之分母不計同值之對
     ['GD17', 'src/domain/rankCompare.mjs', [["r[idx[j].i] = (s + e) / 2 + 1", "r[idx[j].i] = s + 1"]], ['unit-gaugeDual']], //同值不取平均名次
     ['GD18', 'src/domain/rankCompare.mjs', [["overlap: topK.filter((x) => inC.has(x.id)).length", "overlap: topK.length"]], ['unit-gaugeDual']], //交集之個數
+    //── 成員穩健性之附算與「成員依賴」之提示(MC 系列; 規則 R-REC-51): 判定(verifyMember.mjs)、計畫與寫入(fillPlan.mjs)、執行與併入(domain.mjs)、呈現、命令列與任務書之一句 ──
+    ['MC01', 'src/domain/verifyMember.mjs', [["let hit = (md !== null && md < cfg.minRetention) || row.nNeg > cfg.maxNegHalves", "let hit = (md !== null && md <= cfg.minRetention) || row.nNeg > cfg.maxNegHalves"]], ['unit-memberCheck']], //中位恰為門檻者命中
+    ['MC02', 'src/domain/verifyMember.mjs', [["let hit = (md !== null && md < cfg.minRetention) || row.nNeg > cfg.maxNegHalves", "let hit = (md !== null && md < cfg.minRetention) || row.nNeg >= cfg.maxNegHalves"]], ['unit-memberCheck']], //負之半庫數恰為上限者命中
+    ['MC03', 'src/domain/verifyMember.mjs', [["if (!cfg || !isObj(row) || row.applicable !== true || !isObj(row.retention)) {", "if (!cfg || !isObj(row) || !isObj(row.retention)) {"]], ['unit-memberCheck']], //不適用者仍判
+    ['MC04', 'src/domain/verifyMember.mjs', [["let applicable = full !== null && full > 0", "let applicable = full !== null && full >= 0"]], ['unit-memberCheck']], //全庫之內容為 0 者適用
+    ['MC05', 'src/domain/verifyMember.mjs', [["let kindOf = (m) => (activeOf(m) && recentDiagOf(m) ? 'recent' : 'builtin')", "let kindOf = (m) => 'builtin'"]], ['unit-memberCheck']], //內容之種類恆為內建
+    ['MC06', 'src/domain/verifyMember.mjs', [["nNeg: hs.filter((h) => h.eqYrMean !== null && h.eqYrMean < 0).length", "nNeg: hs.filter((h) => h.eqYrMean !== null && h.eqYrMean <= 0).length"]], ['unit-memberCheck']], //相位平均恰為 0 者計為負
+    ['MC07', 'src/domain/verifyMember.mjs', [["(s[k / 2 - 1] + s[k / 2]) / 2", "s[k / 2]"]], ['unit-memberCheck']], //偶數個之中位取上中位
+    ['MC08', 'src/domain/verifyMember.mjs', [["min: rs.length ? Math.min(...rs) : null", "min: rs.length ? Math.max(...rs) : null"]], ['unit-memberCheck']], //最小取最大
+    ['MC09', 'src/domain/verifyMember.mjs', [["        if (o.salts.length === 0) {", "        if (false) {"]], ['unit-memberCheck']], //鹽為空陣列不關閉
+    ['MC10', 'src/domain/verifyMember.mjs', [["nullDraws: nd !== null ? nd : (rd !== null ? rd : 32),", "nullDraws: nd !== null ? nd : 32,"]], ['unit-memberCheck']], //抽數不取 replicaNullDraws
+    ['MC11', 'src/domain/verifyMember.mjs', [["salts = [...new Set(xs)]", "salts = xs"]], ['unit-memberCheck']], //鹽不去重
+    ['MC12', 'src/domain/verifyMember.mjs', [["let ld = sc.flags && typeof sc.flags.trainLadder === 'number' ? sc.flags.trainLadder : sc.ladder", "let ld = sc.ladder"]], ['unit-memberCheck']], //合格不看評估期之階梯
+    ['MC13', 'src/domain/verifyMember.mjs', [["if (!cfg || !sc || (sc.flags && sc.flags.vetoed)) {", "if (!cfg || !sc) {"]], ['unit-memberCheck']], //被否決者亦合格
+    ['MC14', 'src/domain/verifyMember.mjs', [["typeof mb.selHash === 'string' && mb.selHash === sel ? mb.row : null", "typeof mb.selHash === 'string' ? mb.row : null"]], ['unit-memberCheck']], //樹上之讀數不核正本之選集指紋
+    ['MC15', 'src/domain/fillPlan.mjs', [[" && v(a, 'member') === v(b, 'member')", ""]], ['unit-memberCheck']], //快取之鍵不比 member
+    ['MC16', 'src/domain/fillPlan.mjs', [["&& isObj(fM.row) && canonOk(fM, isStr(n.selHash) ? n.selHash : null)", "&& isObj(fM.row)"]], ['unit-memberCheck']], //不核正本之選集指紋
+    ['MC17', 'src/domain/fillPlan.mjs', [["let kM = mElig && mElig.has(n.id) ?", "let kM = mElig ?"]], ['unit-memberCheck']], //不合格者亦計畫
+    ['MC18', 'src/domain/fillPlan.mjs', [["    if (needM0 && (deferM || !inT)) {\n            blMember.push(n.id)", "    if (needM0 && deferM) {\n            blMember.push(n.id)"]], ['unit-memberCheck']], //範圍外者不入待補算
+    ['MC19', 'src/domain/fillPlan.mjs', [["isObj(k.member) && (!isObj(only) || only.member === true)", "isObj(k.member)"]], ['unit-memberCheck']], //只取之項目不及 member
+    ['MC20', 'src/domain/fillPlan.mjs', [[": (p && isObj(p.member) ? { member: p.member } : {})),", ": {}),"]], ['unit-memberCheck']], //補算檔不沿用前次之成員穩健性
+    ['MC21', 'src/domain/fillPlan.mjs', [["return f && sameKey(f.key, key) && isObj(f.row) && canonOk(f, canonSel) ? { at: f.at, row: f.row, canon:", "return f && isObj(f.row) && canonOk(f, canonSel) ? { at: f.at, row: f.row, canon:"]], ['unit-memberCheck']], //現行之值不核鍵(鹽改變仍補回)
+    ['MC22', 'src/domain/fillPlan.mjs', [["let res = all.filter((x) => !(x.member !== undefined && x.postfit === null && extN(x) === 0))", "let res = all"]], ['unit-memberCheck']], //只有成員穩健性者計入首列
+    ['MC23', 'src/domain/fillPlan.mjs', [["    if (pre) {\n        return out\n    }", "    if (false) {\n        return out\n    }"]], ['unit-memberCheck']], //派做夢之前之一次照列待補算
+    ['MC24', 'src/domain/fillPlan.mjs', [["if (nPf || exParts.length || nMem) {", "if (nPf || exParts.length) {"]], ['unit-memberCheck']], //只有成員穩健性之待補算者不列
+    ['MC25', 'src/domain/domain.mjs', [["let isEvalHint = (s) => isTwoHint(s) || isExposureHint(s) || isMemberHint(s)", "let isEvalHint = (s) => isTwoHint(s) || isExposureHint(s)"]], ['unit-memberCheck']], //重掃與重產不替換成員依賴之提示
+    ['MC26', 'src/domain/domain.mjs', [["let mh = n && n.status === 'executed' ? memberHintOfNode(n) : null", "let mh = null"]], ['unit-memberCheck']], //判定之入口不併成員依賴之提示
+    ['MC27', 'src/domain/domain.mjs', [["let hint = selAt !== null && selAt === selNow ? memberHintOf(mb.row, mcfg) : null", "let hint = null"]], ['unit-memberCheck']], //併入時不寫提示
+    ['MC28', 'src/domain/domain.mjs', [["d.harness.notes : []).filter((s) => !String(s).startsWith(MEMBER_HEAD))", "d.harness.notes : [])"]], ['unit-memberCheck']], //迴圈判讀之舊列不取代
+    ['MC29', 'src/domain/domain.mjs', [["member: { at: mb.at, row: mb.row, selHash: selAt }", "member: { at: mb.at, row: mb.row, selHash: null }"]], ['unit-memberCheck']], //樹之讀數不記選集指紋
+    ['MC30', 'src/domain/domain.mjs', [["                    if (!okDoc || !okTree) {", "                    if (false) {"]], ['unit-memberCheck']], //不補回
+    ['MC31', 'src/domain/domain.mjs', [["!isObjF(o.member) || o.member.tag !== tag)", "!isObjF(o.member))"]], ['unit-memberCheck']], //不核半庫之標記
+    ['MC32', 'src/domain/domain.mjs', [["                        break\n                    }\n                    halves.push({ tag, n: o.member.n, metrics: o.metrics })", "                    }\n                    halves.push({ tag, n: o.member.n, metrics: o.metrics })"]], ['unit-memberCheck']], //失敗不即止
+    ['MC33', 'src/domain/domain.mjs', [["'--ext-only', RECENT_DIAG, '--member', tag,", "'--member', tag,"]], ['unit-memberCheck']], //半庫之評估不限載入之診斷
+    ['MC34', 'src/domain/domain.mjs', [["cur.member = fo.member === true && x.member === 'failed'", "cur.member = false"]], ['unit-memberCheck']], //強制重算之失敗不續為強制
+    ['MC35', 'src/domain/domain.mjs', [["...(ext.length ? { ext } : {}), ...(v.member === true ? { member: true } : {}) }", "...(ext.length ? { ext } : {}) }"]], ['unit-memberCheck']], //待重試之 force 不帶 member
+    ['MC36', 'src/domain/domain.mjs', [["let eligible = nodes.map((x) => x.id).filter((id) => memberEligibleOf(rsi.store.getNode(id), mcfg))", "let eligible = nodes.map((x) => x.id)"]], ['unit-memberCheck']], //不篩合格者
+    ['MC37', 'src/domain/domain.mjs', [["let anyMember = nodes.some((n) => memberRowOfTree(n) !== null)", "let anyMember = true"]], ['unit-memberCheck']], //看板無讀數者亦加欄
+    ['MC38', 'src/domain/domain.mjs', [["return `;成員保持率 ${v}", "return '' && `;成員保持率 ${v}"]], ['unit-memberCheck']], //搜尋地圖不註記
+    ['MC39', 'src/domain/pickStore.mjs', [["let memberOn = fillOn && [...fills.values()].some(", "let memberOn = fillOn || [...fills.values()].some("]], ['unit-memberCheck']], //補算檔皆無此項亦帶 member 之鍵
+    ['MC40', 'src/cli/rsi.mjs', [["member: !process.argv.includes('--no-member') }", "member: true }"]], ['unit-memberCheck']], //--no-member 無作用
+    ['MC41', 'src/domain/texts.mjs', [["迴圈之讀數:合格之新成品於派做夢之前已以隨機半庫重跑 —— 命中者 §1 之「迴圈檢查」列「提示(成員依賴)」,其餘見節點文件之迴圈判讀之「成員穩健性」一列;無迴圈之讀數者以 `--member` 自行核對。", ""]], ['unit-memberCheck']], //任務書之一句不指向迴圈之讀數
+    ['MC42', 'src/domain/domain.mjs', [["memberHit = memberHintOf(mrow, mcfg) !== null", "memberHit = false"]], ['unit-memberCheck']], //摘要之命中數
+    //── 附算之時點(PD 系列; 規則 R-REC-51 ⑤): 求解窗後段與成員穩健性於派做夢之前、同一項每輪至多一次、待重試與不重試之失敗之紀錄每輪記一次 ──
+    ['PD01', 'src/domain/domain.mjs', [["if (autoFillOf(st.rsi) && nodeIds.length) {", "if (false) {"]], ['unit-memberCheck']], //不於派做夢之前附算
+    ['PD02', 'src/domain/domain.mjs', [["...(skip ? { skip, prior: preFill } : {}),", ""]], ['unit-memberCheck']], //做夢之後重做同一項
+    ['PD03', 'src/domain/domain.mjs', [["...(skip ? { skip, prior: preFill } : {}),", "...(skip ? { skip } : {}),"]], ['unit-memberCheck']], //派做夢之前之失敗不入紀錄
+    ['PD04', 'src/domain/domain.mjs', [["let resB = preRun ? [] : (pr ? mergeRes(results, pr.results) : results)", "let resB = pr ? mergeRes(results, pr.results) : results"]], ['unit-memberCheck']], //派做夢之前之一次亦記 ⇒ 一輪記兩次
+    ['PD05', 'src/domain/domain.mjs', [["postfit: x.postfit !== null ? x.postfit : p.postfit,", "postfit: x.postfit,"]], ['unit-fillBacklog']], //合併不取派做夢之前之求解窗後段之結果(不重試之失敗之指紋缺該項)
+    ['PD06', 'src/domain/fillPlan.mjs', [["${pre ? '附算(派做夢之前;求解窗後段;佐證,不改 S)' : '附算(求解窗後段與擴充診斷;佐證,不改 S)'}", "${'附算(求解窗後段與擴充診斷;佐證,不改 S)'}"]], ['unit-memberCheck']], //派做夢之前之一次之首列之字樣
+    ['PD07', 'src/domain/domain.mjs', [["...(preSum ? { fill: { preDream: preSum, ...(msF ? { member: msF } : {}) } } : {})", ""]], ['unit-fillRevise']], //做夢未交付時不回傳派做夢之前之附算
+    ['PD08', 'src/domain/domain.mjs', [["...(preSum ? { preDream: preSum } : {}), ...(ms ? { member: ms } : {})", "...(ms ? { member: ms } : {})"]], ['unit-fillRun']], //fill 不帶 preDream
+    ['PD09', 'src/domain/domain.mjs', [["let pf = t.postfit && !(skipPf && skipPf.has(t.nodeId))", "let pf = t.postfit"]], ['unit-memberCheck']], //skip 不作用於求解窗後段
+    ['PD10', 'src/domain/domain.mjs', [["postfit: true, ext: false, member: true, storeAfter: false, source: 'round', stage: 'preDream'", "postfit: true, ext: true, member: true, storeAfter: false, source: 'round', stage: 'preDream'"]], ['unit-memberCheck']], //擴充診斷亦移到派做夢之前
+    ['PD11', 'src/domain/domain.mjs', [["let keepPr = (x) => liveIds.has(x.nodeId) && (carriedIds === null || carriedIds.has(x.nodeId))", "let keepPr = (x) => liveIds.has(x.nodeId)"]], ['unit-memberCheck']], //prior 之併入不限於 skip 所列者(重做者之舊失敗併入新成品)
+    ['PD12', 'src/domain/domain.mjs', [["let keepPr = (x) => liveIds.has(x.nodeId) && (carriedIds === null || carriedIds.has(x.nodeId))", "let keepPr = (x) => carriedIds === null || carriedIds.has(x.nodeId)"]], ['unit-memberCheck']], //prior 之併入不核仍在樹上(做夢刪除者之舊失敗併入)
+    //── 「有內容」之單一定義(HC 系列; 規則 R-REC-49 ⑤): 並列、主鍵、補位之底、估法之候選 ──
+    ['HC01', 'src/domain/domain.mjs', [["let c = contentOf(n); return c && hasContentNode(n) ? c.v : null", "let c = contentOf(n); return c ? c.v : null"]], ['unit-gaugeContent']], //主鍵與並列不看「有內容」(改前)
+    ['HC02', 'src/domain/domain.mjs', [["anyValue: !content && cands.some((n) => contentOf(n) !== null)", "anyValue: false"]], ['unit-gaugeContent']], //並列之註記不分兩種情形
+    ['HC03', 'src/domain/domain.mjs', [["let hasContent = (n) => hasContentOf(n, pMax)", "let hasContent = (n) => contentOf(n) !== null"]], ['unit-gaugeContent']], //搜尋地圖之「有內容」與單一定義不同
+    ['HC04', 'src/domain/domain.mjs', [["let noValueWhy = (n) => (contentOf(n) ? '不符「有內容」' : '無其值')", "let noValueWhy = () => '無其值'"]], ['unit-gaugeContent']], //註記不分「不符」
+    ['HC05', 'src/tools/rankCompare.mjs', [["    .filter((n) => Pk.hasContent(n))", "    .filter(() => true)"]], ['unit-gaugeContent']], //估法之候選不看「有內容」
+    ['VZ08', 'src/domain/domain.mjs', [["let mcfg = memberCfgOfSt(st)", "let mcfg = memberCfgOfSt(st) //minRetention"]], ['unit-verifyZone']], //領域內嵌成員依賴之門檻之名(判定與門檻須只在禁區內之檔)
+    //── 排程第 593 項之修正輪(tad206b; 主控之裁定): 快取之鍵併近期活躍度版之診斷之雜湊、做夢未交付之字樣、任務書之一句隨設定、實數鍵收數字字串(MD 系列; 規則 R-REC-51)──
+    ['MD01', 'src/domain/fillPlan.mjs', [[", ...(dep ? { diag: diag === undefined ? null : diag } : {}) })", " })"]], ['unit-memberCheck']], //讀數依診斷者之鍵不帶診斷之雜湊(診斷改寫不重算)
+    ['MD02', 'src/domain/fillPlan.mjs', [["&& mRecent && mRecent.has(n.id))", "&& mRecent)"]], ['unit-memberCheck']], //recent 所列者與否皆帶診斷之雜湊(不依者亦因診斷改寫而重算)
+    ['MD03', 'src/domain/fillPlan.mjs', [["let deferM = needM0 && dep", "let deferM = false && needM0 && dep"]], ['unit-memberCheck']], //正本之診斷值過時者不延後(全庫之值與各半之值不同版而照算)
+    ['MD04', 'src/domain/fillPlan.mjs', [["dh !== null && !names.includes(mDiag) && !extCurrent(n, mDiag,", "dh !== null && !extCurrent(n, mDiag,"]], ['unit-memberCheck']], //本次補該診斷者亦延後(不與診斷之補算同一任務)
+    ['MD05', 'src/domain/fillPlan.mjs', [["&& !extCurrent(n, mDiag, {", "&& extCurrent(n, mDiag, {"]], ['unit-memberCheck']], //延後之判準反向(現行者延後、過時者照算)
+    ['MD06', 'src/domain/fillPlan.mjs', [["if (needM0 && (deferM || !inT)) {", "if (needM0 && !inT) {"]], ['unit-memberCheck']], //延後者不列入待補算
+    ['MD07', 'src/domain/fillPlan.mjs', [["if (!needM0) {\n                nCurrent++\n            }\n            continue", "nCurrent++\n            continue"]], ['unit-memberCheck']], //延後者計為現行
+    ['MD08', 'src/domain/fillPlan.mjs', [[", ...(k.member.diag === undefined ? [] : [k.member.diag])]", "]"]], ['unit-memberCheck']], //待算之鍵之正規字串不含診斷之雜湊(診斷改寫後之同一失敗被當成重跑結果相同)
+    ['MD09', 'src/domain/verifyMember.mjs', [["m.sel.sigPerPick >= 2 * m.null.sigPerPick", "m.sel.sigPerPick > 2 * m.null.sigPerPick"]], ['unit-memberCheck']], //依診斷之判準之邊界(恰為 2 倍亦是)
+    ['MD10', 'src/domain/domain.mjs', [["recent: eligible.filter((id) => memberRecentCapableOf(rsi.store.getNode(id))), diagName: RECENT_DIAG }", "recent: [], diagName: RECENT_DIAG }"]], ['unit-memberCheck']], //計畫不給依診斷者(鍵恆不帶診斷之雜湊)
+    ['MD11', 'src/domain/domain.mjs', [["mrow = memberRowOf(diagNew ? { ...cm, ext: { ...(isObjF(cm.ext) ? cm.ext : {}), [RECENT_DIAG]: diagNew } } : cm, halves, mcfg)", "mrow = memberRowOf(cm, halves, mcfg)"]], ['unit-memberCheck']], //全庫之值取樹上之舊版診斷值(與各半之現行診斷不同版)
+    ['MD12', 'src/domain/domain.mjs', [["if (memberDep && task.ext.includes(RECENT_DIAG) && !diagNew) {", "if (false) {"]], ['unit-memberCheck']], //同任務之診斷補算失敗仍算讀數
+    ['MD13', 'src/domain/domain.mjs', [["dep: memberRecentCapableOf(rsi.store.getNode(n.id)), diag: dgHash === undefined ? null : dgHash }", "dep: false }"]], ['unit-memberCheck']], //節點文件之補回之鍵不帶診斷之雜湊(與計畫之鍵不同 ⇒ 補回不成)
+    ['MD14', 'src/domain/verifyMember.mjs', [["let numOf = (v) => (isenum(v) ? Number(v) : null)", "let numOf = fin"]], ['unit-memberCheck']], //實數鍵不收數字字串(改前)
+    ['MD15', 'src/domain/verifyMember.mjs', [["let numOf = (v) => (isenum(v) ? Number(v) : null)", "let numOf = (v) => (isenum(v) ? v : null)"]], ['unit-memberCheck']], //實數鍵通過後仍用原字串(跨套件規格 K4)
+    ['MD16', 'src/domain/verifyExposure.mjs', [["isenum(o.minShift, { gt: 0, max: 1 }) ? Number(o.minShift) : EXPOSURE_DEFAULT.minShift", "typeof o.minShift === 'number' && Number.isFinite(o.minShift) && o.minShift > 0 && o.minShift <= 1 ? o.minShift : EXPOSURE_DEFAULT.minShift"]], ['unit-exposure']], //minShift 不收數字字串(改前)
+    ['MD17', 'src/domain/verifyExposure.mjs', [["? Number(o.minShift) :", "? o.minShift :"]], ['unit-exposure']], //minShift 通過後仍用原字串
+    ['MD18', 'src/domain/verifyExposure.mjs', [["{ gt: 0, max: 1 }", "{ max: 1 }"]], ['unit-exposure']], //minShift 之下界不排除 0
+    ['MD19', 'src/domain/verifyExposure.mjs', [["{ gt: 0, max: 1 }", "{ gt: 0 }"]], ['unit-exposure']], //minShift 之上界不限 1
+    ['MD20', 'src/domain/texts.mjs', [["let memberOn = autoFillOn && memberCfgOfSt(st) !== null", "let memberOn = true"]], ['unit-memberCheck']], //任務書之一句不隨設定(改前)
+    ['MD21', 'src/domain/texts.mjs', [["let memberOn = autoFillOn && memberCfgOfSt(st) !== null", "let memberOn = memberCfgOfSt(st) !== null"]], ['unit-memberCheck']], //一句不隨 autoFill 關閉而略去
+    ['MD22', 'src/domain/texts.mjs', [["let memberOn = autoFillOn && memberCfgOfSt(st) !== null", "let memberOn = autoFillOn"]], ['unit-memberCheck']], //一句不隨 memberCheck 關閉而略去
+    ['MD23', 'src/domain/fillPlan.mjs', [["!(rsiCfg && rsiCfg.autoFill === false)", "!(rsiCfg && rsiCfg.autoFill == false)"]], ['unit-memberCheck']], //autoFill 之判定寬鬆(0、空字串亦視為關閉)
+    ['MD24', 'src/domain/fillPlan.mjs', [["let retryText = typeof retryAt === 'string' && retryAt !== '' ? retryAt :", "let retryText = false ? retryAt :"]], ['unit-memberCheck']], //重試時機之字樣不可取代
+    ['MD25', 'src/domain/fillPlan.mjs', [[";失敗者(${retryText}):${badM.map(", ";失敗者(${r.source === 'round' ? '下一次輪末重試' : '再執行補算工具時重試'}):${badM.map("]], ['unit-memberCheck']], //成員穩健性一列之重試時機字樣不可取代
+    ['MD26', 'src/domain/domain.mjs', [["{ stage: 'preDream', retryAt: '做夢未交付,未記入待重試;補做夢時重算' }", "{ stage: 'preDream' }"]], ['unit-memberCheck']], //做夢未交付時摘要列之字樣不改
+    ['MD27', 'src/domain/domain.mjs', [["if (autoFillOf(st.rsi)) {", "if (true) {"]], ['unit-memberCheck']], //做夢之後之附算不隨 autoFill 關閉而略去
+    ['MD28', 'src/domain/domain.mjs', [["task.keys.member.diag !== undefined)", "false)"]], ['unit-memberCheck']], //不辨讀數依診斷之任務(同任務之診斷值不取用、補算失敗不攔)
 ]
 
 let args = process.argv.slice(2)

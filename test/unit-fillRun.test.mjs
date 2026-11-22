@@ -42,7 +42,8 @@ describe('附算與補算之執行(規則 R-REC-34)', function () {
         let d = path.join(t.dir, 'proj')
         //資源閘關閉、併行 1(參考設定之資源閘會使工作者等待全機之負載降下, 測試之耗時與成敗隨機器之負載而變)
         st.resources = {}
-        st.rsi = { ...st.rsi, fillParallel: 1 }
+        //成員穩健性(規則 R-REC-51; 預設開啟)關閉: 本檔之範圍為求解窗後段與擴充診斷(成員穩健性之執行與接線見 unit-memberCheck)
+        st.rsi = { ...st.rsi, fillParallel: 1, memberCheck: false }
         st.rsi.root = path.join(d, 'rsi')
         st.rsi.docLimits = false //輪末鉤子之專案文件自動整理(R-REC-17)取本庫自身之 sgud; 測試不得改寫入版控之文件(R-PKG-10)
         st.records = { nodeDir: path.join(d, 'rsi/records/nodes'), dreamDir: path.join(d, 'rsi/records/dreams'), trashDir: path.join(d, 'rsi/records/trash'), workDir: path.join(d, 'rsi/work'), toolboxDir: path.join(d, 'rsi/toolbox') }
@@ -296,7 +297,8 @@ describe('附算與補算之執行(規則 R-REC-34)', function () {
         assert.deepEqual(touched, [ids[0], ids[2]].sort(), '本輪之節點 + 待重試者')
         assert(hk.lines.some((l) => l.startsWith('附算(求解窗後段與擴充診斷;佐證,不改 S):2 個成品')), JSON.stringify(hk.lines))
         assert(hk.lines.some((l) => l.startsWith('待補算之成品') && l.includes('求解窗後段 1 個')), JSON.stringify(hk.lines))
-        assert.deepEqual(hk.fill, { n: 2, failed: 0, retry: 0, backlog: { postfit: 1, ext: 0 }, sec: hk.fill.sec })
+        //求解窗後段之時點(規則 R-REC-51): 本輪之節點(節點 0)之求解窗後段於派做夢之前算(preDream); 做夢之後之一次為節點 0 之擴充診斷與待重試之節點 2
+        assert.deepEqual(hk.fill, { n: 2, failed: 0, retry: 0, backlog: { postfit: 1, ext: 0 }, sec: hk.fill.sec, preDream: { n: 1, failed: 0, sec: hk.fill.preDream.sec } })
         //附算於共同儲存區重產之前 ⇒ 本輪節點之列已帶 postfit
         let idx = JSON.parse(fs.readFileSync(path.join(st.rsi.root, 'picks', 'index.json'), 'utf8'))
         assert.equal(idx.items.find((x) => x.id === ids[0]).postfit.seatsKept, 20)
@@ -315,7 +317,8 @@ describe('附算與補算之執行(規則 R-REC-34)', function () {
         //(本合成專案之做夢不更新 sgud/ ⇒ 鉤子另有「做夢未更新」之失敗, 與附算無關)
         assert(hk2.dream && hk2.dream.round === 2, '做夢照常套用')
         assert(!(hk2.errors || []).some((e) => /附算|評估/.test(String(e))), JSON.stringify(hk2.errors))
-        assert.equal(hk2.fill.failed, 1)
+        //本輪之節點之求解窗後段於派做夢之前執行 ⇒ 其失敗記於 preDream.failed(做夢之後之一次不再執行同一項)
+        assert.equal(hk2.fill.preDream.failed, 1)
         assert(hk2.lines.some((l) => l.includes('失敗者(下一次輪末重試)') && l.includes(ids[1].slice(0, 8))), JSON.stringify(hk2.lines))
         //關閉: settings.rsi.autoFill === false ⇒ 不附算、回傳無 fill
         let st3 = { ...st, rsi: { ...st.rsi, autoFill: false } }
