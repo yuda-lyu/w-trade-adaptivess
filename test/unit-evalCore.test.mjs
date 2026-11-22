@@ -304,12 +304,27 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         assert.equal(ref.sels.length, got[0].sels.length)
     })
 
-    it('pick 回傳不合法之序號或空值 ⇒ 拋錯', () => {
+    it('pick 回傳不合法之序號或空值 ⇒ 拋錯(V19、V20: 英文固定詞彙、帶位置、不帶輸入值; 排程第 510 項: 原為中文訊息並帶輸入值之描述)', () => {
         //合約 §1: pick 須回傳序號陣列或 { ids, tag }; 序號須為 0 ~ n-1 之整數
-        assert.throws(() => ev.runPick(() => [0, L.n], 0), /不合法之序號/)
-        assert.throws(() => ev.runPick(() => [1.5], 0), /不合法之序號/)
-        assert.throws(() => ev.runPick(() => null, 0), /null/)
-        assert.throws(() => ev.runPick(() => ({ tag: 1 }), 0), /缺 ids/)
+        let msgOf = (f) => {
+            try {
+                f()
+            }
+            catch (err) {
+                return err.message
+            }
+            return null
+        }
+        let hi = L.n - 1
+        assert.equal(msgOf(() => ev.runPick(() => [0, L.n], 0)), `invalid pick return value[1]: must be an integer from 0 to ${hi}`)
+        assert.equal(msgOf(() => ev.runPick(() => [1.5], 0)), `invalid pick return value[0]: must be an integer from 0 to ${hi}`)
+        assert.equal(msgOf(() => ev.runPick(() => ({ ids: [0, -1] }), 0)), `invalid pick return value.ids[1]: must be an integer from 0 to ${hi}`, '物件形式: 位置帶 .ids')
+        let RET = 'invalid pick return value: must be an array, a typed array or a Set of strategy indexes, or { ids, group?, tag? }'
+        assert.equal(msgOf(() => ev.runPick(() => null, 0)), RET)
+        assert.equal(msgOf(() => ev.runPick(() => undefined, 0)), RET)
+        assert.equal(msgOf(() => ev.runPick(() => ({ tag: 1 }), 0)), 'invalid pick return value.ids: must be an array, a typed array or a Set of strategy indexes')
+        //不回顯輸入值(V20)
+        assert(!String(msgOf(() => ev.runPick(() => [987654321], 0))).includes('987654321'))
         let r = ev.runPick(() => ({ ids: new Set([3, 3, 1]), tag: 'x' }), 0)
         assert.deepEqual(Array.from(r.sels[0]), [1, 3])
         assert.equal(r.tags[0], 'x')
@@ -1380,8 +1395,9 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         })
         assert(seen[0] > 0 && seen[1] > 0 && seen[2] === 0)
         //不合法之 group
-        assert.throws(() => ev.evalPolicy((ctx) => ({ ids: top(ctx, 4), group: [0, 1] }), opt), /group 須與 ids 等長/)
-        assert.throws(() => ev.evalPolicy((ctx) => ({ ids: top(ctx, 2), group: [0, 9] }), opt), /group 含不合法之值/)
+        //(V19、V20; 排程第 510 項: 原為中文訊息並帶輸入值之描述)
+        assert.throws(() => ev.evalPolicy((ctx) => ({ ids: top(ctx, 4), group: [0, 1] }), opt), (e) => e.message === 'invalid pick return value.group: must have the same number of entries as pick return value.ids')
+        assert.throws(() => ev.evalPolicy((ctx) => ({ ids: top(ctx, 2), group: [0, 9] }), opt), (e) => e.message === 'invalid pick return value.group[1]: must be an integer from 0 to 3')
     })
 })
 

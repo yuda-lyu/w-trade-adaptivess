@@ -31,9 +31,10 @@ let h20 = (buf) => crypto.createHash('sha256').update(buf).digest('hex').slice(0
  */
 let pickHashOf = (buf) => h20(buf)
 
-//EVAL_FP_SKIP, src/eval/ 內不屬評估器之檔(不入指紋; 規則 R-REC-34、R-EV-44): 建帳本之 ledgerBuild.mjs —— 評估器(src/cli/eval.mjs 與其匯入之 src/eval/ 各檔)不匯入它(測試以匯入鏈核對);
-//  只改建帳本之升版不使附算與補算之值過時(帳本之內容改變者經帳本鍵 meta.key 併入指紋)
-let EVAL_FP_SKIP = ['ledgerBuild.mjs']
+//EVAL_FP_SKIP, src/eval/ 內不屬評估器之檔(不入指紋; 規則 R-REC-34、R-EV-44、R-EV-52): 建帳本專用之 ledgerBuild.mjs 與只由它於給了 unit 時動態匯入之 unitNotional.mjs ——
+//  評估器(src/cli/eval.mjs 與其匯入之 src/eval/ 各檔)皆不匯入(測試以匯入鏈核對: 評估器之匯入鏈不含、建帳本之入口之匯入鏈含; 且 src/eval/ 內不在評估器之匯入鏈上之檔 = 本表,新增而不在鏈上之檔須列入或接入鏈);
+//  只改建帳本之升版不使附算與補算之值過時(帳本之內容改變者經帳本鍵 meta.key〔含帳本格式版本、交易規則與緩衝〕併入指紋; 評估器讀帳本之 unit 欄〔unit.mjs、ledger.mjs〕仍在指紋內)
+let EVAL_FP_SKIP = ['ledgerBuild.mjs', 'unitNotional.mjs']
 
 //evalSrcFiles, 評估器原始碼之檔(相對於套件之 src; 依名排序); 讀不到即拋錯(指紋不得因讀檔失敗而靜默變寬)
 let FP_ERR = (what) => new Error(`invalid evaluator fingerprint: must read ${what}`)

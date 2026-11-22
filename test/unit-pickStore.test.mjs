@@ -115,6 +115,107 @@ describe('共同儲存「自適應挑選策略」區(規則 R-REC-25;保留期�
         //共同儲存區內不得出現保留期之數字欄: 各策略之 holdout 只有 perf / content / asOf 三鍵
         assert(idx.items.every((x) => Object.keys(x.holdout).sort().join(',') === 'asOf,content,perf'))
     })
+
+    //_holdout.json 之 asOf(檢定所用資料之終點; 排程第 510 項⑤): 只收非空字串
+    //  規格之句: 非字串(數字、布林、物件、陣列)與空字串視為未給(null); 字串照收; 數字不得進入 README 與 index.json(原: 任何真值照收 —— 數字會進 README 與 index.json)
+    it('_holdout.json 之 asOf 只收非空字串: 數字、布林、物件、陣列、空字串 ⇒ 視為未給(index.json 之 holdoutAsOf 與各策略之 asOf 為 null、README 與總表不含其值); 字串照收; infoOf 同', async () => {
+        let dir = path.join(st.rsi.root, 'picks')
+        let fp = path.join(dir, '_holdout.json')
+        let orig = fs.existsSync(fp) ? fs.readFileSync(fp, 'utf8') : null
+        let items = { [id2]: { perf: '+', content: '-' } }
+        let read = () => {
+            let idx = JSON.parse(fs.readFileSync(path.join(dir, 'index.json'), 'utf8'))
+            return { idx, readme: fs.readFileSync(path.join(dir, 'README.md'), 'utf8'), by: Object.fromEntries(idx.items.map((x) => [x.id, x.holdout])) }
+        }
+        for (let bad of [20261110, true, { a: 1 }, ['2026-11-10'], '', 0, 1.5]) {
+            fs.writeFileSync(fp, JSON.stringify({ asOf: bad, items }), 'utf8')
+            await buildPickStore(st)
+            let { idx, readme, by } = read()
+            assert.equal(idx.holdoutAsOf, null, `holdoutAsOf ${JSON.stringify(bad)}`)
+            assert.deepEqual(by[id2], { perf: '+', content: '-', asOf: null }, `asOf ${JSON.stringify(bad)}`)
+            assert(readme.includes('目前尚無任何檢定結果。') && !readme.includes('目前之檢定所用資料至'), `README ${JSON.stringify(bad)}`)
+            assert(!readme.includes('20261110') && !JSON.stringify(idx).includes('20261110'), '數字不入 README 與 index.json')
+        }
+        fs.writeFileSync(fp, JSON.stringify({ asOf: '2026-11-10T00:00:00', items }), 'utf8')
+        await buildPickStore(st)
+        let ok = read()
+        assert.equal(ok.idx.holdoutAsOf, '2026-11-10T00:00:00')
+        assert.deepEqual(ok.by[id2], { perf: '+', content: '-', asOf: '2026-11-10T00:00:00' })
+        assert(ok.readme.includes('目前之檢定所用資料至 2026-11-10T00:00:00。'))
+        //infoOf(純函數)同口徑
+        let d0 = { nodeId: id2, round: 1, spec: { arms: ['A01_nt'], base: null }, harness: { ok: true, score: { S: 1 } } }
+        assert.deepEqual(infoOf(d0, { ho: { perf: '+', content: '-', asOf: 20261110 } }).holdout, { perf: '+', content: '-', asOf: null })
+        assert.deepEqual(infoOf(d0, { ho: { perf: '+', content: '-', asOf: '' } }).holdout, { perf: '+', content: '-', asOf: null })
+        assert.deepEqual(infoOf(d0, { ho: { perf: '+', content: '-', asOf: 'x' } }).holdout, { perf: '+', content: '-', asOf: 'x' })
+        if (orig === null) {
+            fs.rmSync(fp, { force: true })
+        }
+        else {
+            fs.writeFileSync(fp, orig, 'utf8')
+        }
+    })
+
+    //相位數之寫法(排程第 547 項②之接續: 取實算): 說明各策略之回測期績效者(index.json 之 backtest.* 欄說明、總表之欄標題 INDEX.md)之「七相位」= 各策略之 eqYrByPhase 之長度(皆同者);
+    //  各策略不同或皆無此欄者、及說明外部提供之正負號者(holdout.* 之欄說明、README.md 之固定文字: 保留期、其他標的; 無實算之結果可取)取 settings.eval.phases 之長度(未給 = 7); 節點之內容(agent 所寫之摘要等)不被改寫
+    it('相位數之寫法: 回測期之欄說明與總表之欄標題取各策略之 eqYrByPhase 之長度(皆同者); 保留期之說明與 README 取 settings.eval.phases 之長度; 未給且皆 7 個 ⇒ 七相位(逐字同原文); 各策略之資料(items)不受影響', async () => {
+        let dir = path.join(st.rsi.root, 'picks')
+        let read = () => {
+            let idx = JSON.parse(fs.readFileSync(path.join(dir, 'index.json'), 'utf8'))
+            let note = (re) => idx.fields.find((f) => re.test(f.key)).note
+            return { readme: fs.readFileSync(path.join(dir, 'README.md'), 'utf8'), md: fs.readFileSync(path.join(dir, 'INDEX.md'), 'utf8'), btNote: note(/^backtest\.eqYrMean/), hoNote: note(/^holdout\.perf/), items: JSON.stringify(idx.items) }
+        }
+        //把兩個節點文件之 harness.raw.metrics.op.eqYr.byPhase 改為指定之個數(null = 不改)
+        let origDoc = (id) => fs.readFileSync(path.join(st.records.nodeDir, `${id}.json`), 'utf8')
+        let orig = { [id1]: origDoc(id1), [id2]: origDoc(id2) }
+        let setBy = (n1, n2) => {
+            for (let [id, n] of [[id1, n1], [id2, n2]]) {
+                let d = JSON.parse(orig[id])
+                if (n !== null) {
+                    d.harness.raw.metrics.op.eqYr.byPhase = Array.from({ length: n }, (v, i) => 1 + i)
+                }
+                fs.writeFileSync(path.join(st.records.nodeDir, `${id}.json`), JSON.stringify(d), 'utf8')
+            }
+        }
+        try {
+            //各策略皆 7 個(夾具原樣)、設定 2 個 ⇒ 回測期七相位、保留期與 README 二相位
+            st.eval = { phases: [0, 3] }
+            await buildPickStore(st)
+            let a = read()
+            assert(a.md.includes('| 七相位 平均 / 最差 / 為正 |') && a.btNote.includes('七相位等效年化(%)之平均'), '回測期 ⇒ 各策略之 7 個')
+            assert(a.hoNote.includes('二相位等效年化之平均') && !a.hoNote.includes('七相位'), '保留期 ⇒ 設定')
+            assert(a.readme.includes('二相位等效年化之平均') && !a.readme.includes('七相位'), 'README ⇒ 設定')
+            //未給(預設 7)、各策略皆 7 個 ⇒ 全為七相位(逐字同原文)
+            delete st.eval
+            await buildPickStore(st)
+            let seven = read()
+            assert(seven.md.includes('| 七相位 平均 / 最差 / 為正 |') && seven.btNote.includes('七相位等效年化(%)之平均') && seven.hoNote.includes('七相位等效年化之平均') && seven.readme.includes('七相位等效年化之平均'))
+            assert(!seven.readme.includes('二相位') && !seven.md.includes('二相位') && !seven.btNote.includes('二相位') && !seven.hoNote.includes('二相位'))
+            assert.strictEqual(a.items, seven.items, '各策略之資料不受相位數之寫法影響')
+            //各策略皆 2 個、設定未給(7)⇒ 回測期二相位、保留期與 README 七相位(修前: 全為設定之七相位)
+            setBy(2, 2)
+            await buildPickStore(st)
+            let two = read()
+            assert(two.md.includes('| 二相位 平均 / 最差 / 為正 |') && two.btNote.includes('二相位等效年化(%)之平均') && !two.btNote.includes('七相位'), '回測期 ⇒ 各策略之 2 個')
+            assert(two.hoNote.includes('七相位等效年化之平均') && two.readme.includes('七相位等效年化之平均'), '保留期與 README ⇒ 設定(未給 = 7)')
+            //各策略不同(2 與 7)⇒ 設定; 設定 12 個 ⇒ 阿拉伯數字加空白
+            setBy(2, null)
+            st.eval = { phases: Array.from({ length: 12 }, (v, i) => i) }
+            await buildPickStore(st)
+            let mixed = read()
+            assert(mixed.md.includes('| 12 相位 平均 / 最差 / 為正 |') && mixed.btNote.includes('12 相位等效年化(%)之平均'), '各策略不同 ⇒ 設定(12 個)')
+            //各策略皆 12 個 ⇒ 12 相位
+            setBy(12, 12)
+            await buildPickStore(st)
+            assert(read().md.includes('| 12 相位 平均 / 最差 / 為正 |'))
+        }
+        finally {
+            for (let id of [id1, id2]) {
+                fs.writeFileSync(path.join(st.records.nodeDir, `${id}.json`), orig[id], 'utf8')
+            }
+            delete st.eval
+            await buildPickStore(st)
+        }
+    })
 })
 
 //keepAsync, 先記下要被改之屬性描述, fn 結束後(含拋錯)還原(新增者刪除)

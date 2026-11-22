@@ -238,7 +238,8 @@ describe('成員重抽之半庫帳本(memberLedger)與命令列之 --member', fu
         let wantTh = Array.from(A.srcIdx).flatMap((s) => Array.from(L.keyTh.subarray(L.keyOff[s], L.keyOff[s + 1])))
         assert.deepEqual(got.keyTh, wantTh)
         //cfg.tieSalt(迴圈之重放)與半庫並用: 半庫內各策略之 tie = 全庫評估器於同一 tieSalt 下該策略之 tie
-        for (let tieSalt of [5, -5, 2 ** 53 + 2]) {
+        //  (排程第 595 項起 tieSalt 須為安全整數〔K6〕: 原所列之 2 ** 53 + 2 〔超出安全整數〕改為安全整數內之最大偶數 2 ** 53 - 2, 仍超過 32 位元〔同一個「大鹽」之意圖〕; 超出者之拒絕見 unit-evalRunNums)
+        for (let tieSalt of [5, -5, 2 ** 53 - 2]) {
             let fullSalt = firstCtx(makeEvaluator(L, { ...CFG, tieSalt })).tie
             //獨立預期(HEAD 之原寫法: 同分次鍵之基底再依鹽雙射雜湊一次):
             assert.deepEqual(fullSalt, Array.from({ length: L.n }, (_, s) => legacyTieSalted(s, tieSalt)), `tieSalt ${tieSalt}: 全庫之 tie = 原寫法`)

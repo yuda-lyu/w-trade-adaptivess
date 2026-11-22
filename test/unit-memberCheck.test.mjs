@@ -46,8 +46,13 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
                 assert.deepEqual(VM.memberCheckOf(v, {}), def, JSON.stringify(v))
             }
             assert.deepEqual(VM.memberCheckOf(undefined, { replicaNullDraws: 16 }).nullDraws, 16, 'nullDraws 未給 ⇒ replicaNullDraws')
-            for (let rd of [0, -3, 1.5, 'x', null]) {
-                assert.equal(VM.memberCheckOf(undefined, { replicaNullDraws: rd }).nullDraws, 32, `replicaNullDraws ${rd} 不合 ⇒ 32`)
+            //settings.eval.replicaNullDraws 與迴圈之重放同一個取值函數(排程第 595 項; R-EV-44 ④之二): 未給(含 null)= 32、0(不算虛無)不採用 ⇒ 32、數字字串轉為數值、給了而無效(負數、小數、非數字、布林)拋 invalid eval.replicaNullDraws
+            for (let rd of [0, '0', null, undefined]) {
+                assert.equal(VM.memberCheckOf(undefined, { replicaNullDraws: rd }).nullDraws, 32, `replicaNullDraws ${rd} ⇒ 32`)
+            }
+            assert.equal(VM.memberCheckOf(undefined, { replicaNullDraws: '16' }).nullDraws, 16, 'replicaNullDraws 數字字串')
+            for (let rd of [-3, 1.5, 'x', '', true, false, NaN, Infinity, [16], {}]) {
+                assert.throws(() => VM.memberCheckOf(undefined, { replicaNullDraws: rd }), (err) => err.message === 'invalid eval.replicaNullDraws: must be a non-negative integer', `replicaNullDraws ${String(rd)} 無效 ⇒ 拋`)
             }
             assert.equal(VM.memberCheckOf({ nullDraws: 12 }, { replicaNullDraws: 16 }).nullDraws, 12, 'nullDraws 優先')
             assert.equal(VM.memberCheckOf({ nullDraws: '12' }, {}).nullDraws, 12, '數字字串')

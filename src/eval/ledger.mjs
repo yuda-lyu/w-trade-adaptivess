@@ -418,6 +418,10 @@ let gatherLedger = (L, sel, tag) => {
         M.unitN = L.unitN
         M.unit = L.unit
     }
+    //endBar(clipLedger 所設之決策視窗終點; 規則 R-EV-52)亦沿用: 先 clipLedger 再切半 / 子庫者與先切半再 clipLedger 者逐位相同(原: 丟掉 endBar 而回到全期之決策視窗)
+    if (L.endBar !== undefined && L.endBar !== null) {
+        M.endBar = L.endBar
+    }
     Object.defineProperty(M, 'fac', { enumerable: false, configurable: true, get: () => L.fac })
     Object.defineProperty(M, 'ser', { enumerable: false, configurable: true, get: () => L.ser })
     setExitCols(M)
@@ -460,6 +464,111 @@ let subsetLedger = (L, sel, rule) => {
     return gatherLedger(L, sel, { subset: ObjectFreeze({ rule, nFull: nFullOf(L) }) })
 }
 
+/**
+ * 截至某棒之帳本視圖(規則 R-EV-52; 排程第 510 項; g_backtest.mjs 之全期帳本長於回測期終點者用): 回傳與「帳本於 endBar 截止」同一語意之帳本物件 ——
+ * 進場棒 ≥ endBar 之單去除; 出場棒 ≥ endBar 之單(終點之後才出場者)改為未結(出場棒 -1、損益 0; 與 buildLedger 於帳本終點截止時之未結單相同: 帳本終點之後之資訊不可得);
+ * 其餘單之各欄逐位相同。逐棒之欄(K 線、因子、外部序列、基礎單位名義)與逐策略之靜態欄與原帳本共用(nBars 不變, 其長度之核對照常); 依出場棒排序之已結單欄重建。
+ * 另帶 endBar(= endBar 參數; 評估器之決策與新鮮度之視窗以之為界: 挑選函數照常自帳本起點連續執行, 但只執行至「其後一個決策間隔落在 endBar 之內」之決策 —— 同評估帳本止於 endBar 時 decisionBars 之 b + W ≤ nBars)。
+ * endBar 不小於 L.nBars(無須截)者回傳原帳本物件本身(同一物件、逐位不變); 已截至不晚於 endBar 者(L 為本函數之結果)亦回原物件, 較早者再截(終點取較小者); 半庫與子庫帳本(memberLedger、subsetLedger)沿用 endBar(先截再切 = 先切再截)。入口先比對受保護之內建物件; 參數不合者拋錯(訊息不帶輸入值)
+ *
+ * @param {Object} L 輸入由 loadLedger 取得之帳本物件(亦可為半庫或子庫帳本)
+ * @param {Integer} endBar 輸入帳本之終點棒序(0 以上之整數; 棒序 < endBar 者保留; 回測期終點之棒序)
+ * @returns {Object} 回傳帳本物件(欄位同 loadLedger 之回傳; 已給之 ntStatic 一併帶入)
+ * @example
+ * let L = loadLedger('./data/ledger/full')
+ * let Lc = clipLedger(L, 2400)
+ */
+let clipLedger = (L, endBar) => {
+    assertIntrinsics('ledger-load')
+    if (!isLedgerShape(L)) {
+        throw new ErrorCtor('invalid L: must be a ledger object (see loadLedger and memberLedger)')
+    }
+    let endV = iseint(endBar) ? NumberCtor(endBar) : NaN
+    if (!(endV >= 0)) {
+        throw new ErrorCtor('invalid endBar: must be a non-negative integer')
+    }
+    if (endV >= L.nBars) {
+        return L
+    }
+    //已截至不晚於 endBar 者(L 為 clipLedger 之結果; 其 endBar ≤ endV)回原物件; 更晚之 endBar 者以較早之終點再截(取較小者; 原: 再 clip 於較晚之終點會把 endBar 放寬而與已截去之單不一致)
+    if (typeof L.endBar === 'number' && L.endBar <= endV) {
+        return L
+    }
+    let n = L.n
+    let off = new Uint32ArrayCtor(n + 1)
+    let tot = 0
+    for (let s = 0; s < n; s++) {
+        off[s] = tot
+        for (let j = L.off[s]; j < L.off[s + 1]; j++) {
+            if (L.ent[j] < endV) {
+                tot++
+            }
+        }
+    }
+    off[n] = tot
+    let ent = new Int32ArrayCtor(tot)
+    let ext = new Int32ArrayCtor(tot)
+    let pnl = new Float32ArrayCtor(tot)
+    let p = 0
+    for (let s = 0; s < n; s++) {
+        for (let j = L.off[s]; j < L.off[s + 1]; j++) {
+            if (L.ent[j] < endV) {
+                ent[p] = L.ent[j]
+                if (L.ext[j] >= 0 && L.ext[j] < endV) {
+                    ext[p] = L.ext[j]
+                    pnl[p] = L.pnl[j]
+                }
+                else {
+                    ext[p] = -1
+                    pnl[p] = 0
+                }
+                p++
+            }
+        }
+    }
+    let M = {
+        dir: L.dir,
+        meta: L.meta,
+        n,
+        nBars: L.nBars,
+        barsPerDay: L.barsPerDay,
+        off,
+        ent,
+        ext,
+        pnl,
+        mode: L.mode,
+        tp: L.tp,
+        sl: L.sl,
+        nKeys: L.nKeys,
+        lv: L.lv,
+        fitNt: L.fitNt,
+        cls: L.cls,
+        keyOff: L.keyOff,
+        keyIdx: L.keyIdx,
+        keyNames: L.keyNames,
+        px: L.px,
+        keySym: L.keySym,
+        keyTh: L.keyTh,
+        keyOr: L.keyOr,
+        seriesNames: L.seriesNames,
+        //endBar: 決策視窗之終點棒(評估器之 nEnd; makeEvaluator 之 decisionBars 與新鮮度之視窗以之為界 ⇒ 挑選函數所見之 ctx.nDecisions 與其後之決策皆與止於終點之帳本相同)
+        endBar: endV,
+    }
+    for (let k of ['srcIdx', 'member', 'subset', 'ntStatic']) {
+        if (L[k] !== undefined && L[k] !== null) {
+            M[k] = L[k]
+        }
+    }
+    if (L.unitN !== undefined && L.unitN !== null) {
+        M.unitN = L.unitN
+        M.unit = L.unit
+    }
+    Object.defineProperty(M, 'fac', { enumerable: false, configurable: true, get: () => L.fac })
+    Object.defineProperty(M, 'ser', { enumerable: false, configurable: true, get: () => L.ser })
+    setExitCols(M)
+    return M
+}
+
 //ids, 策略序號 → 策略檔名(需要時才讀)
 /**
  * 讀取帳本資料夾內之 ids.json, 取得策略序號對應之策略檔名陣列
@@ -475,5 +584,5 @@ let loadIds = (dir) => {
 }
 
 
-export { loadLedger, loadIds, tieBaseOf, isSrcIdx, memberLedger, memberUOf, subsetLedger }
+export { loadLedger, loadIds, tieBaseOf, isSrcIdx, memberLedger, memberUOf, subsetLedger, clipLedger }
 export default loadLedger

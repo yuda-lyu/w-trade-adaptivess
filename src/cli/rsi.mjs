@@ -1,18 +1,61 @@
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
-import { getSettings, argOf, argStrOf, writeJson } from '../cfg.mjs'
+import { getSettings, argOf, argStrOf, cliMsgOf, writeJson } from '../cfg.mjs'
 import { peekRound } from '../engineApi.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { roundName } from '../arsi/records.mjs'
 import { runRounds, acquireRunLock, appendEvent, readEvents, trailingFailures, planGateOf, roundOkOf } from '../arsi/runner.mjs'
 import { checkQuota } from '../arsi/dispatchers.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
+import { phaseCountOfMetrics, phaseCountOfAll, phaseText } from '../domain/factsText.mjs'
 import { fileURLToPath } from 'url'
 
 
 //agent(ARSI_AGENT_ROLE = node / dream)執行寫檔之模式 ⇒ 拒跑(離開碼 2; 於讀設定、組裝專案與任何寫入之前; 規則 R-RUN-11); 唯讀之模式(status、dry、frontier 之列出、fill --dry)照常
 guardEntry('rsi')
+//命令列之旗標只認 --key value(空白分隔; 排程第 590、547 項): 帶等號之 --key=value、未列之旗標、重複之旗標、帶值旗標無值、--mode 之值不在列舉、多餘之值一律不執行
+//  (離開碼 2; 於讀設定、組裝專案、取鎖與任何寫入之前; 訊息固定、不帶輸入值)
+//  原: argOf 不識以上各種寫法而視為旗標未給或只取第一個 —— --mode=round 被當成 status(只印現況而未起輪)、--nodes=2 / --rounds=3 之規模不採、--only=… 之範圍擴為全樹、--force=1 / --dry=1 不生效
+{
+    let argMsg = cliMsgOf('rsi')
+    if (argMsg !== null) {
+        console.log(argMsg)
+        process.exit(2)
+    }
+    //--null N(補算之虛無抽數; 只作用於 --mode fill / extfill 之擴充診斷之補算): 給了而不是正整數(0、負數、小數、非數字)⇒ 不補算(離開碼 2; 同上之時點)
+    //  原: Number.isInteger(nullArg) && nullArg > 0 ? nullArg : null —— 不合者被靜默當成未給而依設定之抽數評估(與使用者所要之縮減不同)
+    let md = argOf('mode', 'status')
+    let nullArg0 = argOf('null', null)
+    if ((md === 'fill' || md === 'extfill') && nullArg0 !== null && !(typeof nullArg0 === 'number' && Number.isSafeInteger(nullArg0) && nullArg0 >= 1)) {
+        console.log('invalid --null: must be a positive integer')
+        process.exit(2)
+    }
+    //--dream-only 與 --file 之模式相容(排程第 547 項: 原被靜默忽略 —— `--mode round --file <檔>` 忘了 --dream-only 者起一個完整之輪次〔會派工〕而忽略該檔; `--dream-only` 於他模式亦被忽略):
+    //  --dream-only 只用於 --mode round; --file 只用於 --mode annotate、--mode dirtype 與 --mode round --dream-only; 不合 ⇒ 離開碼 2(同上之時點)
+    let hasDream = process.argv.includes('--dream-only')
+    if (hasDream && md !== 'round') {
+        console.log('invalid --dream-only: must be used with --mode round')
+        process.exit(2)
+    }
+    if (process.argv.includes('--file') && !(md === 'annotate' || md === 'dirtype' || (md === 'round' && hasDream))) {
+        console.log('invalid --file: must be used with --mode annotate, --mode dirtype or --mode round --dream-only')
+        process.exit(2)
+    }
+    //--claim(主張鍵; 只用於 --mode frontier 之 --close / --rearm): 只用於 frontier、且須為 8 個十六進位字(取原字串; 同上之時點)
+    //  原: 不合者靜默視為未給 ——「--close <臂> --claim zz」會把該臂之全部 proposed 提案結案(範圍擴大); 於他模式被忽略
+    if (process.argv.includes('--claim')) {
+        let cv = argStrOf('claim', undefined)
+        if (md !== 'frontier') {
+            console.log('invalid --claim: must be used with --mode frontier')
+            process.exit(2)
+        }
+        if (!(typeof cv === 'string' && /^[0-9a-f]{8}$/.test(cv))) {
+            console.log('invalid --claim: must be an 8-digit hexadecimal claim key (as listed after 主張 or 鍵)')
+            process.exit(2)
+        }
+    }
+}
 
 
 //FP_DIGEST, 輪末摘要之工具(本套件之 src/tools/roundDigest.mjs; 以本檔位置定位套件內之程式, 專案根仍由 ARSI_ROOT 傳給子行程)
@@ -48,7 +91,6 @@ let FP_DIGEST = fileURLToPath(new URL('../tools/roundDigest.mjs', import.meta.ur
 //  node g_rsi.mjs --mode annotate --round N --file <文字檔>      於該輪做夢文件加「迴圈註記」(文件完成後之更正)
 //  node g_rsi.mjs --mode dirtype --round N --file <JSON 檔>      補記該輪做夢文件之方向之任務類型([{ index, type: 'explore' | 'verify', claim }]; 舊做夢文件無此欄時用)
 //  一輪可能歷時數小時: 請以 g_launch.mjs 脫離執行, 進度看 rsi/STATUS.json 與 rsi/logs/
-let st = getSettings()
 let mode = argOf('mode', 'status')
 //只做夢輪次(規則 R-RUN-9): --dream-only --file <文字檔>; 於組裝專案之前先檢查(專案組裝之錯誤不得搶先於輸入錯誤)
 //  文字檔(UTF-8; BOM 去除)讀不到、為無效之 UTF-8 或為空 ⇒ 不啟動(離開碼 2; 不取鎖、不記事件; 訊息依 V19、不帶路徑); 檔名依命令列原字串(不經 argOf 之數字轉型: 001 不得變為 1)
@@ -73,6 +115,8 @@ let cliInt = (k) => {
     let v = argOf(k, null)
     return Number.isInteger(v) && v >= 1 ? v : null
 }
+//設定(排程第 547 項: 旗標之檢查皆已於此之前, 含只做夢輪次之 --file; 原: 讀設定在最前)
+let st = getSettings()
 //組裝時之設定預檢(規則 R-EV-44; 期間之界線、eval.fitEnd、eval.trainFromStart)不合 ⇒ 印 ERROR invalid …、離開碼 2(同 g_eval.mjs; 不取鎖、不記事件)
 let P = makeProjectOrExit(st, { run: { nodesPerRound: cliInt('nodes') || cliInt('arms'), parallelNodes: cliInt('parallel') || cliInt('workers'), roundsPerRun: cliInt('rounds') } })
 //onlyOf, --only <id 前綴,…> 之解析(reverify / extfill / fill 共用): 取原字串(argStrOf; 全數字之前綴經數值轉型會使清單為空、範圍靜默擴為全樹);
@@ -327,11 +371,14 @@ else if (mode === 'round') {
         let sm = res.summary || {}
         //本輪回測期 S 最高者(未被否決者; 評估期 = 回測期): 進度之量尺
         let best = null
+        //bestPh: 該節點之評估實際所算之相位數(其 metrics.phases 之長度; 無此欄者取設定之長度; 不入 best 與 ROUND.json), 輪末之日誌行用(排程第 547 項②之接續)
+        let bestPh = null
         {
             let ok = (res.nodes || []).filter((n) => n.status === 'executed' && n.score && !(n.score.flags && n.score.flags.vetoed))
             if (ok.length) {
                 let top = ok.slice().sort((a, b) => b.score.S - a.score.S)[0]
                 let m = top.raw && top.raw.metrics
+                bestPh = phaseCountOfAll([phaseCountOfMetrics(m)], st.eval)
                 //compExcess / compP / compShare: 組成對照(同側同活躍度虛無; 選集之方向或活躍度偏離全體隨機時才有)—— S 高而組成可重現之比例接近 1 者, 其績效來自組成
                 best = { id: top.id, arms: top.spec.arms, S: top.score.S, ladder: top.score.ladder, eqYrMean: m && m.op ? m.op.eqYr.mean : null, eqYrMin: m && m.op ? m.op.eqYr.min : null, excess: m && m.null ? m.null.excess : null, nullP: m && m.null ? m.null.p : null, compExcess: m && m.nullSideAct ? m.nullSideAct.excess : null, compP: m && m.nullSideAct ? m.nullSideAct.p : null, compShare: m && m.nullSideAct ? m.nullSideAct.share : null }
             }
@@ -379,7 +426,7 @@ else if (mode === 'round') {
         ev({ event: 'round-done', round: res.round, ok: roundOkOf({ dreamOnly: !!dreamOnly, nExecuted: sm.nExecuted || 0, hookFailed: !!(out.hook && out.hook.failed), delivered: !!(out.hook && out.hook.dream) }), ...(dreamOnly ? { dreamOnly: true } : {}), wallMin: out.wallMin, nExecuted: sm.nExecuted || 0, nError: sm.nError || 0, hookFailed: out.hook ? out.hook.failed === true : null, best: best ? { id: best.id, S: best.S } : null, summary: res.fd ? relOf(path.join(res.fd, 'ROUND.json')) : null, ...(out.hook && out.hook.fill ? { fill: out.hook.fill } : {}), ...(quotaNow ? { quota: quotaNow } : {}) })
         lock.beat()
         P.setStatus({ stage: 'round-done', wallMin: out.wallMin, hookFailed: out.hook ? out.hook.failed : null, resources })
-        P.log(`===== ${roundName(res.round)} 結束: 執行 ${sm.nExecuted} / 錯誤 ${sm.nError};階梯 ${JSON.stringify(sm.ladders || {})};回測期 S ${out.nodes.map((n) => (n.S === null ? '—' : n.S)).join(' / ')}${best ? `;本輪最高 ${best.id.slice(0, 8)} S ${best.S}(七相位均 ${best.eqYrMean}、最差相位 ${best.eqYrMin}、對隨機挑之超額 ${best.excess}${typeof best.compShare === 'number' ? `;組成對照之超額 ${best.compExcess}、p ${best.compP}、組成可重現 ${Math.round(best.compShare * 100)}%` : ''})` : ''};${out.wallMin} 分 =====`)
+        P.log(`===== ${roundName(res.round)} 結束: 執行 ${sm.nExecuted} / 錯誤 ${sm.nError};階梯 ${JSON.stringify(sm.ladders || {})};回測期 S ${out.nodes.map((n) => (n.S === null ? '—' : n.S)).join(' / ')}${best ? `;本輪最高 ${best.id.slice(0, 8)} S ${best.S}(${phaseText(bestPh, '相位')}均 ${best.eqYrMean}、最差相位 ${best.eqYrMin}、對隨機挑之超額 ${best.excess}${typeof best.compShare === 'number' ? `;組成對照之超額 ${best.compExcess}、p ${best.compP}、組成可重現 ${Math.round(best.compShare * 100)}%` : ''})` : ''};${out.wallMin} 分 =====`)
         for (let l of (out.hook && out.hook.lines) || []) {
             P.log(l)
         }
@@ -498,7 +545,7 @@ else if (mode === 'extfill') {
     let nullArg = argOf('null', null)
     let r
     try {
-        r = await P.extFill({ names: list('ext'), only, force: argOf('force', false) === true, nullDraws: Number.isInteger(nullArg) && nullArg > 0 ? nullArg : null })
+        r = await P.extFill({ names: list('ext'), only, force: argOf('force', false) === true, nullDraws: nullArg })
     }
     catch (err) {
         console.log(`未執行: ${String((err && err.message) || err).split('\n')[0]}`)
@@ -527,7 +574,7 @@ else if (mode === 'fill') {
     let targets = only ? P.rsi.store.listIndex().filter((x) => x.status === 'executed' && only.some((p) => x.id.startsWith(p))).map((x) => x.id) : null
     //par: 原值交 P.fillParOf 檢測(跨套件規格 K3、K4、K7: 無效者用預設、數字字串轉型、上限 8; 檢測之值即使用之值)
     //  --no-member: 不算成員穩健性(規則 R-REC-51; 成員穩健性開啟〔settings.rsi.memberCheck〕時預設算合格之成品; 關閉者此旗標無作用)
-    let opt = { targets, postfit: !process.argv.includes('--no-postfit'), ext, force: argOf('force', false) === true, nullDraws: Number.isInteger(nullArg) && nullArg > 0 ? nullArg : null, par: parArg, member: !process.argv.includes('--no-member') }
+    let opt = { targets, postfit: !process.argv.includes('--no-postfit'), ext, force: argOf('force', false) === true, nullDraws: nullArg, par: parArg, member: !process.argv.includes('--no-member') }
     //optLine, 命令列解析後之選項(--dry 與實跑皆印; 使維護者看到旗標實際解析成什麼): 範圍、求解窗後段、擴充診斷、強制重算、虛無抽數、併行; 計畫有成員穩健性之項目者另列其選項(否則逐字不變)
     let optLine = `選項(解析後):範圍 ${targets ? `${targets.length} 個節點(--only)` : '全樹'};求解窗後段 ${opt.postfit ? '算' : '不算(--no-postfit)'};擴充診斷 ${ext === true ? '全部' : (ext === false ? '不補(--ext none)' : ext.join('、'))};強制重算 ${opt.force ? '是' : '否'};虛無抽數 ${opt.nullDraws === null ? '依設定' : opt.nullDraws};併行 ${P.fillParOf(opt.par)}`
     let mc = P.memberCheck
@@ -599,7 +646,7 @@ else if (mode === 'frontier') {
             console.log(`未執行: 有輪次或重算執行中(pid ${lockF.pid});等它結束再改掛`)
             process.exit(3)
         }
-        let bs = argOf('base', undefined)
+        let bs = argStrOf('base', undefined)
         let ck = claimArg()
         let r = P.rearmFrontier({ arms: String(ra).split('+'), to: String(to).split('+'), why: String(why), ...(typeof bs === 'string' && bs ? { base: bs } : {}), ...(typeof ck === 'string' && ck ? { claim: ck } : {}) })
         lockF.release()
@@ -637,6 +684,6 @@ else if (mode === 'status') {
     console.log(JSON.stringify({ nNodes: s.nNodes, top: (s.top || []).slice(0, 5), status: stt, frontier: rsi.store.listFrontier().filter((f) => f.status === 'proposed').length }, null, 1))
 }
 else {
-    console.log('用法: node g_rsi.mjs --mode init|dry|round|status|board|validate')
+    console.log('用法: node g_rsi.mjs --mode init|dry|round|status|board|validate|reverify|extfill|fill|frontier|annotate|dirtype')
     process.exit(2)
 }

@@ -245,12 +245,73 @@ describe('擴充診斷 api.simulate / api.summarize / api.replaceNull 之輸入:
         }
     })
 
-    it('pick 之回傳值(runPick)之可接受種類不變(沿用 Array.from: 其他可迭代物亦收): 本項只改擴充診斷之 simulate 之選集', () => {
-        //排程第 497 項之邊界: pickOutOf 之 strict 只用於 api.simulate; 挑選函數之回傳值之複本沿用原寫法(見 state: 該路徑之同類迭代器問題待裁示)
-        let r = ev.runPick(() => ({ ids: threeOne() }), 0)
-        assert.deepEqual(Array.from(r.sels[0]), [1, 3])
-        let r2 = ev.runPick(() => ({ ids: { length: 2, 0: 5, 1: 2 } }), 0)
-        assert.deepEqual(Array.from(r2.sels[0]), [2, 5])
+    it('pick 之回傳值(runPick)之可接受種類 = 與 api.simulate 之選集同一組: Array、定型陣列、Set、{ ids, group?, tag? }(ids / group 同); 其他種類(產生器、類陣列、原始值、Map)⇒ 拋 V19(不帶輸入值)(排程第 510 項①: 原沿用 Array.from, 其他可迭代物與類陣列亦收)', () => {
+        //盤點(本庫之成品範例、合約、測試夾具之回傳種類): 皆為 Array 或 { ids: Array, group?: Array, tag? }, 一處 Set; 合約只寫「序號陣列或 { ids, tag }」 ⇒ 收窄不影響既有之寫法
+        let sel = (f) => Array.from(ev.runPick(f, 0).sels[0])
+        //可接受: 結果 = 排序去重之序號(與原寫法 Array.from 之結果逐位相同)
+        for (let [name, f, want] of [
+            ['Array', () => [3, 1, 3], [1, 3]],
+            ['Int32Array', () => Int32Array.from([3, 1]), [1, 3]],
+            ['Uint16Array', () => Uint16Array.from([3, 1, 3]), [1, 3]],
+            ['Float64Array(整數值)', () => Float64Array.from([3, 1]), [1, 3]],
+            ['Set', () => new Set([3, 3, 1]), [1, 3]],
+            ['{ ids: Array }', () => ({ ids: [3, 1] }), [1, 3]],
+            ['{ ids: Set }', () => ({ ids: new Set([3, 1]) }), [1, 3]],
+            ['{ ids: Int32Array, group: Array }', () => ({ ids: Int32Array.from([3, 1]), group: [0, 1] }), [1, 3]],
+            ['{ ids: Set, group: Set }', () => ({ ids: new Set([3, 1]), group: new Set([0, 1]) }), [1, 3]],
+            ['空陣列', () => [], []],
+        ]) {
+            assert.deepEqual(sel(f), want, name)
+        }
+        //group 之對應(依 ids 之位置): ids [3, 1]、group [2, 0] ⇒ 排序後 [1, 3] 之子帳為 [0, 2]
+        let g = ev.runPick(() => ({ ids: [3, 1], group: Int32Array.from([2, 0]) }), 0)
+        assert.deepEqual(Array.from(g.sels[0]), [1, 3])
+        //不可接受(其他可迭代物、類陣列、原始值、Map; 物件形式之 ids / group 亦同): 皆拋 V19 之錯、不回顯輸入
+        let SECRET = 'secret-token-xyz'
+        let RET = 'invalid pick return value: must be an array, a typed array or a Set of strategy indexes, or { ids, group?, tag? }'
+        let IDS = 'invalid pick return value.ids: must be an array, a typed array or a Set of strategy indexes'
+        let GRP = 'invalid pick return value.group: must be an array, a typed array or a Set of group numbers'
+        let msgOf = (f) => {
+            try {
+                ev.runPick(f, 0)
+            }
+            catch (err) {
+                return err.message
+            }
+            return null
+        }
+        for (let [name, f, want] of [
+            ['產生器(物件形式缺 ids)', () => threeOne(), IDS],
+            ['類陣列', () => ({ length: 2, 0: 5, 1: 2 }), IDS],
+            ['字串', () => `12${SECRET}`, RET],
+            ['數字(原: 靜默成空選集)', () => 5, RET],
+            ['布林', () => true, RET],
+            ['Map', () => new Map([[1, 2]]), IDS],
+            ['{ ids: 產生器 }', () => ({ ids: threeOne() }), IDS],
+            ['{ ids: 類陣列 }', () => ({ ids: { length: 2, 0: 5, 1: 2 } }), IDS],
+            ['{ ids: 數字 }', () => ({ ids: 5 }), IDS],
+            ['{ ids: 字串 }', () => ({ ids: SECRET }), IDS],
+            ['{ ids: 已撤銷之代理 }', () => {
+                let rv = Proxy.revocable([], {})
+                rv.revoke()
+                return { ids: rv.proxy }
+            }, IDS],
+            ['{ ids: Array, group: 類陣列 }', () => ({ ids: [1], group: { length: 1, 0: 0 } }), GRP],
+            ['{ ids: Array, group: 字串 }', () => ({ ids: [1], group: SECRET }), GRP],
+            ['{ ids: Array, group: 產生器 }', () => ({ ids: [1], group: threeOne() }), GRP],
+        ]) {
+            let m = msgOf(f)
+            assert.strictEqual(m, want, name)
+            assert(!m.includes(SECRET), `${name}: 不回顯`)
+        }
+        //模組自己之存取子拋出之錯誤照拋(不被吞成種類不合之訊息; 與原寫法相同)
+        let boomOut = {}
+        Object.defineProperty(boomOut, 'ids', {
+            get: () => {
+                throw new Error('boom')
+            },
+        })
+        assert.strictEqual(msgOf(() => boomOut), 'boom')
     })
 
     it('api.summarize:合法輸入(陣列 / 定型陣列、選配之 thirds)之結果與數學定義相符、彼此相同;元素為物件者以 Number() 取值(同原寫法)', () => {
@@ -436,7 +497,7 @@ describe('擴充診斷 api.simulate / api.summarize / api.replaceNull 之輸入:
         })
     })
 
-    it('api.simulate 之選集內容之錯誤(序號不合法、group 與 ids 不等長、group 值不合法)依 V19、V20:帶位置(含 ids / group 之索引)、不帶輸入值;挑選函數之回傳值(runPick)之中文訊息不變', () => {
+    it('api.simulate 之選集內容之錯誤(序號不合法、group 與 ids 不等長、group 值不合法)依 V19、V20:帶位置(含 ids / group 之索引)、不帶輸入值;挑選函數之回傳值(runPick)之訊息同為 V19', () => {
         runExt(ev, (api) => {
             let n = api.n
             let okA = api.phases.map((p) => p.sels.map((s) => Array.from(s)))
@@ -464,10 +525,10 @@ describe('擴充診斷 api.simulate / api.summarize / api.replaceNull 之輸入:
             want({ ids: [1, 2], group: [0] }, `invalid ${at}.group: must have the same number of entries as ${at}.ids`, 'group 與 ids 不等長')
             want({ ids: [1, 2], group: [0, 7] }, `invalid ${at}.group[1]: must be an integer from 0 to 3`, 'group 值超出範圍')
             want({ ids: [1, 2], group: [0, 'MARKER'] }, `invalid ${at}.group[1]: must be an integer from 0 to 3`, 'group 值為字串')
-            //挑選函數之回傳值(runPick; 非 strict)之中文訊息不變(合約 §1; 本項只改擴充診斷之 simulate)
-            assert.throws(() => ev.runPick(() => [0, n], 0), /pick 回傳含不合法之序號: \d+\(須為 0 ~ \d+ 之整數\)/)
-            assert.throws(() => ev.runPick(() => ({ ids: [1, 2], group: [0] }), 0), /pick 回傳之 group 須與 ids 等長/)
-            assert.throws(() => ev.runPick(() => ({ ids: [1, 2], group: [0, 7] }), 0), /pick 回傳之 group 含不合法之值: 7/)
+            //挑選函數之回傳值(runPick; 非 strict)之訊息同為 V19、V20(位置名稱 pick return value; 排程第 510 項④: 原為中文訊息並帶輸入值之描述)
+            assert.strictEqual(msgOf(() => ev.runPick(() => [0, n], 0)), `invalid pick return value[1]: must be an integer from 0 to ${n - 1}`)
+            assert.strictEqual(msgOf(() => ev.runPick(() => ({ ids: [1, 2], group: [0] }), 0)), 'invalid pick return value.group: must have the same number of entries as pick return value.ids')
+            assert.strictEqual(msgOf(() => ev.runPick(() => ({ ids: [1, 2], group: [0, 7] }), 0)), 'invalid pick return value.group[1]: must be an integer from 0 to 3')
             return { text: 'ok' }
         })
     })
@@ -528,17 +589,26 @@ describe('擴充診斷 api.simulate / api.summarize / api.replaceNull 之輸入:
             want(() => api.replaceNull({ grp: new BigInt64Array(api.n), nGroups: 2 }), G, 'grp 為 BigInt 定型陣列')
             want(() => api.replaceNull({ grp: ok.map((x, i) => (i === 2 ? Symbol('s') : x)), nGroups: 2 }), G, 'grp 元素為 Symbol')
             want(() => api.replaceNull(null), 'invalid opt: must be an object', 'opt 為 null')
-            //draws / half / actDays 之存取子拋錯 ⇒ 視為未給(沿用「不合者用預設」)
+            //half 之存取子拋錯 ⇒ 視為未給(沿用「不合者用預設」)
             let dflt = json(api.replaceNull({ draws: 4 }))
             assert.equal(json(api.replaceNull({
                 draws: 4,
                 get half() {
                     return SECRET()
-                },
+                }
+            })), dflt)
+            //actDays、draws 之存取子拋錯 ⇒ 無效(V11; 與 fillRandom 同一口徑, 排程第 574 項: 原「視為未給」): 不透傳模組之錯誤, 以固定訊息拒收(不帶輸入值)
+            want(() => api.replaceNull({
+                draws: 4,
                 get actDays() {
                     return SECRET()
                 }
-            })), dflt)
+            }), 'invalid opt.actDays: must be a non-negative integer (0 for the cumulative entry count)', 'actDays 之存取子')
+            want(() => api.replaceNull({
+                get draws() {
+                    return SECRET()
+                }
+            }), 'invalid opt.draws: must be an integer from 1 to 64', 'draws 之存取子')
             return { text: 'ok' }
         })
     })

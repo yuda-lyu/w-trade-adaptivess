@@ -4,7 +4,7 @@ import { agentRoleOf, AGENT_ROLE_ENV } from '../arsi/agentRole.mjs'
 //agent 不得執行之進入檔與模式(規則 R-RUN-11): 進入檔之拒跑(各命令列與工具之開頭呼叫 guardEntry)與操作掃描(verify.mjs 之「執行迴圈之寫檔入口」)共用本表 —— 兩處之判定一致
 //  寫檔或起行程者(writes 為真)於 ARSI_AGENT_ROLE = node / dream 時拒跑: 印一行理由(不帶輸入值)、離開碼 2、不做任何寫入(於讀設定與組裝專案之前判定)
 //  唯讀者照常(行為逐位不變); 任務書要 agent 執行者(g_eval.mjs、g_toolbox.mjs)不在表內, 一律不擋
-//  args = 進入檔之後之命令列引數(同 process.argv.slice(2)); 判定與各入口之實際解析一致(g_rsi.mjs 之 --mode 同 cfg.mjs 之 argOf: 未給、或以 --mode=… 書寫者為 status)
+//  args = 進入檔之後之命令列引數(同 process.argv.slice(2)); 判定與各入口之實際解析一致(g_rsi.mjs 之 --mode 同 cfg.mjs 之 argOf: 未給為 status; 以 --mode=… 書寫者本判定仍視為 status〔唯讀〕, 但進入檔本身已於其後一律拒收帶等號之旗標〔離開碼 2、不執行任何模式; R-EV-49〕)
 let has = (args, k) => args.includes(k)
 //valOf, `--k v` 之 v(同 argOf: 其後無字或以 -- 起首 ⇒ true; 未給 ⇒ null)
 let valOf = (args, k) => {

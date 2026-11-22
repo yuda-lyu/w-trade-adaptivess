@@ -93,6 +93,111 @@ describe('附算與補算之命令列:g_rsi.mjs --mode fill(規則 R-REC-34)', f
         return { status: r.status, out: `${r.stdout}\n${r.stderr}` }
     }
 
+    //開啟專案(行程內; 以專案之 settings.json 為準, 路徑轉為絕對): 供「以 API 呼叫」之案(fillPlanOf、fill、extFill、writeBoard、writeSearchMap)用; 不派工、不起評估(本組案只驗拒絕與文字)
+    let openP = (root) => {
+        let st = JSON.parse(fs.readFileSync(path.join(root, 'settings.json'), 'utf8'))
+        st.eval.ledgerDir = path.join(root, 'ledger', 'eval')
+        st.rsi.root = path.join(root, 'rsi')
+        for (let k of Object.keys(st.records)) {
+            st.records[k] = path.join(root, st.records[k])
+        }
+        st.FD_ROOT = root
+        return { st, P: makeProject(st, { dispatch: async () => ({ ok: false, error: 'stub' }), gate: null, catalogFile: path.join(root, 'seed_catalog2.json') }) }
+    }
+
+    //補算之虛無抽數(排程第 547 項①): 給了而不是正整數 ⇒ 拒絕(原: 靜默當成未給而依設定之抽數評估, 與使用者所要之縮減不同)
+    //  規格之句: 命令列 --null 於 --mode fill / extfill 須為正整數(離開碼 2、固定訊息、於讀設定與任何寫入之前); API 之 fill / extFill / fillPlanOf 之 nullDraws 同(未給或 null = 設定之值、正整數與其數字字串採用、其餘拋 invalid opt.nullDraws)
+    it('--mode fill / extfill 之 --null: 0、非數字、小數、負數 ⇒ 離開碼 2 與固定訊息、不建補算檔與狀態檔; 無值 ⇒ 通用之無值訊息; 正整數照常(選項列顯示所採之抽數)', () => {
+        let { root } = mkProject('nullArg', { diags: ['dA'] })
+        for (let mode of ['fill', 'extfill']) {
+            for (let v of ['0', 'abc', '2.5', '-3', '1e2']) {
+                let r = rsiCli(root, ['--mode', mode, '--null', v, ...(mode === 'fill' ? ['--dry'] : [])])
+                assert.equal(r.status, 2, `${mode} --null ${v}: ${r.out.slice(0, 400)}`)
+                assert.equal(r.out.trim(), 'invalid --null: must be a positive integer', `${mode} --null ${v}`)
+            }
+            let b = rsiCli(root, ['--mode', mode, '--null'])
+            assert.equal(b.status, 2, `${mode}: ${b.out.slice(0, 400)}`)
+            assert.equal(b.out.trim(), 'invalid --null: must be written as --null <N> (a value is required)')
+        }
+        assert(!fs.existsSync(path.join(root, 'rsi', 'fill_state.json')) && !fs.existsSync(path.join(root, 'rsi', 'fill')), '拒絕者不寫任何檔')
+        let ok = rsiCli(root, ['--mode', 'fill', '--dry', '--null', '3'])
+        assert.equal(ok.status, 0, ok.out.slice(0, 600))
+        assert(ok.out.includes('虛無抽數 3;'), ok.out.slice(0, 600))
+        let okStr = rsiCli(root, ['--mode', 'fill', '--dry', '--null', '03'])
+        assert(okStr.out.includes('虛無抽數 3;'), `數字字串轉為數值: ${okStr.out.slice(0, 600)}`)
+    })
+
+    it('API: fillPlanOf、fill、extFill 之 nullDraws: 未給或 null = 設定之值; 正整數與其數字字串採用(計畫之鍵同); 0、負數、小數、非數字字串、布林、陣列、物件、NaN、Infinity ⇒ 拋 / reject invalid opt.nullDraws(不帶輸入值)', async () => {
+        let { root } = mkProject('nullApi', { diags: ['dA'] })
+        let { P } = openP(root)
+        let keysOf = (nd) => JSON.stringify(P.fillPlanOf({ nullDraws: nd }).tasks.map((x) => x.keys))
+        let base = keysOf(undefined)
+        assert.equal(keysOf(null), base, 'null = 未給')
+        //鑑別前提: 縮減之抽數併入擴充診斷之鍵(與未縮減者不同); 數字字串與其數字之計畫相同
+        assert.notEqual(keysOf(3), base, '鑑別前提: nullDraws 3 之鍵與未給者不同')
+        assert.equal(keysOf('3'), keysOf(3), '數字字串轉為數值')
+        assert.equal(keysOf(' 3 '), keysOf(3))
+        let SECRET = 'secret-token-xyz'
+        let MSG = 'invalid opt.nullDraws: must be a positive integer'
+        for (let bad of [0, -1, 2.5, 'abc', '', '0', true, false, [], {}, NaN, Infinity, 2 ** 53, SECRET]) {
+            assert.throws(() => P.fillPlanOf({ nullDraws: bad }), (e) => e.message === MSG, `fillPlanOf ${String(bad)}`)
+            await assert.rejects(() => P.fill({ nullDraws: bad, storeAfter: false }), (e) => e.message === MSG, `fill ${String(bad)}`)
+            await assert.rejects(() => P.extFill({ nullDraws: bad }), (e) => e.message === MSG, `extFill ${String(bad)}`)
+        }
+        //extFill: nullDraws 之檢查先於診斷之名(給了而無效者不因名稱不存在而改報他錯); 對照: 名稱不存在者(nullDraws 合格)報名稱之錯
+        await assert.rejects(() => P.extFill({ names: ['no_such_diag'], nullDraws: 0 }), (e) => e.message === MSG, 'extFill: nullDraws 先於名稱')
+        await assert.rejects(() => P.extFill({ names: ['no_such_diag'] }), (e) => /無此擴充診斷/.test(e.message), '對照: 名稱不存在')
+        //於任何寫入之前拒絕
+        assert(!fs.existsSync(path.join(root, 'rsi', 'fill_state.json')) && !fs.existsSync(path.join(root, 'rsi', 'fill')), '拒絕者不寫任何檔')
+    })
+
+    //settings.backtest 之數值鍵無效(排程第 547 項①): 組裝專案之入口(g_rsi.mjs)印 ERROR invalid backtest.<鍵>、離開碼 2(不印堆疊; 不寫任何檔)
+    it('settings.backtest.nullDraws 等無效 ⇒ g_rsi.mjs 以 ERROR invalid backtest.<鍵> 離開碼 2(組裝專案時; 同 invalid eval.*); 合格(數字字串)者照常', () => {
+        let { root } = mkProject('btCfg')
+        let fp = path.join(root, 'settings.json')
+        let set0 = JSON.parse(fs.readFileSync(fp, 'utf8'))
+        for (let [k, v, msg] of [['nullDraws', 'abc', 'a non-negative integer'], ['replicas', 2.5, 'a positive integer'], ['timeoutSec', 0, 'a positive number of seconds that is at most 2147483'], ['minLadder', -1, 'a non-negative integer']]) {
+            fs.writeFileSync(fp, JSON.stringify({ ...set0, backtest: { ...(set0.backtest || {}), [k]: v } }, null, 1), 'utf8')
+            let r = rsiCli(root, ['--mode', 'status'])
+            assert.equal(r.status, 2, `${k}: ${r.out.slice(0, 400)}`)
+            assert.equal(r.out.trim(), `ERROR invalid backtest.${k}: must be ${msg}`, k)
+        }
+        fs.writeFileSync(fp, JSON.stringify({ ...set0, backtest: { ...(set0.backtest || {}), nullDraws: '32', replicas: '2' } }, null, 1), 'utf8')
+        let ok = rsiCli(root, ['--mode', 'status'])
+        assert.equal(ok.status, 0, ok.out.slice(0, 400))
+        fs.writeFileSync(fp, JSON.stringify(set0, null, 1), 'utf8')
+    })
+
+    //相位數之寫法(排程第 547 項②): 看板、搜尋地圖、共同儲存區之說明與總表、摘要與命令列之輸出取自 settings.eval.phases 之長度(原寫死「七相位」); 預設(未給 phases = 7)者與寫死時逐字相同
+    it('看板(ARMS_BOARD.md)、搜尋地圖(SEARCH_MAP.md)、共同儲存區(README.md、INDEX.md、index.json 之欄說明)之相位數 = eval.phases 之長度(此專案 2 個 ⇒「二相位」、無「七相位」); 設定改為未給(預設 7 個)而各節點仍為 2 個相位所算 ⇒ 說明結果者仍寫實算之二相位、說明設定者(README 之保留期)寫七相位', async () => {
+        let { root } = mkProject('phText')
+        let rd = (...a) => fs.readFileSync(path.join(root, 'rsi', ...a), 'utf8')
+        let { P } = openP(root)
+        P.writeBoard()
+        P.writeSearchMap()
+        await P.pickStore()
+        let files = { 'ARMS_BOARD.md': rd('ARMS_BOARD.md'), 'SEARCH_MAP.md': rd('SEARCH_MAP.md'), 'picks/README.md': rd('picks', 'README.md'), 'picks/INDEX.md': rd('picks', 'INDEX.md'), 'picks/index.json(欄說明)': JSON.stringify(JSON.parse(rd('picks', 'index.json')).fields) }
+        for (let [nm, tx] of Object.entries(files)) {
+            assert(!tx.includes('七相位'), `${nm}: 不得含「七相位」(設定為 2 個相位)`)
+        }
+        assert(files['ARMS_BOARD.md'].includes('| 二相位平均 |'), '看板之節點一覽之欄')
+        assert(files['picks/INDEX.md'].includes('二相位 平均 / 最差 / 為正'), '總表之欄')
+        assert(files['picks/README.md'].includes('二相位等效年化之平均'), 'README 之欄說明')
+        assert(files['picks/index.json(欄說明)'].includes('二相位等效年化(%)之平均'), 'index.json 之欄說明')
+        //改為未給(評估器之預設 7 個相位)而各節點仍是以 2 個相位算出者(設定改動後尚未重算; 排程第 547 項②之接續: 取實算):
+        //  說明各節點之結果者(看板、總表之欄標)仍寫實算之二相位, 說明設定者(README 之保留期之說明)寫設定之七相位; 各節點皆算 7 個者之逐字同原文見 unit-phaseActual、unit-gaugeDual
+        let set1 = JSON.parse(fs.readFileSync(path.join(root, 'settings.json'), 'utf8'))
+        delete set1.eval.phases
+        fs.writeFileSync(path.join(root, 'settings.json'), JSON.stringify(set1, null, 1), 'utf8')
+        let o2 = openP(root)
+        o2.P.writeBoard()
+        o2.P.writeSearchMap()
+        await o2.P.pickStore()
+        assert(rd('ARMS_BOARD.md').includes('| 二相位平均 |'), '各節點算 2 個相位 ⇒ 看板寫實算之二相位(不寫設定之七相位)')
+        assert(rd('picks', 'INDEX.md').includes('二相位 平均 / 最差 / 為正') && rd('picks', 'README.md').includes('七相位等效年化之平均'), '總表之欄標 ⇒ 實算; README(保留期之說明)⇒ 設定')
+        assert(!rd('ARMS_BOARD.md').includes('七相位'))
+    })
+
     it('--dry 只列計畫(不評估、不寫檔);實跑:補算檔之值 = 以評估入口直接跑 --period postfit 之結果;共同儲存區帶 postfit;再跑不重算;有輪次之鎖 ⇒ 離開碼 3', () => {
         let { root, id, wd } = mkProject('main')
         let r0 = rsiCli(root, ['--mode', 'fill', '--dry'])
@@ -203,15 +308,23 @@ describe('附算與補算之命令列:g_rsi.mjs --mode fill(規則 R-REC-34)', f
         let r4b = dry('--only', id.slice(0, 5))
         assert.equal(r4b.status, 2, r4b.out.slice(0, 600))
         assert(r4b.out.includes('--only 須給節點 id 前綴(至少 6 碼;逗號分隔)'), r4b.out.slice(0, 600))
-        //--null: 正整數才採(0、非數字、小數 ⇒ 依設定)
-        for (let [v, want] of [['2', '2'], ['16', '16'], ['0', '依設定'], ['abc', '依設定'], ['2.5', '依設定'], ['-3', '依設定']]) {
+        //--null: 正整數才採; 給了而不是正整數(0、非數字、小數、負數)⇒ 拒絕(離開碼 2; 固定訊息; 排程第 547 項; 原: 靜默依設定; 另見下方之專案案)
+        for (let [v, want] of [['2', '2'], ['16', '16'], ['03', '3']]) {
             assert.equal(optOf(dry('--null', v)), OPT({ nulls: want }), `--null ${v}`)
+        }
+        for (let v of ['0', 'abc', '2.5', '-3']) {
+            let rn = dry('--null', v)
+            assert.equal(rn.status, 2, `--null ${v}: ${rn.out.slice(0, 300)}`)
+            assert.equal(rn.out.trim(), 'invalid --null: must be a positive integer', `--null ${v}`)
         }
         //--par: 數字(含數字字串)才採、上限 8; 無效 ⇒ 改用設定之 fillParallel(此處為 1)
         for (let [v, want] of [['3', '3'], ['8', '8'], ['99', '8'], ['0', '1'], ['abc', '1'], ['2.5', '1'], ['-1', '1']]) {
             assert.equal(optOf(dry('--par', v)), OPT({ par: want }), `--par ${v}`)
         }
-        assert.equal(optOf(dry('--par')), OPT({ par: '1' }), '只有旗標無值 ⇒ 依設定')
+        //只有旗標無值 ⇒ 拒絕(通用之帶值旗標無值之訊息; 排程第 547 項; 原: 依設定)
+        let rpb = dry('--par')
+        assert.equal(rpb.status, 2, rpb.out.slice(0, 300))
+        assert.equal(rpb.out.trim(), 'invalid --par: must be written as --par <N> (a value is required)')
         //設定之 fillParallel: 數字字串轉型(K7)、無效用預設 3(K3)、上限 8; --par 優先於設定
         let fpSet = path.join(root, 'settings.json')
         let set0 = fs.readFileSync(fpSet, 'utf8')

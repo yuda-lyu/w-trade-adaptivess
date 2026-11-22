@@ -672,13 +672,14 @@ describe('命令列之 --period postfit(求解窗後段;規則 R-EV-41)', functi
         let r4 = run(rootHi, ['--mode', 'full', '--period', 'postfit', '--phases', '1', '--out', fo])
         assert.equal(r4.status, 2, r4.out.slice(0, 800))
         assert(r4.out.split(/\r?\n/).includes(MSG_NODEC), r4.out.slice(0, 800))
-        //設定之 phases 為空陣列(無相位可評估)⇒ 拒絕(不放行至評估器)
+        //設定之 phases 為空陣列(無相位可評估)⇒ 拒絕(不放行至評估器): 排程第 595 項(R-EV-50)起, 空之 eval.phases 於設定之預檢即為無效(invalid eval.phases; 原: 通過預檢而於此段之核對才被拒、訊息為 MSG_NODEC)
         let rootNone = mkProject('phasenone', { phases: [] })
         let foNone = path.join(rootNone, 'none.json')
         let r5 = run(rootNone, ['--mode', 'full', '--period', 'postfit', '--out', foNone])
         assert.equal(r5.status, 2, r5.out.slice(0, 800))
-        assert(r5.out.split(/\r?\n/).includes(MSG_NODEC), r5.out.slice(0, 800))
-        assert(!fs.existsSync(foNone))
+        assert(r5.out.split(/\r?\n/).includes('ERROR invalid eval.phases: must be a non-empty array of non-negative numbers'), r5.out.slice(0, 800))
+        assert(!r5.out.split(/\r?\n/).includes(MSG_NODEC), '不再走到相位之決策棒之核對')
+        assert.equal(JSON.parse(fs.readFileSync(foNone, 'utf8')).code, 'CONFIG_INVALID', '給 --out 者寫設定錯誤之結果檔(不是評估結果)')
     })
 
     it('--ext-test 與其他期間之併用維持現狀(只拒絕其與 postfit 之併用):--ext-test 搭 --period train 照常試跑', () => {

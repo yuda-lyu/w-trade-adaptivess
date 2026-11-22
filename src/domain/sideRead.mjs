@@ -1,3 +1,6 @@
+import { phaseText } from '../eval/cfgNum.mjs'
+
+
 //全樹之側別讀數(規則 R-REC-50; 純函數): 樹上之高分是否與選集之側別(做多比例)同進退 —— 搜尋地圖 §4 之讀數與警示、輪末摘要之警示一列
 //  只列讀數與警示, 不改任何選取、S、階梯、否決、可信度、排序鍵
 /**
@@ -91,16 +94,17 @@ let SIDE_READ_WARN_HEAD = '側別讀數之警示'
  * 側別讀數之兩列之文字(純函數):line = 搜尋地圖 §4 之讀數一列(以「- 」起首),warn = 警示之句(以「側別讀數之警示」起首;未命中為空字串)
  *
  * @param {Object|null} sr 輸入 sideReadOf 之結果
+ * @param {Integer} [nPh=7] 輸入相位數(settings.eval.phases 之長度),只用於「七相位平均」之寫法(排程第 547 項; 預設 7 者逐字不變),預設7
  * @returns {Object} 回傳 { line, warn };sr 為 null 回 { line: '', warn: '' }
  * @example
  * let t = sideReadTextOf(sr)
  */
-let sideReadTextOf = (sr) => {
+let sideReadTextOf = (sr, nPh = 7) => {
     if (!sr) {
         return { line: '', warn: '' }
     }
     let f2 = (v) => v.toFixed(2)
-    let line = `- 側別讀數(回測期;相異成品 ${sr.n} 個):做多比例與七相位平均之相關 ${sr.r === null ? '—' : f2(sr.r)};排序鍵前 ${sr.nTop} 名之做多比例 ${f2(sr.topLo)} ~ ${f2(sr.topHi)}。`
+    let line = `- 側別讀數(回測期;相異成品 ${sr.n} 個):做多比例與${phaseText(nPh, '相位')}平均之相關 ${sr.r === null ? '—' : f2(sr.r)};排序鍵前 ${sr.nTop} 名之做多比例 ${f2(sr.topLo)} ~ ${f2(sr.topHi)}。`
     let what = [sr.warn.corr ? '績效與做多比例高度相關' : null, sr.warn.short ? `排序鍵前 ${sr.nTop} 名皆偏做空` : null, sr.warn.long ? `排序鍵前 ${sr.nTop} 名皆偏做多` : null].filter(Boolean)
     let warn = what.length ? `${SIDE_READ_WARN_HEAD}:${what.join(';')}(相異成品 ${sr.n} 個)⇒ 樹上之高分可能來自側別之曝險,宜以兩側席次固定之版本與成員穩健性核對` : ''
     return { line, warn }

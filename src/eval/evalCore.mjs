@@ -3,10 +3,10 @@ import iseint from 'wsemi/src/iseint.mjs'
 import { P, copyRange, copyAll, pushOwn, assertIntrinsics, violationMark, violationSince, isIntegrityError, integrityError, adoptError, snapData, handOut, isMutableSnap, isBrand } from './intrinsics.mjs'
 import { tieBaseOf, isSrcIdx } from './ledger.mjs'
 import { normUnit } from './unit.mjs'
-import { onBarGrid, evalNumsOf } from './barGrid.mjs'
-import { cfgNumOf } from './cfgNum.mjs'
+import { onBarGrid, evalNumsOf, evalListsOf, wholeBarsOf } from './barGrid.mjs'
+import { cfgNumOf, cfgListOf, evalRunNumsOf } from './cfgNum.mjs'
 
-const { ObjectFreeze, ObjectSeal, ObjectHasOwn, ReflectApply, ArrayFrom, ArrayIsArray, ArrayPrototypeJoin, ArrayBufferIsView, NumberCtor, NumberIsInteger, NumberIsFinite, MathFloor, MathRound, MathMax, MathMin, MathImul, StringCtor, JSONStringify, StructuredClone, ErrorCtor, MapPrototypeGet, MapPrototypeSet, MapPrototypeHas, MapPrototypeDelete, MapPrototypeKeys, MapIteratorNext, SetPrototypeGetSize, SetPrototypeValues, SetIteratorNext, TypedArrayPrototypeGetLength, TypedArrayPrototypeGetToStringTag, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
+const { ObjectFreeze, ObjectSeal, ObjectHasOwn, ReflectApply, ArrayIsArray, ArrayPrototypeJoin, ArrayBufferIsView, NumberCtor, NumberIsInteger, NumberIsFinite, MathFloor, MathRound, MathMax, MathMin, MathImul, StringCtor, JSONStringify, StructuredClone, ErrorCtor, MapPrototypeGet, MapPrototypeSet, MapPrototypeHas, MapPrototypeDelete, MapPrototypeKeys, MapIteratorNext, SetPrototypeGetSize, SetPrototypeValues, SetIteratorNext, TypedArrayPrototypeGetLength, TypedArrayPrototypeGetToStringTag, Int8ArrayCtor, Uint8ArrayCtor, Uint16ArrayCtor, Int32ArrayCtor, Uint32ArrayCtor, Float32ArrayCtor, Float64ArrayCtor } = P
 
 
 //快速評估核心:「項目之事件帳本 + 於各決策時點只憑過去資訊挑子集(可另給逐訊號之執行規則)+ 往後視窗之結果彙整」
@@ -176,6 +176,10 @@ let idListOf = (v) => {
     return listOf(v)
 }
 
+//挑選函數之回傳值之訊息(V19; 排程第 510 項: 原中文訊息並帶輸入值之描述): PICK_RET_WHERE = 訊息所用之位置名稱(normSel 之 where 之預設)、PICK_RET_MSG = 整體之種類不合
+const PICK_RET_WHERE = 'pick return value'
+const PICK_RET_MSG = `invalid ${PICK_RET_WHERE}: must be an array, a typed array or a Set of strategy indexes, or { ids, group?, tag? }`
+
 //strictPickOutOf, 擴充診斷 simulate 之選集元素(一次決策之選集)之複本(排程第 497 項): 只收陣列、定型陣列、Set, 或 { ids, group? }(ids / group 同); 只用擷取之參照(不經迭代器), 讀取拋錯(存取子、已撤銷之代理)視為無效
 //  物件之 tag 欄於 simulate 不採用(重放之 tag 由 tagsByPhase 或成品給)⇒ 不讀取、不快照(其存取子 / 不可複製之值不影響結果)
 //  回傳恆帶自有之 bad 欄(合法者為 null; 呼叫端讀自有欄, 不沿原型鏈): 'sel'(元素為 null / undefined, 或元素本身〔非物件形式〕不是上列三種)、'ids'(物件形式之 ids 缺、讀取拋錯或種類不合)、'group'(物件形式之 group 讀取拋錯或種類不合);
@@ -263,14 +267,16 @@ let isCapitalError = (err) => err !== null && typeof err === 'object' && capital
  * @param {Object} [cfg={}] 輸入設定物件,預設{}
  * @param {Number} [cfg.warmupDays=180] 輸入暖機日數(非負數,與每日棒數之積須為整數;數字字串收受並轉為數值;給了而無效者拋 invalid cfg.warmupDays),預設180
  * @param {Number} [cfg.cadenceDays=7] 輸入決策間隔日數(正數,與每日棒數之積須為整數;同上;無效者拋 invalid cfg.cadenceDays),預設7
- * @param {Integer} [cfg.tieSalt=0] 輸入同分次序之重放鹽值(整數),預設0(正本)
+ * @param {Integer} [cfg.tieSalt=0] 輸入同分次序之重放鹽值(整數;數字字串收受並轉為數值;給了而無效者拋 invalid cfg.tieSalt),預設0(正本)
  * @param {Object} [cfg.fitEnd] 輸入各策略求解窗終點之時間字串物件{ long, short }(無時區之時間字串),預設未給
- * @param {Array} [cfg.phases=[0,1,2,3,4,5,6]] 輸入起始相位(日)陣列,evalPolicy未於opt指定時採用,預設[0,1,2,3,4,5,6]
- * @param {Array} [cfg.horizons=[1,3,7,14,30]] 輸入新鮮度地平線(日)陣列,evalPolicy未於opt指定時採用,預設[1,3,7,14,30]
+ * @param {Array} [cfg.phases=[0,1,2,3,4,5,6]] 輸入起始相位(日)陣列(非空;各項非負數或其數字字串,與每日棒數之積須為整數;給了而無效者拋 invalid cfg.phases…),evalPolicy未於opt指定時採用,預設[0,1,2,3,4,5,6]
+ * @param {Array} [cfg.horizons=[1,3,7,14,30]] 輸入新鮮度地平線(日)陣列(各項正數或其數字字串,與每日棒數之積須為整數;空陣列合法 = 不算新鮮度;給了而無效者拋 invalid cfg.horizons…),evalPolicy未於opt指定時採用,預設[1,3,7,14,30]
+ * @param {Integer} [cfg.geoTp=3] 輸入幾何對照之止盈等分數(正整數;數字字串收受;無效者拋 invalid cfg.geoTp),預設3
+ * @param {Integer} [cfg.geoSl=3] 輸入幾何對照之止損等分數(正整數;數字字串收受;無效者拋 invalid cfg.geoSl),預設3
  * @param {Integer} [cfg.nullDraws=64] 輸入虛無重複抽樣次數(非負整數,0 = 不算虛無;數字字串收受;無效者拋 invalid cfg.nullDraws),evalPolicy未於opt指定時採用,預設64
  * @param {Integer} [cfg.actBins=10] 輸入同活躍度虛無之分層數(正整數;無效者拋 invalid cfg.actBins),預設10
  * @param {Integer} [cfg.sideActHalf=50] 輸入組成對照之名次寬度(非負整數;無效者拋 invalid cfg.sideActHalf),預設50
- * @param {Integer} [cfg.seed=1] 輸入亂數種子,evalPolicy未於opt指定時採用,預設1
+ * @param {Integer} [cfg.seed=1] 輸入亂數種子(整數;數字字串收受並轉為數值,其後只用轉換值;給了而無效者拋 invalid cfg.seed),evalPolicy未於opt指定時採用,預設1
  * @returns {Object} 回傳評估器物件, 含方法: evalPolicy(評估一個挑選函數, 回傳完整評估結果), runPick(於一個相位依序呼叫挑選函數), opOf(操作績效), freshOf(新鮮度), nullOf(同劑量虛無), nullActOf(同活躍度虛無), nullSideActOf(同側同活躍度虛無), nullSideGeoOf(同側幾何分組虛無), sideGeoGroups(幾何分組), simWindows(視窗模擬), decisionBars(相位之決策棒), 以及屬性 meta(結構靜態欄)、timeOf(K棒序號轉時間字串)
  * @example
  * let st = getSettings()
@@ -285,6 +291,9 @@ let makeEvaluator = (L, cfg = {}) => {
 
     let n = L.n
     let nBars = L.nBars
+    //nEnd, 決策視窗與新鮮度視窗之終點棒(規則 R-EV-52; 排程第 510 項②): 帳本物件帶 endBar(clipLedger 所設; 全期帳本截至回測期終點之視圖)且小於 nBars 者, 決策之視窗須落在 endBar 之內
+    //  (同帳本止於 endBar 時 decisionBars 之 `b + W <= nBars`; 挑選函數所見之 ctx.nDecisions、其後之決策皆與止於 endBar 之帳本相同); 未帶者 = nBars(逐位不變); 逐棒之欄與持倉簿之陣列仍依 nBars(帳本之長度)
+    let nEnd = NumberIsInteger(L.endBar) && L.endBar >= 0 && L.endBar < nBars ? L.endBar : nBars
     let nFac = L.keyNames.length
     //外部序列(規則 R-EV-34; 選配): 名稱 → 序號; 帳本未建入者(含舊帳本)為空
     //  名稱為評估器自己之凍結複本(不與帳本物件共用; ctx.series 之錯誤訊息只讀它)
@@ -293,6 +302,10 @@ let makeEvaluator = (L, cfg = {}) => {
     let bpd = L.barsPerDay
     //影響評估之數字之取值與檢測(evalNumsOf; 與設定之預檢、命令列、任務書、合約之參考版同一函數; 規則 R-EV-44): 未給 = 預設; 數字字串轉為數值; 給了而無效 ⇒ 拒絕(拋 invalid cfg.<鍵>: must be …)
     let cfgNums = evalNumsOf(cfg, bpd, 'cfg')
+    //評估之執行面之數字(seed、tieSalt、replicaSeeds、replicaNullDraws、timeoutSec、geoTp、geoSl)與相位、新鮮度地平線之清單: 同一口徑(evalRunNumsOf、evalListsOf; 規則 R-EV-44 ④之二): 每個鍵只讀一次、數字字串轉為數值後才使用、給了而無效 ⇒ 拒絕
+    //  亂數種子於各處(`seed * 1000003`、`seed + …`)皆用轉換後之數值(原: 字串之種子於兩種運算被解讀為不同之數值)
+    let cfgRun = evalRunNumsOf(cfg, 'cfg')
+    let cfgLists = evalListsOf(cfg, bpd, 'cfg')
     let warmupDays = cfgNums.warmupDays
     let cadenceDays = cfgNums.cadenceDays
     let warm = warmupDays * bpd
@@ -334,6 +347,8 @@ let makeEvaluator = (L, cfg = {}) => {
     }
     //serAvail, 訊息用之可用名稱(帳本未建入外部序列者另述)
     let serAvail = () => (serNames.length ? ArrayPrototypeJoin(serNames, '、') : '無;帳本未建入外部序列')
+    //serAvailEn, api.series 之訊息用(V19: 列舉類寫出允許之集合; 英文): 名稱以 ', ' 相接; 帳本未建入外部序列者另述
+    let serAvailEn = () => (serNames.length ? ArrayPrototypeJoin(serNames, ', ') : 'none (the ledger has no external series)')
     let seriesAt = (si, b, nBack, who) => {
         let S = L.ser
         if (!S || TypedArrayPrototypeGetLength(S) !== serNames.length * nBars) {
@@ -390,8 +405,8 @@ let makeEvaluator = (L, cfg = {}) => {
     //    使半庫內各策略之 tie(ctx.meta.tie、同一進場棒之訊號先後、虛無之同值次序)與其於全庫時相同; 未給(一般之帳本)⇒ 以序號產生, 行為不變
     //    型別以內部槽判定(同 L.ntStatic; isSrcIdx); 給而不合(非 Int32Array、長度非 L.n、含負值)即拒絕建評估器; tie 之雜湊式在 ledger.mjs 之 tieBaseOf(單一來源)
     //    cfg.tieSalt 先讀(其存取子可執行呼叫端之程式): 檢查 srcIdx 與使用它之間不再讀取呼叫端之物件, 檢查之值即使用之值
-    let tieSaltArg = cfg.tieSalt //只讀一次(存取子可先後回傳不同之值: 檢查之值即使用之值)
-    let tieSalt = Number.isInteger(tieSaltArg) ? tieSaltArg : 0
+    //  tieSalt 已於上方之 evalRunNumsOf 讀一次並檢測(未給 = 0; 數字字串轉為數值; 給了而非整數即拒絕: 原為非整數者靜默視為 0)
+    let tieSalt = cfgRun.tieSalt
     let srcIdx = L.srcIdx === undefined || L.srcIdx === null ? null : L.srcIdx
     if (srcIdx !== null && !isSrcIdx(srcIdx, n)) {
         throw new ErrorCtor('invalid L.srcIdx: must be an Int32Array of length L.n with non-negative values (index of each strategy in the full library; see memberLedger)')
@@ -495,7 +510,7 @@ let makeEvaluator = (L, cfg = {}) => {
     //decisionBars, 相位 phase 之決策棒(其後 W 根之視窗須完整落在帳本內)
     let decisionBars = (phase, W = cad) => {
         let bs = []
-        for (let b = warm + phase * bpd; b + W <= nBars; b += cad) {
+        for (let b = warm + phase * bpd; b + W <= nEnd; b += cad) {
             bs.push(b)
         }
         return bs
@@ -529,62 +544,73 @@ let makeEvaluator = (L, cfg = {}) => {
             return snapData(t)
         }
         catch (err) {
-            throw new ErrorCtor(`pick 回傳之 tag 須為可結構化複製之資料(數值、字串、物件、陣列等; 不得含函數、符號、共享記憶體): ${StringCtor((err && typeof err.message === 'string' && err.message) || '無法複製').slice(0, 120)}`)
+            //V19、V20(排程第 510 項: 原中文訊息, 並附結構化複製之原錯誤訊息): 英文固定詞彙、不帶輸入內容
+            throw new ErrorCtor('invalid pick return value.tag: must be structured-cloneable data (numbers, strings, objects, arrays; no functions, symbols or shared memory)')
         }
     }
     //pickOutOf, 收下 pick(或擴充診斷 simulate 之元素)之回傳值 —— 第一段: 只讀取並複製成評估器自有之資料(只用擷取之參照; 此段可能執行模組之存取子與迭代器)
     //  回 { arr(序號之陣列), garr(group 之陣列或 null), tag(快照), explicitGroup(物件形式且明給 group) }; 第二段 normSel 於比對內建物件之後才執行
     //  Set 以內部欄位辨識(不經 instanceof); ids / group 經 Array.from(與原寫法之 [...Set] 相同之迭代次序)
     //  strict(擴充診斷 simulate 之元素用; 排程第 497 項)改由模組層之 strictPickOutOf 處理(ids / group 之複本不經迭代器、讀取拋錯視為無效、不讀物件之 tag 欄; 其他種類回 { bad }, 由呼叫端於比對內建物件之後依位置拋錯)
-    //  挑選函數之回傳值(strict 為假; runPick)沿用原寫法之 Array.from(其可接受之種類較寬: 其他可迭代物、類陣列; 該路徑之迭代器問題不在本項, 見 state 之待裁示)
+    //  挑選函數之回傳值(strict 為假; runPick; 排程第 510 項): 與 strict 同一組可接受之種類 —— Array、定型陣列、Set(ids / group 同), 或 { ids, group?, tag? }; ids / group 之複本以 idListOf 取(只用擷取之參照, 不經迭代器;
+    //    讀取拋錯〔已撤銷之代理、拋錯之存取子〕視為無效, 不使讀取之錯誤逸出); 其他種類(其他可迭代物、類陣列、原始值)⇒ 拋 V19 之錯(不帶輸入值)
+    //    (原: Array.from(ids) —— 可接受任何可迭代物與類陣列〔產生器、Map 之迭代器、{ length, 0: … }〕, 原始值之數字 / 布林成為空選集而靜默, 字串被拆成字元; 且迭代經可被改寫之 Array.from / 迭代器)
+    //    本庫之成品範例、合約與測試夾具之回傳種類盤點: 皆為 Array(或 { ids: Array, group?: Array, tag? })、一處 Set; 無任何成品用其他可迭代物(排程第 510 項之盤點表)
     let pickOutOf = (out, strict = false) => {
         if (strict) {
             return strictPickOutOf(out)
         }
         if (out === null || out === undefined) {
-            throw new ErrorCtor('pick 回傳 null / undefined(須回傳序號陣列或 { ids, tag })')
+            throw new ErrorCtor(PICK_RET_MSG)
         }
         let tag = null
         let ids = out
         let group = null
+        let viaObj = false
         if (!ArrayIsArray(out) && !ArrayBufferIsView(out) && !isBrand(SetPrototypeGetSize, out) && typeof out === 'object') {
+            viaObj = true
             ids = out.ids
             let t = out.tag
             tag = t === undefined ? null : t
             let g = out.group
             group = g === undefined || g === null ? null : g
             if (ids === null || ids === undefined) {
-                throw new ErrorCtor('pick 回傳之物件缺 ids')
+                throw new ErrorCtor(`invalid ${PICK_RET_WHERE}.ids: must be an array, a typed array or a Set of strategy indexes`)
             }
         }
-        let arr = ArrayFrom(ids)
-        let garr = group === null ? null : ArrayFrom(group)
-        return { arr, garr, tag: snapTag(tag), explicitGroup: group !== null }
+        let arr = idListOf(ids)
+        if (arr === null) {
+            throw new ErrorCtor(viaObj ? `invalid ${PICK_RET_WHERE}.ids: must be an array, a typed array or a Set of strategy indexes` : PICK_RET_MSG)
+        }
+        let garr = group === null ? null : idListOf(group)
+        if (group !== null && garr === null) {
+            throw new ErrorCtor(`invalid ${PICK_RET_WHERE}.group: must be an array, a typed array or a Set of group numbers`)
+        }
+        return { arr, garr, tag: snapTag(tag), explicitGroup: group !== null, viaObj }
     }
     //normSel, 第二段: 驗證並正規化(已比對內建物件之後; 輸入為 pickOutOf 之回傳)
-    //  where(選配; 擴充診斷 simulate 之元素用, 如 'selsByPhase[0][2]'): 給者之錯誤訊息改為 V19、V20(invalid <位置>…: must be …; 不帶輸入值); 未給者(挑選函數之回傳值)維持原中文訊息
-    let normSel = (px, where = null) => {
+    //  where(選配; 擴充診斷 simulate 之元素用, 如 'selsByPhase[0][2]'; 未給 = 挑選函數之回傳值 'pick return value'): 錯誤訊息一律 V19、V20(invalid <位置>…: must be …; 不帶輸入值;
+    //    排程第 510 項: 挑選函數之回傳值原為中文訊息並帶輸入值之描述)
+    let normSel = (px, where = PICK_RET_WHERE) => {
         let arr = px.arr
         let garr = px.garr
         let tag = px.tag
         if (garr !== null) {
             if (garr.length !== arr.length) {
-                throw new Error(where === null ? `pick 回傳之 group 須與 ids 等長(ids ${arr.length} 個、group ${garr.length} 個)` : `invalid ${where}.group: must have the same number of entries as ${where}.ids`)
+                throw new Error(`invalid ${where}.group: must have the same number of entries as ${where}.ids`)
             }
         }
-        //descOf, 錯誤訊息用之值之描述: 物件不轉字串(不執行模組之 toString; 此段已在比對內建物件之後)
-        let descOf = (v) => (v !== null && (typeof v === 'object' || typeof v === 'function') ? '(物件)' : String(v).slice(0, 40))
         let seen = new Map()
         for (let i = 0; i < arr.length; i++) {
             let v = arr[i]
             if (!Number.isInteger(v) || v < 0 || v >= n) {
-                throw new Error(where === null ? `pick 回傳含不合法之序號: ${descOf(v)}(須為 0 ~ ${n - 1} 之整數)` : `invalid ${where}${px.viaObj ? '.ids' : ''}[${i}]: must be an integer from 0 to ${n - 1}`)
+                throw new Error(`invalid ${where}${px.viaObj ? '.ids' : ''}[${i}]: must be an integer from 0 to ${n - 1}`)
             }
             let g = 0
             if (garr) {
                 g = garr[i]
                 if (!Number.isInteger(g) || g < 0 || g >= N_GROUP) {
-                    throw new Error(where === null ? `pick 回傳之 group 含不合法之值: ${descOf(g)}(須為 0 ~ ${N_GROUP - 1} 之整數)` : `invalid ${where}.group[${i}]: must be an integer from 0 to ${N_GROUP - 1}`)
+                    throw new Error(`invalid ${where}.group[${i}]: must be an integer from 0 to ${N_GROUP - 1}`)
                 }
             }
             if (!seen.has(v)) {
@@ -1332,7 +1358,7 @@ let makeEvaluator = (L, cfg = {}) => {
         let maxPeakN = 0
         for (let k = 0; k < bars.length; k++) {
             let b = bars[k]
-            if (b + W > nBars) {
+            if (b + W > nEnd) {
                 break
             }
             let r = simWindows([{ b, e: b + W, sel: sels[k], tag: tags ? tags[k] : null, k: k + k0 }], accept)
@@ -2019,11 +2045,24 @@ let makeEvaluator = (L, cfg = {}) => {
         assertIntrinsics('pick')
         let t0 = Date.now()
         let accept = typeof opt.accept === 'function' ? opt.accept : null
-        let phases = opt.phases || cfg.phases || [0, 1, 2, 3, 4, 5, 6]
-        let horizons = opt.horizons || cfg.horizons || [1, 3, 7, 14, 30]
+        //opt.phases / opt.horizons / opt.seed: 與設定同一口徑(給了而無效 ⇒ 拒絕; 數字字串轉為數值後才使用; 未給 ⇒ 設定值〔makeEvaluator 已檢測〕, 再無則預設; 規則 R-EV-44 ④之二)
+        let phases = cfgListOf(opt.phases, null, 'opt.phases', 'nonNegNum')
+        if (phases === null) {
+            phases = cfgLists.phases || [0, 1, 2, 3, 4, 5, 6]
+        }
+        else {
+            wholeBarsOf(phases, bpd, 'opt.phases', 'a non-negative')
+        }
+        let horizons = cfgListOf(opt.horizons, null, 'opt.horizons', 'posNum', true)
+        if (horizons === null) {
+            horizons = cfgLists.horizons || [1, 3, 7, 14, 30]
+        }
+        else {
+            wholeBarsOf(horizons, bpd, 'opt.horizons', 'a positive')
+        }
         //opt.nullDraws: 給了(非 undefined / null)而無效 ⇒ 拒絕(決定資料口徑之 opt 不退回預設); 未給 ⇒ 設定值(makeEvaluator 已檢測)
         let nullDraws = cfgNumOf(opt.nullDraws, cfgNums.nullDraws, 'opt.nullDraws', 'nonNegInt')
-        let seed = opt.seed === undefined ? (cfg.seed === undefined ? 1 : cfg.seed) : opt.seed
+        let seed = cfgNumOf(opt.seed, cfgRun.seed, 'opt.seed', 'int')
         let fromBar = Number.isInteger(opt.fromBar) ? opt.fromBar : null
         let toBar = Number.isInteger(opt.toBar) ? opt.toBar : null
         //afterFitOnly(規則 R-EV-41): 只讀一次(檢查之值即使用之值); 於執行挑選函數之前檢查(不先耗時); 訊息依 V19、V20(不帶輸入值)
@@ -2203,8 +2242,8 @@ let makeEvaluator = (L, cfg = {}) => {
                 return { draws: nullDraws, half, mean: r4(s.mean), sd: r4(s.sd), p: r4((1 + ge) / (1 + nullDraws)), z: s.sd > 0 ? r4((obs - s.mean) / s.sd) : 0, excess: r4(obs - s.mean), sigPerPick: r4(v.comp.sigPerPick), share: obs > 0 ? r4(Math.max(0, s.mean) / obs) : null, ...(v.thirds ? { thirdsMean: v.thirds.map(r4) } : {}) }
             }
             nulSide = { ...pack(nullSideActOf(runs, accept, nullDraws, seed + 2750159, half)), triggered: devSig || devLong }
-            let nTp = cfg.geoTp === undefined ? 3 : cfg.geoTp
-            let nSl = cfg.geoSl === undefined ? 3 : cfg.geoSl
+            let nTp = cfgRun.geoTp
+            let nSl = cfgRun.geoSl
             nulGeo = { ...pack(nullSideGeoOf(runs, accept, nullDraws, seed + 6700417, half, nTp, nSl)), nTp, nSl }
         }
         //評估期間三等分(依決策序; 各段自空倉起算、各自計等效年化): 績效是否集中於某一段; 有算虛無時另給各段之隨機挑(至多 16 抽)之均
@@ -2500,6 +2539,7 @@ let makeEvaluator = (L, cfg = {}) => {
             }
             //(listOf、readOpt 已移至模組層: 與 api.summarize、api.simulate 與 pickOutOf 之 strict 共用)
             const REPLACE_GRP_MSG = 'invalid opt.grp: must be an array or typed array with one integer from 0 to opt.nGroups - 1 per strategy (api.n entries)'
+            const REPLACE_DRAWS_MAX = 64
             let replaceNull = (o = {}) => {
                 //第一段: 讀參數(各欄只讀一次; 其後之判斷皆先以 Number.isInteger / isFinite 篩選, 不對物件取值)
                 //  grp(排程第 497 項: 原 TypedArray.from 經可被改寫之迭代器): 只以擷取之參照複製(listOf: 長度超過策略數者不複製), 元素再依 Int32 轉型寫入評估器自有之 Int32Array(同原 Int32Array.from 之轉型; 物件元素之 valueOf 於此段執行);
@@ -2532,7 +2572,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 let oDraws = readOpt(o, 'draws')
                 let oHalf = readOpt(o, 'half')
                 let oAct = readOpt(o, 'actDays')
-                //讀取拋錯之 draws / half / actDays 為非整數 / 非有限數之哨兵 ⇒ 沿用「不合者用預設」(nullGroupActOf 以 Number.isFinite 篩 actDays)
+                //讀取拋錯之 draws / half / actDays 為非整數之哨兵: actDays、draws 與 fillRandom 同一口徑(給了而不合即拋 invalid opt.actDays / invalid opt.draws; 排程第 574 項), half 沿用「不合者用預設」
                 //onlyGroups / onlyDecisions(規則 R-EV-38): 此段只以擷取之參照(listOf: 不經迭代器)複製成評估器自有之陣列(元素不取值; 形狀不合者記為 false / null, 於比對之後才拋錯)
                 let oOnlyG = readOpt(o, 'onlyGroups')
                 let onlyG = oOnlyG === undefined || oOnlyG === null ? null : (listOf(oOnlyG) || false)
@@ -2608,6 +2648,27 @@ let makeEvaluator = (L, cfg = {}) => {
                         pushOwn(decMask, mk)
                     }
                 }
+                //actDays、draws(排程第 574 項; 與 fillRandom 同一口徑): wsemi iseint(安全整數之數字或其數字字串; 通過者以 Number 轉為數字)、給了而不合即拋(訊息依 V19、V20, 不帶輸入值; 讀取拋錯之存取子 / 代理視為無效); 未給(undefined 或 null)取預設
+                //  actDays: 非負整數(0 = 累計進場數; 原以 Number.isFinite 篩, 數字字串被靜默當成 0、負數與小數照收); draws: 1 ~ REPLACE_DRAWS_MAX 之整數(原: 超過 64 者靜默截斷為 64, 不合者靜默用預設)
+                //  half: 非負整數或其數字字串(轉為數值); 不合者仍用預設(沿用其既有口徑, 只補收數字字串)
+                let actUse = 0
+                if (oAct !== undefined && oAct !== null) {
+                    actUse = iseint(oAct) ? NumberCtor(oAct) : NaN
+                    if (!(actUse >= 0)) {
+                        throw new ErrorCtor('invalid opt.actDays: must be a non-negative integer (0 for the cumulative entry count)')
+                    }
+                }
+                let drawsUse = Math.max(1, Math.min(REPLACE_DRAWS_MAX, nullDraws || 16))
+                if (oDraws !== undefined && oDraws !== null) {
+                    drawsUse = iseint(oDraws) ? NumberCtor(oDraws) : NaN
+                    if (!(drawsUse >= 1 && drawsUse <= REPLACE_DRAWS_MAX)) {
+                        throw new ErrorCtor(`invalid opt.draws: must be an integer from 1 to ${REPLACE_DRAWS_MAX}`)
+                    }
+                }
+                let halfUse = 50
+                if (oHalf !== undefined && oHalf !== null && iseint(oHalf) && NumberCtor(oHalf) >= 0) {
+                    halfUse = NumberCtor(oHalf)
+                }
                 if (subMask !== null && !runs.some((r) => r.sels.some((s) => grpOf.has(s)))) {
                     //成品未分帳(pick 未回傳非 0 之 group): 無子帳可指定 ⇒ 不適用(不拋錯: 同一個診斷可套於全部成品; 不重放)
                     //  於執行規則(accept)之內呼叫者仍依合約拋重入之錯誤(不因短路而放行)
@@ -2617,8 +2678,7 @@ let makeEvaluator = (L, cfg = {}) => {
                     return { applicable: false, reason: '成品未分帳(pick 未回傳 group): onlyGroups 不適用' }
                 }
                 let more = subMask !== null || decMask !== null ? { subMask, decMask } : null
-                let d = Number.isInteger(oDraws) && oDraws > 0 ? Math.min(oDraws, 64) : Math.max(1, Math.min(64, nullDraws || 16))
-                let v = nullGroupActOf(runs, accept, d, seed + 49979687, Number.isInteger(oHalf) && oHalf >= 0 ? oHalf : 50, g.grp, g.nGroups, oAct || 0, more)
+                let v = nullGroupActOf(runs, accept, drawsUse, seed + 49979687, halfUse, g.grp, g.nGroups, actUse, more)
                 if (!more) {
                     return summarizeOf(Array.from(v), v.thirds)
                 }
@@ -2761,7 +2821,7 @@ let makeEvaluator = (L, cfg = {}) => {
             let barOf = (fnName, bar) => {
                 let v = iseint(bar) ? NumberCtor(bar) : NaN
                 if (!(v >= 0 && v <= nBars)) {
-                    throw new ErrorCtor(`api.${fnName}: bar 須為 0 ~ ${nBars} 之整數`)
+                    throw new ErrorCtor(`api.${fnName}: invalid bar: must be an integer from 0 to ${nBars}`)
                 }
                 return v
             }
@@ -2773,7 +2833,7 @@ let makeEvaluator = (L, cfg = {}) => {
             let dataFactor = (ki, bar, nBack = 180) => {
                 guardExt('ext')
                 if (!kiOk(ki)) {
-                    throw new ErrorCtor(nFac > 0 ? `api.factor: ki 須為 0 ~ ${nFac - 1} 之整數(meta.keyNames 之序號)` : 'api.factor: 帳本無因子(meta.keyNames 為空)')
+                    throw new ErrorCtor(nFac > 0 ? `api.factor: invalid ki: must be an integer from 0 to ${nFac - 1} (an index of meta.keyNames)` : 'api.factor: invalid ki: must be an index of meta.keyNames (the ledger has no factors)')
                 }
                 return factorAt(ki, barOf('factor', bar), nBack, 'api.factor')
             }
@@ -2781,7 +2841,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 guardExt('ext')
                 let si = MapPrototypeGet(serIdx, name)
                 if (si === undefined) {
-                    throw new ErrorCtor(`api.series: name 須為 meta.seriesNames 之一(可用: ${serAvail()})`)
+                    throw new ErrorCtor(`api.series: invalid name: must be one of meta.seriesNames (${serAvailEn()})`)
                 }
                 return seriesAt(si, barOf('series', bar), nBack, 'api.series')
             }

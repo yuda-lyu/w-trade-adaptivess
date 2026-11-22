@@ -1,13 +1,14 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings, argOf } from '../cfg.mjs'
-import { loadLedger } from '../eval/ledger.mjs'
+import { getSettings, argOf, cliMsgOf } from '../cfg.mjs'
+import { evalRunNumsOf } from '../eval/cfgNum.mjs'
+import { loadLedger, clipLedger } from '../eval/ledger.mjs'
 import { makeEvaluator, ntStaticOf, mulberry32 } from '../eval/evalCore.mjs'
 import { loadPick } from '../eval/pickLoader.mjs'
 import { P as PI, assertIntrinsics, isIntegrityError } from '../eval/intrinsics.mjs'
 import { backtestCfg } from '../domain/backtestCfg.mjs'
 import { gradeOf } from '../domain/backtestGrade.mjs'
-import { trainFromBarOf, gridCheck, checkEvalSettings, periodAt, configMsgOf } from '../eval/barGrid.mjs'
+import { trainFromBarOf, gridCheck, checkEvalSettings, evalListsOf, periodAt, configMsgOf } from '../eval/barGrid.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
 
@@ -28,8 +29,30 @@ if (process.env.ARSI_HARNESS !== '1') {
     console.log('g_backtest.mjs 只供迴圈使用(回測期數字不對 agent 揭露); 節點與做夢任務請用 g_eval.mjs')
     process.exit(4)
 }
+//命令列之旗標只認 --key value(空白分隔; 排程第 590、547 項): 帶等號之 --key=value、未列之旗標、重複之旗標、帶值旗標無值、--match-sides 之值不在 0 / 1、多餘之值一律不執行
+//  (離開碼 2; 於讀設定與載入模組之前, 不寫任何檔; 訊息固定、不帶輸入值)
+//  原: argOf 不識以上各種寫法而視為旗標未給或只取第一個(--seed=7 之種子不換、--dir=… 之結果夾不改而寫入正式之結果夾、--match-sides yes 被當 0)
+{
+    let argMsg = cliMsgOf('backtest')
+    if (argMsg !== null) {
+        console.log(argMsg)
+        process.exit(2)
+    }
+}
 let st = getSettings()
-let bt = backtestCfg(st)
+//settings.backtest 之數值鍵(minLadder、replicas、nullDraws、timeoutSec)給了而無效 ⇒ ERROR invalid backtest.<鍵>、離開碼 2(未寫任何檔; 排程第 547 項; 原: 不合者被靜默改用預設)
+let bt
+try {
+    bt = backtestCfg(st)
+}
+catch (err) {
+    let msg = configMsgOf(err)
+    if (msg === null) {
+        throw err
+    }
+    console.log(`ERROR ${msg}`)
+    process.exit(2)
+}
 let fpPick = argOf('pick', '')
 let name = String(argOf('name', ''))
 let show = argOf('show', false) === true
@@ -138,9 +161,8 @@ let ntStatic = null
     try {
         //全期帳本(L)之訓練期終點、回測期起點已由上方之預檢核對; 此處核對評估帳本(Le)之訓練期終點與分級分段所用之回測期終點
         gridCheck(periodAt(st, 'train', 'end'), Le.meta, 'periods.train.end')
-        if (bt.grade.enabled && bt.nullDraws > 0) {
-            gridCheck(periodAt(st, 'backtest', 'end'), L.meta, 'periods.backtest.end')
-        }
+        //回測期終點亦為重放之界線(規則 R-EV-52): 一律須落在全期帳本之棒格線上(原: 只在分級啟用且虛無抽數 > 0 時檢查)
+        gridCheck(periodAt(st, 'backtest', 'end'), L.meta, 'periods.backtest.end')
         fromL = trainFromBarOf(st, L.meta, trainEndBar)
         fromE = trainFromBarOf(st, Le.meta, trainEndE)
     }
@@ -162,10 +184,25 @@ let ntStatic = null
     }
 }
 L.ntStatic = ntStatic
+//回測期終點之界線(規則 R-EV-52; 排程第 510 項): 全期帳本長於回測期終點者(涵蓋回測期之後之資料; 評估帳本止於回測期終點), 重放只計 [回測期起點, 回測期終點) 內之決策,
+//  且單之出場以回測期終點為界 —— 終點之後才出場之單視為未結(與評估帳本於終點截止時相同; 終點之後之損益不可得於回測期)。原: 重放無終點之上界, 終點之後之決策與損益被計入旗標與參照
+//  全期帳本止於回測期終點(或更早)者不受影響(clipLedger 回原帳本、不帶 endBar ⇒ 評估器之決策之上界仍為帳本之 nBars, 不改變任何決策)
+let btEndBar = barOf(periodAt(st, 'backtest', 'end'))
+//回測期須有範圍(終點晚於起點): 原無終點之上界而不檢; 今以終點為界, 終點不晚於起點者將無任何決策而旗標靜默為 fail ⇒ 離開碼 2
+if (!(btEndBar > btStartBar)) {
+    console.log('ERROR invalid periods.backtest.end: must be later than periods.backtest.start')
+    process.exit(2)
+}
+L = clipLedger(L, btEndBar)
 //eval.fitEnd 不在帳本之棒格線上等設定不合(規則 R-EV-44)⇒ 離開碼 2(未寫任何檔)
 let ev
+let evRun
+let evLists
 try {
     ev = makeEvaluator(L, st.eval)
+    //亂數種子與相位之清單: 與評估器同一組函數(規則 R-EV-44 ④之二); 數字字串轉為數值後才使用(原: `seed + i` 於字串之種子為字串相接)
+    evRun = evalRunNumsOf(st.eval, 'eval')
+    evLists = evalListsOf(st.eval, L.barsPerDay, 'eval')
 }
 catch (err) {
     let msg = configMsgOf(err)
@@ -178,16 +215,26 @@ catch (err) {
 let accept = typeof pk.accept === 'function' ? pk.accept : null
 //亂數種子: 預設 settings.eval.seed; --seed N 可覆寫(主代理校準參照用: 同一模組換種子看等級之分佈)
 let seedArg = argOf('seed', null)
-let seed = typeof seedArg === 'number' && Number.isFinite(seedArg) ? seedArg : (st.eval.seed === undefined ? 1 : st.eval.seed)
+let seed = evRun.seed
+if (seedArg !== null) {
+    //--seed 須為整數(安全整數之範圍內; 同 g_eval.mjs 之重放): 給了而不合者說明並沿用設定之種子(原: 小數照用、非數字靜默忽略)
+    if (typeof seedArg === 'number' && Number.isSafeInteger(seedArg)) {
+        seed = seedArg
+    }
+    else {
+        console.log('--seed 須為整數(安全整數之範圍內),已忽略(沿用設定之亂數種子)')
+    }
+}
 let r2 = (x) => Math.round(x * 100) / 100
 //replay, 以某亂數種子重放一次(七相位); 回各相位之切片與操作績效
 //  切片帶 k0(其第一個決策於整段重放之決策序): 執行規則收到之 sig.k 與挑選函數之 ctx.k 一致(皆自帳本起點之第一個決策起算)
 let replay = (sd) => {
     let rs = []
     let os = []
-    for (let ph of st.eval.phases) {
+    for (let ph of (evLists.phases || [0, 1, 2, 3, 4, 5, 6])) {
         let r = ev.runPick(pk.pick, ph, sd)
         let i0 = r.bars.findIndex((b) => b >= btStartBar)
+        //決策之上界(規則 R-EV-52): 帳本已截至回測期終點(clipLedger; L.endBar)⇒ runPick 只執行至其後一個決策間隔落在終點之內之決策(同評估帳本止於回測期終點時 decisionBars 之界線), 無須另裁
         let run = i0 < 0 ? { phase: ph, bars: [], sels: [], tags: [], k0: 0 } : { phase: ph, bars: r.bars.slice(i0), sels: r.sels.slice(i0), tags: r.tags.slice(i0), k0: i0 }
         rs.push(run)
         os.push(ev.opOf(run.sels, run.bars, run.tags, accept, { k0: run.k0 }))
@@ -211,6 +258,11 @@ catch (err) {
     process.exit(3)
 }
 let { runs, ops, eq, mean, min } = reps[0]
+//回測期內須至少有一個決策(視窗短於一個決策間隔、帳本於回測期起點之後不足一個視窗者, 各相位皆無決策): 原靜默為 nDecisions 全 0 之 fail 旗標 ⇒ 離開碼 2、不寫結果檔
+if (runs.every((r) => r.bars.length === 0)) {
+    console.log('ERROR invalid periods.backtest: must contain at least one decision (the period from periods.backtest.start to periods.backtest.end is shorter than the decision interval)')
+    process.exit(2)
+}
 let avg = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0)
 let sdOf = (a) => {
     let m = avg(a); return Math.sqrt(avg(a.map((v) => (v - m) * (v - m))))
@@ -322,7 +374,7 @@ let nul = ref ? { draws: bt.nullDraws, mean: r2(ref.dose.mean), sd: r2(ref.dose.
 //分段: 回測期等分為 grade.splits 段(依決策棒), 各段之超額 = 本成品 − 該段參照之平均(各段各自之參照)
 let segs = []
 if (ref && bt.grade.enabled) {
-    let endBar = barOf(st.periods.backtest.end)
+    let endBar = btEndBar
     let k = Math.max(1, Math.round(bt.grade.splits))
     for (let i = 0; i < k; i++) {
         let b0 = btStartBar + Math.round((endBar - btStartBar) * i / k)

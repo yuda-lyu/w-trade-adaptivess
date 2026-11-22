@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { getSettings, readJson } from '../cfg.mjs'
+import { phaseCountOfMetrics, phaseCountOfAll, phaseText } from '../eval/cfgNum.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
 //agent(ARSI_AGENT_ROLE = node / dream)⇒ 帶 --out(寫出 DIGEST.md)者拒跑(離開碼 2; 規則 R-RUN-11); 只印出者照常
@@ -56,7 +57,7 @@ let hex = /\b[0-9a-f]{20}\b/g
 P('## 節點')
 P('')
 //評估期 = 回測期; 欄為回測期之 S / 階梯、七相位平均 / 最差相位、組成對照(同側同活躍度虛無)之超額與可重現比例、換種子與同分次序之 S
-P('| 節點 | 類型 | 臂(←起點) | 回測期 S / 階梯 | 七相位平均 / 最差相位 | 組成對照之超額 / p / 可重現 | 換種子與同分次序之 S | agent 秒 | 評估(完整 / 相異選集) | 迴圈檢查 | 方向指定之選集指紋 | 共用工具 | 試驗 |')
+P(`| 節點 | 類型 | 臂(←起點) | 回測期 S / 階梯 | ${phaseText(phaseCountOfAll(rows.map((d) => phaseCountOfMetrics(d.harness && d.harness.raw && d.harness.raw.metrics)), st.eval), '相位')}平均 / 最差相位 | 組成對照之超額 / p / 可重現 | 換種子與同分次序之 S | agent 秒 | 評估(完整 / 相異選集) | 迴圈檢查 | 方向指定之選集指紋 | 共用工具 | 試驗 |`)
 P('|---|---|---|---|---|---|---|---|---|---|---|---|---|')
 let f1 = (x) => (typeof x === 'number' ? x.toFixed(1) : '—')
 let nFullAll = 0

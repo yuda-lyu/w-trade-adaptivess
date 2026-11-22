@@ -1,6 +1,7 @@
 import iseint from 'wsemi/src/iseint.mjs'
 import isenum from 'wsemi/src/isenum.mjs'
 import { recentDiagOf } from './diagRead.mjs'
+import { evalRunNumOf } from '../eval/cfgNum.mjs'
 
 
 //成員穩健性之判定(規則 R-REC-51; 純函數): 合格之成品以隨機半庫(數種切法 × 兩半; 評估器之 --member <鹽>:<0|1>)重跑完整評估, 量其內容是否依賴特定成員
@@ -36,10 +37,10 @@ let intOf = (v, lo, hi) => (iseint(v) && Number(v) >= lo && Number(v) <= hi ? Nu
 let numOf = (v) => (isenum(v) ? Number(v) : null)
 
 /**
- * 成員穩健性之附算之設定(settings.rsi.memberCheck 之解讀;無效即用預設、不拋錯)
+ * 成員穩健性之附算之設定(settings.rsi.memberCheck 之解讀:其各鍵無效即用預設、不拋錯;例外: settings.eval.replicaNullDraws 給了而無效者拋 invalid eval.replicaNullDraws)
  *
  * false 或 salts 為空陣列者回 null(關閉);salts 須為 0 ~ 4294967295 之整數(或其數字字串)之陣列(重複者只取一次),不合者用預設;
- * nullDraws 須為正整數,未給或不合者取 evalCfg.replicaNullDraws(正整數者),再無則 32;minLadder、maxNegHalves 須為非負整數、minRetention 須為有限數值(數字或其數字字串,轉為數值後使用),不合者用預設。
+ * nullDraws 須為正整數,未給或不合者取 evalCfg.replicaNullDraws(與迴圈之重放同一取值函數 evalRunNumOf:數字字串轉為數值、給了而無效者拋 invalid eval.replicaNullDraws;取值為 0〔重放不算虛無〕者不採用),再無則 32;minLadder、maxNegHalves 須為非負整數、minRetention 須為有限數值(數字或其數字字串,轉為數值後使用),不合者用預設。
  *
  * @param {*} v 輸入 settings.rsi.memberCheck 之值
  * @param {Object|null} [evalCfg=null] 輸入 settings.eval(讀取 replicaNullDraws)
@@ -63,7 +64,10 @@ let memberCheckOf = (v, evalCfg = null) => {
             salts = [...new Set(xs)]
         }
     }
-    let rd = isObj(evalCfg) ? intOf(evalCfg.replicaNullDraws, 1, Number.MAX_SAFE_INTEGER) : null
+    //settings.eval.replicaNullDraws: 與迴圈之重放同一個取值函數(evalRunNumOf; 規則 R-EV-44 ④之二): 未給 = 預設 32、數字字串轉為數值、給了而無效 ⇒ 拋 invalid eval.replicaNullDraws
+    //  (原: 此處收數字字串而 verify.mjs 之重放不收 —— 同一鍵兩處之解讀不一); 附算需至少 1 抽 ⇒ 取值為 0(不算虛無)者不採用、依其後之預設
+    let rdv = isObj(evalCfg) ? evalRunNumOf(evalCfg, 'replicaNullDraws', 'eval') : null
+    let rd = rdv !== null && rdv >= 1 ? rdv : null
     let nd = intOf(o.nullDraws, 1, Number.MAX_SAFE_INTEGER)
     let ml = intOf(o.minLadder, 0, Number.MAX_SAFE_INTEGER)
     let mn = intOf(o.maxNegHalves, 0, Number.MAX_SAFE_INTEGER)

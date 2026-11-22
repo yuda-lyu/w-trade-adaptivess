@@ -6,6 +6,7 @@ import { TRIALS } from './briefTrials.mjs'
 import { libSizeText, periodLenText, cadenceOf, nullDrawsOf, phaseCountOf, phaseText, horizonsOf, dateOf } from './factsText.mjs'
 import { POSTFIT_HEAD, fillBacklogSecOf, autoFillOf } from './fillPlan.mjs'
 import { memberCfgOfSt } from './verifyMember.mjs'
+import { evalLimitsOf } from '../eval/cfgNum.mjs'
 
 
 //OUT_SATURATED_NOTE, 輪末摘要「配比」一列之附註: 可選之臂皆已試過、向外 0 條, 而做夢本輪宣告(或續存)「現行資訊範圍內已無可試之向外方向」(規則 R-REC-29)
@@ -119,7 +120,8 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
     //其他標的之正負號(規則 R-REC-30; 選配): 共同儲存區有 _cross.json 時才寫進任務書(只說明欄之意義與讀法; 任務書只依檔之有無、不讀該檔之內容, 不出現任何號或數字);
     //  只在 hasStore() 之段內使用(尚無總表者不提)
     let hasCross = () => fs.existsSync(path.join(st.rsi.root, 'picks', '_cross.json'))
-    let lim = st.eval.limits
+    //硬上限: 與評估器(scoreOf)、合約之參考版(initProject.mjs)同一個取值函數與同一預設(evalLimitsOf; 規則 R-EV-44 ④之二): 數字字串轉為數值、未給 = 400 / 50、給了而無效 ⇒ 拋 invalid eval.limits.<鍵>
+    let lim = evalLimitsOf(st.eval, 'eval')
     let sc = st.score
     let guidesOn = !(st.rsi && st.rsi.guides === false)
     //輪末之附算一併處理待補算(規則 R-REC-41): 開啟者(上限 > 0 且未關閉附算)做夢任務書之擴建一節改寫「既有節點之值由輪末之附算一併補入」; 關閉者為改前之原文

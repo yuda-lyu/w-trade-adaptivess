@@ -1,4 +1,4 @@
-import { evalCfgNumsOf } from '../eval/cfgNum.mjs'
+import { evalCfgNumsOf, cfgListOf, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll } from '../eval/cfgNum.mjs'
 
 
 //套件文字中之策略庫規模、期間與節奏之寫法(規則 R-REC-36): 任務書(./texts.mjs)與合約之參考版(../tools/initProject.mjs 之 renderContract)共用
@@ -59,28 +59,7 @@ let cadenceOf = (ev) => evalCfgNumsOf(ev, 'eval').cadenceDays
  */
 let nullDrawsOf = (ev) => evalCfgNumsOf(ev, 'eval').nullDraws
 
-/**
- * 相位數:settings.eval.phases 為非空陣列者為其長度,否則為評估器之預設 7(0 ~ 6 日各一個起始相位)
- *
- * @param {Object} ev 輸入 settings.eval(可為 null)
- * @returns {Integer} 回傳相位數
- * @example
- * phaseCountOf({ phases: [0, 3] })
- * // => 2
- */
-let phaseCountOf = (ev) => (ev && Array.isArray(ev.phases) && ev.phases.length > 0 ? ev.phases.length : 7)
-
-/**
- * 相位數之寫法:1 ~ 10 為國字(七)、其餘為阿拉伯數字加空白(12 ),後接 tail(如「相位」「個相位」「個起始相位」)
- *
- * @param {Integer} n 輸入相位數
- * @param {String} tail 輸入接續之字
- * @returns {String} 回傳寫法
- * @example
- * phaseText(7, '相位')
- * // => '七相位'
- */
-let phaseText = (n, tail) => (Number.isInteger(n) && n >= 1 && n <= 10 ? '一二三四五六七八九十'[n - 1] : `${n} `) + tail
+//phaseCountOf、phaseText(相位數與其寫法)、phaseCountOfMetrics、phaseCountOfAll(結果實算之相位數)之單一定義在 ../eval/cfgNum.mjs(評估器之判讀 score.mjs 亦用; 本檔再匯出, 任務書與合約之參考版沿用此路徑)
 
 /**
  * 虛無 p 於 draws 抽之下限:1 ÷ (1 + draws) 四捨五入至小數第 4 位(同評估器之 r4;64 抽為 0.0154)
@@ -94,7 +73,7 @@ let phaseText = (n, tail) => (Number.isInteger(n) && n >= 1 && n <= 10 ? '一二
 let nullFloorText = (draws) => String(Math.round((1 / (1 + draws)) * 10000) / 10000)
 
 /**
- * 新鮮度地平線(日):settings.eval.horizons,未給或為空陣列者為評估器之預設 [1, 3, 7, 14, 30]
+ * 新鮮度地平線(日):settings.eval.horizons 為非空陣列者為其各元素(與評估器同一取值函數 cfgListOf: 元素須為正數或其數字字串, 轉為數值後才寫入文字; 無效者拋 invalid eval.horizons[i]), 否則為評估器之預設 [1, 3, 7, 14, 30]
  *
  * @param {Object} ev 輸入 settings.eval(可為 null)
  * @returns {Array} 回傳地平線之陣列
@@ -102,7 +81,7 @@ let nullFloorText = (draws) => String(Math.round((1 / (1 + draws)) * 10000) / 10
  * horizonsOf({})
  * // => [1, 3, 7, 14, 30]
  */
-let horizonsOf = (ev) => (ev && Array.isArray(ev.horizons) && ev.horizons.length ? ev.horizons : [1, 3, 7, 14, 30])
+let horizonsOf = (ev) => (ev && Array.isArray(ev.horizons) && ev.horizons.length ? cfgListOf(ev.horizons, null, 'eval.horizons', 'posNum') : [1, 3, 7, 14, 30])
 
 /**
  * 時刻字串之日期部分(非空字串者取前 10 字;其餘回 null)
@@ -116,4 +95,4 @@ let horizonsOf = (ev) => (ev && Array.isArray(ev.horizons) && ev.horizons.length
 let dateOf = (t) => (typeof t === 'string' && t ? t.slice(0, 10) : null)
 
 
-export { libSizeText, periodLenText, cadenceOf, nullDrawsOf, phaseCountOf, phaseText, nullFloorText, horizonsOf, dateOf }
+export { libSizeText, periodLenText, cadenceOf, nullDrawsOf, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll, nullFloorText, horizonsOf, dateOf }

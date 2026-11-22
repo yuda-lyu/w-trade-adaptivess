@@ -50,3 +50,5 @@ let unitNotionalOf = (close, nu, times = null) => {
 
 
 export { unitNotionalOf }
+//(流程之依賴; 排程第 547 項③)本檔不在評估器之指紋內(只由 ledgerBuild.mjs 於給了 unit 時動態匯入, 不在評估器之匯入鏈上; src/domain/fillKeys.mjs 之 EVAL_FP_SKIP): 其輸出之改變使帳本之 unit.f64 不同,
+//  但帳本鍵只雜湊交易規則與緩衝(unitKeyOf)而不含 unit.f64 之內容 ⇒ 改了本檔之輸出時須同時升 ledgerBuild.mjs 之 LEDGER_VERSION(否則帳本鍵與評估器之指紋皆不變, 既有之附算與補算不知過時; 同 ledgerBuild.mjs 之改動)

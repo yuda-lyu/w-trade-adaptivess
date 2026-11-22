@@ -310,7 +310,8 @@ describe('影響評估之數字給了而無效即拒絕(規則 R-EV-44 ④之二
         it('g_eval.mjs --null:給了而不是非負整數(負數、小數、非數字、無值)⇒ invalid --null、離開碼 2(不靜默忽略);0 與正整數照常;未給 ⇒ 依模式與設定', () => {
             let root = mkProj('nullArg')
             for (let args of [['--null', '-1'], ['--null', '1.5'], ['--null', 'abc'], ['--null'], ['--period', 'train', '--null', 'abc'], ['--period', 'postfit', '--mode', 'full', '--null', '-3']]) {
-                let r = run(root, ['--pick', 'pick_all.mjs', '--mode', 'quick', ...args])
+                //單值旗標不重複給(排程第 547 項: 重複之 --mode 於通用之檢查即拒): 自帶 --mode 者不再加預設之 --mode quick
+                let r = run(root, ['--pick', 'pick_all.mjs', ...(args.includes('--mode') ? [] : ['--mode', 'quick']), ...args])
                 assert.equal(r.status, 2, `${args.join(' ')}: ${r.out.slice(0, 300)}`)
                 assert(/^invalid --null: must be a non-negative integer$/m.test(r.stdout) && noStack(r.out), `${args.join(' ')}: ${r.out.slice(0, 300)}`)
             }

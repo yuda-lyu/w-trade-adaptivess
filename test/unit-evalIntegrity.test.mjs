@@ -16,6 +16,8 @@ import { makeTmp, writeSynthLedger, FD_ROOT, makeTrainEvaluator as makeEvaluator
 //  違約樣本一律為最小者(對內建物件之方法重新賦值、或改寫交出之物件), 測後一律還原
 const CFG = { warmupDays: 60, cadenceDays: 7, phases: [0, 3], horizons: [3, 7], nullDraws: 8, seed: 11 }
 const TA_PROTO = Object.getPrototypeOf(Int8Array.prototype)
+//tag 不可結構化複製之訊息(V19、V20: 英文固定詞彙, 不附結構化複製之原錯誤訊息; 排程第 510 項)
+const TAG_MSG = 'invalid pick return value.tag: must be structured-cloneable data (numbers, strings, objects, arrays; no functions, symbols or shared memory)'
 
 //keep, 先記下要被改之屬性描述, fn 結束後(含拋錯)逐一還原(新增者刪除)
 let keep = (targets, fn) => {
@@ -254,7 +256,8 @@ describe('evalCore 資料不共用(R-EV-35 ①):模組改寫交出之物件, 評
         assert.deepEqual(m.sel.tagPerf, base.sel.tagPerf)
         assert(m.op.nOrders.every((x) => x > 0), '快照凍結 ⇒ accept 有下單')
         //不可結構化複製之 tag(函數)⇒ 拋錯
-        assert.throws(() => ev.runPick(() => ({ ids: [1], tag: { f: () => 1 } }), 0), /可結構化複製/)
+        //(V19、V20; 排程第 510 項: 原中文訊息並附結構化複製之原錯誤訊息)
+        assert.throws(() => ev.runPick(() => ({ ids: [1], tag: { f: () => 1 } }), 0), (e) => e.message === TAG_MSG)
         //原始值與無法凍結之內容(Map)照常; Map 每個視窗另給複本
         let r = ev.runPick((ctx) => ({ ids: [1], tag: ctx.k % 2 ? 'x' : new Map([[1, ctx.k]]) }), 0)
         assert.equal(r.tags[1], 'x')
@@ -754,7 +757,7 @@ describe('evalCore 內建物件之完整性(R-EV-35 ②):被改即評估失敗(E
             () => ({ ids: [1], tag: Symbol('x') }),
         ]
         for (let f of mk) {
-            assert.throws(() => ev.runPick(f, 0), /可結構化複製/)
+            assert.throws(() => ev.runPick(f, 0), (e) => e.message === TAG_MSG)
         }
     })
 
@@ -1590,7 +1593,7 @@ describe('命令列(src/cli/eval.mjs):挑選模組 / 擴充診斷模組之載入
             assert(/EXT_OK use_data[^\n]*: n 30\/30\/30/.test(r1.out), r1.out.slice(0, 800))
             let r2 = run(['--pick', pickOk, '--ext-test', fpBad])
             assert.equal(r2.status, 4, r2.out.slice(0, 800))
-            assert(/EXT_FAIL bad_bar: api\.series: bar 須為 0 ~ 2400 之整數\r?\n/.test(r2.out) && !r2.out.includes('987654321'), r2.out.slice(0, 800))
+            assert(/EXT_FAIL bad_bar: api\.series: invalid bar: must be an integer from 0 to 2400\r?\n/.test(r2.out) && !r2.out.includes('987654321'), r2.out.slice(0, 800))
         }
         finally {
             fs.rmSync(fpUse, { force: true })

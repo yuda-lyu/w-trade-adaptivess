@@ -2,6 +2,7 @@ import path from 'path'
 import fs from 'fs'
 import { getSettings } from '../cfg.mjs'
 import { backtestCfg } from '../domain/backtestCfg.mjs'
+import { configMsgOf } from '../eval/barGrid.mjs'
 import { scanTrace, setGuardExtra, guardExtraOf, allowWorkOf } from '../domain/verify.mjs'
 import { evalHintsOfDocs, isEvalHint } from '../domain/verifyEvalHints.mjs'
 
@@ -14,6 +15,19 @@ import { evalHintsOfDocs, isEvalHint } from '../domain/verifyEvalHints.mjs'
 //  成員依賴之提示(規則 R-REC-51)同(判定讀樹上之 raw.member): 不在此對照之內 —— 節點文件內之該條不列入「節點文件內」之項、不使該份判為不同; --mode validate 之重掃以樹上之值重產(現行者照留一條, 不重複)
 let st = getSettings()
 setGuardExtra(guardExtraOf(st)) //專案另加之禁區字樣(與迴圈之掃描同一組)
+//私有根(settings.backtest.privateRoot): settings.backtest 之數值鍵無效(invalid backtest.<鍵>; 排程第 547 項)⇒ 印 ERROR、離開碼 2(唯讀工具, 不拋堆疊); 其餘錯誤照舊拋出
+let privateRoot
+try {
+    privateRoot = backtestCfg(st).privateRoot
+}
+catch (err) {
+    let msg = configMsgOf(err)
+    if (msg === null) {
+        throw err
+    }
+    console.log(`ERROR ${msg}`)
+    process.exit(2)
+}
 let root = st.FD_ROOT
 let workRoot = st.records.workDir
 let only = process.argv[2] ? process.argv[2].split(',') : null
@@ -38,7 +52,7 @@ for (let d of docs) {
         planRule = /交付版先定再跑|先寫規劃再評估/.test(fs.readFileSync(path.join(wd, 'brief.md'), 'utf8'))
     }
     catch (err) {}
-    let tr = scanTrace({ workDir: wd, attempt: d.attempt || 1, privateRoot: backtestCfg(st).privateRoot, root, writeRoots: [wd], workRoot, allowWork, nodeRules: true, planRule, stateRoot: st.rsi.root })
+    let tr = scanTrace({ workDir: wd, attempt: d.attempt || 1, privateRoot, root, writeRoots: [wd], workRoot, allowWork, nodeRules: true, planRule, stateRoot: st.rsi.root })
     let now = [...tr.issues, ...(hints.get(d.nodeId) || [])]
     let old = ((d.harness && d.harness.checks && d.harness.checks.issues) || []).filter((s) => isScan(s) || isEvalHint(s))
     let same = JSON.stringify(old) === JSON.stringify(now)

@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import { scoreOf } from '../eval/score.mjs'
+import { evalRunNumsOf, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll } from '../eval/cfgNum.mjs'
 import { stripComments } from '../eval/pickLoader.mjs'
 import { runNodeProc } from './proc.mjs'
 import { makeBacktest } from './backtest.mjs'
@@ -716,6 +717,10 @@ let lostVersions = (workDir, until = null) => {
     return [...lost.entries()].map(([pick, hs]) => ({ pick, n: hs.size }))
 }
 
+//phaseCountOfDoc, 節點文件(欄標、新鮮度一列)之相位數 = 該評估結果實際所算者(phaseCountOfMetrics: metrics.phases 之長度, 其次 op.eqYr.byPhase 之長度; 完整評估 = settings.eval.phases 之長度; 排程第 547 項: 原寫死「七相位」);
+//  兩欄皆無者(手寫之 metrics)取評估器之預設 7(phaseCountOfAll 之設定給 null)
+let phaseCountOfDoc = (m) => phaseCountOfAll([phaseCountOfMetrics(m)], null)
+
 //summaryOf, 節點文件之重點數字(與 agent 自報 results.claimed 同鍵者逐項比對); 全部為評估期(回測期)之數字; trainScore = 不含檢定旗標之判讀(agent 自跑看得到的那一份)
 /**
  * 取得節點文件之重點數字(與 agent 自報 results.claimed 同鍵者逐項比對;皆為回測期之數字)
@@ -729,7 +734,7 @@ let lostVersions = (workDir, until = null) => {
 let summaryOf = (m, trainScore) => [
     { key: 'S', label: 'S(回測期)', value: trainScore.S },
     { key: 'ladder', label: '階梯(回測期)', value: trainScore.ladder, tol: 0 },
-    { key: 'eqYrMean', label: '等效年化 七相位平均(%;回測期)', value: m.op.eqYr.mean },
+    { key: 'eqYrMean', label: `等效年化 ${phaseText(phaseCountOfDoc(m), '相位')}平均(%;回測期)`, value: m.op.eqYr.mean },
     { key: 'eqYrMin', label: '等效年化 最差相位(%;回測期)', value: m.op.eqYr.min },
     { key: 'monthlyOrders', label: '月均單', value: m.op.monthlyOrders.mean },
     { key: 'peakHold', label: '最大同時持倉', value: m.op.peakHold.max, tol: 0 },
@@ -847,7 +852,7 @@ let notesOf = (m, seedS = null, train = null, replays = null, half = false, side
         }
     }
     if (m.fresh) {
-        out.push(`新鮮度(七相位均 %): ${Object.keys(m.fresh).map((H) => `${H}d ${f1(m.fresh[H].eqYr.mean)}`).join(' | ')}`)
+        out.push(`新鮮度(${phaseText(phaseCountOfDoc(m), '相位')}均 %): ${Object.keys(m.fresh).map((H) => `${H}d ${f1(m.fresh[H].eqYr.mean)}`).join(' | ')}`)
     }
     if (m.sel) {
         out.push(`選集: 大小均 ${f1(m.sel.sizeMean)}(${m.sel.sizeMin} ~ ${m.sel.sizeMax});換手 Jaccard ${m.sel.turnoverJaccard};執行規則 ${m.hasAccept ? `有(下單率 ${f1(m.op.acceptRate * 100)}%)` : '無'};勝率 ${f1(m.op.winRate * 100)}%`)
@@ -906,6 +911,9 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
         let rel = (p) => path.relative(FD_ROOT, p).replace(/\\/g, '/')
         let fpPick = path.join(workDir, 'pick.mjs')
         let fpOut = path.join(workDir, 'harness_full.json')
+        //評估之執行面之數字(亂數種子、重放次數、重放之虛無抽數、逾時秒數): 與評估器、設定之預檢同一組函數(evalRunNumsOf; 規則 R-EV-44 ④之二): 未給 = 預設、數字字串轉為數值後才使用(原: 各處自行判斷 ——
+        //  replicaSeeds 與 replicaNullDraws 不收數字字串、`seed + i` 於字串之種子為字串相接、`timeoutSec || 900` 之 falsy 取預設), 給了而無效 ⇒ 拋 invalid eval.<鍵>(組裝時之預檢已先拒絕)
+        let evRun = evalRunNumsOf(st.eval, 'eval')
         if (!fs.existsSync(fpPick)) {
             let dh = deniedHalt(path.join(workDir, `agent_a${attempt}.log`))
             return { ok: false, error: `未交付 pick.mjs${dh ? `(工作階段結束於被權限拒絕之工具呼叫: ${dh.tool} ${dh.target})` : ''}`, issues: [] }
@@ -918,10 +926,10 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
         let nLogged = evalsLogged(workDir, evalsUntil)
         //--no-log 只在 ARSI_HARNESS=1 時生效(g_eval.mjs); 節點自己帶 --no-log 者照記並標記
         let nNoLog = noLogTried(workDir, evalsUntil)
-        let r = await runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), '--pick', fpPick, '--mode', 'full', '--out', fpOut, '--no-log'], { cwd: FD_ROOT, timeoutMs: (st.eval.timeoutSec || 900) * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })
+        let r = await runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), '--pick', fpPick, '--mode', 'full', '--out', fpOut, '--no-log'], { cwd: FD_ROOT, timeoutMs: evRun.timeoutSec * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })
         let out = readJson(fpOut)
         if (r.timeout) {
-            return { ok: false, error: `重跑逾時(${st.eval.timeoutSec || 900}s; 挑選模組過慢)`, issues: [] }
+            return { ok: false, error: `重跑逾時(${evRun.timeoutSec}s; 挑選模組過慢)`, issues: [] }
         }
         if (!out || out.ok !== true) {
             //結果檔帶 code 者(EVAL_UNIT_CAPITAL、PICK_RUN、LEDGER_UNIT_MISMATCH 等; 同為離開碼 3 或 2 者以之分辨)一併列於訊息與回傳
@@ -974,14 +982,14 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
         let replays = []
         let isHalf = isHalfOf(out.pickMeta)
         {
-            let nRep = Number.isInteger(st.eval.replicaSeeds) ? st.eval.replicaSeeds : 0
-            let seed0 = st.eval.seed === undefined ? 1 : st.eval.seed
-            let nDraw = Number.isInteger(st.eval.replicaNullDraws) ? st.eval.replicaNullDraws : 32
+            let nRep = evRun.replicaSeeds
+            let seed0 = evRun.seed
+            let nDraw = evRun.replicaNullDraws
             //重放一併載入之擴充診斷(規則 R-REC-42; settings.rsi.replicaExt): 預設 = 正本中帶看板值之診斷 + 正本之 neutralExec(其 delta 有值者); 'none' 或無此類診斷者之引數與改前逐字相同
             let rxScope = replicaExtOf(st.rsi)
             let extArgs = replicaExtArgsOf(rxScope, out.metrics)
             let extArgs0 = ['--ext-only', 'nullRecentAct']
-            let replayOf = (i, fpS, ea) => runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), '--pick', fpPick, '--mode', 'full', '--null', String(nDraw), ...ea, '--seed', String(seed0 + i), '--tie-salt', String(i), '--out', fpS, '--no-log'], { cwd: FD_ROOT, timeoutMs: (st.eval.timeoutSec || 900) * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })
+            let replayOf = (i, fpS, ea) => runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), '--pick', fpPick, '--mode', 'full', '--null', String(nDraw), ...ea, '--seed', String(seed0 + i), '--tie-salt', String(i), '--out', fpS, '--no-log'], { cwd: FD_ROOT, timeoutMs: evRun.timeoutSec * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })
             for (let i = 1; i <= nRep; i++) {
                 let fpS = path.join(workDir, `harness_seed${i}.json`)
                 try {
@@ -1030,7 +1038,7 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
                 fs.rmSync(fpT, { force: true })
             }
             catch (err) {}
-            let rt = await runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), '--pick', fpPick, '--mode', 'quick', '--period', 'train', '--null', '0', '--out', fpT, '--no-log'], { cwd: FD_ROOT, timeoutMs: (st.eval.timeoutSec || 900) * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })
+            let rt = await runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), '--pick', fpPick, '--mode', 'quick', '--period', 'train', '--null', '0', '--out', fpT, '--no-log'], { cwd: FD_ROOT, timeoutMs: evRun.timeoutSec * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })
             let o = readJson(fpT)
             if (!rt.timeout && o && o.ok === true && o.metrics && o.metrics.sel && typeof o.metrics.sel.longRatio === 'number') {
                 train = { longRatio: o.metrics.sel.longRatio, tags: (o.metrics.sel.tags || []).slice(0, 4), ...(shortShareOf(o.metrics) === null ? {} : { shortShare: shortShareOf(o.metrics) }) }
@@ -1082,20 +1090,20 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
         //完整評估之相異版本數(迴圈之重跑帶 --no-log 不記, 故此處讀到的只有 agent 自己的評估)
         let nDist = evalsDistinct(workDir, evalsUntil)
         let layer = layerOfSpec(spec)
-        let score = scoreOf(out.metrics, { limits: st.eval.limits, score: st.score, layer })
+        let score = scoreOf(out.metrics, { limits: st.eval.limits, score: st.score, layer, nPh: phaseCountOf(st.eval) })
         let trainScore = score
         //檢定旗標(「回測期旗標」機制; 隨附之參考設定明設 settings.backtest.enabled = false(未設時 backtestCfg 視為啟用): 不啟用時評估期即回測期, 節點自己看得到數字;
         //  日後若由主控以保留期或他幣作檢定, 可沿用此接口, 見 sgud/proc/process.md §5)
         let validation = null
         if (keepValidation && typeof keepValidation.flag === 'string' && backtest.cfg.enabled) {
             validation = { name: 'backtest', flag: keepValidation.flag, label: gradeLabel(keepValidation.flag), at: keepValidation.at || null, error: null }
-            score = scoreOf(out.metrics, { limits: st.eval.limits, score: st.score, layer, evidence: { backtest: keepValidation.flag } })
+            score = scoreOf(out.metrics, { limits: st.eval.limits, score: st.score, layer, evidence: { backtest: keepValidation.flag }, nPh: phaseCountOf(st.eval) })
         }
         else if (backtest.cfg.enabled && score.ladder >= backtest.cfg.minLadder && !score.flags.vetoed) {
             let b = await backtest.run({ nodeId, attempt, workDir })
             validation = { name: 'backtest', flag: b.flag, label: b.flag ? gradeLabel(b.flag) : null, at: b.at, error: b.error }
             if (b.flag) {
-                score = scoreOf(out.metrics, { limits: st.eval.limits, score: st.score, layer, evidence: { backtest: b.flag } })
+                score = scoreOf(out.metrics, { limits: st.eval.limits, score: st.score, layer, evidence: { backtest: b.flag }, nPh: phaseCountOf(st.eval) })
             }
         }
         return {

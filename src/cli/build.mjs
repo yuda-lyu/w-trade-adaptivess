@@ -1,5 +1,5 @@
 import path from 'path'
-import { getSettings, argOf, P } from '../cfg.mjs'
+import { getSettings, argOf, P, cliMsgOf } from '../cfg.mjs'
 import buildLedger from '../eval/ledgerBuild.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
@@ -23,9 +23,29 @@ import { guardEntry } from '../domain/agentEntries.mjs'
 //    回測期旗標(g_backtest.mjs)所用之全期帳本須以同一起點建(否則 g_backtest.mjs 離開碼 5)
 //  agent(ARSI_AGENT_ROLE = node / dream)不得建帳本 ⇒ 拒跑(離開碼 2; 於讀設定與任何寫入之前; 規則 R-RUN-11)
 guardEntry('build')
-let st = getSettings()
-let limit = argOf('limit', 0)
+//命令列之旗標只認 --key value(空白分隔; 排程第 590、547 項): 帶等號之 --key=value、未列之旗標、重複之旗標、帶值旗標無值、多餘之值一律不建(離開碼 2; 於讀設定與任何寫入之前; 訊息固定、不帶輸入值)
+//  原: argOf 不識以上各種寫法而視為旗標未給 —— --limit=5 之試算建成全庫之評估帳本、--train=1 之訓練期帳本建成評估帳本(皆寫入正式之帳本夾)
+{
+    let argMsg = cliMsgOf('build')
+    if (argMsg !== null) {
+        console.log(argMsg)
+        process.exit(2)
+    }
+}
+//--limit N(只建前 N 隻之試算): 給了而不是正整數(0、負數、小數、非數字)⇒ 不建(離開碼 2; 原: 非正數與非數字被當成未給而建成全庫之評估帳本, 寫入正式之帳本夾)
+let limitArg = argOf('limit', null)
+if (limitArg !== null && !(typeof limitArg === 'number' && Number.isSafeInteger(limitArg) && limitArg >= 1)) {
+    console.log('invalid --limit: must be a positive integer')
+    process.exit(2)
+}
+let limit = limitArg === null ? 0 : limitArg
 let train = argOf('train', false) === true
+//--limit 與 --train 不併用(原: --train 時 --limit 靜默被丟掉而建成完整之訓練期帳本; 同 g_rsi.mjs --dream-only 之處理)
+if (train && limitArg !== null) {
+    console.log('invalid --limit: must not be used with --train')
+    process.exit(2)
+}
+let st = getSettings()
 let outDir = train ? path.join(path.dirname(path.resolve(st.eval.ledgerDir)), 'train') : (limit > 0 ? `${st.eval.ledgerDir}_limit${limit}` : st.eval.ledgerDir)
 let endTime = train ? st.periods.train.end : st.periods.backtest.end
 if (Date.parse(`${endTime}Z`) >= Date.parse(`${st.periods.holdoutFrom}Z`)) {

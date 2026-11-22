@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { normBarHours } from '../eval/barGrid.mjs'
-import { evalCfgNumsOf, cfgNumLoose } from '../eval/cfgNum.mjs'
+import { evalCfgNumsOf, evalLimitsOf, cfgNumLoose } from '../eval/cfgNum.mjs'
 import { phaseCountOf, phaseText, horizonsOf, periodLenText, dateOf } from '../domain/factsText.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
@@ -129,7 +129,8 @@ let factsOf = (st) => {
     }
     let numOnly = (x, def) => (typeof x === 'number' && Number.isFinite(x) ? x : def)
     let fe = ev.fitEnd && typeof ev.fitEnd === 'object' ? ev.fitEnd : {}
-    let lim = ev.limits && typeof ev.limits === 'object' ? ev.limits : {}
+    //硬上限(月均單、最大同時持倉): 與評估器(scoreOf)、任務書(texts.mjs)同一個取值函數與同一預設 400 / 50(evalLimitsOf; 規則 R-EV-44 ④之二); 給了而無效 ⇒ 拋 invalid eval.limits.<鍵>(不寫出任何檔)
+    let lim = evalLimitsOf(ev, 'eval')
     let rs = s.resources && typeof s.resources === 'object' ? s.resources : {}
     let btS = typeof bt.start === 'string' ? bt.start : '2025-10-06T00:00:00'
     let btE = typeof bt.end === 'string' ? bt.end : '2026-07-31T00:00:00'
@@ -146,7 +147,7 @@ let factsOf = (st) => {
         ho: dateOf(pe.holdoutFrom),
         //求解窗為選配之設定: 未給者不寫日期(合約改為「設定 eval.fitEnd 所對應…」之通稱)
         fit: { l: dateOf(fe.long), s: dateOf(fe.short) },
-        lim: { monthlyOrders: num(lim.monthlyOrders, 400), peakHold: num(lim.peakHold, 50) },
+        lim,
         hz: horizonsOf(ev),
         draws: en.nullDraws,
         sc: {

@@ -1,5 +1,5 @@
 import isenum from 'wsemi/src/isenum.mjs'
-import { evalCfgNumsOf } from './cfgNum.mjs'
+import { evalCfgNumsOf, evalRunNumsOf, evalLimitsOf, cfgListOf } from './cfgNum.mjs'
 
 
 //每根 K 棒之時長與時刻格線(規則 R-EV-44): 每根時長須整除 24 小時(每日棒數為整數), 設定之時刻須落在帳本之棒格線上
@@ -125,7 +125,7 @@ let checkEvalSettings = (st, meta) => {
     let tr = objOf(periodsOf(st).train)
     gridCheck(tr.end, meta, 'periods.train.end')
     gridCheck(periodAt(st, 'backtest', 'start'), meta, 'periods.backtest.start')
-    //期間之另兩端(訓練期起點、回測期終點): 任務書與評估結果之標示取其日期、回測期長度取其日數差 ⇒ 須為可解析之時刻字串(缺者否則於組裝任務書時以 TypeError 結束); 不要求在棒格線上(只有 eval.trainFromStart 與 g_backtest.mjs 之分級才要求,見其各處)
+    //期間之另兩端(訓練期起點、回測期終點): 任務書與評估結果之標示取其日期、回測期長度取其日數差 ⇒ 須為可解析之時刻字串(缺者否則於組裝任務書時以 TypeError 結束); 不要求在棒格線上(只有 eval.trainFromStart 與 g_backtest.mjs 才要求 —— g_backtest.mjs 以回測期終點為重放之界, 一律檢查〔規則 R-EV-52〕,見其各處)
     for (let [seg, end] of [['train', 'start'], ['backtest', 'end']]) {
         let v = periodAt(st, seg, end)
         if (!(typeof v === 'string' && Number.isFinite(Date.parse(`${v}Z`)))) {
@@ -140,7 +140,12 @@ let checkEvalSettings = (st, meta) => {
     }
     trainFromBarOf(st, meta, Math.round((Date.parse(`${tr.end}Z`) - time0Ms) / barMs))
     //影響評估之數字(暖機日數、決策間隔、虛無抽數、活躍度分層數、名次寬度)給了而無效 ⇒ 拒絕(與 makeEvaluator 同一函數 evalNumsOf)
-    evalNumsOf(st && st.eval, Math.round(24 / meta.barHours), 'eval')
+    let bpd = Math.round(24 / meta.barHours)
+    evalNumsOf(st && st.eval, bpd, 'eval')
+    //評估之執行面之數字(亂數種子、同分次序之鹽、重放次數與其虛無抽數、逾時秒數、幾何分組數)、硬上限(eval.limits)、相位與新鮮度地平線之清單: 同一口徑(與 makeEvaluator 與迴圈之重放同一函數)
+    evalRunNumsOf(st && st.eval, 'eval')
+    evalLimitsOf(st && st.eval, 'eval')
+    evalListsOf(st && st.eval, bpd, 'eval')
 }
 
 
@@ -168,6 +173,50 @@ let evalNumsOf = (ev, bpd, who = 'eval') => {
         }
     }
     return out
+}
+
+/**
+ * 數字清單之各元素(日數)× 每日棒數須為整數(決策棒與視窗以棒序計, 小數之棒序使索引落空): 不合者拋 invalid <where>[i]: must be … number of days that is a whole number of bars
+ *
+ * @param {Array} arr 輸入數值陣列(已經 cfgListOf 取值)
+ * @param {Number} bpd 輸入每日棒數
+ * @param {String} where 輸入錯誤訊息所用之位置名稱
+ * @param {String} kind 輸入描述,'a non-negative' 或 'a positive'
+ * @returns {undefined} 無回傳值
+ * @example
+ * wholeBarsOf([0, 3], 6, 'eval.phases', 'a non-negative')
+ */
+let wholeBarsOf = (arr, bpd, where, kind) => {
+    for (let i = 0; i < arr.length; i++) {
+        if (!Number.isInteger(arr[i] * bpd)) {
+            throw new Error(`invalid ${where}[${i}]: must be ${kind} number of days that is a whole number of bars`)
+        }
+    }
+}
+
+/**
+ * 相位之起始日數(phases;非負)與新鮮度地平線(horizons;正)之清單之取值與檢測(規則 R-EV-44; 評估器 makeEvaluator、設定之預檢 checkEvalSettings 與命令列共用):
+ * 未給(undefined 或 null)之鍵回 null(由評估器取其預設 [0 ~ 6] 與 [1, 3, 7, 14, 30]);須為陣列(phases 須非空; horizons 之空陣列合法 = 不算新鮮度)、各元素為數字或數字字串(轉為數值)、元素 × 每日棒數為整數;給了而無效者拋 invalid <who>.<鍵>…(不帶輸入值)
+ *
+ * @param {Object} ev 輸入評估之設定(settings.eval 或 makeEvaluator 之 cfg;可為 null 或 undefined)
+ * @param {Number} bpd 輸入每日棒數(帳本之 barsPerDay)
+ * @param {String} [who='eval'] 輸入錯誤訊息所用之物件名稱,預設'eval'
+ * @returns {Object} 回傳 { phases, horizons }(各為數值陣列或 null)
+ * @example
+ * evalListsOf({ phases: ['0', 3] }, 6)
+ * // => { phases: [0, 3], horizons: null }
+ */
+let evalListsOf = (ev, bpd, who = 'eval') => {
+    let e = ev && typeof ev === 'object' ? ev : {}
+    let phases = cfgListOf(e.phases, null, `${who}.phases`, 'nonNegNum')
+    let horizons = cfgListOf(e.horizons, null, `${who}.horizons`, 'posNum', true)
+    if (phases !== null) {
+        wholeBarsOf(phases, bpd, `${who}.phases`, 'a non-negative')
+    }
+    if (horizons !== null) {
+        wholeBarsOf(horizons, bpd, `${who}.horizons`, 'a positive')
+    }
+    return { phases, horizons }
 }
 
 /**
@@ -199,7 +248,7 @@ let periodAt = (st, seg, end) => objOf(periodsOf(st)[seg])[end]
 
 /**
  * 設定不合之錯誤之訊息(命令列與工具之入口用):invalid cfg.<鍵> 改為 invalid eval.<鍵>(makeEvaluator 以 cfg 稱設定,使用者看到之位置為 settings.eval);
- * 屬設定不合者(invalid eval.…、invalid periods.…、invalid ARSI_EVAL_FROM、invalid opt.nullDraws、invalid --null)回改寫後之訊息,其餘回 null(照舊拋出)
+ * 屬設定不合者(invalid eval.…、invalid periods.…、invalid backtest.…〔settings.backtest 之數值鍵; backtestCfg〕、invalid ARSI_EVAL_FROM、invalid opt.nullDraws、invalid --null)回改寫後之訊息,其餘回 null(照舊拋出)
  *
  * @param {*} err 輸入錯誤
  * @returns {String|null} 回傳訊息或 null
@@ -209,8 +258,8 @@ let periodAt = (st, seg, end) => objOf(periodsOf(st)[seg])[end]
  */
 let configMsgOf = (err) => {
     let msg = String((err && err.message) || err).replace(/^invalid cfg\./, 'invalid eval.')
-    return /^invalid (eval\.|periods\.|ARSI_EVAL_FROM|opt\.nullDraws|--null)/.test(msg) ? msg : null
+    return /^invalid (eval\.|periods\.|backtest\.|ARSI_EVAL_FROM|opt\.nullDraws|--null)/.test(msg) ? msg : null
 }
 
 
-export { normBarHours, onBarGrid, trainFromBarOf, gridCheck, checkEvalSettings, evalNumsOf, periodAt, configMsgOf }
+export { normBarHours, onBarGrid, trainFromBarOf, gridCheck, checkEvalSettings, evalNumsOf, evalListsOf, wholeBarsOf, periodAt, configMsgOf }

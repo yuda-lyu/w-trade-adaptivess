@@ -1,8 +1,9 @@
 import path from 'path'
-import { getSettings } from '../cfg.mjs'
+import { getSettings, cliMsgOf } from '../cfg.mjs'
 import { createToolbox } from '../arsi/toolbox.mjs'
 import { makeToolboxRules, TB_BASELINE } from '../domain/toolboxRules.mjs'
 import { backtestCfg } from '../domain/backtestCfg.mjs'
+import { configMsgOf } from '../eval/barGrid.mjs'
 import { setGuardExtra, guardExtraOf } from '../domain/verify.mjs'
 
 
@@ -10,10 +11,31 @@ import { setGuardExtra, guardExtraOf } from '../domain/verify.mjs'
 //  node g_toolbox.mjs
 //  做夢 agent 於交付前執行: 這裡列為「問題」之檔, 交付後會被迴圈逐檔還原; 不必自寫檢查腳本
 //  離開碼: 0 全部合格 / 1 有問題
+//命令列之旗標(排程第 590、547 項): 本進入檔無旗標、無位置引數; 帶等號之 --key=value、任何旗標與任何引數與他進入檔同一處置(離開碼 2、訊息固定、不帶輸入值; 原被靜默忽略)
+{
+    let argMsg = cliMsgOf('toolbox')
+    if (argMsg !== null) {
+        console.log(argMsg)
+        process.exit(2)
+    }
+}
 let st = getSettings()
 setGuardExtra(guardExtraOf(st)) //專案另加之禁區字樣(與迴圈之機械檢查同一組)
 let dir = st.records.toolboxDir || path.join(st.rsi.root, 'toolbox')
-let rules = makeToolboxRules({ privateRoot: backtestCfg(st).privateRoot })
+let privateRoot
+try {
+    privateRoot = backtestCfg(st).privateRoot
+}
+catch (err) {
+    //settings.backtest 之數值鍵無效(invalid backtest.<鍵>: …; 排程第 547 項)⇒ 印 ERROR、離開碼 2(不寫任何檔); 其餘錯誤照舊拋出
+    let msg = configMsgOf(err)
+    if (msg === null) {
+        throw err
+    }
+    console.log(`ERROR ${msg}`)
+    process.exit(2)
+}
+let rules = makeToolboxRules({ privateRoot })
 let tb = createToolbox({ dir, indexSeed: rules.indexSeed, checkFile: rules.checkFile, checkIndex: rules.checkIndex, codeOf: rules.codeOf, baselineFile: path.join(st.rsi.root, TB_BASELINE) })
 tb.ensure() //索引尚不存在時以初始內容建立(與迴圈於做夢前所做者相同)
 let r = tb.inspect()

@@ -301,9 +301,10 @@ describe('擴充診斷之資料存取(api.market / api.factor / api.series)', fu
             let bads = [-1, 1.5, nB + 1, 1e9, NaN, Infinity, -Infinity, undefined, null, 'abc', '', ' ', '1.5', '-1', String(nB + 1), [5], {}, 5n, true, Symbol('x'), new Number(3), sneaky]
             for (let bad of bads) {
                 let w = typeof bad === 'symbol' ? 'symbol' : typeof bad === 'bigint' ? `${bad}n` : Array.isArray(bad) ? '[5]' : bad === sneaky ? 'sneaky' : JSON.stringify(bad) === undefined ? String(bad) : JSON.stringify(bad)
-                assert.equal(msgOf(() => api.market(bad, 5)), `api.market: bar 須為 0 ~ ${nB} 之整數`, `market bar ${w}`)
-                assert.equal(msgOf(() => api.factor(0, bad, 5)), `api.factor: bar 須為 0 ~ ${nB} 之整數`, `factor bar ${w}`)
-                assert.equal(msgOf(() => api.series('ser_a', bad, 5)), `api.series: bar 須為 0 ~ ${nB} 之整數`, `series bar ${w}`)
+                //(V19、V20: 英文固定詞彙、不帶輸入值; 排程第 510 項④: 原中文訊息)
+                assert.equal(msgOf(() => api.market(bad, 5)), `api.market: invalid bar: must be an integer from 0 to ${nB}`, `market bar ${w}`)
+                assert.equal(msgOf(() => api.factor(0, bad, 5)), `api.factor: invalid bar: must be an integer from 0 to ${nB}`, `factor bar ${w}`)
+                assert.equal(msgOf(() => api.series('ser_a', bad, 5)), `api.series: invalid bar: must be an integer from 0 to ${nB}`, `series bar ${w}`)
             }
             assert.equal(touched, 0, '被檢測之值不得被呼叫任何方法(valueOf / toString)')
             //邊界值不拋錯
@@ -324,12 +325,13 @@ describe('擴充診斷之資料存取(api.market / api.factor / api.series)', fu
     it('名稱或序號不合者拋錯(訊息以 api. 起首、列出允許之集合、不帶輸入值;依參數位置先檢查 ki / name 再檢查 bar);未建入外部序列之帳本:api.meta.seriesNames 為空、api.series 拋錯', () => {
         runExt(ev, (api) => {
             assert.deepEqual(Array.from(api.meta.seriesNames), ['ser_a', 'ser_b'])
-            let wantS = 'api.series: name 須為 meta.seriesNames 之一(可用: ser_a、ser_b)'
+            //(V19、V20: 英文固定詞彙; 列舉類寫出允許之集合、不寫給定之值; 排程第 510 項④: 原中文訊息)
+            let wantS = 'api.series: invalid name: must be one of meta.seriesNames (ser_a, ser_b)'
             for (let bad of ['nope', 'SER_A', '', 0, undefined, null, {}, ['ser_a']]) {
                 let m = msgOf(() => api.series(bad, 10, 5))
                 assert.equal(m, wantS, `series name ${JSON.stringify(bad)}`)
             }
-            let wantF = 'api.factor: ki 須為 0 ~ 1 之整數(meta.keyNames 之序號)'
+            let wantF = 'api.factor: invalid ki: must be an integer from 0 to 1 (an index of meta.keyNames)'
             for (let bad of [2, -1, 1.5, '0', NaN, Infinity, undefined, null, {}, 0n]) {
                 let m = msgOf(() => api.factor(bad, 10, 5))
                 assert.equal(m, wantF, `factor ki ${typeof bad === 'bigint' ? `${bad}n` : JSON.stringify(bad)}`)
@@ -343,7 +345,7 @@ describe('擴充診斷之資料存取(api.market / api.factor / api.series)', fu
         writeSynthLedger(dir, { n: 60, nBars: 2400, seed: 5 })
         runExt(makeEvaluator(loadLedger(dir), CFG), (api) => {
             assert.deepEqual(Array.from(api.meta.seriesNames), [])
-            assert.equal(msgOf(() => api.series('ser_a', 10, 5)), 'api.series: name 須為 meta.seriesNames 之一(可用: 無;帳本未建入外部序列)')
+            assert.equal(msgOf(() => api.series('ser_a', 10, 5)), 'api.series: invalid name: must be one of meta.seriesNames (none (the ledger has no external series))')
             //K 線與因子不受影響
             assert.equal(api.market(10, 5).close.length, 5)
             assert.equal(api.factor(0, 10, 5).length, 5)
@@ -355,7 +357,7 @@ describe('擴充診斷之資料存取(api.market / api.factor / api.series)', fu
         let mp = path.join(dir2, 'meta.json')
         fs.writeFileSync(mp, JSON.stringify({ ...JSON.parse(fs.readFileSync(mp, 'utf8')), keyNames: [] }), 'utf8')
         runExt(makeEvaluator(loadLedger(dir2), CFG), (api) => {
-            assert.equal(msgOf(() => api.factor(0, 10, 5)), 'api.factor: 帳本無因子(meta.keyNames 為空)')
+            assert.equal(msgOf(() => api.factor(0, 10, 5)), 'api.factor: invalid ki: must be an index of meta.keyNames (the ledger has no factors)')
             assert.equal(api.market(10, 5).close.length, 5)
             return { text: 'ok' }
         })

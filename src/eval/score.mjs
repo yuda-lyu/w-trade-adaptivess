@@ -1,3 +1,6 @@
+import { evalLimitsOf, phaseText } from './cfgNum.mjs'
+
+
 //判讀: 評估器之原料 raw → 分數 S、階梯 ladder、旗標 flags、格 cell(品質多樣性用)
 //  **原料為評估期(= 回測期)之評估結果; 目標 = 回測期之等效年化更佳(穩定之正值)**
 //  S = 0.7 × 七相位平均等效年化 + 0.3 × 最差相位等效年化(操作績效 op; 相位穩健)
@@ -31,11 +34,12 @@ let OOS_WHY = {
  * @param {Object} opt.score 輸入評分門檻物件{ ladder1: { S, nullP }, ladder2: { freshMin, worstPhaseMin }, ladder3: { monthlyOrders, peakHold }, freqBands: [b1, b2] }
  * @param {String} [opt.layer=null] 輸入層名稱, 用於 cell 字串前綴, 預設null(以 ? 表示)
  * @param {Object} [opt.evidence=null] 輸入證據物件(可含 trust、backtest、backtestOK), 預設null
+ * @param {Integer} [opt.nPh=7] 輸入相位數(settings.eval.phases 之長度; phaseCountOf),只用於 flags.why 內「七相位皆為正」之寫法(排程第 547 項; 預設 7 者逐字不變),預設7
  * @returns {Object} 回傳 { S, ladder(0 ~ 3, 有檢定旗標時 0 ~ 4), flags: { vetoed, why, backtest, trainLadder }, cell(字串 層|low、mid、high 或 none), evaluator }
  * @example
  * let r = scoreOf(m, { limits: { monthlyOrders: 60, peakHold: 20 }, score, layer: 'L1' })
  */
-let scoreOf = (raw, { limits, score, layer = null, evidence = null } = {}) => {
+let scoreOf = (raw, { limits, score, layer = null, evidence = null, nPh = 7 } = {}) => {
     let m = raw && raw.metrics ? raw.metrics : raw
     let why = []
     if (!m || !m.op) {
@@ -46,15 +50,17 @@ let scoreOf = (raw, { limits, score, layer = null, evidence = null } = {}) => {
     let S = Math.round((0.7 * mean + 0.3 * min) * 100) / 100
     let mo = m.op.monthlyOrders.mean
     let pk = m.op.peakHold.max
+    //硬上限之取值與檢測(evalLimitsOf; 與合約、任務書之參考版同一函數與同一預設 400 / 50; 規則 R-EV-44 ④之二): 未給 = 預設; 數字字串轉為數值後才比較; 給了而無效 ⇒ 拒絕(原: 無檢測, 缺鍵或非數字者永不否決, null 或空字串被當 0 而一律否決)
+    let lim = evalLimitsOf({ limits }, 'eval')
     //hard: 使階梯歸零之否決(成品本身不可用)
     let hard = false
-    if (mo > limits.monthlyOrders) {
+    if (mo > lim.monthlyOrders) {
         hard = true
-        why.push(`月均單 ${mo.toFixed(0)} > ${limits.monthlyOrders}`)
+        why.push(`月均單 ${mo.toFixed(0)} > ${lim.monthlyOrders}`)
     }
-    if (pk > limits.peakHold) {
+    if (pk > lim.peakHold) {
         hard = true
-        why.push(`最大同時持倉 ${pk} > ${limits.peakHold}`)
+        why.push(`最大同時持倉 ${pk} > ${lim.peakHold}`)
     }
     if (m.sel && m.sel.sizeMax === 0) {
         hard = true
@@ -98,7 +104,7 @@ let scoreOf = (raw, { limits, score, layer = null, evidence = null } = {}) => {
     }
     let ladder = trainLadder
     if (backtest) {
-        why.push(`${OOS_WHY[backtest]};訓練期階梯 ${trainLadder}`)
+        why.push(`${OOS_WHY[backtest].replace(/七相位/g, phaseText(nPh, '相位'))};訓練期階梯 ${trainLadder}`)
         if (backtest in OOS_LADDER) {
             ladder = hard ? 0 : OOS_LADDER[backtest]
         }

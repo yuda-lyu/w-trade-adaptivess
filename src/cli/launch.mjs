@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { spawn } from 'child_process'
-import { P } from '../cfg.mjs'
+import { P, cliMsgOf } from '../cfg.mjs'
 import { peekRunLock, appendEvent } from '../arsi/runner.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
@@ -21,6 +21,15 @@ let k = argv.indexOf('--')
 if (k < 1) {
     console.log('用法: node g_launch.mjs <日誌名> -- <node 參數…>')
     process.exit(2)
+}
+//本進入檔之引數(`--` 之前)只有日誌名一個, 無旗標; 帶等號之 --key=value、任何旗標與多餘之引數與他進入檔同一處置(離開碼 2、不建日誌夾、訊息固定、不帶輸入值; 排程第 590、547 項)
+//  `--` 之後為子行程之引數(原樣轉交; node 之選項本身可帶等號, 如 --max-old-space-size=4096): 其進入檔(g_eval.mjs、g_rsi.mjs 等)自行拒收不合之寫法, 結果見日誌末之 [detached] EXIT=2
+{
+    let argMsg = cliMsgOf('launch', argv.slice(0, k), { positional: 1 })
+    if (argMsg !== null) {
+        console.log(argMsg)
+        process.exit(2)
+    }
 }
 let name = argv[0]
 let args = argv.slice(k + 1)

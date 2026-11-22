@@ -5,6 +5,7 @@ import { isIntegrityError, integrityError, assertIntrinsics, pushOwn } from '../
 import { postfitInfoOf, memberInfoOf, FILL_DIR } from './fillPlan.mjs'
 import { pickHashOf, evaluatorFpOf, readFill } from './fillKeys.mjs'
 import { recentDiagOf } from './diagRead.mjs'
+import { phaseCountOf, phaseText, phaseCountOfAll } from './factsText.mjs'
 
 //共同儲存「自適應挑選策略」區(規則 R-REC-25): <狀態根>/picks/
 //  目的: 各節點(探索與驗證皆含)交付之挑選模組統一歸檔 —— 程式碼之逐位複本 + 由迴圈以同一評估器重跑所得之回測期績效與必要之欄位,
@@ -15,7 +16,7 @@ import { recentDiagOf } from './diagRead.mjs'
 //    index.json           全部欄位(機器可讀; { schema, updatedAt, fields, items })
 //    <節點 id>/pick.mjs    交付版之逐位複本
 //    <節點 id>/info.json   該策略之全部欄位
-//    _holdout.json        保留期之正負號(只有正負號; 由主控之檢定工具寫入; 本模組只讀、不產生、不刪; 只收 "+" / "-" / "0" 之字串, 其他值一律忽略〔視為未算〕)
+//    _holdout.json        保留期之正負號(只有正負號; 由主控之檢定工具寫入; 本模組只讀、不產生、不刪; 只收 "+" / "-" / "0" 之字串, 其他值一律忽略〔視為未算〕; asOf〔檢定所用資料之終點〕只收非空字串, 其他值視為未給)
 //    _cross.json          其他標的之正負號(選配; 同一挑選模組原樣不改、於另一標的之策略庫上評估; 回測期與保留期各給績效與挑選內容之號;
 //                         由使用端之上層以其工具寫入; 本模組只讀、不產生、不刪; 只收 "+" / "-" / "0" 之字串, 其他值一律忽略〔視為未算〕; 規則 R-REC-30)
 //                         無此檔(或檔之形狀不合)者, 共同儲存區之各檔與未支援此檔之版本逐位相同(欄、說明、info.json 之 cross 鍵皆不出現)
@@ -26,6 +27,12 @@ import { recentDiagOf } from './diagRead.mjs'
 //  本區由迴圈產生(輪末與主控審定後), agent 唯讀; 來源 = 節點文件(迴圈重跑之數字, 不是 agent 自報)與各節點工作夾之 pick.mjs
 
 let SCHEMA = 1
+
+//phSub, 欄位說明、總表之欄標題與 README.md 內之「七相位」改為相位數之寫法(排程第 547 項: 原寫死「七相位」; 預設 7 者逐字不變):
+//  說明各策略之回測期績效者(backtest.* 之欄說明、總表之欄標題)= 各策略之 eqYrByPhase 之長度(皆同者; 該評估實際所算之相位數; 各策略不同或皆無者取設定);
+//  說明外部提供之正負號者(holdout.*、cross.* 之欄說明、README 本文; 無實算之結果可取)= 設定之 eval.phases 之長度(未給 = 7)
+//  只用於本檔之固定文字(欄位定義、欄標題、README 本文), 不用於節點之內容(agent 所寫之摘要、說明等原樣)
+let phSub = (s, nPh) => s.replace(/七相位/g, phaseText(nPh, '相位'))
 
 //中止本次更新之說明(完整性錯誤之訊息前綴)
 const ABORT_NOTE = '共同儲存區之更新已中止(未寫入任何檔)'
@@ -312,7 +319,7 @@ let infoOf = (d, { meta = null, fam = null, ho = null, cross = undefined, postfi
         //成員穩健性之佐證(規則 R-REC-51): 補算檔之值(memberInfoOf 之結果)或 null; 不入總表之欄; 未給 member(undefined; 無任何補算檔帶此項)⇒ 不帶此鍵(逐位不變)
         ...(member === undefined ? {} : { member: member && typeof member === 'object' && !Array.isArray(member) ? member : null }),
         //保留期: perf / content 只收正負號(signOf; 數字不入專案, 與其他標的之 _cross.json 之界線相同)
-        holdout: ho ? { perf: signOf(ho.perf), content: signOf(ho.content), asOf: ho.asOf || null } : { perf: null, content: null, asOf: null },
+        holdout: ho ? { perf: signOf(ho.perf), content: signOf(ho.content), asOf: typeof ho.asOf === 'string' && ho.asOf ? ho.asOf : null } : { perf: null, content: null, asOf: null },
         //其他標的之正負號(規則 R-REC-30): 只在給了 cross 時才有此鍵(無 _cross.json 者 info.json 與舊版逐位相同); 只取四個號, 不帶其他欄
         ...(cross === undefined ? {} : { cross: crossInfoOf(cross) }),
         files: { pick: `${storeRel}/${id}/pick.mjs`, doc: rel(d.__docMd || '') || null },
@@ -446,6 +453,8 @@ let buildPickStore = async (st) => {
     let fams = familyMap(st.records.dreamDir)
     let hoFile = readJson(path.join(dir, '_holdout.json'))
     let hoItems = (hoFile && hoFile.items) || {}
+    //hoAsOf, 保留期檢定所用資料之終點(_holdout.json 之 asOf; 排程第 510 項): 只收非空字串, 其他(數字、布林、物件、陣列、空字串)視為未給(null; 原: 任何真值照收 —— 數字會進 README.md 與 index.json)
+    let hoAsOf = hoFile && typeof hoFile.asOf === 'string' && hoFile.asOf ? hoFile.asOf : null
     //其他標的之正負號(規則 R-REC-30; 選配): 只讀、不產生、不刪; 無此檔或形狀不合 ⇒ cr 為 null, 各檔與舊版逐位相同
     let crFp = path.join(dir, '_cross.json')
     let crExists = fs.existsSync(crFp)
@@ -518,15 +527,17 @@ let buildPickStore = async (st) => {
             copied++
         }
         d.__docMd = path.join(st.records.nodeDir, `${d.nodeId}.md`)
-        let ho = hoItems[d.nodeId] ? { ...hoItems[d.nodeId], asOf: hoFile.asOf || null } : null
+        let ho = hoItems[d.nodeId] ? { ...hoItems[d.nodeId], asOf: hoAsOf } : null
         let info = infoOf(d, { meta, fam: fams.get(String(d.nodeId).slice(0, 8)) || null, ho, ...(cr ? { cross: cr.signsOf(d.nodeId) } : {}), ...(fillOn ? { postfit } : {}), ...(memberOn ? { member } : {}), rel, storeRel })
         fs.writeFileSync(path.join(dir, d.nodeId, 'info.json'), JSON.stringify(info, null, 1), 'utf8')
         items.push(info)
     }
     items.sort((p, q) => (q.backtest.S === null ? -Infinity : q.backtest.S) - (p.backtest.S === null ? -Infinity : p.backtest.S) || (p.id < q.id ? -1 : 1))
     let updatedAt = new Date().toISOString()
-    fs.writeFileSync(path.join(dir, 'index.json'), JSON.stringify({ schema: SCHEMA, updatedAt, holdoutAsOf: (hoFile && hoFile.asOf) || null, fields: fieldDefsOf(!!cr, fillOn, memberOn).map(([key, note]) => ({ key, note })), items }, null, 1), 'utf8')
-    let cols = columnsOf(!!cr)
+    let nPh = phaseCountOf(st.eval)
+    let nPhBt = phaseCountOfAll(items.map((x) => (Array.isArray(x.backtest.eqYrByPhase) ? x.backtest.eqYrByPhase.length : null)), st.eval)
+    fs.writeFileSync(path.join(dir, 'index.json'), JSON.stringify({ schema: SCHEMA, updatedAt, holdoutAsOf: hoAsOf, fields: fieldDefsOf(!!cr, fillOn, memberOn).map(([key, note]) => ({ key, note: phSub(note, /^backtest\./.test(key) ? nPhBt : nPh) })), items }, null, 1), 'utf8')
+    let cols = columnsOf(!!cr).map(([t, fn]) => [phSub(t, nPhBt), fn])
     let L = []
     L.push('# 自適應挑選策略總表')
     L.push('')
@@ -542,7 +553,7 @@ let buildPickStore = async (st) => {
     }
     L.push('')
     fs.writeFileSync(path.join(dir, 'INDEX.md'), L.join('\n'), 'utf8')
-    fs.writeFileSync(path.join(dir, 'README.md'), readmeText(storeRel, items.length, (hoFile && hoFile.asOf) || null, !!cr, fillOn, st.periods && typeof st.periods.holdoutFrom === 'string' && st.periods.holdoutFrom ? st.periods.holdoutFrom.slice(0, 10) : null, memberOn), 'utf8')
+    fs.writeFileSync(path.join(dir, 'README.md'), phSub(readmeText(storeRel, items.length, hoAsOf, !!cr, fillOn, st.periods && typeof st.periods.holdoutFrom === 'string' && st.periods.holdoutFrom ? st.periods.holdoutFrom.slice(0, 10) : null, memberOn), nPh), 'utf8')
     //cross: 無 _cross.json ⇒ null; 有而形狀不合 ⇒ { invalid: true, signed: 0, ignored: 0 }(總表不列其欄); 可用 ⇒ { invalid: false, signed〔至少有一個號之策略數〕, ignored〔區內策略之檔內不是號而被忽略之值之數〕}
     let cross = !crExists ? null : (cr ? { invalid: false, signed: cr.signed(), ignored: cr.ignored() } : { invalid: true, signed: 0, ignored: 0 })
     return { dir, n: items.length, copied, skipped, holdoutSigned: items.filter((x) => x.holdout.perf !== null).length, cross }

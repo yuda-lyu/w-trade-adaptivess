@@ -1,13 +1,13 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
-import { getSettings, argOf, argStrOf } from '../cfg.mjs'
+import { getSettings, argOf, argStrOf, cliMsgOf } from '../cfg.mjs'
 import { loadLedger, memberLedger, subsetLedger } from '../eval/ledger.mjs'
 import { parseSubsetRule, subsetMaskOf, SUBSET_MSG, SUBSET_MEMBER_MSG } from '../eval/subsetRule.mjs'
 import { makeEvaluator, ntStaticOf, isCapitalError } from '../eval/evalCore.mjs'
 import { normUnit, sameUnit } from '../eval/unit.mjs'
-import { trainFromBarOf, gridCheck, checkEvalSettings, evalNumsOf, periodAt, configMsgOf } from '../eval/barGrid.mjs'
-import { cfgNumOf } from '../eval/cfgNum.mjs'
+import { trainFromBarOf, gridCheck, checkEvalSettings, evalNumsOf, evalListsOf, wholeBarsOf, periodAt, configMsgOf } from '../eval/barGrid.mjs'
+import { cfgNumOf, cfgListOf, evalRunNumsOf, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll } from '../eval/cfgNum.mjs'
 import { loadPick, loadExt } from '../eval/pickLoader.mjs'
 import { P as PI, pushOwn, safeJson, assertIntrinsics, isIntegrityError } from '../eval/intrinsics.mjs'
 import { scoreOf } from '../eval/score.mjs'
@@ -19,7 +19,9 @@ import { createResourceMonitor } from '../arsi/resources.mjs'
 //    挑選函數自帳本起點(暖機後之第一個決策)連續執行到回測期終點, 每個決策只看得到決策棒以前之資訊;
 //    只有決策棒落在回測期者計入績效、新鮮度、虛無與選集統計(持倉簿自回測期起點為空)。ctx.meta.ntAll 只計訓練期之進場數(策略庫之靜態屬性)
 //  node g_eval.mjs --pick <挑選模組.mjs> [--mode quick|full] [--period backtest|train|postfit] [--out <結果.json>] [--null N] [--phases 0,3] [--ref <參考模組.mjs>[,<參考模組2.mjs>…]]
+//  旗標一律寫成 --key value(空白分隔); 帶等號之 --key=value(含布林旗標之 --no-log=1)一律不評估: 印固定之單行訊息(不帶輸入值)、離開碼 2、於讀設定與載入模組之前(規則 R-EV-49; 旗標之單一定義見 cfg.mjs 之 CLI_FLAGS)
 //  --null N: 虛無抽數(非負整數; 覆寫設定之 eval.nullDraws); 給了而不是非負整數(含無值、非數字)⇒ 印 invalid --null: must be a non-negative integer、離開碼 2(規則 R-EV-44; 不靜默忽略)
+//  --phases 0,3: 相位之起始日數(覆寫設定之 eval.phases); 各項須為非負數且與每日棒數之積為整數, 不合 ⇒ 印 invalid --phases[<i>]: must be …、離開碼 2(規則 R-EV-50)
 //  設定不合(影響評估之數字 warmupDays、cadenceDays、nullDraws、actBins、sideActHalf 給了而無效;期間之界線缺或不在棒格線上;eval.fitEnd、eval.trainFromStart 不合)⇒ 印 ERROR invalid …、離開碼 2
 //    quick: 相位 0 與 3、地平線 7 日、不算虛無(數秒; 迭代用)
 //    full : 七相位、全部地平線、同劑量虛無 64 抽(交付用; 結果之 selHash 為選集序列之指紋)
@@ -56,7 +58,18 @@ import { createResourceMonitor } from '../arsi/resources.mjs'
 //  內建物件之完整性(規則 R-EV-35 ②): 挑選模組、擴充診斷模組、參考模組各於載入後比對; 讀帳本前與輸出前(最後一個 await 之後)再比對 ——
 //    模組可排入延後執行之程式(微任務), 於其後之 await 期間才改內建物件; 評估本身為同步, 執行中不會插入
 //    被改 ⇒ 評估失敗(離開碼 3; 有 --out 者寫 { ok: false, code: 'EVAL_INTEGRITY', where, items }), 結果檔與評估紀錄以擷取之 JSON.stringify 寫出
-let st = getSettings()
+//命令列之旗標只認 --key value(空白分隔; 排程第 590、547 項): 帶等號之 --key=value、未列之旗標(含拼錯、--period:postfit 之冒號寫法)、單值旗標重複、帶值旗標無值、--mode / --period 之值不在列舉、
+//  多餘之值(--phases 0 3、--ref a.mjs b.mjs)一律不評估(離開碼 2; 於讀設定、載入模組與等資源閘之前即檢查, 不寫結果檔、不記評估紀錄; 訊息固定、不帶輸入值〔K9〕)
+//  原: argOf 不識以上各種寫法而視為旗標未給或只取第一個 —— --period=postfit 退回回測期之評估而記為正本列、--null=8 / --phases=0,3 / --mode=full 之設定被忽略而以預設評估、--ref=… / --ext-test=… 不執行、--no-log=1 不生效、
+//    --mode ful 當成 quick、重複給之 --pick 取第一個、--phases 0 3 只取 0, 皆靜默
+//  本進入檔認得之全部旗標見 cfg.mjs 之 CLI_FLAGS.eval(單一定義)、列舉之值見 CLI_ENUMS.eval、無值或重複由本檔自己解析者見 CLI_OWN.eval; 同時帶 --member= 與 --subset= 者先報 --member(沿用 1.0.42)
+{
+    let argMsg = cliMsgOf('eval', process.argv.slice(2), { first: ['member', 'subset'] })
+    if (argMsg !== null) {
+        console.log(argMsg)
+        process.exit(2)
+    }
+}
 let fpPick = argOf('pick', '')
 if (!fpPick || fpPick === true) {
     console.log('用法: node g_eval.mjs --pick <挑選模組.mjs> [--mode quick|full] [--period backtest|train|postfit] [--out <結果.json>] [--null N] [--phases 0,3] [--ref <參考模組.mjs>]')
@@ -79,6 +92,64 @@ if (nullArg !== null && !(typeof nullArg === 'number' && Number.isSafeInteger(nu
     console.log('invalid --null: must be a non-negative integer')
     process.exit(2)
 }
+//--phases <日,日,…>(相位之起始日數; 覆寫設定之 eval.phases; 排程第 595 項): 各項須為非負數(數字或數字字串; 轉為數值後才使用); 給了而不合 ⇒ 不評估(離開碼 2; 訊息依 V19、V20, 不帶輸入值;
+//  原: Number(x) 之隱式轉換, 非數字者為 NaN ⇒ 該相位無決策棒而靜默算錯, 空項被當 0); 無值(只給旗標)者已於檔首之通用檢查拒收(cliMsgOf; 原: 忽略而沿用設定); 與每日棒數之積須為整數者於讀帳本之後檢查
+let phasesArg = argOf('phases', null)
+let phasesList = null
+if (phasesArg !== null && phasesArg !== true) {
+    try {
+        phasesList = cfgListOf(String(phasesArg).split(','), null, '--phases', 'nonNegNum')
+    }
+    catch (err) {
+        console.log(err.message)
+        process.exit(2)
+    }
+}
+//成員重抽(規則 R-EV-40): --member <鹽>:<0|1> ⇒ 以半庫帳本(memberLedger: 只含該半之策略、重新編號、保留各策略於全庫之同分次鍵)評估; 未給 ⇒ 全庫(行為不變)
+//  格式不合者不評估(離開碼 2; 不靜默改用全庫: 那會把全庫之結果當成半庫之結果); 於載入模組與等資源閘之前即檢查(不先耗時), 不寫結果檔、不記評估紀錄
+//  鹽之 0x 十六進位寫法只於此處解析(memberLedger 收整數, 依 iseint); memberTag 為標記('0x<鹽之十六進位>:<0|1>'; 未給為 null): 結果檔之 member.tag 與評估紀錄之每一列(含失敗者)帶之 —— 帶此標記者不是正本之評估
+//  帶等號之 --member=<鹽>:<半> 同拒(離開碼 2; 同上之時點與處置): 命令列之旗標只認 --key value; 此寫法被忽略會使成員重抽之評估變成全庫之評估而評估紀錄記為正本列
+//    (全部旗標之 --key=value 皆於檔首以 eqFlagMsgOf 一併拒收〔排程第 590 項; 1.0.42 先處理 --member=、--subset=〕, 訊息同 1.0.42)
+let memberArg = argOf('member', null)
+let member = null
+let memberTag = null
+if (memberArg !== null) {
+    //格式 <鹽>:<0|1>: 鹽之位數不另限(前導零無妨), 以數值 ≤ 4294967295 為界(過大者轉為 Infinity 或大數而拒收); 旗標重複給者拒收(argOf 只取第一個, 其餘靜默忽略會誤跑)
+    let mm = /^(0x[0-9a-fA-F]+|[0-9]+):([01])$/.exec(String(memberArg))
+    let saltV = mm ? (mm[1].startsWith('0x') ? parseInt(mm[1].slice(2), 16) : Number(mm[1])) : NaN
+    if (!mm || !(saltV <= 0xFFFFFFFF) || process.argv.filter((a) => a === '--member').length > 1) {
+        console.log('invalid --member: must be <salt>:<half>, where salt is an integer from 0 to 4294967295 (decimal or 0x hexadecimal) and half is 0 or 1')
+        process.exit(2)
+    }
+    member = { salt: saltV, half: Number(mm[2]) }
+    memberTag = `0x${saltV.toString(16)}:${member.half}`
+}
+//子庫之規則(規則 R-EV-47): --subset <規則>[,<規則>…] ⇒ 以子庫帳本(subsetLedger: 只含符合全部規則之策略、重新編號、保留各策略於全庫之同分次鍵)評估; 未給 ⇒ 全庫(行為不變)
+//  格式不合(parseSubsetRule 拋錯)、旗標重複給、只給旗標、與 --member 併用、帶等號者不評估(離開碼 2; 同 --member 之時點與處置: 於載入模組與資源閘之前, 不寫結果檔、不記評估紀錄, 訊息不帶輸入值)
+//  subset.rule = 正規化之規則字串(parseSubsetRule 之 tag): 結果檔之 subset.rule 與評估紀錄之每一列(含失敗者)帶之 —— 帶此標記者不是正本之評估
+//  帶等號之 --subset=<規則> 同拒(離開碼 2; 同上; 於檔首, 故不被「第一個 --subset」之合格值遮蔽): 同上, 被忽略會以全庫評估而評估紀錄記為正本列
+let subsetArg = argStrOf('subset', null)
+let subset = null
+if (subsetArg !== null) {
+    let ps = null
+    try {
+        ps = process.argv.filter((a) => a === '--subset').length > 1 || subsetArg === true ? null : parseSubsetRule(subsetArg)
+    }
+    catch (err) {
+        ps = null
+    }
+    if (ps === null) {
+        console.log(SUBSET_MSG)
+        process.exit(2)
+    }
+    if (memberArg !== null) {
+        console.log(SUBSET_MEMBER_MSG)
+        process.exit(2)
+    }
+    subset = { rules: ps.rules, rule: ps.tag }
+}
+//設定(排程第 547 項: 旗標之檢查皆已於此之前; 其餘依設定者如下)
+let st = getSettings()
 if (isPostfit) {
     let nullArg0 = nullArg
     let nDraws = 0
@@ -106,56 +177,6 @@ if (isPostfit) {
         console.log(`invalid --period postfit: ${bad}`)
         process.exit(2)
     }
-}
-//成員重抽(規則 R-EV-40): --member <鹽>:<0|1> ⇒ 以半庫帳本(memberLedger: 只含該半之策略、重新編號、保留各策略於全庫之同分次鍵)評估; 未給 ⇒ 全庫(行為不變)
-//  格式不合者不評估(離開碼 2; 不靜默改用全庫: 那會把全庫之結果當成半庫之結果); 於載入模組與等資源閘之前即檢查(不先耗時), 不寫結果檔、不記評估紀錄
-//  鹽之 0x 十六進位寫法只於此處解析(memberLedger 收整數, 依 iseint); memberTag 為標記('0x<鹽之十六進位>:<0|1>'; 未給為 null): 結果檔之 member.tag 與評估紀錄之每一列(含失敗者)帶之 —— 帶此標記者不是正本之評估
-//  帶等號之 --member=<鹽>:<半> 同拒(離開碼 2; 同上之時點與處置): 命令列之旗標只認 --key value(其他旗標之 --key=value 被忽略), 此寫法被忽略會使成員重抽之評估變成全庫之評估而評估紀錄記為正本列
-let memberArg = argOf('member', null)
-let member = null
-let memberTag = null
-if (process.argv.some((a) => a.startsWith('--member='))) {
-    console.log('invalid --member: must be written as --member <salt>:<half> (a space, not =)')
-    process.exit(2)
-}
-if (memberArg !== null) {
-    //格式 <鹽>:<0|1>: 鹽之位數不另限(前導零無妨), 以數值 ≤ 4294967295 為界(過大者轉為 Infinity 或大數而拒收); 旗標重複給者拒收(argOf 只取第一個, 其餘靜默忽略會誤跑)
-    let mm = /^(0x[0-9a-fA-F]+|[0-9]+):([01])$/.exec(String(memberArg))
-    let saltV = mm ? (mm[1].startsWith('0x') ? parseInt(mm[1].slice(2), 16) : Number(mm[1])) : NaN
-    if (!mm || !(saltV <= 0xFFFFFFFF) || process.argv.filter((a) => a === '--member').length > 1) {
-        console.log('invalid --member: must be <salt>:<half>, where salt is an integer from 0 to 4294967295 (decimal or 0x hexadecimal) and half is 0 or 1')
-        process.exit(2)
-    }
-    member = { salt: saltV, half: Number(mm[2]) }
-    memberTag = `0x${saltV.toString(16)}:${member.half}`
-}
-//子庫之規則(規則 R-EV-47): --subset <規則>[,<規則>…] ⇒ 以子庫帳本(subsetLedger: 只含符合全部規則之策略、重新編號、保留各策略於全庫之同分次鍵)評估; 未給 ⇒ 全庫(行為不變)
-//  格式不合(parseSubsetRule 拋錯)、旗標重複給、只給旗標、與 --member 併用、帶等號者不評估(離開碼 2; 同 --member 之時點與處置: 於載入模組與資源閘之前, 不寫結果檔、不記評估紀錄, 訊息不帶輸入值)
-//  subset.rule = 正規化之規則字串(parseSubsetRule 之 tag): 結果檔之 subset.rule 與評估紀錄之每一列(含失敗者)帶之 —— 帶此標記者不是正本之評估
-//  帶等號之 --subset=<規則> 同拒(離開碼 2; 同上; 於其餘之子庫檢查之前, 故不被「第一個 --subset」之合格值遮蔽): 同上, 被忽略會以全庫評估而評估紀錄記為正本列
-let subsetArg = argStrOf('subset', null)
-let subset = null
-if (process.argv.some((a) => a.startsWith('--subset='))) {
-    console.log('invalid --subset: must be written as --subset <rule> (a space, not =)')
-    process.exit(2)
-}
-if (subsetArg !== null) {
-    let ps = null
-    try {
-        ps = process.argv.filter((a) => a === '--subset').length > 1 || subsetArg === true ? null : parseSubsetRule(subsetArg)
-    }
-    catch (err) {
-        ps = null
-    }
-    if (ps === null) {
-        console.log(SUBSET_MSG)
-        process.exit(2)
-    }
-    if (memberArg !== null) {
-        console.log(SUBSET_MEMBER_MSG)
-        process.exit(2)
-    }
-    subset = { rules: ps.rules, rule: ps.tag }
 }
 //memberInfo, 失敗之結果檔所帶之 member / subset(帳本尚未載入, 無 n / nFull): 成功之結果檔之 member / subset 另含 n 與 nFull 等
 let memberInfo = () => ({ ...(member ? { member: { tag: memberTag, salt: member.salt, half: member.half } } : {}), ...(subset ? { subset: { rule: subset.rule } } : {}) })
@@ -384,10 +405,14 @@ if (periodArg === 'train' && trainFrom !== null) {
 }
 //亂數種子: 預設 settings.eval.seed; --seed 只在迴圈之重放(ARSI_HARNESS=1)時生效
 let seedArg = argOf('seed', null)
-let seed = st.eval.seed === undefined ? 1 : st.eval.seed
+let seedOverride = null
 if (seedArg !== null) {
-    if (process.env.ARSI_HARNESS === '1' && typeof seedArg === 'number' && Number.isFinite(seedArg)) {
-        seed = seedArg
+    if (process.env.ARSI_HARNESS === '1' && typeof seedArg === 'number' && Number.isSafeInteger(seedArg)) {
+        seedOverride = seedArg
+    }
+    else if (process.env.ARSI_HARNESS === '1') {
+        //迴圈之重放: 給了而不是整數(小數、非數字、無值、超出安全整數)⇒ 說明原因(原: 一律稱「只供迴圈之重放使用」)
+        console.log('--seed 須為整數(安全整數之範圍內),已忽略(沿用設定之亂數種子)')
     }
     else {
         console.log('--seed 只供迴圈之重放使用,已忽略(沿用設定之亂數種子)')
@@ -397,28 +422,45 @@ if (seedArg !== null) {
 let tieArg = argOf('tie-salt', null)
 let tieSalt = 0
 if (tieArg !== null) {
-    if (process.env.ARSI_HARNESS === '1' && Number.isInteger(tieArg)) {
+    if (process.env.ARSI_HARNESS === '1' && Number.isInteger(tieArg) && Number.isSafeInteger(tieArg)) {
         tieSalt = tieArg
+    }
+    else if (process.env.ARSI_HARNESS === '1') {
+        console.log('--tie-salt 須為整數(安全整數之範圍內),已忽略(沿用正本之同分次序)')
     }
     else {
         console.log('--tie-salt 只供迴圈之重放使用,已忽略(沿用正本之同分次序)')
     }
 }
 let ev
+let evNums
+let evRun
+let evLists
 try {
     ev = makeEvaluator(L, tieSalt !== 0 ? { ...st.eval, tieSalt } : st.eval)
+    //設定之數值(與評估器、上方之預檢同一組函數; 規則 R-EV-44 ④之二): 決策間隔、虛無抽數、亂數種子、相位與新鮮度地平線取轉型後之數值(數字字串之設定不以字串進入 opt)
+    //  亂數種子: 數字字串轉為數值後才使用(原: 字串之種子於 `seed * 1000003` 與 `seed + …` 被解讀為不同之數值)
+    evNums = evalNumsOf(st.eval, L.barsPerDay, 'eval')
+    evRun = evalRunNumsOf(st.eval, 'eval')
+    evLists = evalListsOf(st.eval, L.barsPerDay, 'eval')
 }
 catch (err) {
     configExit(err)
 }
-let phasesArg = argOf('phases', null)
-//設定之數值(evalNumsOf; 上方之預檢已通過): 決策間隔、虛無抽數取轉型後之數值(數字字串之設定不以字串進入 opt; 規則 R-EV-44)
-let evNums = evalNumsOf(st.eval, L.barsPerDay, 'eval')
+let seed = seedOverride !== null ? seedOverride : evRun.seed
 let opt = mode === 'full'
-    ? { phases: st.eval.phases, horizons: st.eval.horizons, nullDraws: evNums.nullDraws }
+    ? { phases: evLists.phases, horizons: evLists.horizons, nullDraws: evNums.nullDraws }
     : { phases: [0, 3], horizons: [evNums.cadenceDays], nullDraws: 0 }
-if (phasesArg !== null && phasesArg !== true) {
-    opt.phases = String(phasesArg).split(',').map((x) => Number(x))
+if (phasesList !== null) {
+    //--phases(上方已檢各項為非負數): 與每日棒數之積須為整數(同設定之 eval.phases)
+    try {
+        wholeBarsOf(phasesList, L.barsPerDay, '--phases', 'a non-negative')
+    }
+    catch (err) {
+        console.log(err.message)
+        process.exit(2)
+    }
+    opt.phases = phasesList
 }
 if (nullArg !== null) {
     opt.nullDraws = nullArg
@@ -563,7 +605,7 @@ catch (err) {
     process.exit(3)
 }
 //求解窗後段(--period postfit)為佐證、不入 S、階梯與量尺之排序: 不計 S(結果檔之 score 與評估紀錄之 S 為 null)、不印判讀列(與回測期之 S 並列易被當成分數)
-let sc = postfit ? null : scoreOf(m, { limits: st.eval.limits, score: st.score })
+let sc = postfit ? null : scoreOf(m, { limits: st.eval.limits, score: st.score, nPh: phaseCountOf(st.eval) })
 //與參考模組之選集重疊率(--ref): 診斷用; 參考模組執行失敗只記錯誤, 不影響本模組之評估結果
 //  結果檔: refOverlap = 第一個參考(物件; 單一參考時與舊版逐欄相同); 給多個參考時另有 refOverlaps = 全部參考依序之陣列(各自之 ctx.state / ctx.rand)
 let overlapOf = async (refPath) => {
@@ -672,7 +714,8 @@ if (m.unit) {
     console.log(`基礎單位(交易規則 步長 ${m.unit.rule.stepSize} / 最小數量 ${m.unit.rule.minQty} / 最小名義價值 ${m.unit.rule.minNotional}, 緩衝 ${m.unit.buffer}, 研究用本金 ${m.unit.uIni}u): 每單之損益 = 每單位損益 × 該單之基礎單位名義; 等效年化 = 損益和 ÷ 最大同時持倉名義 ÷ 年數(挑選與執行規則所見之統計仍為每單位損益與單數)`)
 }
 console.log(`操作績效(${m.period.cadenceDays} 日一換): 等效年化 均 ${f1(m.op.eqYr.mean)}% 最差相位 ${f1(m.op.eqYr.min)}% 最佳 ${f1(m.op.eqYr.max)}% | 月均單 ${f1(m.op.monthlyOrders.mean)} | 最大同時持倉 ${m.op.peakHold.max}${m.op.peakNotional ? `(名義 ${f1(m.op.peakNotional.max)}u)` : ''} | 勝率 ${(m.op.winRate * 100).toFixed(1)}% | 執行規則 ${m.hasAccept ? `有(下單率 ${(m.op.acceptRate * 100).toFixed(1)}%)` : '無(全收)'}`)
-console.log(`新鮮度(七相位均 %): ${m.horizons.map((H) => `${H}d ${f1(m.fresh[H].eqYr.mean)}`).join(' | ')}`)
+//新鮮度列之相位數 = 本次評估實際所算者(m.phases 之長度; --mode quick 為 2、--phases 覆寫者為其個數; 不取設定之 eval.phases 之長度; 排程第 547 項②之接續)
+console.log(`新鮮度(${phaseText(phaseCountOfAll([phaseCountOfMetrics(m)], st.eval), '相位')}均 %): ${m.horizons.map((H) => `${H}d ${f1(m.fresh[H].eqYr.mean)}`).join(' | ')}`)
 if (m.null) {
     console.log(`同劑量虛無(${m.null.draws} 抽): 均 ${f1(m.null.mean)}% sd ${f1(m.null.sd)} p95 ${f1(m.null.p95)} | 超額 ${f1(m.null.excess)} z ${m.null.z} p ${m.null.p}`)
 }

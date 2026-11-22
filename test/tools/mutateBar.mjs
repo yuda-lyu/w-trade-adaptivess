@@ -27,7 +27,7 @@ let M = [
     ['B07', 'src/eval/barGrid.mjs', [["    gridCheck(periodAt(st, 'backtest', 'start'), meta, 'periods.backtest.start')", '    void 0']], ['unit-evalNums']],
     ['B08', 'src/eval/barGrid.mjs', [['        if (fe[side] && !onBarGrid(fe[side], time0Ms, barMs)) {', '        if (false) {']], ['unit-barHours']],
     ['B09', 'src/eval/barGrid.mjs', [['    trainFromBarOf(st, meta, Math.round((Date.parse(`${tr.end}Z`) - time0Ms) / barMs))', '    void 0']], ['unit-barHours']],
-    ['B10', 'src/eval/barGrid.mjs', [["    evalNumsOf(st && st.eval, Math.round(24 / meta.barHours), 'eval')", '    void 0']], ['unit-evalNums']],
+    ['B10', 'src/eval/barGrid.mjs', [["    evalNumsOf(st && st.eval, bpd, 'eval')", '    void 0']], ['unit-evalNums']],
     ['B11', 'src/eval/barGrid.mjs', [['        if (!Number.isInteger(out[k] * bpd)) {', '        if (false) {']], ['unit-evalNums']],
     ['B12', 'src/eval/barGrid.mjs', [['Number.isInteger(out[k] * bpd)', 'Number.isInteger(out[k])']], ['unit-evalNums']],
     ['B13', 'src/eval/barGrid.mjs', [[".replace(/^invalid cfg\\./, 'invalid eval.')", ".replace(/^invalid cfg\\./, 'invalid cfg.')"]], ['unit-evalNums']],
@@ -36,7 +36,7 @@ let M = [
     ['B16', 'src/eval/barGrid.mjs', [['    let tr = objOf(periodsOf(st).train)', '    let tr = periodsOf(st).train']], ['unit-evalNums']],
     //── cfgNum.mjs ──
     ['C01', 'src/eval/cfgNum.mjs', [['Number.isFinite(x) && k[1](x)', 'Number.isFinite(x)']], ['unit-evalNums']],
-    ['C02', 'src/eval/cfgNum.mjs', [['    if (v === undefined || v === null) {', '    if (v === undefined) {']], ['unit-evalNums']],
+    ['C02', 'src/eval/cfgNum.mjs', [['    if (v === undefined || v === null) {\n        return def\n    }\n    let x =', '    if (v === undefined) {\n        return def\n    }\n    let x =']], ['unit-evalNums']],
     ['C03', 'src/eval/cfgNum.mjs', [["(typeof v === 'string' && isenum(v) ? Number(v) : NaN)\n    if (!(Number.isFinite(x) && k[1](x)))", "(typeof v === 'string' && isenum(v) ? v : NaN)\n    if (!(Number.isFinite(x) && k[1](x)))"]], ['unit-evalNums']],
     ['C04', 'src/eval/cfgNum.mjs', [["let x = typeof v === 'number' ? v : (typeof v === 'string' && isenum(v) ? Number(v) : NaN)\n    if (!(Number.isFinite(x) && k[1](x)))", "let x = typeof v === 'number' || typeof v === 'boolean' ? Number(v) : (typeof v === 'string' && isenum(v) ? Number(v) : NaN)\n    if (!(Number.isFinite(x) && k[1](x)))"]], ['unit-evalNums']],
     ['C05', 'src/eval/cfgNum.mjs', [["nullDraws: [64, 'nonNegInt']", "nullDraws: [32, 'nonNegInt']"]], ['unit-evalNums']],
@@ -64,7 +64,7 @@ let M = [
     //── cli/eval.mjs ──
     ['V01', 'src/cli/eval.mjs', [[': { phases: [0, 3], horizons: [evNums.cadenceDays], nullDraws: 0 }', ': { phases: [0, 3], horizons: [st.eval.cadenceDays], nullDraws: 0 }']], ['unit-evalNums']],
     //V02 為等價變異(第 5 欄 'equiv'): 完整評估之 opt.nullDraws 取設定之原值時, evalPolicy 自身亦以 cfgNumOf 檢測並轉型 ⇒ 結果相同; 保留此項以記錄「兩層各自檢測」之設計
-    ['V02', 'src/cli/eval.mjs', [['horizons: st.eval.horizons, nullDraws: evNums.nullDraws }', 'horizons: st.eval.horizons, nullDraws: st.eval.nullDraws }']], ['unit-evalNums'], 'equiv'],
+    ['V02', 'src/cli/eval.mjs', [['horizons: evLists.horizons, nullDraws: evNums.nullDraws }', 'horizons: evLists.horizons, nullDraws: st.eval.nullDraws }']], ['unit-evalNums'], 'equiv'],
     ['V03', 'src/cli/eval.mjs', [["if (nullArg !== null && !(typeof nullArg === 'number' && Number.isSafeInteger(nullArg) && nullArg >= 0)) {", 'if (false) {']], ['unit-evalNums']],
     ['V04', 'src/cli/eval.mjs', [['if (nullArg !== null) {', "if (typeof nullArg === 'number' && false) {"]], ['unit-evalNums']],
     ['V05', 'src/cli/eval.mjs', [["writeJson(path.resolve(fpOut), { ok: false, ...memberInfo(), error: msg, code: 'CONFIG_INVALID' })", 'void 0']], ['unit-evalNums']],
@@ -83,7 +83,7 @@ let M = [
     ['K03', 'src/cli/backtest.mjs', [["        gridCheck(periodAt(st, 'train', 'end'), Le.meta, 'periods.train.end')", '        void 0']], ['unit-barHours']],
     ['K04', 'src/cli/backtest.mjs', [['        fromE = trainFromBarOf(st, Le.meta, trainEndE)', '        fromE = trainFromBarOf(st, L.meta, trainEndE)']], ['unit-barHours']],
     ['K05', 'src/cli/backtest.mjs', [['        fromL = trainFromBarOf(st, L.meta, trainEndBar)', '        fromL = null']], ['unit-barHours']],
-    ['K06', 'src/cli/backtest.mjs', [["            gridCheck(periodAt(st, 'backtest', 'end'), L.meta, 'periods.backtest.end')", '            void 0']], ['unit-barHours']],
+    ['K06', 'src/cli/backtest.mjs', [["        gridCheck(periodAt(st, 'backtest', 'end'), L.meta, 'periods.backtest.end')", '        void 0']], ['unit-barHours', 'unit-backtestEnd']],
     //K07 為等價變異(縱深防禦): makeEvaluator 對同一帳本 L 之設定檢查已由上方之預檢 checkEvalSettings(st, L.meta) 涵蓋; 預檢略過者(L.meta 之 time0 或 barHours 無效)於其後之離開碼 5 路徑先結束 ⇒ 此 catch 於正常路徑不可達
     ['K07', 'src/cli/backtest.mjs', [["    let msg = configMsgOf(err)\n    if (msg !== null) {\n        console.log(`ERROR ${msg}`)\n        process.exit(2)\n    }\n    throw err", '    throw err']], ['unit-barHours'], 'equiv'],
     ['K08', 'src/cli/backtest.mjs', [["    let trainEndE = Math.round((Date.parse(`${periodAt(st, 'train', 'end')}Z`)", "    let trainEndE = Math.round((Date.parse(`${st.periods.train.end}Z`)"]], ['unit-evalNums']],
@@ -120,14 +120,14 @@ let M = [
     ['T21', 'src/domain/texts.mjs', [["回測期 S、' + ph('相位') + '、挑選內容", '回測期 S、七相位、挑選內容']], ['unit-factsResidue']],
     ['T22', 'src/domain/texts.mjs', [["幾何對照(' + nDraws + ' 抽)為準", '幾何對照(64 抽)為準']], ['unit-factsResidue']],
     //── factsText.mjs ──
-    ['F01', 'src/domain/factsText.mjs', [["n >= 1 && n <= 10 ? '一二三四五六七八九十'[n - 1]", "n >= 1 && n <= 7 ? '一二三四五六七八九十'[n - 1]"]], ['unit-factsResidue']],
+    ['F01', 'src/eval/cfgNum.mjs', [["n >= 1 && n <= 10 ? '一二三四五六七八九十'[n - 1]", "n >= 1 && n <= 7 ? '一二三四五六七八九十'[n - 1]"]], ['unit-factsResidue']],
     ['F02', 'src/domain/factsText.mjs', [['(1 / (1 + draws))', '(1 / draws)']], ['unit-factsResidue']],
-    ['F03', 'src/domain/factsText.mjs', [['ev.phases.length > 0 ? ev.phases.length : 7', 'ev.phases.length > 0 ? 7 : 7']], ['unit-factsResidue']],
+    ['F03', 'src/eval/cfgNum.mjs', [['ev.phases.length > 0 ? ev.phases.length : 7', 'ev.phases.length > 0 ? 7 : 7']], ['unit-factsResidue']],
     //F04、F05 單獨為等價變異(互相遮蔽): cadenceOf 與 nullDrawsOf 皆經 evalCfgNumsOf 檢測「全部五個鍵」, 任務書同時呼叫兩者, 改壞其一時另一個仍拋; F06 為兩者同時改壞
     ['F04', 'src/domain/factsText.mjs', [["let cadenceOf = (ev) => evalCfgNumsOf(ev, 'eval').cadenceDays", 'let cadenceOf = (ev) => (ev && Number(ev.cadenceDays)) || 7']], ['unit-factsResidue'], 'equiv'],
     ['F05', 'src/domain/factsText.mjs', [["let nullDrawsOf = (ev) => evalCfgNumsOf(ev, 'eval').nullDraws", 'let nullDrawsOf = (ev) => (ev && Number(ev.nullDraws)) || 64']], ['unit-factsResidue'], 'equiv'],
     ['F07', 'src/domain/factsText.mjs', [["let cadenceOf = (ev) => evalCfgNumsOf(ev, 'eval').cadenceDays", 'let cadenceOf = (ev) => (ev && Number(ev.cadenceDays)) || 7'], ["let nullDrawsOf = (ev) => evalCfgNumsOf(ev, 'eval').nullDraws", 'let nullDrawsOf = (ev) => (ev && Number(ev.nullDraws)) || 64']], ['unit-factsResidue']],
-    ['F06', 'src/domain/factsText.mjs', [['`${n} `) + tail', '`${n}`) + tail']], ['unit-factsResidue']],
+    ['F06', 'src/eval/cfgNum.mjs', [['`${n} `) + tail', '`${n}`) + tail']], ['unit-factsResidue']],
     //── initProject.mjs ──
     ['I01', 'src/tools/initProject.mjs', [["['七個起始相位', 1, (v) => v.ph('個起始相位')]", "['七個起始相位', 1, (v) => '七個起始相位']"]], ['unit-factsResidue']],
     ['I02', 'src/tools/initProject.mjs', [["['七個相位', 1, (v) => v.ph('個相位')]", "['七個相位', 1, (v) => '七個相位']"]], ['unit-factsResidue']],
@@ -149,10 +149,10 @@ let M = [
     ['I17', 'src/tools/initProject.mjs', [["barHours: bv === undefined || bv.startsWith('--') ? '' : bv", "barHours: bv === undefined || bv.startsWith('--') ? undefined : bv"]], ['unit-barHours']],
     ['I18', 'src/tools/initProject.mjs', [['    let bpd = Math.round(24 / h)', '    let bpd = Math.round(24 / h) + 1']], ['unit-barHours']],
     //── fillKeys.mjs ──
-    ['X01', 'src/domain/fillKeys.mjs', [["let EVAL_FP_SKIP = ['ledgerBuild.mjs']", 'let EVAL_FP_SKIP = []']], ['unit-evalFingerprint']],
-    ['X02', 'src/domain/fillKeys.mjs', [["let EVAL_FP_SKIP = ['ledgerBuild.mjs']", "let EVAL_FP_SKIP = ['ledgerBuild.mjs', 'evalCore.mjs']"]], ['unit-evalFingerprint']],
+    ['X01', 'src/domain/fillKeys.mjs', [["let EVAL_FP_SKIP = ['ledgerBuild.mjs', 'unitNotional.mjs']", 'let EVAL_FP_SKIP = []']], ['unit-evalFingerprint']],
+    ['X02', 'src/domain/fillKeys.mjs', [["let EVAL_FP_SKIP = ['ledgerBuild.mjs', 'unitNotional.mjs']", "let EVAL_FP_SKIP = ['ledgerBuild.mjs', 'unitNotional.mjs', 'evalCore.mjs']"]], ['unit-evalFingerprint']],
     ['X03', 'src/domain/fillKeys.mjs', [['&& !EVAL_FP_SKIP.includes(f))', '&& EVAL_FP_SKIP.includes(f))']], ['unit-evalFingerprint']],
-    ['X04', 'src/domain/fillKeys.mjs', [["let EVAL_FP_SKIP = ['ledgerBuild.mjs']", "let EVAL_FP_SKIP = ['ledgerBuild.mjs', 'barGrid.mjs']"]], ['unit-evalFingerprint']],
+    ['X04', 'src/domain/fillKeys.mjs', [["let EVAL_FP_SKIP = ['ledgerBuild.mjs', 'unitNotional.mjs']", "let EVAL_FP_SKIP = ['ledgerBuild.mjs', 'unitNotional.mjs', 'barGrid.mjs']"]], ['unit-evalFingerprint']],
     //── ledgerBuild.mjs / build.mjs ──
     ['L01', 'src/eval/ledgerBuild.mjs', [["barHours = normBarHours(barHours, 'barHours')", 'barHours = Number(barHours)']], ['unit-barHours']],
     ['L02', 'src/eval/ledgerBuild.mjs', [['if (isec !== undefined && isec !== null && !(isenum(isec) && Number(isec) === barSec)) {', 'if (false) {']], ['unit-barHours']],
@@ -858,10 +858,11 @@ let M = [
     ['SB43', 'src/domain/verify.mjs', [["(?:backtest|verify|libStats)|tools", "(?:backtest|verify)|tools"]], ['unit-verifyZone']], //禁區不含 src/domain/libStats.mjs(節點可讀取或匯入庫況體檢之計算)
     ['SB44', 'src/domain/verify.mjs', [["libCheck)/i, '回測期重放 / 迴圈驗證之程式'", "libCheckX)/i, '回測期重放 / 迴圈驗證之程式'"]], ['unit-verifyZone']], //禁區不含 src/tools/libCheck.mjs
     //── 排程第 589 項之接續輪(主控另加): 帶等號之 --subset= / --member= 拒收、空子庫之警示、libCheck 之設定讀不到(R-EV-47、R-EV-48)──
-    ['SB45', 'src/cli/eval.mjs', [["if (process.argv.some((a) => a.startsWith('--subset='))) {", "if (false) {"]], ['unit-subsetLedger']], //帶等號之 --subset= 不拒(靜默忽略而以全庫評估)
-    ['SB46', 'src/cli/eval.mjs', [["if (process.argv.some((a) => a.startsWith('--member='))) {", "if (false) {"]], ['unit-subsetLedger']], //帶等號之 --member= 不拒
-    ['SB47', 'src/cli/eval.mjs', [["a.startsWith('--subset=')", "a === '--subset='"]], ['unit-subsetLedger']], //只拒空值之 --subset=(帶值者不拒)
-    ['SB48', 'src/cli/eval.mjs', [["(a) => a.startsWith('--member='))", "(a) => a.startsWith('--subset='))"]], ['unit-subsetLedger']], //--member= 之檢查誤認為 --subset=(--member= 不拒, 且訊息錯置)
+    //  排程第 590 項後: 帶等號之旗標統一由 cfg.mjs 之 eqFlagMsgOf(CLI_FLAGS.<進入檔>)檢查(原 eval.mjs 內之兩處 some(startsWith) 已併入; 以下四項改植於其接線與表)
+    ['SB45', 'src/cfg.mjs', [["        'member': '<salt>:<half>',\n        'subset': '<rule>',\n", "        'member': '<salt>:<half>',\n"]], ['unit-subsetLedger']], //表內無 subset ⇒ --subset= 之訊息為通稱(不指明須寫成 --subset <規則>)
+    ['SB46', 'src/cfg.mjs', [["        'member': '<salt>:<half>',\n        'subset': '<rule>',\n", "        'subset': '<rule>',\n"]], ['unit-subsetLedger']], //表內無 member ⇒ --member= 之訊息為通稱
+    ['SB47', 'src/cli/eval.mjs', [["process.argv.slice(2), { first: ['member', 'subset'] })", "process.argv.slice(2), { first: ['subset', 'member'] })"]], ['unit-subsetLedger', 'unit-cliEqFlags']], //同時帶 --member= 與 --subset= 時先報 --subset(沿用 1.0.42 者為先報 --member)
+    ['SB48', 'src/cli/eval.mjs', [["process.argv.slice(2), { first: ['member', 'subset'] })", 'process.argv.slice(2))']], ['unit-cliEqFlags', 'unit-subsetLedger']], //不給優先序 ⇒ 依命令列之次序(--subset= 在前者先報 --subset)
     ['SB49', 'src/cli/eval.mjs', [["    if (subset.n === 0) {", "    if (subset.n === 1) {"]], ['unit-subsetLedger']], //空子庫不警示而留 1 隻者警示
     ['SB50', 'src/cli/eval.mjs', [["    if (subset.n === 0) {", "    if (subset.n >= 0) {"]], ['unit-subsetLedger']], //留 ≥ 1 隻者亦警示
     ['SB51', 'src/cli/eval.mjs', [["    if (subset.n === 0) {", "    if (false) {"]], ['unit-subsetLedger']], //空子庫不警示
@@ -1019,6 +1020,222 @@ let M = [
     ['MD26', 'src/domain/domain.mjs', [["{ stage: 'preDream', retryAt: '做夢未交付,未記入待重試;補做夢時重算' }", "{ stage: 'preDream' }"]], ['unit-memberCheck']], //做夢未交付時摘要列之字樣不改
     ['MD27', 'src/domain/domain.mjs', [["if (autoFillOf(st.rsi)) {", "if (true) {"]], ['unit-memberCheck']], //做夢之後之附算不隨 autoFill 關閉而略去
     ['MD28', 'src/domain/domain.mjs', [["task.keys.member.diag !== undefined)", "false)"]], ['unit-memberCheck']], //不辨讀數依診斷之任務(同任務之診斷值不取用、補算失敗不攔)
+    //── 命令列旗標之等號寫法(排程第 590 項; cfg.mjs 之 eqFlagMsgOf 與 CLI_FLAGS、各進入檔之接線) ──
+    ['TQ01', 'src/cfg.mjs', [["a.startsWith('--') && a.includes('='))", "a.startsWith('--'))"]], ['unit-cliEqFlags']], //凡 -- 起首者皆拒(不論有無等號)
+    ['TQ02', 'src/cfg.mjs', [["a.startsWith('--') && a.includes('='))", "a.includes('='))"]], ['unit-cliEqFlags']], //凡含等號者皆拒(含值內含等號、單橫線之引數)
+    ['TQ03', 'src/cfg.mjs', [["typeof a === 'string' && a.startsWith('--')", "a.startsWith('--')"]], ['unit-cliEqFlags']], //非字串之元素致 TypeError
+    ['TQ04', 'src/cfg.mjs', [["    let nm = nameOf(a)\n    if (!known(nm)) {", "    let nm = nameOf(a)\n    if (false) {"]], ['unit-cliEqFlags']], //未列之旗標(含原型之名稱)亦以其名稱寫入訊息(回顯輸入)
+    ['TQ05', 'src/cfg.mjs', [["    return flags[nm] === null ? ", "    return flags[nm] !== null ? "]], ['unit-cliEqFlags']], //布林旗標與帶值旗標之訊息互換
+    ['TQ06', 'src/cfg.mjs', [["        if (pickEq !== null) {\n            break\n        }", "        if (false) {\n            break\n        }"]], ['unit-cliEqFlags']], //優先序之旗標: 最後一個所列者勝(而非第一個)
+    ['TQ07', 'src/cfg.mjs', [["    let nameOf = (a) => a.slice(2, a.indexOf('='))\n    let known = (nm) => Object.prototype.hasOwnProperty.call(flags, nm)", "    let nameOf = (a) => a.slice(2, a.indexOf('='))\n    let known = (nm) => (nm in flags)"]], ['unit-cliEqFlags']], //原型之名稱(constructor、__proto__…)被當作已列之旗標
+    ['TQ08', 'src/cfg.mjs', [["let a = pickEq !== null ? pickEq : eqs[0]", "let a = eqs[0]"]], ['unit-cliEqFlags']], //不採優先序
+    ['TQ09', 'src/cfg.mjs', [["a.slice(2, a.indexOf('='))", "a.slice(2)"]], ['unit-cliEqFlags']], //旗標名含 =值(皆被當作未列之旗標)
+    ['TQ10', 'src/cli/eval.mjs', [["    if (argMsg !== null) {", "    if (false) {"]], ['unit-cliEqFlags']], //g_eval.mjs 不檢查
+    ['TQ11', 'src/cli/backtest.mjs', [["    if (argMsg !== null) {", "    if (false) {"]], ['unit-cliEqFlags']], //g_backtest.mjs 不檢查
+    ['TQ12', 'src/cli/build.mjs', [["    if (argMsg !== null) {", "    if (false) {"]], ['unit-cliEqFlags']], //g_build.mjs 不檢查
+    ['TQ13', 'src/cli/rsi.mjs', [["    if (argMsg !== null) {", "    if (false) {"]], ['unit-cliEqFlags']], //g_rsi.mjs 不檢查
+    ['TQ14', 'src/cli/toolbox.mjs', [["    if (argMsg !== null) {", "    if (false) {"]], ['unit-cliEqFlags']], //g_toolbox.mjs 不檢查
+    ['TQ15', 'src/cli/launch.mjs', [["    if (argMsg !== null) {", "    if (false) {"]], ['unit-cliEqFlags']], //g_launch.mjs 不檢查
+    ['TQ16', 'src/cfg.mjs', [["        'tie-salt': '<N>',\n", ""]], ['unit-cliEqFlags']], //表內缺旗標(盤點與訊息皆不合)
+    ['TQ17', 'src/cfg.mjs', [["        'no-log': null,\n", "        'no-log': '<x>',\n"]], ['unit-cliEqFlags']], //布林旗標被當作帶值者(訊息不合)
+    ['TQ18', 'src/cli/eval.mjs', [["phasesList = cfgListOf(String(phasesArg).split(','), null, '--phases', 'nonNegNum')", "phasesList = String(phasesArg).split(',').map((x) => Number(x))"]], ['unit-cliEqFlags']], //--phases 回到 Number(x) 之隱式轉換(非數字為 NaN)
+    ['TQ19', 'src/cli/eval.mjs', [["        wholeBarsOf(phasesList, L.barsPerDay, '--phases', 'a non-negative')", "        void 0"]], ['unit-cliEqFlags']], //--phases 不核對與每日棒數之積
+    ['TQ20', 'src/cli/eval.mjs', [["Number.isSafeInteger(seedArg)", "Number.isFinite(seedArg)"]], ['unit-cliEqFlags']], //--seed 收小數(評估器之種子須為整數 ⇒ 於評估中才拋)
+    ['TQ21', 'src/cli/eval.mjs', [["Number.isSafeInteger(tieArg)", "Number.isFinite(tieArg)"]], ['unit-cliEqFlags']], //--tie-salt 收小數
+    ['TQ22', 'src/cli/eval.mjs', [["    evRun = evalRunNumsOf(st.eval, 'eval')\n", "    evRun = { seed: 1 }\n"]], ['unit-cliEqFlags']], //命令列不用設定之種子(字串之種子 / 設定之種子失效)
+    ['TQ23', 'src/cli/backtest.mjs', [["    evRun = evalRunNumsOf(st.eval, 'eval')\n", "    evRun = { seed: st.eval.seed }\n"]], ['unit-evalRunNums']], //g_backtest.mjs 之種子取設定之原值(字串之種子 + i 為字串相接)
+    //── settings.eval 之執行面之數字、硬上限、相位與地平線(排程第 595 項; cfgNum.mjs、barGrid.mjs、evalCore.mjs、score.mjs 與各使用處) ──
+    ['VN01', 'src/eval/cfgNum.mjs', [["int: ['an integer', (x) => Number.isSafeInteger(x)],", "int: ['an integer', (x) => Number.isFinite(x)],"]], ['unit-evalRunNums']], //種子與鹽收小數
+    ['VN02', 'src/eval/cfgNum.mjs', [["    seed: [1, 'int'],", "    seed: [2, 'int'],"]], ['unit-evalRunNums']], //種子之預設
+    ['VN03', 'src/eval/cfgNum.mjs', [["    tieSalt: [0, 'int'],", "    tieSalt: [1, 'int'],"]], ['unit-evalRunNums']], //同分次序之鹽之預設
+    ['VN04', 'src/eval/cfgNum.mjs', [["    replicaNullDraws: [32, 'nonNegInt'],", "    replicaNullDraws: [16, 'nonNegInt'],"]], ['unit-evalRunNums']], //重放之虛無抽數之預設
+    ['VN05', 'src/eval/cfgNum.mjs', [["    timeoutSec: [900, 'timerSec'],", "    timeoutSec: [900, 'nonNegNum'],"]], ['unit-evalRunNums']], //逾時收 0 且無上限
+    ['VN06', 'src/eval/cfgNum.mjs', [["    geoTp: [3, 'posInt'],", "    geoTp: [3, 'nonNegInt'],"]], ['unit-evalRunNums']], //止盈等分數收 0
+    ['VN07', 'src/eval/cfgNum.mjs', [["    geoSl: [3, 'posInt'],", "    geoSl: [4, 'posInt'],"]], ['unit-evalRunNums']], //止損等分數之預設
+    ['VN08', 'src/eval/cfgNum.mjs', [["    replicaSeeds: [0, 'nonNegInt'],", "    replicaSeeds: [0, 'posInt'],"]], ['unit-evalRunNums']], //重放次數不收 0
+    ['VN09', 'src/eval/cfgNum.mjs', [["    if (!Array.isArray(spec)) {", "    if (false) {"]], ['unit-evalRunNums']], //單一鍵之取值不核對鍵名(原型之名稱)
+    ['VN10', 'src/eval/cfgNum.mjs', [["let EVAL_LIMITS = { monthlyOrders: 400, peakHold: 50 }", "let EVAL_LIMITS = { monthlyOrders: 400, peakHold: 60 }"]], ['unit-evalRunNums']], //硬上限之預設
+    ['VN11', 'src/eval/cfgNum.mjs', [["typeof l !== 'object' || Array.isArray(l)", "typeof l !== 'object'"]], ['unit-evalRunNums']], //eval.limits 收陣列
+    ['VN12', 'src/eval/cfgNum.mjs', [["`${who}.limits.${k}`, 'nonNegNum')", "`${who}.limits.${k}`, 'posNum')"]], ['unit-evalRunNums']], //硬上限不收 0
+    ['VN13', 'src/eval/cfgNum.mjs', [["(v.length === 0 && allowEmpty !== true)", "(v.length === 0 && false)"]], ['unit-evalRunNums']], //相位之清單收空陣列
+    ['VN14', 'src/eval/cfgNum.mjs', [["        if (x === undefined || x === null) {\n            throw new Error(`invalid ${where}[${i}]", "        if (x === undefined) {\n            throw new Error(`invalid ${where}[${i}]"]], ['unit-evalRunNums']], //清單之元素為 null 者當作 0
+    ['VN15', 'src/eval/barGrid.mjs', [["    if (phases !== null) {", "    if (false) {"]], ['unit-evalRunNums']], //相位不核對與每日棒數之積
+    ['VN16', 'src/eval/barGrid.mjs', [["    if (horizons !== null) {", "    if (false) {"]], ['unit-evalRunNums']], //地平線不核對與每日棒數之積
+    ['VN17', 'src/eval/barGrid.mjs', [["    evalRunNumsOf(st && st.eval, 'eval')\n", "    void 0\n"]], ['unit-evalRunNums']], //組裝時之預檢不檢執行面之數字
+    ['VN18', 'src/eval/barGrid.mjs', [["    evalLimitsOf(st && st.eval, 'eval')\n", "    void 0\n"]], ['unit-evalRunNums']], //組裝時之預檢不檢硬上限
+    ['VN19', 'src/eval/barGrid.mjs', [["    evalListsOf(st && st.eval, bpd, 'eval')\n", "    void 0\n"]], ['unit-evalRunNums']], //組裝時之預檢不檢相位與地平線
+    ['VN20', 'src/eval/evalCore.mjs', [["let seed = cfgNumOf(opt.seed, cfgRun.seed, 'opt.seed', 'int')", "let seed = opt.seed === undefined ? cfg.seed : opt.seed"]], ['unit-evalRunNums']], //種子取原值(字串相接)
+    ['VN21', 'src/eval/evalCore.mjs', [["let tieSalt = cfgRun.tieSalt", "let tieSalt = Number.isInteger(cfg.tieSalt) ? cfg.tieSalt : 0"]], ['unit-evalRunNums']], //同分次序之鹽取原值(字串之鹽失效)
+    ['VN22', 'src/eval/evalCore.mjs', [["let nTp = cfgRun.geoTp", "let nTp = cfg.geoTp === undefined ? 3 : cfg.geoTp"]], ['unit-evalRunNums']], //止盈等分數取原值
+    ['VN23', 'src/eval/evalCore.mjs', [["let nSl = cfgRun.geoSl", "let nSl = cfg.geoSl === undefined ? 3 : cfg.geoSl"]], ['unit-evalRunNums']], //止損等分數取原值
+    ['VN24', 'src/eval/evalCore.mjs', [["phases = cfgLists.phases || [0, 1, 2, 3, 4, 5, 6]", "phases = cfg.phases || [0, 1, 2, 3, 4, 5, 6]"]], ['unit-evalRunNums']], //設定之相位取原值
+    ['VN25', 'src/eval/evalCore.mjs', [["horizons = cfgLists.horizons || [1, 3, 7, 14, 30]", "horizons = cfg.horizons || [1, 3, 7, 14, 30]"]], ['unit-evalRunNums']], //設定之地平線取原值
+    ['VN26', 'src/eval/evalCore.mjs', [["            wholeBarsOf(phases, bpd, 'opt.phases', 'a non-negative')", "            void 0"]], ['unit-evalRunNums']], //opt.phases 不核對與每日棒數之積
+    ['VN27', 'src/eval/evalCore.mjs', [["            wholeBarsOf(horizons, bpd, 'opt.horizons', 'a positive')", "            void 0"]], ['unit-evalRunNums']], //opt.horizons 不核對與每日棒數之積
+    ['VN28', 'src/eval/evalCore.mjs', [["let cfgRun = evalRunNumsOf(cfg, 'cfg')", "let cfgRun = evalRunNumsOf({}, 'cfg')"]], ['unit-evalRunNums']], //評估器不讀設定之執行面之數字
+    ['VN29', 'src/eval/evalCore.mjs', [["let cfgLists = evalListsOf(cfg, bpd, 'cfg')", "let cfgLists = evalListsOf({}, bpd, 'cfg')"]], ['unit-evalRunNums']], //評估器不讀設定之相位與地平線
+    ['VN30', 'src/eval/score.mjs', [["    let lim = evalLimitsOf({ limits }, 'eval')", "    let lim = limits"]], ['unit-evalRunNums']], //判讀取硬上限之原值(缺鍵永不否決)
+    ['VN31', 'src/domain/texts.mjs', [["    let lim = evalLimitsOf(st.eval, 'eval')", "    let lim = st.eval.limits"]], ['unit-evalRunNums']], //任務書取硬上限之原值
+    ['VN32', 'src/tools/initProject.mjs', [["    let lim = evalLimitsOf(ev, 'eval')", "    let lim = ev.limits && typeof ev.limits === 'object' ? ev.limits : {}"]], ['unit-evalRunNums']], //合約之參考版取硬上限之原值(缺鍵寫 undefined)
+    ['VN33', 'src/domain/verifyMember.mjs', [["let rd = rdv !== null && rdv >= 1 ? rdv : null", "let rd = rdv"]], ['unit-memberCheck']], //成員穩健性之附算收 0 抽
+    ['VN34', 'src/domain/verifyMember.mjs', [["evalRunNumOf(evalCfg, 'replicaNullDraws', 'eval')", "evalRunNumOf(evalCfg, 'replicaSeeds', 'eval')"]], ['unit-memberCheck']], //成員穩健性之附算讀錯鍵
+    ['VN35', 'src/domain/verify.mjs', [["        let nRep = evRun.replicaSeeds", "        let nRep = Number.isInteger(st.eval.replicaSeeds) ? st.eval.replicaSeeds : 0"]], ['unit-evalRunNums']], //迴圈之重放次數取原值(字串者不重放)
+    ['VN36', 'src/domain/verify.mjs', [["            let seed0 = evRun.seed", "            let seed0 = st.eval.seed === undefined ? 1 : st.eval.seed"]], ['unit-evalRunNums']], //迴圈之重放之種子取原值(seed + i 為字串相接)
+    ['VN37', 'src/domain/verify.mjs', [["            let nDraw = evRun.replicaNullDraws", "            let nDraw = Number.isInteger(st.eval.replicaNullDraws) ? st.eval.replicaNullDraws : 32"]], ['unit-evalRunNums']], //迴圈之重放之虛無抽數取原值(字串者用預設)
+    ['VN39', 'src/eval/cfgNum.mjs', [["(x) => x > 0 && x * 1000 <= 2147483647]", "(x) => x > 0]"]], ['unit-evalRunNums']], //逾時無上限(超過 Node 計時器之上限者立即觸發)
+    ['VN40', 'src/eval/cfgNum.mjs', [["x * 1000 <= 2147483647]", "x * 1000 < 2147483647]"]], ['unit-evalRunNums']], //逾時之上限之邊界(恰 2147483647 毫秒)不收
+    ['VN41', 'src/eval/cfgNum.mjs', [["(x) => x > 0 && x * 1000 <= 2147483647]", "(x) => x >= 0 && x * 1000 <= 2147483647]"]], ['unit-evalRunNums']], //逾時收 0(0 毫秒 ⇒ 立即逾時)
+    ['VN42', 'src/cli/backtest.mjs', [["typeof seedArg === 'number' && Number.isSafeInteger(seedArg)", "typeof seedArg === 'number' && Number.isFinite(seedArg)"]], ['unit-evalRunNums']], //g_backtest.mjs 之 --seed 收小數
+    ['VN43', 'src/cli/backtest.mjs', [["        console.log('--seed 須為整數(安全整數之範圍內),已忽略(沿用設定之亂數種子)')\n", "        void 0\n"]], ['unit-evalRunNums']], //g_backtest.mjs 之 --seed 不合者靜默忽略
+    ['VN44', 'src/cli/eval.mjs', [["    else if (process.env.ARSI_HARNESS === '1') {\n        //迴圈之重放: 給了而不是整數", "    else if (false) {\n        //迴圈之重放: 給了而不是整數"]], ['unit-cliEqFlags']], //迴圈之重放而 --seed 不合者仍稱「只供迴圈之重放使用」
+    ['VN45', 'src/cli/eval.mjs', [["    else if (process.env.ARSI_HARNESS === '1') {\n        console.log('--tie-salt 須為整數", "    else if (false) {\n        console.log('--tie-salt 須為整數"]], ['unit-cliEqFlags']], //迴圈之重放而 --tie-salt 不合者仍稱「只供迴圈之重放使用」
+    ['VN38', 'src/domain/verify.mjs', [["timeoutMs: evRun.timeoutSec * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })\n        let out = readJson(fpOut)", "timeoutMs: evRun.timeoutSec * 100000, env: { ...process.env, ARSI_HARNESS: '1' } })\n        let out = readJson(fpOut)"]], ['unit-evalRunNums']], //重跑之逾時之單位錯
+    //── 擴充診斷 api.replaceNull 之 actDays、draws、half(排程第 574 項; 與 fillRandom 同一口徑) ──
+    ['AR01', 'src/eval/evalCore.mjs', [["actUse = iseint(oAct) ? NumberCtor(oAct) : NaN", "actUse = Number.isFinite(oAct) ? oAct : 0"]], ['unit-evalRunNums']], //actDays 回到 isFinite 之篩(數字字串被當 0、不合者不拋)
+    ['AR02', 'src/eval/evalCore.mjs', [["                    if (!(actUse >= 0)) {", "                    if (false) {"]], ['unit-evalRunNums']], //actDays 收負數
+    ['AR03', 'src/eval/evalCore.mjs', [["if (!(drawsUse >= 1 && drawsUse <= REPLACE_DRAWS_MAX)) {", "if (!(drawsUse >= 1)) {"]], ['unit-evalRunNums']], //draws 無上限
+    ['AR04', 'src/eval/evalCore.mjs', [["if (!(drawsUse >= 1 && drawsUse <= REPLACE_DRAWS_MAX)) {", "if (!(drawsUse <= REPLACE_DRAWS_MAX)) {"]], ['unit-evalRunNums']], //draws 收 0 與負數
+    ['AR05', 'src/eval/evalCore.mjs', [["let drawsUse = Math.max(1, Math.min(REPLACE_DRAWS_MAX, nullDraws || 16))", "let drawsUse = 16"]], ['unit-evalRunNums']], //draws 未給之預設不隨評估之虛無抽數
+    ['AR06', 'src/eval/evalCore.mjs', [["const REPLACE_DRAWS_MAX = 64", "const REPLACE_DRAWS_MAX = 63"]], ['unit-evalRunNums']], //draws 之上限少 1
+    ['AR07', 'src/eval/evalCore.mjs', [["iseint(oHalf) && NumberCtor(oHalf) >= 0) {", "iseint(oHalf)) {"]], ['unit-evalRunNums']], //half 收負數
+    ['AR08', 'src/eval/evalCore.mjs', [["                    halfUse = NumberCtor(oHalf)", "                    halfUse = oHalf"]], ['unit-evalRunNums']], //half 取原值(數字字串於 p + half 為字串相接)
+    ['AR09', 'src/eval/evalCore.mjs', [["                let halfUse = 50", "                let halfUse = 40"]], ['unit-evalRunNums']], //half 之預設
+    ['AR10', 'src/eval/evalCore.mjs', [["halfUse, g.grp, g.nGroups, actUse, more)", "halfUse, g.grp, g.nGroups, 0, more)"]], ['unit-evalRunNums']], //actDays 未傳入抽樣
+    ['AR11', 'src/eval/evalCore.mjs', [["halfUse, g.grp, g.nGroups, actUse, more)", "50, g.grp, g.nGroups, actUse, more)"]], ['unit-evalRunNums']], //half 未傳入抽樣
+    //── 命令列旗標之嚴格檢查(排程第 547、590 項之接續; unit-cliStrictFlags): cliMsgOf ──
+    ['FS01', 'src/cfg.mjs', [["        if (typeof a !== 'string' || !a.startsWith('--')) {", "        if (false) {"]], ['unit-cliStrictFlags']], //多餘之位置引數 / 值不被偵測(落入未列之旗標)
+    ['FS02', 'src/cfg.mjs', [["        if (!known(nm)) {\n            return names.length", "        if (false) {\n            return names.length"]], ['unit-cliStrictFlags']], //未列之旗標不拒
+    ['FS03', 'src/cfg.mjs', [["        if (seen.has(nm) && !own.dup.includes(nm)) {", "        if (false) {"]], ['unit-cliStrictFlags']], //單值旗標重複不拒
+    ['FS04', 'src/cfg.mjs', [["        if (seen.has(nm) && !own.dup.includes(nm)) {", "        if (seen.has(nm)) {"]], ['unit-cliStrictFlags', 'unit-memberLedger']], //進入檔自己處理重複者(--member、--subset)亦拒為通用之訊息
+    ['FS05', 'src/cfg.mjs', [["            if (hasVal) {\n                return 'invalid argument", "            if (false) {\n                return 'invalid argument"]], ['unit-cliStrictFlags'], 'equiv'], //布林旗標之後接值不拒(等價變異: 無此分支時該值於下一輪被當成多餘之位置引數而回同一訊息; 有布林旗標之進入檔皆不允許位置引數)
+    ['FS06', 'src/cfg.mjs', [["            if (!(hasVal && enums[nm].includes(v))) {", "            if (false) {"]], ['unit-cliStrictFlags']], //列舉之值不檢
+    ['FS07', 'src/cfg.mjs', [["            if (!(hasVal && enums[nm].includes(v))) {", "            if (!hasVal) {"]], ['unit-cliStrictFlags']], //列舉之值只檢有無(集合外之值不拒)
+    ['FS08', 'src/cfg.mjs', [["            if (own.noValue.includes(nm)) {\n                if (hasVal) {", "            if (false) {\n                if (hasVal) {"]], ['unit-cliStrictFlags', 'unit-evalNums']], //進入檔自己處理無值者(--null、--member、--subset)亦拒為通用之訊息
+    ['FS09', 'src/cfg.mjs', [["        let hasVal = typeof v === 'string' && !v.startsWith('--')", "        let hasVal = typeof v === 'string'"]], ['unit-cliStrictFlags']], //其後之旗標被當成值
+    ['FS10', 'src/cfg.mjs', [["            i++\n            continue\n        }\n        //空字串或只有空白之值", "            continue\n        }\n        //空字串或只有空白之值"]], ['unit-cliStrictFlags']], //列舉旗標之值不被吃掉(再被掃為多餘之值)
+    ['FS11', 'src/cfg.mjs', [["        i++\n    }\n    return null\n}", "    }\n    return null\n}"]], ['unit-cliStrictFlags']], //帶值旗標之值不被吃掉
+    ['FS12', 'src/cfg.mjs', [["            if (nSeen < nPos && typeof a === 'string') {", "            if (typeof a === 'string') {"]], ['unit-cliStrictFlags']], //位置引數不限個數
+    ['FS13', 'src/cfg.mjs', [["    let eq = eqFlagMsgOf(flags, argv, first)\n    if (eq !== null) {", "    let eq = null\n    if (eq !== null) {"]], ['unit-cliStrictFlags', 'unit-cliEqFlags']], //帶等號者不先檢(落入未列之旗標之通稱)
+    ['FS14', 'src/cfg.mjs', [["    eval: { mode: ['quick', 'full'], period: ['backtest', 'train', 'postfit'] },", "    eval: { mode: ['quick', 'full', 'extra'], period: ['backtest', 'train', 'postfit'] },"]], ['unit-cliStrictFlags']], //列舉之集合與格式說明不一致
+    ['FS15', 'src/cfg.mjs', [["    rsi: { noValue: ['file'], dup: [] },", "    rsi: { noValue: [], dup: [] },"]], ['unit-cliStrictFlags', 'unit-dreamOnly']], //--file 無值(只做夢輪次)之固定訊息被通用之訊息取代
+    ['FS16', 'src/cfg.mjs', [["    eval: { noValue: ['null', 'member', 'subset'], dup: ['member', 'subset'] },", "    eval: { noValue: ['null', 'member', 'subset'], dup: [] },"]], ['unit-cliStrictFlags', 'unit-memberLedger']], //--member、--subset 之重複之固定訊息被通用之訊息取代
+    ['FS17', 'src/cfg.mjs', [["'frontier', 'annotate', 'dirtype'] },\n}", "'frontier', 'annotate'] },\n}"]], ['unit-cliStrictFlags']], //rsi 之模式少一個(dirtype 被拒)
+    ['FS18', 'src/cfg.mjs', [["    backtest: { 'match-sides': ['0', '1'] },", "    backtest: {},"]], ['unit-cliStrictFlags']], //--match-sides 之值不檢
+    ['FS20', 'src/cli/build.mjs', [["Number.isSafeInteger(limitArg) && limitArg >= 1)", "Number.isSafeInteger(limitArg) && limitArg >= 0)"]], ['unit-cliStrictFlags']], //--limit 0 收
+    ['FS21', 'src/cli/build.mjs', [["typeof limitArg === 'number' && Number.isSafeInteger(limitArg)", "typeof limitArg === 'number' && Number.isFinite(limitArg)"]], ['unit-cliStrictFlags']], //--limit 2.5 收
+    ['FS22', 'src/cli/build.mjs', [["if (limitArg !== null && !(typeof", "if (false && !(typeof"]], ['unit-cliStrictFlags']], //--limit 不檢
+    ['FS23', 'src/cli/rsi.mjs', [["Number.isSafeInteger(nullArg0) && nullArg0 >= 1)", "Number.isSafeInteger(nullArg0) && nullArg0 >= 0)"]], ['unit-cliStrictFlags']], //--null 0 收
+    ['FS24', 'src/cli/rsi.mjs', [["    if ((md === 'fill' || md === 'extfill') && nullArg0 !== null", "    if (md === 'fill' && nullArg0 !== null"]], ['unit-cliStrictFlags']], //extfill 之 --null 不檢
+    ['FS25', 'src/cli/rsi.mjs', [["    if ((md === 'fill' || md === 'extfill') && nullArg0 !== null", "    if (md === 'extfill' && nullArg0 !== null"]], ['unit-cliStrictFlags']], //fill 之 --null 不檢
+    ['FS26', 'src/cli/rsi.mjs', [["typeof nullArg0 === 'number' && Number.isSafeInteger(nullArg0)", "typeof nullArg0 === 'number' && Number.isFinite(nullArg0)"]], ['unit-cliStrictFlags']], //--null 2.5 收
+    ['FS27', 'src/cli/launch.mjs', [["{ positional: 1 }", "{ positional: 2 }"]], ['unit-cliStrictFlags']], //日誌名之後之多餘引數收
+    ['FS28', 'src/cli/launch.mjs', [["{ positional: 1 }", "{ positional: 0 }"]], ['unit-cliStrictFlags', 'unit-cliEqFlags']], //日誌名亦拒
+    //── 補算之虛無抽數(排程第 547 項①; unit-fillCli): fillDrawsOf ──
+    ['ND01', 'src/domain/domain.mjs', [["let fillDrawsOf = (v) => cfgNumOf(v, null, 'opt.nullDraws', 'posInt')", "let fillDrawsOf = (v) => cfgNumOf(v, null, 'opt.nullDraws', 'nonNegInt')"]], ['unit-fillCli']], //0 收(其後之 planFill 以另一訊息拒)
+    ['ND02', 'src/domain/domain.mjs', [["let fillDrawsOf = (v) => cfgNumOf(v, null, 'opt.nullDraws', 'posInt')", "let fillDrawsOf = (v) => (Number.isInteger(v) && v > 0 ? v : null)"]], ['unit-fillCli']], //回到原寫法(無效靜默當成未給; 數字字串不收)
+    ['ND03', 'src/domain/domain.mjs', [["        nullDraws = fillDrawsOf(nullDraws)\n        let { nodes, skipped } = fillNodesOf()", "        let { nodes, skipped } = fillNodesOf()"]], ['unit-fillCli']], //fillPlanOf 不檢
+    ['ND04', 'src/domain/domain.mjs', [["        nullDraws = fillDrawsOf(nullDraws)\n        let t0 = Date.now()", "        let t0 = Date.now()"]], ['unit-fillCli']], //fill 不檢
+    ['ND05', 'src/domain/domain.mjs', [["        nullDraws = fillDrawsOf(nullDraws)\n        let all = diagsOf(toolboxDir).map((x) => x.name)", "        let all = diagsOf(toolboxDir).map((x) => x.name)"]], ['unit-fillCli']], //extFill 不檢
+    //── settings.backtest 之數值鍵(排程第 547 項①; unit-backtestCfg): backtestCfg ──
+    ['BC01', 'src/domain/backtestCfg.mjs', [["cfgNumOf(b.minLadder, 0, 'backtest.minLadder', 'nonNegInt')", "(Number.isInteger(b.minLadder) ? b.minLadder : 0)"]], ['unit-backtestCfg']], //minLadder 回到原寫法
+    ['BC02', 'src/domain/backtestCfg.mjs', [["cfgNumOf(b.replicas, 3, 'backtest.replicas', 'posInt')", "(Number.isInteger(b.replicas) && b.replicas >= 1 ? b.replicas : 3)"]], ['unit-backtestCfg']], //replicas 回到原寫法
+    ['BC03', 'src/domain/backtestCfg.mjs', [["cfgNumOf(b.nullDraws, 64, 'backtest.nullDraws', 'nonNegInt')", "(Number.isInteger(b.nullDraws) ? b.nullDraws : 64)"]], ['unit-backtestCfg']], //nullDraws 回到原寫法
+    ['BC04', 'src/domain/backtestCfg.mjs', [["cfgNumOf(b.timeoutSec, 1200, 'backtest.timeoutSec', 'timerSec')", "(b.timeoutSec || 1200)"]], ['unit-backtestCfg']], //timeoutSec 回到原寫法
+    ['BC05', 'src/domain/backtestCfg.mjs', [["cfgNumOf(b.replicas, 3, 'backtest.replicas', 'posInt')", "cfgNumOf(b.replicas, 3, 'backtest.replicas', 'nonNegInt')"]], ['unit-backtestCfg']], //replicas 收 0
+    ['BC06', 'src/domain/backtestCfg.mjs', [["cfgNumOf(b.nullDraws, 64, 'backtest.nullDraws', 'nonNegInt')", "cfgNumOf(b.nullDraws, 64, 'backtest.nullDraws', 'posInt')"]], ['unit-backtestCfg']], //nullDraws 不收 0
+    ['BC07', 'src/domain/backtestCfg.mjs', [["cfgNumOf(b.timeoutSec, 1200, 'backtest.timeoutSec', 'timerSec')", "cfgNumOf(b.timeoutSec, 1200, 'backtest.timeoutSec', 'posNum')"]], ['unit-backtestCfg']], //timeoutSec 無上限
+    ['BC08', 'src/domain/backtestCfg.mjs', [["cfgNumOf(b.minLadder, 0, 'backtest.minLadder', 'nonNegInt')", "cfgNumOf(b.minLadder, 0, 'backtest.minLadder', 'nonNegNum')"]], ['unit-backtestCfg']], //minLadder 收小數
+    ['BC10', 'src/cli/backtest.mjs', [["    console.log(`ERROR ${msg}`)\n    process.exit(2)\n}\nlet fpPick = argOf('pick', '')", "    console.log(`ERROR ${msg}`)\n    process.exit(1)\n}\nlet fpPick = argOf('pick', '')"]], ['unit-backtestCfg']], //設定無效之離開碼
+    ['BC11', 'src/eval/barGrid.mjs', [["|periods\\.|backtest\\.|ARSI_EVAL_FROM|", "|periods\\.|ARSI_EVAL_FROM|"]], ['unit-backtestCfg', 'unit-fillCli']], //configMsgOf 不認 invalid backtest.…
+    ['BC12', 'src/cli/toolbox.mjs', [["    console.log(`ERROR ${msg}`)\n    process.exit(2)\n}\nlet rules", "    console.log(`ERROR ${msg}`)\n    process.exit(1)\n}\nlet rules"]], ['unit-backtestCfg']], //g_toolbox.mjs 設定無效之離開碼
+    //── 相位數之寫法(排程第 547 項②; unit-phaseText、unit-fillCli、unit-pickStore): phaseCountOf / phaseText 之各輸出處 ──
+    ['PT01', 'src/domain/domain.mjs', [["let phT = (tail, ns) => phaseText(ns ? nPhOf(ns) : phaseCountOf(st.eval), tail)", "let phT = (tail, ns) => phaseText(7, tail)"]], ['unit-fillCli']], //看板與搜尋地圖寫死七相位
+    ['PT02', 'src/domain/pickStore.mjs', [["    let nPh = phaseCountOf(st.eval)", "    let nPh = 7"]], ['unit-pickStore']], //共同儲存區寫死七相位
+    ['PT03', 'src/domain/pickStore.mjs', [["let phSub = (s, nPh) => s.replace(/七相位/g, phaseText(nPh, '相位'))", "let phSub = (s, nPh) => s"]], ['unit-pickStore']], //共同儲存區不替換
+    ['PT04', 'src/eval/score.mjs', [[".replace(/七相位/g, phaseText(nPh, '相位'))", ""]], ['unit-phaseText']], //判讀之說明不替換
+    ['PT05', 'src/domain/sideRead.mjs', [["做多比例與${phaseText(nPh, '相位')}平均之相關 ", "做多比例與七相位平均之相關 "]], ['unit-phaseText']], //側別讀數寫死
+    ['PT06', 'src/domain/verify.mjs', [["let phaseCountOfDoc = (m) => phaseCountOfAll([phaseCountOfMetrics(m)], null)", "let phaseCountOfDoc = (m) => 7"]], ['unit-phaseText']], //節點文件之欄標與新鮮度一列寫死
+    ['PT07', 'src/cli/eval.mjs', [["新鮮度(${phaseText(phaseCountOfAll([phaseCountOfMetrics(m)], st.eval), '相位')}均 %)", "新鮮度(七相位均 %)"]], ['unit-phaseText']], //命令列之新鮮度一列寫死
+    ['PT08', 'src/cli/rsi.mjs', [["(${phaseText(bestPh, '相位')}均 ${best.eqYrMean}", "(七相位均 ${best.eqYrMean}"]], ['unit-phaseActual']], //輪末摘要寫死
+    ['PT09', 'src/tools/roundDigest.mjs', [["${phaseText(phaseCountOfAll(rows.map((d) => phaseCountOfMetrics(d.harness && d.harness.raw && d.harness.raw.metrics)), st.eval), '相位')}平均 / 最差相位", "七相位平均 / 最差相位"]], ['unit-phaseActual']], //輪末摘要之表頭寫死
+    ['PT10', 'src/domain/domain.mjs', [["sideReadTextOf(sideReadOfTree(nodes), nPhOf(nodes))", "sideReadTextOf(sideReadOfTree(nodes))"]], ['unit-phaseActual']], //搜尋地圖之側別讀數寫死
+    ['PT11', 'src/domain/domain.mjs', [["sideReadTextOf(sideReadOfTree(ns), nPhOf(ns))", "sideReadTextOf(sideReadOfTree(ns))"]], ['unit-phaseText']], //輪末摘要之側別讀數寫死
+    ['PT12', 'src/domain/domain.mjs', [["layer: node && node.spec ? layerOfSpec(node.spec) : null, evidence: ev, nPh: phaseCountOf(st.eval) })", "layer: node && node.spec ? layerOfSpec(node.spec) : null, evidence: ev })"]], ['unit-phaseText']], //判讀(domain)之說明寫死
+    ['PT13', 'src/domain/verify.mjs', [["evidence: { backtest: b.flag }, nPh: phaseCountOf(st.eval) })", "evidence: { backtest: b.flag } })"]], ['unit-phaseText']], //判讀(verify)之說明寫死
+    //── 相位數取實算(排程第 547 項②之接續; unit-phaseActual、unit-phaseText、unit-pickStore): phaseCountOfMetrics / phaseCountOfAll 與各輸出處之接線 ──
+    ['PA01', 'src/eval/cfgNum.mjs', [["    if (m && Array.isArray(m.phases) && m.phases.length > 0) {", "    if (false) {"]], ['unit-phaseActual']], //phases 不採(只看 byPhase)
+    ['PA02', 'src/eval/cfgNum.mjs', [["    return Array.isArray(bp) && bp.length > 0 ? bp.length : null", "    return null"]], ['unit-phaseActual']], //不取 byPhase 之長度
+    ['PA03', 'src/eval/cfgNum.mjs', [["xs.length > 0 && xs.every((n) => n === xs[0]) ? xs[0] : phaseCountOf(ev)", "xs.length > 0 ? xs[0] : phaseCountOf(ev)"]], ['unit-phaseActual']], //各列不同仍取第一列(不退回設定)
+    ['PA04', 'src/eval/cfgNum.mjs', [["Number.isInteger(n) && n > 0) : []", "Number.isInteger(n)) : []"]], ['unit-phaseActual']], //0 與負數之列計入
+    ['PA05', 'src/eval/cfgNum.mjs', [["xs.length > 0 && xs.every((n) => n === xs[0]) ? xs[0] : phaseCountOf(ev)", "xs.every((n) => n === xs[0]) ? xs[0] : phaseCountOf(ev)"]], ['unit-phaseActual']], //無列時回 undefined
+    ['PA06', 'src/eval/cfgNum.mjs', [["xs.every((n) => n === xs[0]) ? xs[0] : phaseCountOf(ev)", "xs.every((n) => n === xs[0]) ? xs[0] : 7"]], ['unit-phaseActual']], //後備取預設 7(不取設定)
+    ['PA07', 'src/eval/cfgNum.mjs', [["    if (m && Array.isArray(m.phases) && m.phases.length > 0) {", "    if (m && Array.isArray(m.phases) && m.phases.length >= 0) {"]], ['unit-phaseActual']], //空之 phases 回 0
+    ['PA08', 'src/cli/eval.mjs', [["phaseText(phaseCountOfAll([phaseCountOfMetrics(m)], st.eval), '相位')}均 %)", "phaseText(phaseCountOf(st.eval), '相位')}均 %)"]], ['unit-phaseActual']], //畫面取設定之長度(原寫法)
+    ['PA09', 'src/cli/rsi.mjs', [["bestPh = phaseCountOfAll([phaseCountOfMetrics(m)], st.eval)", "bestPh = phaseCountOfAll([], st.eval)"]], ['unit-phaseActual']], //輪末摘要不取該節點之結果
+    ['PA10', 'src/domain/domain.mjs', [["let nPhOf = (ns) => phaseCountOfAll(ns.map((n) => phaseCountOfMetrics(n.raw && n.raw.metrics)), st.eval)", "let nPhOf = (ns) => phaseCountOfAll(ns.map((n) => null), st.eval)"]], ['unit-phaseActual']], //彙整輸出不取各節點之結果
+    ['PA11', 'src/domain/domain.mjs', [["等效年化之${phT('相位', nodes)}平均 + 0.3", "等效年化之${phT('相位')}平均 + 0.3"]], ['unit-phaseActual']], //看板之 S 定義句取設定
+    ['PA12', 'src/domain/domain.mjs', [["等效年化之' + phT('相位', nodes) + '平均", "等效年化之' + phT('相位') + '平均"]], ['unit-phaseActual']], //看板之超額說明取設定
+    ['PA13', 'src/domain/domain.mjs', [["| 最差相位 | ${phT('相位', nodes)}平均 | 階梯 |", "| 最差相位 | ${phT('相位')}平均 | 階梯 |"]], ['unit-phaseActual']], //看板之節點一覽欄標取設定
+    ['PA14', 'src/domain/domain.mjs', [["列其 S / 最差相位 / ' + phT('相位', nodes) + '平均 / 對組成對照之超額", "列其 S / 最差相位 / ' + phT('相位') + '平均 / 對組成對照之超額"]], ['unit-phaseActual']], //搜尋地圖之量尺說明取設定
+    ['PA15', 'src/domain/domain.mjs', [["最差相位 / ' + phT('相位', nodes) + '平均 / 超額 / 組成之水準", "最差相位 / ' + phT('相位') + '平均 / 超額 / 組成之水準"]], ['unit-phaseActual']], //搜尋地圖之表頭取設定
+    ['PA16', 'src/domain/pickStore.mjs', [["note: phSub(note, /^backtest\\./.test(key) ? nPhBt : nPh)", "note: phSub(note, nPh)"]], ['unit-pickStore']], //共同儲存區之回測期欄說明取設定
+    ['PA17', 'src/domain/pickStore.mjs', [["note: phSub(note, /^backtest\\./.test(key) ? nPhBt : nPh)", "note: phSub(note, nPhBt)"]], ['unit-pickStore']], //共同儲存區之保留期欄說明取各策略之長度
+    ['PA18', 'src/domain/pickStore.mjs', [["[phSub(t, nPhBt), fn]", "[phSub(t, nPh), fn]"]], ['unit-pickStore']], //總表之欄標取設定
+    ['PA19', 'src/domain/pickStore.mjs', [["x.backtest.eqYrByPhase.length : null)), st.eval)", "x.backtest.eqYrByPhase.length : null)).concat([1]), st.eval)"]], ['unit-pickStore']], //各策略之長度另混入一列(必不同)
+    ['PA20', 'src/domain/verify.mjs', [["let phaseCountOfDoc = (m) => phaseCountOfAll([phaseCountOfMetrics(m)], null)", "let phaseCountOfDoc = (m) => phaseCountOfAll([], null)"]], ['unit-phaseActual']], //節點文件不取結果之相位數    //── 第 510 項②: 回測期旗標之重放以回測期終點為界(unit-backtestEnd): clipLedger 與 g_backtest.mjs ──
+    ['BE01', 'src/eval/ledger.mjs', [["            if (L.ent[j] < endV) {\n                tot++", "            if (L.ent[j] <= endV) {\n                tot++"]], ['unit-backtestEnd']], //進場棒 = 終點之單亦留(計數與填入不一致)
+    ['BE03', 'src/eval/ledger.mjs', [["if (L.ext[j] >= 0 && L.ext[j] < endV) {", "if (L.ext[j] >= 0 && L.ext[j] <= endV) {"]], ['unit-backtestEnd']], //出場棒 = 終點者視為已結
+    ['BE04', 'src/eval/ledger.mjs', [["                    ext[p] = -1\n                    pnl[p] = 0\n", "                    ext[p] = L.ext[j]\n                    pnl[p] = L.pnl[j]\n"]], ['unit-backtestEnd']], //終點之後才出場之單不改為未結
+    ['BE05', 'src/eval/ledger.mjs', [["                    ext[p] = -1\n                    pnl[p] = 0\n", "                    ext[p] = -1\n                    pnl[p] = L.pnl[j]\n"]], ['unit-backtestEnd']], //改為未結而損益不歸零
+    ['BE06', 'src/eval/ledger.mjs', [["    if (endV >= L.nBars) {\n        return L\n    }", "    if (endV > L.nBars) {\n        return L\n    }"]], ['unit-backtestEnd']], //終點 = nBars 者不回原物件
+    ['BE07', 'src/eval/ledger.mjs', [["    setExitCols(M)\n    return M\n}\n\n//ids,", "    return M\n}\n\n//ids,"]], ['unit-backtestEnd']], //依出場棒排序之已結單欄不重建
+    ['BE08', 'src/cli/backtest.mjs', [["L = clipLedger(L, btEndBar)", "void 0"]], ['unit-backtestEnd']], //不截帳本
+    ['BE09', 'src/eval/ledger.mjs', [["        endBar: endV,\n", ""]], ['unit-backtestEnd']], //帳本視圖不帶 endBar(決策不以終點為界)
+    ['BE10', 'src/eval/ledger.mjs', [["        endBar: endV,\n", "        endBar: endV + 1,\n"]], ['unit-backtestEnd']], //endBar 多 1(視窗恰止於終點之決策外之一個決策被計入)
+    ['BE11', 'src/eval/evalCore.mjs', [["        for (let b = warm + phase * bpd; b + W <= nEnd; b += cad) {", "        for (let b = warm + phase * bpd; b + W <= nBars; b += cad) {"]], ['unit-backtestEnd']], //決策不以 endBar 為界
+    ['BE12', 'src/eval/evalCore.mjs', [["            if (b + W > nEnd) {", "            if (b + W > nBars) {"]], ['unit-backtestEnd']], //新鮮度之視窗不以 endBar 為界
+    ['BE13', 'src/eval/evalCore.mjs', [["L.endBar < nBars ? L.endBar : nBars", "L.endBar < nBars ? L.endBar + 1 : nBars"]], ['unit-backtestEnd']], //nEnd 多 1
+    ['BE14', 'src/eval/evalCore.mjs', [["NumberIsInteger(L.endBar) && L.endBar >= 0 && L.endBar < nBars ?", "NumberIsInteger(L.endBar) && L.endBar < nBars ?"]], ['unit-backtestEnd'], 'equiv'], //endBar 為負數(帳本物件不會帶; 等價)
+    //── g_rsi.mjs 之 --dream-only 與 --file 之模式相容; 進入檔自己處理之旗標於讀設定之前(unit-cliStrictFlags) ──
+    ['FS30', 'src/cli/rsi.mjs', [["    if (hasDream && md !== 'round') {", "    if (false) {"]], ['unit-cliStrictFlags']], //--dream-only 於他模式不拒
+    ['FS31', 'src/cli/rsi.mjs', [["(md === 'annotate' || md === 'dirtype' || (md === 'round' && hasDream))", "(md === 'annotate' || md === 'dirtype' || md === 'round')"]], ['unit-cliStrictFlags']], //round 不帶 --dream-only 而給 --file 不拒
+    ['FS32', 'src/cli/rsi.mjs', [["    if (process.argv.includes('--file') && !(", "    if (false && !("]], ['unit-cliStrictFlags']], //--file 之模式相容不檢
+    ['FS33', 'src/cli/rsi.mjs', [["let dreamOnly = null\n", "let dreamOnly = (getSettings(), null)\n"]], ['unit-cliStrictFlags']], //只做夢輪次之 --file 之檢查晚於讀設定
+    ['FS34', 'src/cli/eval.mjs', [["let memberArg = argOf('member', null)", "let memberArg = (getSettings(), argOf('member', null))"]], ['unit-cliStrictFlags']], //--member 之檢查晚於讀設定
+    ['FS35', 'src/cli/eval.mjs', [["let nullArg = argOf('null', null)", "let nullArg = (getSettings(), argOf('null', null))"]], ['unit-cliStrictFlags']], //--null 之檢查晚於讀設定
+    ['FS36', 'src/cli/eval.mjs', [["let subsetArg = argStrOf('subset', null)", "let subsetArg = (getSettings(), argStrOf('subset', null))"]], ['unit-cliStrictFlags']], //--subset 之檢查晚於讀設定
+    ['BC13', 'src/tools/scanCheck.mjs', [["    console.log(`ERROR ${msg}`)\n    process.exit(2)\n}", "    console.log(`ERROR ${msg}`)\n    process.exit(1)\n}"]], ['unit-backtestCfg']], //scanCheck.mjs 設定無效之離開碼
+    //── 第 510 項①④⑤: 挑選函數回傳值之收窄與 V19 訊息、api 之訊息、保留期 asOf ──
+    ['NP01', 'src/eval/evalCore.mjs', [["        if (arr === null) {\n            throw new ErrorCtor(viaObj ?", "        if (false) {\n            throw new ErrorCtor(viaObj ?"]], ['unit-extApiInput']], //ids 之種類不合不拒
+    ['NP02', 'src/eval/evalCore.mjs', [["        if (group !== null && garr === null) {", "        if (false) {"]], ['unit-extApiInput']], //group 之種類不合不拒
+    ['NP03', 'src/eval/evalCore.mjs', [["invalid ${where}${px.viaObj ? '.ids' : ''}[${i}]: must be an integer from 0 to ${n - 1}", "invalid ${where}[${i}]: must be an integer from 0 to ${n - 1}"]], ['unit-evalCore']], //物件形式之位置不帶 .ids
+    ['NP04', 'src/eval/evalCore.mjs', [["const PICK_RET_WHERE = 'pick return value'", "const PICK_RET_WHERE = 'pick result'"]], ['unit-evalCore']], //訊息之位置名稱
+    ['NP05', 'src/eval/evalCore.mjs', [["'invalid pick return value.tag: must be structured-cloneable data (numbers, strings, objects, arrays; no functions, symbols or shared memory)'", "'invalid pick return value.tag: must be structured-cloneable data'"]], ['unit-evalIntegrity']], //tag 之訊息
+    ['NP06', 'src/eval/evalCore.mjs', [["`api.${fnName}: invalid bar: must be an integer from 0 to ${nBars}`", "`api.${fnName}: invalid bar: must be an integer from 0 to ${nBars - 1}`"]], ['unit-extData']], //api 之 bar 之上界
+    ['NP07', 'src/eval/evalCore.mjs', [["ArrayPrototypeJoin(serNames, ', ') : 'none (the ledger has no external series)')", "ArrayPrototypeJoin(serNames, '、') : 'none (the ledger has no external series)')"]], ['unit-extData']], //api.series 之名稱列表之分隔
+    ['NP08', 'src/eval/evalCore.mjs', [["(an index of meta.keyNames)` : 'api.factor: invalid ki: must be an index of meta.keyNames (the ledger has no factors)'", "(an index of meta.keyNames)` : 'api.factor: invalid ki: must be an index of meta.keyNames'"]], ['unit-extData']], //帳本無因子之訊息
+    ['HO01', 'src/domain/pickStore.mjs', [["let hoAsOf = hoFile && typeof hoFile.asOf === 'string' && hoFile.asOf ? hoFile.asOf : null", "let hoAsOf = hoFile && hoFile.asOf ? hoFile.asOf : null"]], ['unit-pickStore']], //asOf 任何真值照收
+    ['HO02', 'src/domain/pickStore.mjs', [["asOf: typeof ho.asOf === 'string' && ho.asOf ? ho.asOf : null }", "asOf: ho.asOf || null }"]], ['unit-pickStore']], //infoOf 之 asOf 任何真值照收
+    //── 第 547 項③: 評估器之指紋排除 unitNotional.mjs ──
+    ['X05', 'src/domain/fillKeys.mjs', [["let EVAL_FP_SKIP = ['ledgerBuild.mjs', 'unitNotional.mjs']", "let EVAL_FP_SKIP = ['ledgerBuild.mjs']"]], ['unit-evalFingerprint']], //unitNotional.mjs 計入指紋
+    ['X06', 'src/domain/fillKeys.mjs', [["let EVAL_FP_SKIP = ['ledgerBuild.mjs', 'unitNotional.mjs']", "let EVAL_FP_SKIP = ['unitNotional.mjs']"]], ['unit-evalFingerprint']], //ledgerBuild.mjs 計入指紋
+    //── nullGroupActOf 之「鄰域用盡 ⇒ 該席從缺」(排程第 574 項之測試守門; unit-evalRunNums 之參考模型) ──
+    ['ZE01', 'src/eval/evalCore.mjs', [["let v = drawNear(ord, lo, hi, rng, stamp, tick)\n                        if (v < 0) {\n                            continue\n", "let v = drawNear(ord, lo, hi, rng, stamp, tick)\n                        if (v < 0) {\n                            break\n"]], ['unit-evalRunNums']], //一席從缺即停止填其後之席
+    ['ZE02', 'src/eval/evalCore.mjs', [["let v = drawNear(ord, lo, hi, rng, stamp, tick)\n                        if (v < 0) {\n                            continue\n", "let v = drawNear(ord, lo, hi, rng, stamp, tick)\n                        if (false) {\n                            continue\n"]], ['unit-evalRunNums']], //從缺之席留下序號 -1
+    ['ZE03', 'src/eval/evalCore.mjs', [["                        rs[k] = out.slice(0, m).sort()", "                        rs[k] = out.sort()"]], ['unit-evalRunNums']], //從缺之席以序號 0 補入(未截斷至所填之席數)
+    ['ZE04', 'src/eval/evalCore.mjs', [["let v = drawNear(ord, lo, hi, rng, stamp, tick)\n                        if (v < 0) {\n                            continue\n                        }\n                        stamp[v] = tick", "let v = drawNear(ord, lo, hi, rng, stamp, tick)\n                        if (v < 0) {\n                            continue\n                        }\n                        void 0"]], ['unit-evalRunNums']], //所抽之席不標記為已用(同一選集內重複)
+    //── 獨立複審(第二次)之處置(R-EV-52): 空字串之值、--claim、--limit 與 --train、回測期之退化、endBar 之組合 ──
+    ['RV01', 'src/cfg.mjs', [["if (!hasVal || v.trim() === '') {", "if (!hasVal) {"]], ['unit-cliStrictFlags']], //空字串或只有空白之值被當成值
+    ['RV02', 'src/cfg.mjs', [["                if (hasVal) {\n                    i++\n                }\n                continue\n            }\n            return `invalid --${nm}: must be written as", "                continue\n            }\n            return `invalid --${nm}: must be written as"]], ['unit-cliStrictFlags']], //own 旗標之空值不被消耗(被當成多餘之值)
+    ['RV03', 'src/cli/rsi.mjs', [["if (!(typeof cv === 'string' && /^[0-9a-f]{8}$/.test(cv))) {", "if (false) {"]], ['unit-cliStrictFlags']], //--claim 之格式不檢
+    ['RV04', 'src/cli/rsi.mjs', [["        if (md !== 'frontier') {\n            console.log('invalid --claim: must be used with --mode frontier')", "        if (false) {\n            console.log('invalid --claim: must be used with --mode frontier')"]], ['unit-cliStrictFlags']], //--claim 不限 frontier 模式
+    ['RV05', 'src/cli/rsi.mjs', [["let bs = argStrOf('base', undefined)", "let bs = argOf('base', undefined)"]], ['unit-cliStrictFlags']], //--base 經數值轉型(全數字之 id 前綴被丟掉)
+    ['RV06', 'src/cli/build.mjs', [["if (train && limitArg !== null) {", "if (false) {"]], ['unit-cliStrictFlags']], //--limit 與 --train 併用不拒
+    ['RV07', 'src/cli/backtest.mjs', [["if (!(btEndBar > btStartBar)) {", "if (false) {"]], ['unit-backtestEnd']], //回測期終點不晚於起點不拒
+    ['RV08', 'src/cli/backtest.mjs', [["if (runs.every((r) => r.bars.length === 0)) {", "if (false) {"]], ['unit-backtestEnd']], //回測期內無任何決策不拒
+    ['RV09', 'src/eval/ledger.mjs', [["    if (L.endBar !== undefined && L.endBar !== null) {\n        M.endBar = L.endBar\n    }", "    void 0"]], ['unit-backtestEnd']], //半庫與子庫丟掉 endBar
+    ['RV10', 'src/eval/ledger.mjs', [["    if (typeof L.endBar === 'number' && L.endBar <= endV) {\n        return L\n    }", "    void 0"]], ['unit-backtestEnd']], //已截者於較晚之終點再截 ⇒ endBar 被放寬
+    ['RV11', 'src/eval/ledger.mjs', [["typeof L.endBar === 'number' && L.endBar <= endV", "typeof L.endBar === 'number' && L.endBar < endV"]], ['unit-backtestEnd']], //同終點再截不回原物件
 ]
 
 let args = process.argv.slice(2)

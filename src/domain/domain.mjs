@@ -7,6 +7,7 @@ import { getSettings, readJson, writeJson, FD_ROOT } from '../cfg.mjs'
 import { scoreOf } from '../eval/score.mjs'
 import { normUnit } from '../eval/unit.mjs'
 import { checkEvalSettings, configMsgOf } from '../eval/barGrid.mjs'
+import { evalRunNumOf, cfgNumOf } from '../eval/cfgNum.mjs'
 import { createFileRecords, roundName, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_LABELS, ARM_KINDS, ARM_LABELS, CLAIM_VERDICTS } from '../arsi/records.mjs'
 import { proposalOf } from './armCatalog.mjs'
 import { buildPickStore } from './pickStore.mjs'
@@ -20,7 +21,7 @@ import { makeDispatch } from '../arsi/dispatchers.mjs'
 import { createResourceMonitor } from '../arsi/resources.mjs'
 import { resolveRunConfig } from '../arsi/runner.mjs'
 import { makeTexts, GUIDE, guideText, OUT_SATURATED_NOTE } from './texts.mjs'
-import { nullDrawsOf, nullFloorText } from './factsText.mjs'
+import { nullDrawsOf, nullFloorText, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll } from './factsText.mjs'
 import { makeVerify, summaryOf, notesOf, isHalfOf, scanTrace, shortShareOf, sideFlowIssue, sideFlowCfgOf, extSurfaceOf, extFlagIssue, extBoardMeansOf, runNodeProc, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD, dirWorkIdsOf, dirNodeIdsOf, allowWorkOf } from './verify.mjs'
 import { PEAK_HEAD, TWIN_HEAD, isEvalHint as isTwoHint, evalHintBody, evalHintsOfDocs } from './verifyEvalHints.mjs'
 import { exposureCfgOf, exposureOf, isExposureHint, exposureHintOf } from './verifyExposure.mjs'
@@ -293,6 +294,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
     setGuardExtra(guardExtraOf(st))
 
     let rel = (p) => path.relative(FD_ROOT, p).replace(/\\/g, '/')
+    //nPhOf, 一組節點(已執行者)之相位數 = 各節點之評估結果實際所算者(raw.metrics 之 phases 或 op.eqYr.byPhase 之長度; 皆同者); 各節點不同或皆無此欄者取設定之 eval.phases 之長度(未給 = 評估器之預設 7)
+    //phT, 相位數之寫法(排程第 547 項: 原寫死「七相位」): 帶節點(ns)者 = 說明該組節點之結果 ⇒ nPhOf(取實算); 不帶者 = 說明正本評估之設定(做夢任務書之填寫指引)⇒ 設定之長度; 等於預設者與寫死時逐字相同
+    let nPhOf = (ns) => phaseCountOfAll(ns.map((n) => phaseCountOfMetrics(n.raw && n.raw.metrics)), st.eval)
+    let phT = (tail, ns) => phaseText(ns ? nPhOf(ns) : phaseCountOf(st.eval), tail)
     //臂目錄(規則 R-ARM-2): 生效之目錄 = 基底(arms/base.json; node tools/buildCatalog.mjs 產生)+ 狀態根之擴充(<狀態根>/governance/extensions.json; 引擎之治理 ——
     //  節點與做夢提、主控以 tools/armDecide.mjs 審); 算子與載體由目錄推導 ⇒ 於組裝領域之前取得(引擎組裝時以同一份基底 + 擴充合成 rsi.arms); 擴充檔損壞即拋錯
     //  inject.catalogFile: 供 agent 閱讀之生效目錄之寫出位置(預設 arms/catalog.json; 假輪次改寫到其狀態根旁, 不動正式之檔)
@@ -706,7 +711,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             if (raw && raw.validation && raw.validation.flag) {
                 ev.backtest = raw.validation.flag
             }
-            return scoreOf(raw && raw.metrics, { limits: st.eval.limits, score: st.score, layer: node && node.spec ? layerOfSpec(node.spec) : null, evidence: ev })
+            return scoreOf(raw && raw.metrics, { limits: st.eval.limits, score: st.score, layer: node && node.spec ? layerOfSpec(node.spec) : null, evidence: ev, nPh: phaseCountOf(st.eval) })
         },
         fingerprint: (raw) => (raw && raw.selHash ? raw.selHash : null),
         gates: {
@@ -1004,9 +1009,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let pBt = `${st.periods.backtest.start.slice(0, 10)} ~ ${st.periods.backtest.end.slice(0, 10)}`
         L.push(byKey ? (byC ? '## 節點一覽(未被否決者在前;其內依挑選內容由高至低 —— 見表前之「主鍵」一段)' : '## 節點一覽(未被否決者在前;其內依排序鍵由高至低 —— 見表前之「排序鍵」一段)') : '## 節點一覽(未被否決者在前;其內依回測期之 S 由高至低)')
         L.push('')
-        L.push(`**全部數字皆為回測期(${pBt})之評估結果**(策略庫沒見過之期間;每個決策只憑決策棒以前之資訊)。目標:S 更高且各相位皆為正。S = 0.7 × 等效年化之七相位平均 + 0.3 × 最差相位;階梯 0 ~ 3 見任務書之判準。`)
+        L.push(`**全部數字皆為回測期(${pBt})之評估結果**(策略庫沒見過之期間;每個決策只憑決策棒以前之資訊)。目標:S 更高且各相位皆為正。S = 0.7 × 等效年化之${phT('相位', nodes)}平均 + 0.3 × 最差相位;階梯 0 ~ 3 見任務書之判準。`)
         L.push('')
-        L.push('不同選集大小與持倉上限之 S 不能直接比(虛無均隨之變動);判斷挑法有沒有內容請看**超額**(等效年化之七相位平均 − 同劑量虛無均 = 比同樣條件之隨機挑好多少)與 z。虛無 p 於 ' + `${nullDrawsOf(st.eval)} 抽之下限為 ${nullFloorText(nullDrawsOf(st.eval))}。`)
+        L.push('不同選集大小與持倉上限之 S 不能直接比(虛無均隨之變動);判斷挑法有沒有內容請看**超額**(等效年化之' + phT('相位', nodes) + '平均 − 同劑量虛無均 = 比同樣條件之隨機挑好多少)與 z。虛無 p 於 ' + `${nullDrawsOf(st.eval)} 抽之下限為 ${nullFloorText(nullDrawsOf(st.eval))}。`)
         L.push('')
         //全體隨機之基準(規則 R-REC-36): 取判讀所用之同一份設定(settings.score.sideFlow 與內建值之合併), 不寫死某一策略庫之實測值
         let sfBase = sideFlowCfgOf(st.score && st.score.sideFlow).baseShort
@@ -1088,7 +1093,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             L.push('')
         }
         let keyNoteAt = L.length
-        L.push(`| 節點 | 臂 | 起點 | S | 最差相位 | 七相位平均 | 階梯 | 否決 | 虛無均 | 超額 | z | 虛無 p | 同訊號量超額 / p | 同活躍度超額 / p | 組成對照之超額 / p / 可重現 | 幾何對照之超額 / p | 換種子與同分次序之 S | 正本與重放之 S 之均;超額之均(組成對照 / 近期活躍度版)${anyXm ? ';擴充診斷之看板值之均' : ''} | 擴充診斷之看板值 |${anyMember ? ' 成員穩健性(保持率 中位 / 最小;負之半庫 / 半庫數) |' : ''} 每隻訊號數 | 做多比例 | 下單之做空比例(訓練期 / 回測期) | 月均單 | 最大持倉 | 選集大小 | 可信度 | 輪 | 成品之機制(自述) |`)
+        L.push(`| 節點 | 臂 | 起點 | S | 最差相位 | ${phT('相位', nodes)}平均 | 階梯 | 否決 | 虛無均 | 超額 | z | 虛無 p | 同訊號量超額 / p | 同活躍度超額 / p | 組成對照之超額 / p / 可重現 | 幾何對照之超額 / p | 換種子與同分次序之 S | 正本與重放之 S 之均;超額之均(組成對照 / 近期活躍度版)${anyXm ? ';擴充診斷之看板值之均' : ''} | 擴充診斷之看板值 |${anyMember ? ' 成員穩健性(保持率 中位 / 最小;負之半庫 / 半庫數) |' : ''} 每隻訊號數 | 做多比例 | 下單之做空比例(訓練期 / 回測期) | 月均單 | 最大持倉 | 選集大小 | 可信度 | 輪 | 成品之機制(自述) |`)
         L.push(`|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|${anyMember ? '---|' : ''}`)
         //正本與各次重放之平均(規則 R-EV-24): S、組成對照之超額、近期活躍度之組成對照之超額; 無重放(結果不依賴種子與同分次序)者即正本
         let avgOf = (n) => {
@@ -1255,9 +1260,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
         L.push('## 1. 逐輪趨勢')
         L.push('')
         let keyNoteAt = L.length
-        L.push('**進度之量尺 = 「有內容且可信」者之最高者**,列其 S / 最差相位 / 七相位平均 / 對組成對照之超額 / 組成之水準(組成對照之均;S ≈ 組成之水準 + 挑選內容,判進度以超額為主)。**「挑選內容」= 超額之均**:選集之每隻訊號數為全體隨機之 2 倍以上者用近期活躍度版之組成對照,其餘用內建者,取正本與各次重放之平均;挑選內容最高者不等於 S 最高者時兩者並列。「本輪最高 S」含組成,不作量尺。')
+        L.push('**進度之量尺 = 「有內容且可信」者之最高者**,列其 S / 最差相位 / ' + phT('相位', nodes) + '平均 / 對組成對照之超額 / 組成之水準(組成對照之均;S ≈ 組成之水準 + 挑選內容,判進度以超額為主)。**「挑選內容」= 超額之均**:選集之每隻訊號數為全體隨機之 2 倍以上者用近期活躍度版之組成對照,其餘用內建者,取正本與各次重放之平均;挑選內容最高者不等於 S 最高者時兩者並列。「本輪最高 S」含組成,不作量尺。')
         L.push('')
-        L.push('| 輪 | 節點(探索 / 驗證) | 新試之臂 | 本輪最高 S(含組成) | 量尺:截至該輪「有內容且可信」之最高者(S / 最差相位 / 七相位平均 / 超額 / 組成之水準) | 截至該輪「有內容」之最高 S(含部分可信與未審) | 做夢之方向(向內 / 向外;探索中押新家族者) | 前次方向之回顧(成立 / 不成立 / 其他) | 整體研判(集中度 / 進度 / 局部最佳點之風險) |')
+        L.push('| 輪 | 節點(探索 / 驗證) | 新試之臂 | 本輪最高 S(含組成) | 量尺:截至該輪「有內容且可信」之最高者(S / 最差相位 / ' + phT('相位', nodes) + '平均 / 超額 / 組成之水準) | 截至該輪「有內容」之最高 S(含部分可信與未審) | 做夢之方向(向內 / 向外;探索中押新家族者) | 前次方向之回顧(成立 / 不成立 / 其他) | 整體研判(集中度 / 進度 / 局部最佳點之風險) |')
         L.push('|---|---|---|---|---|---|---|---|---|')
         let seenArms = new Set()
         for (let r of rounds) {
@@ -1428,7 +1433,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             L.push(`- 前緣(尚未執行之提案)${props.length} 條:向內 ${props.length - out.length}、向外 ${out.length}(${props.map((n) => `${n.spec.arms.join('+')}${n.spec.base ? `←${String(n.spec.base).slice(0, 8)}` : ''}`).join(';')})。`)
         }
         //側別讀數(規則 R-REC-50): 相異之成品達下限才列讀數一列, 命中警示者另列一列(否則逐字不變)
-        let srT = sideReadTextOf(sideReadOfTree(nodes))
+        let srT = sideReadTextOf(sideReadOfTree(nodes), nPhOf(nodes))
         if (srT.line) {
             L.push(srT.line)
         }
@@ -1460,7 +1465,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
     }))
     let dreamExtra = [
         '2. **更新專案之指引文件**(本專案之累積經驗;只改下列檔,並把改了什麼列入 `dream.json` 之 `docsUpdated`):',
-        '   - `sgud/state/state.md`:只改 **§2「rsi 現況」**(覆寫該節,不追加流水帳;其餘各節由迴圈維護者更新):已跑輪數、樹上節點數與階梯分佈、**目前「挑選內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品(並列;同一個者寫一次並註明)**(各列 id、臂、S、七相位平均、最差相位、為正之相位數、對隨機挑之超額與 p、換亂數種子與同分次序之 S、可信度;為側別曝險者註明)、**整體研判之結論**(搜尋之集中度、進度、卡在局部最佳點之風險與依據;同 `synthesis.overview`)、各線之現況、已試與未試之臂、前緣、共用工具區之內容、已知問題。',
+        '   - `sgud/state/state.md`:只改 **§2「rsi 現況」**(覆寫該節,不追加流水帳;其餘各節由迴圈維護者更新):已跑輪數、樹上節點數與階梯分佈、**目前「挑選內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品(並列;同一個者寫一次並註明)**(各列 id、臂、S、' + phT('相位') + '平均、最差相位、為正之相位數、對隨機挑之超額與 p、換亂數種子與同分次序之 S、可信度;為側別曝險者註明)、**整體研判之結論**(搜尋之集中度、進度、卡在局部最佳點之風險與依據;同 `synthesis.overview`)、各線之現況、已試與未試之臂、前緣、共用工具區之內容、已知問題。',
         '   - `sgud/exp/experience.md`:新增本輪之**經驗**條目(條號續編;每條一個可重複使用之教訓:對節點 agent 寫挑選模組 / 做實驗 / 填文件之建議、對審計之建議、對評估器之觀察;附依據之節點 id 與數字)。對個別機制或臂之提示也寫在這裡;**每條開頭以〔〕標明適用範圍**(臂 id、層,或〔通用〕),日後之節點才找得到與自己之臂相關者。',
         '   - `sgud/proc/guide_dream.md`、`sgud/proc/guide_node.md`:**寫法守則**(由你維護;規則見 §3 之改進項一段)—— 有要增、改、刪之守則時直接改這兩個檔,並在 `docsUpdated` 註明改了什麼;沒有就不動。',
         '   - `sgud/feedback/feedback.md`:`dream.json` 之**每一筆改進項**(`guidance.improvements`)各新增一列(日期、類別、對象、內容、依據);類別欄寫該筆之類別名 —— 迴圈架構(`loop`)/ 做夢原則(`dream`)/ 節點原則(`node`)/ 共用工具(`tool`)/ 績效判準(`score`)/ 量尺(`validation`)/ 自有套件、全域技能、全域設定(`external`)。主代理依類別處置並另記處置列。**不是改進項者不入回饋檔**(本輪之審計內容寫在做夢文件;對個別節點或臂之提示寫入經驗)。',
@@ -1719,7 +1724,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             if (gd.show) {
                 lines.push(`量尺(並列;樹上可信者):${gaugeDualText(gd)}`)
             }
-            let srT = sideReadTextOf(sideReadOfTree(ns))
+            let srT = sideReadTextOf(sideReadOfTree(ns), nPhOf(ns))
             if (srT.warn) {
                 lines.push(srT.warn)
             }
@@ -1878,7 +1883,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             if (!m || !m.op) {
                 continue
             }
-            let train = scoreOf(m, { limits: st.eval.limits, score: st.score, layer: layerOfSpec(d.spec) })
+            let train = scoreOf(m, { limits: st.eval.limits, score: st.score, layer: layerOfSpec(d.spec), nPh: phaseCountOf(st.eval) })
             h.summary = summaryOf(m, train)
             h.notes = notesOf(m)
             h.fingerprint = h.fingerprint || h.selHash || m.selHash
@@ -1909,7 +1914,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 continue
             }
             let has = !!(n.raw.validation && n.raw.validation.flag)
-            let train = scoreOf(n.raw.metrics, { limits: st.eval.limits, score: st.score, layer: layerOfSpec(n.spec), evidence: { trust: n.evidence ? n.evidence.trust : null } })
+            let train = scoreOf(n.raw.metrics, { limits: st.eval.limits, score: st.score, layer: layerOfSpec(n.spec), evidence: { trust: n.evidence ? n.evidence.trust : null }, nPh: phaseCountOf(st.eval) })
             if ((has && !force) || train.ladder < bt.cfg.minLadder || train.flags.vetoed) {
                 continue
             }
@@ -2095,7 +2100,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
         return e
     }
     //runEvalDefault, 執行一次評估(g_eval.mjs 之子行程); 回 { code, timeout }
-    let runEvalDefault = async ({ args }) => runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), ...args], { cwd: FD_ROOT, timeoutMs: (st.eval.timeoutSec || 900) * 1000, env: fillEnv() })
+    //  逾時秒數: 與迴圈之重跑同一個取值函數(evalRunNumOf; 規則 R-EV-44 ④之二): 未給 = 900、數字字串轉為數值、給了而無效 ⇒ 拋 invalid eval.timeoutSec(組裝時之預檢已先拒絕; 原 `|| 900`: falsy 取預設、非數字者約 1 毫秒即逾時)
+    let runEvalDefault = async ({ args }) => runNodeProc([path.join(FD_ROOT, 'g_eval.mjs'), ...args], { cwd: FD_ROOT, timeoutMs: evalRunNumOf(st.eval, 'timeoutSec', 'eval') * 1000, env: fillEnv() })
     //writeJsonAtomic, 原子寫入(暫存檔〔帶行程代號〕+ 改名): 寫到一半中止者不留半份之正式檔
     //  寫檔與改名經 io(預設 fs; 可以 inject.io = { writeFileSync, renameSync } 注入, 測試以之觀察「先寫暫存再改名」)
     let io = inject.io && typeof inject.io.writeFileSync === 'function' && typeof inject.io.renameSync === 'function' ? inject.io : fs
@@ -2255,10 +2261,14 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //forcedOfRetry, 待重試之 force 欄 → planFill 之 forced { <節點 id>: { postfit?, ext? } }(強制重算而失敗者續為強制重算)
     let forcedOfRetry = (retry) => Object.fromEntries(retry.filter((x) => x.force).map((x) => [x.id, x.force]))
     //  member(選配; 規則 R-REC-51): true 且成員穩健性開啟(settings.rsi.memberCheck)者另計畫合格之成品之成員穩健性; 未給或 false 者計畫與未加入本項時相同
+    //fillDrawsOf, 補算之虛無抽數(nullDraws; fill、extFill、fillPlanOf 共用; 排程第 547 項): 未給(undefined 或 null)= null(沿用設定之值); 正整數(數字或其數字字串; 轉為數值後才使用)原樣;
+    //  給了而不是正整數(0、負數、小數、非數字、布林、物件)⇒ 拋 invalid opt.nullDraws: must be a positive integer(不帶輸入值; 原: 不合者被靜默當成未給而依設定評估 —— 與使用者所要之縮減不同, 且不報錯)
+    let fillDrawsOf = (v) => cfgNumOf(v, null, 'opt.nullDraws', 'posInt')
     let fillPlanOf = ({ targets = null, postfit = true, ext = true, force = false, nullDraws = null, member = false } = {}) => {
+        nullDraws = fillDrawsOf(nullDraws)
         let { nodes, skipped } = fillNodesOf()
         let fst = readFillState()
-        let p = planFill({ nodes, diags: diagsOf(toolboxDir), registry: fst.registry, evaluator: evaluatorFpOf(st), now: new Date().toISOString(), targets, postfit, ext, force, forced: forcedOfRetry(fst.retry), nullDraws: Number.isInteger(nullDraws) && nullDraws > 0 ? nullDraws : null, member: member === true ? memberPlanOf(nodes) : null })
+        let p = planFill({ nodes, diags: diagsOf(toolboxDir), registry: fst.registry, evaluator: evaluatorFpOf(st), now: new Date().toISOString(), targets, postfit, ext, force, forced: forcedOfRetry(fst.retry), nullDraws, member: member === true ? memberPlanOf(nodes) : null })
         return { ...p, skipped }
     }
     //fill, 附算與補算之執行
@@ -2284,6 +2294,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //  stage(選配)= 'preDream': 輪末之派做夢之前之一次(摘要之列之寫法見 fillLinesOf; 不更新待重試與不重試之失敗之紀錄, 回傳另帶 tasks; 待重試已達上限之列由做夢之後之一次列出)
     //  prior(選配; 輪末之做夢之後之一次所用)= 同一輪之派做夢之前之一次之回傳(results、tasks): 併入本次之結果以記待重試與不重試之失敗(每輪記一次)
     let fill = async ({ targets = null, postfit = true, ext = true, force = false, nullDraws = null, par = null, runEval = runEvalDefault, storeAfter = true, onEach = null, source = 'cli', backlogSec = 0, member = false, skip = null, stage = null, prior = null } = {}) => {
+        nullDraws = fillDrawsOf(nullDraws)
         let t0 = Date.now()
         let tCap0 = clockOf()
         let now = new Date().toISOString()
@@ -2294,7 +2305,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let evaluator = evaluatorFpOf(st)
         let { nodes, skipped } = fillNodesOf()
         //forced: 前次強制重算而失敗者(待重試之 force 欄)續為強制重算, 直到成功
-        let plan = planFill({ nodes, diags: diagsOf(toolboxDir), registry: prevReg, evaluator, now, targets, postfit, ext, force, forced: forcedOfRetry(fsr.retry), nullDraws: Number.isInteger(nullDraws) && nullDraws > 0 ? nullDraws : null, member: member === true ? memberPlanOf(nodes) : null })
+        let plan = planFill({ nodes, diags: diagsOf(toolboxDir), registry: prevReg, evaluator, now, targets, postfit, ext, force, forced: forcedOfRetry(fsr.retry), nullDraws, member: member === true ? memberPlanOf(nodes) : null })
         //skip(輪末之做夢之後之一次): 同一輪之派做夢之前已執行過之項目不再執行(每一項每輪至多一次; 未給者計畫不變)
         let skipPf = isObjF(skip) && Array.isArray(skip.postfit) ? new Set(skip.postfit) : null
         let skipM = isObjF(skip) && Array.isArray(skip.member) ? new Set(skip.member) : null
@@ -2319,7 +2330,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let blIds = new Set([...plan.backlog.postfit, ...Object.values(plan.backlog.ext).flat()].filter((id) => !inRetry.has(id)))
             if (blIds.size) {
                 let order = nodes.map((n) => n.id).filter((id) => blIds.has(id))
-                let pb = planFill({ nodes, diags: diagsOf(toolboxDir), registry: prevReg, evaluator, now, targets: order, postfit, ext, force: false, forced: null, nullDraws: Number.isInteger(nullDraws) && nullDraws > 0 ? nullDraws : null })
+                let pb = planFill({ nodes, diags: diagsOf(toolboxDir), registry: prevReg, evaluator, now, targets: order, postfit, ext, force: false, forced: null, nullDraws })
                 let byId = new Map(pb.tasks.map((x) => [x.nodeId, x]))
                 let blRec = new Map(fsr.blocked.map((x) => [x.id, x.sig]))
                 for (let tk of order.map((id) => byId.get(id)).filter(Boolean)) {
@@ -2390,7 +2401,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 let rr = null
                 let tRun = Date.now()
                 try {
-                    rr = await runEval({ nodeId: id, kind: 'ext', args: ['--pick', fpPick, '--mode', 'full', ...(Number.isInteger(nullDraws) && nullDraws > 0 ? ['--null', String(nullDraws)] : []), '--ext-only', task.ext.join(','), '--out', fpOut, '--no-log'] })
+                    rr = await runEval({ nodeId: id, kind: 'ext', args: ['--pick', fpPick, '--mode', 'full', ...(nullDraws !== null ? ['--null', String(nullDraws)] : []), '--ext-only', task.ext.join(','), '--out', fpOut, '--no-log'] })
                 }
                 catch (err) {
                     rr = { code: null, timeout: false, error: String((err && err.message) || err) }
@@ -2826,6 +2837,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //  nullDraws(選配; 正整數)= 重放時之虛無抽數(預設 = 設定值): 所補之診斷不使用虛無(只用 simulate)時, 主控可給 1 以省時間 —— 用到虛無之診斷不得縮減(其值會不同)
     //  回 { names, nNodes, results: [{ nodeId, ok, filled, board } | { nodeId, ok: false, error }], store, [stateError] }(results 只列有待補者; 同 fill 之執行)
     let extFill = async ({ names = null, only = null, force = false, nullDraws = null, runEval = runEvalDefault } = {}) => {
+        nullDraws = fillDrawsOf(nullDraws)
         let all = diagsOf(toolboxDir).map((x) => x.name)
         let want = Array.isArray(names) && names.length ? names.map((s) => String(s).trim()).filter((s) => s.length > 0) : all
         let unknown = want.filter((s) => !all.includes(s))
