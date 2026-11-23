@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings, argOf, FD_ROOT } from '../cfg.mjs'
+import { getSettings, argOf, cliGuard, FD_ROOT } from '../cfg.mjs'
 import { peekRunLock } from '../arsi/runner.mjs'
 import { ARM_LABELS, armProposalLine } from '../arsi/records.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
@@ -9,6 +9,8 @@ import { guardEntry } from '../domain/agentEntries.mjs'
 
 //agent(ARSI_AGENT_ROLE = node / dream)⇒ 帶任何引數(審定)者拒跑(離開碼 2; 於組裝專案與任何寫入之前; 規則 R-RUN-11); 無引數之列出照常
 guardEntry('armDecide')
+//命令列之旗標只認 --key value(空白分隔)與 TOOL_FLAGS.armDecide 所列者: 等號寫法、未列之旗標、重複、無值、多餘之值一律拒收(離開碼 2; 於組裝專案與任何寫入之前; 訊息固定、不帶輸入值; 原: 靜默忽略)
+cliGuard('armDecide')
 
 //臂目錄之提案之審定(主控用; 規則 R-ARM-2): 節點與做夢「提」, 主控「審」; 經引擎之治理(rsi.governance.decide)寫入 <狀態根>/governance/
 //  (擴充檔 extensions.json 為提交點, 其後提案帳 proposals.json 與 PROPOSALS.md), 並重寫供 agent 閱讀之 arms/catalog.json; 下一輪起可指派

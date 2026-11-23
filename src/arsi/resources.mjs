@@ -1,4 +1,5 @@
 import os from 'os'
+import getTrace from 'wsemi/src/getTrace.mjs'
 
 
 //資源監看與資源閘(通用; 不含領域用語): 讓使用端依自身設備給定 CPU 與記憶體之上限, 迴圈據以決定何時可再起一項工作
@@ -53,6 +54,10 @@ let osRead = () => {
  * @param {Function} [opt.log] 輸入記錄函數,預設空函數
  * @param {Function} [opt.sleep] 輸入睡眠函數,形式 (ms) → Promise,預設為 setTimeout 版本
  * @param {Function} [opt.rand] 輸入亂數函數,預設Math.random
+ * @param {Function} [opt.onTrace=null] 輸入觀察回調(跨套件規格〈計時器相關函數之觀察回調與測試〉;沿用 wsemi 之 getTrace),形式 (e) => {},e 為凍結之事件物件 { type, ... },於事件發生當下同步呼叫(拋錯與回傳之 rejection 忽略;未給時不組事件物件;stop 之後背景取樣之事件不再發出),預設null。事件:
+ *   'start' { sampleSec }(開始背景取樣;已在取樣者不發)、'stop' {}(停止背景取樣;未在取樣者不發)、'sample' { cpu(%; 第一次取樣無 CPU 值為 null), ramUsedGB }(每取一次樣)、
+ *   'wait-pass' { tag, waitedSec, forced: false, limited }(資源閘放行;未設任何上限者 limited 為 false、立即放行)、'wait-block' { tag, cpu, ramUsedGB }(最近取樣在門檻之外,開始等待;一次等待只發一次)、
+ *   'wait-poll' { tag, cpu, ramUsedGB, sleepMs }(每次重查之前;sleepMs 為即將睡眠之毫秒數,已含抖動)、'wait-forced' { tag, waitedSec, forced: true }(等待逾最長時間,放行)
  * @returns {Object} 回傳物件,含方法 start(開始背景取樣)、stop(停止背景取樣)、sample(取一次樣)、wait(tag)(資源閘,回傳 { waitedSec, forced })、stats(取得統計)、reset(統計歸零)
  * @example
  * let mon = createResourceMonitor({ cpuMax: 90, ramUsedMaxGB: 24 })
@@ -75,6 +80,8 @@ let createResourceMonitor = (opt = {}) => {
     let sleep = typeof opt.sleep === 'function' ? opt.sleep : (ms) => new Promise((resolve) => setTimeout(resolve, ms))
     let jitter = num(opt.jitter) === null ? 0 : Math.max(0, Math.min(1, opt.jitter))
     let rand = typeof opt.rand === 'function' ? opt.rand : Math.random
+    //觀察回調(opt.onTrace; wsemi getTrace): 未給 ⇒ null、不組事件物件
+    let trace = getTrace(opt)
 
     let prev = null
     let last = null
@@ -129,12 +136,18 @@ let createResourceMonitor = (opt = {}) => {
         if (r.ramUsedGB > b.ramMaxGB) {
             b.ramMaxGB = r.ramUsedGB
         }
+        if (trace) {
+            trace('sample', { cpu, ramUsedGB: r.ramUsedGB })
+        }
         return last
     }
 
     let start = () => {
         if (timer) {
             return
+        }
+        if (trace) {
+            trace('start', { sampleSec })
         }
         sample()
         timer = setInterval(sample, sampleSec * 1000)
@@ -147,6 +160,9 @@ let createResourceMonitor = (opt = {}) => {
         if (timer) {
             clearInterval(timer)
             timer = null
+            if (trace) {
+                trace('stop', {})
+            }
         }
     }
 
@@ -155,6 +171,9 @@ let createResourceMonitor = (opt = {}) => {
     //wait, 資源閘: 起新工作前呼叫
     let wait = async (tag = '') => {
         if (cpuStart === null && ramStart === null) {
+            if (trace) {
+                trace('wait-pass', { tag, waitedSec: 0, forced: false, limited: false })
+            }
             return { waitedSec: 0, forced: false }
         }
         let t0 = Date.now()
@@ -171,14 +190,24 @@ let createResourceMonitor = (opt = {}) => {
                 st.waits += waited ? 0 : 1
                 st.waitedSec += (Date.now() - t0) / 1000
                 log(`資源閘 ${tag}: 等待逾 ${maxWaitSec} 秒仍超過門檻(CPU ${last.cpu === null ? '—' : last.cpu.toFixed(0)}%、已用記憶體 ${last.ramUsedGB.toFixed(1)} GB), 放行`)
+                if (trace) {
+                    trace('wait-forced', { tag, waitedSec: Math.round((Date.now() - t0) / 1000), forced: true })
+                }
                 return { waitedSec: Math.round((Date.now() - t0) / 1000), forced: true }
             }
             if (!waited) {
                 waited = true
                 st.waits++
                 log(`資源閘 ${tag}: CPU ${last.cpu === null ? '—' : last.cpu.toFixed(0)}%(門檻 ${cpuStart === null ? '—' : cpuStart})、已用記憶體 ${last.ramUsedGB.toFixed(1)} GB(門檻 ${ramStart === null ? '—' : ramStart}), 等待`)
+                if (trace) {
+                    trace('wait-block', { tag, cpu: last.cpu, ramUsedGB: last.ramUsedGB })
+                }
             }
-            await sleep(pollSec * 1000 * (jitter > 0 ? 1 + jitter * (rand() - 0.5) : 1))
+            let sleepMs = pollSec * 1000 * (jitter > 0 ? 1 + jitter * (rand() - 0.5) : 1)
+            if (trace) {
+                trace('wait-poll', { tag, cpu: last.cpu, ramUsedGB: last.ramUsedGB, sleepMs })
+            }
+            await sleep(sleepMs)
             if (!timer) {
                 sample()
             }
@@ -186,6 +215,9 @@ let createResourceMonitor = (opt = {}) => {
         let sec = (Date.now() - t0) / 1000
         if (waited) {
             st.waitedSec += sec
+        }
+        if (trace) {
+            trace('wait-pass', { tag, waitedSec: Math.round(sec), forced: false, limited: true })
         }
         return { waitedSec: Math.round(sec), forced: false }
     }

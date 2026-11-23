@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import { fileURLToPath } from 'url'
 import { FILL_DIR } from './fillPlan.mjs'
 import { EVAL_VERSION } from './evalVersion.mjs'
+import { pkgRootOf, PKG_NAME } from './pkgRoot.mjs'
 
 //附算與補算之快取之鍵之來源(規則 R-REC-34; 讀檔者集中於此, 計畫本身在 fillPlan.mjs 為純函數)
 //  pickHashOf     成品檔之內容雜湊(位元組之 sha256 前 20 字)
@@ -16,8 +17,17 @@ import { EVAL_VERSION } from './evalVersion.mjs'
 //  fillFileOf / postfitFileOf  補算檔 / 求解窗後段之完整結果檔之路徑(狀態根之 fill/<節點 id>.json / .postfit.json; agent 不可寫之處)
 //  readFill       補算檔(無、讀不到、節點 id 不合或檔內之 nodeId 不符者為 null; 節點工作夾內之同名檔一律不讀)
 
-//SRC, 套件之 src 夾: 本檔以 ESM 深層路徑載入時位於 src/domain(上一層即 src); 打包進主入口(dist/*.umd.js)時上一層為套件根 ⇒ 先找上一層之 eval/, 無則找上一層之 src/eval/
-let SRC = ((up) => [up, path.join(up, 'src')].find((d) => fs.existsSync(path.join(d, 'eval'))) || up)(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'))
+//SRC, 套件之 src 夾: 往上找本套件之 package.json(pkgRootOf; 原始檔位於 <套件根>/src/domain、打包進主入口之 dist/*.umd.js 位於 <套件根>/dist, 皆得同一個套件根; 排程第 477 項 ②)⇒ <套件根>/src;
+//  找不到(無本套件之 package.json 之配置)⇒ 依檔案位置推導(原作法): 本檔位於 src/domain(上一層即 src)或打包檔位於套件根下一層(上一層為套件根)⇒ 先找上一層之 eval/, 無則找上一層之 src/eval/
+//  srcDirOf(here, pkgName): here = 本檔所在之夾; pkgName 供測試給不存在之套件名以走原作法
+let srcDirOf = (here, pkgName = PKG_NAME) => {
+    let root = pkgRootOf(here, pkgName)
+    if (root && fs.existsSync(path.join(root, 'src', 'eval'))) {
+        return path.join(root, 'src')
+    }
+    return ((up) => [up, path.join(up, 'src')].find((d) => fs.existsSync(path.join(d, 'eval'))) || up)(path.resolve(here, '..'))
+}
+let SRC = srcDirOf(path.dirname(fileURLToPath(import.meta.url)))
 
 let h20 = (buf) => crypto.createHash('sha256').update(buf).digest('hex').slice(0, 20)
 
@@ -152,4 +162,4 @@ let readFill = (stateRoot, nodeId) => {
     }
 }
 
-export { pickHashOf, evaluatorFpOf, diagsOf, readFill, fillFileOf, postfitFileOf }
+export { pickHashOf, evaluatorFpOf, diagsOf, readFill, fillFileOf, postfitFileOf, srcDirOf }

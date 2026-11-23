@@ -1,6 +1,9 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings } from '../cfg.mjs'
+import { getSettings, cliGuard } from '../cfg.mjs'
+
+//命令列只認一個位置引數(輪次; TOOL_FLAGS.dreamProfile): 任何旗標、多餘之位置引數一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值)
+cliGuard('dreamProfile')
 
 //唯讀(主代理): 做夢 agent 把時間花在哪 —— 解析其逐步事件紀錄(rsi/work/dream_rNNN/agent.log), 依工具呼叫之時間戳分類彙總
 //  node tools/dreamProfile.mjs [輪次(預設最近)]

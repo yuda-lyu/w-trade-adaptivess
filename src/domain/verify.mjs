@@ -5,10 +5,11 @@ import { scoreOf } from '../eval/score.mjs'
 import { evalRunNumsOf, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll } from '../eval/cfgNum.mjs'
 import { stripComments } from '../eval/pickLoader.mjs'
 import { runNodeProc } from './proc.mjs'
+import { PKG_NAME } from './pkgRoot.mjs'
 import { makeBacktest } from './backtest.mjs'
 import { gradeLabel } from './backtestGrade.mjs'
 import { recentDiagOf, neutralDeltaOf } from './diagRead.mjs'
-import { absOf, stripSearchPatterns, listRootExempt, entryExecOf, recursiveRootOf, scriptListsRoot, toolListsRoot, LR_CD } from './verifyCmdScan.mjs'
+import { absOf, stripSearchPatterns, listRootExempt, entryExecOf, recursiveRootOf, scriptListsRoot, toolListsRoot, LR_CD, zoneOf, zoneToolOf } from './verifyCmdScan.mjs'
 
 
 //節點成品之機械驗證(迴圈之正本數字): 以子行程重跑 g_eval.mjs --mode full, 不採信 agent 自報
@@ -105,7 +106,9 @@ let CONTENT_KEYS = ['content', 'new_string', 'old_string', 'newString', 'oldStri
 let CODE_EXT = /\.(mjs|js|cjs|ts|py|sh|ps1|bat|cmd)$/i
 //程式夾之位置: 本套件之原始碼在 <套件夾>/src —— 安裝於專案後為 node_modules/w-trade-adaptivess/src, 於套件夾內開發時為 src;
 //  沿用舊配置(程式直接放在專案之 lib)之專案亦一併涵蓋。迴圈驗證之程式 = 其 domain 夾之 backtest*、verify*
-let PKG_NAME = 'w-trade-adaptivess'
+//PKG_NAME(套件名; 單一定義在 pkgRoot.mjs)
+//ZONE_LABEL, 節點之禁區字樣「迴圈驗證之程式」之標籤(同一個標籤涵蓋 src/domain/{backtest,verify}*、庫況體檢之程式、萬用字元之前綴、先切換目錄之相對路徑與套件之建置產物 / 文件; `unit-cmdScan` 釘死標籤之清單與次序)
+let ZONE_LABEL = '回測期重放 / 迴圈驗證之程式'
 //GUARD_EXTRA, 專案另加之禁區字樣(套件本身不寫死任何專案之名稱): 由領域層於組裝時依設定給定(setGuardExtra(guardExtraOf(st)))
 //  guardExtraOf(st): 策略庫位於專案夾之外時, 其所在之資料夾名列為「策略庫專案」(settings.source.libraryRoot 之末段為 data、library 等通用名者取上一層);
 //    另加 settings.guard.forbidden = [{ pattern(正則之原始字串; 不分大小寫), label }]
@@ -177,7 +180,8 @@ let forbiddenPats = (privateRoot, nodeRules = false) => [
     [/archive_\d{8}_regime\d*/i, '舊制之備份'],
     //  同一條、同一標籤: 迴圈驗證之程式(src/domain/verify*、backtest*)與庫況體檢之程式(src/domain/libStats.mjs、src/tools/libCheck.mjs; 規則 R-EV-48、R-BT-10 ④)
     //  —— 後者之輸出含評估期內全庫之統計(事後資訊), 節點不得讀取或匯入其程式; 執行 tools/libCheck.mjs 另由「執行迴圈之寫檔入口」(R-BT-7 ①)與入口之拒跑(R-RUN-11)擋
-    ...(nodeRules ? [[/(?:lib|src)[\\/]+(?:domain[\\/]+(?:backtest|verify|libStats)|tools[\\/]+libCheck)/i, '回測期重放 / 迴圈驗證之程式']] : []),
+    //  另涵蓋套件裝於 node_modules/<套件>/ 下之建置產物與文件(dist、docs、sgud、test、README: 內含判定之程式與門檻之值; 同一個標籤; 規則 R-BT-10 ⑦)與專案內之 dist/<套件名>*(建置產物之檔名)
+    ...(nodeRules ? [[new RegExp(`(?:lib|src)[\\\\/]+(?:domain[\\\\/]+(?:backtest|verify|libStats)|tools[\\\\/]+libCheck)|node_modules[\\\\/]+${escRe(PKG_NAME)}[\\\\/]+(?:dist|docs|sgud|test|README)|dist[\\\\/]+${escRe(PKG_NAME)}`, 'i'), ZONE_LABEL]] : []),
 ]
 //節點專用、只套用於工具呼叫之指令與路徑(不套用於檔案內容與共用工具區之逐檔檢查 —— 程式內容中之「lib」「src」可能只是變數名):
 //  ①以目錄或萬用字元涵蓋迴圈驗證之程式者(…/domain/*.mjs、rg … <程式夾>/domain、ls <程式夾>/domain/、grep -r … <程式夾>、列出套件夾或其 src): 其輸出會含 verify.mjs 之內容
@@ -340,6 +344,8 @@ let scanTrace = ({ workDir, attempt, logFile = null, privateRoot, root = null, w
     let reListRoot = null
     let listBase = null
     let cwdMoved = false
+    //zone, 節點之「先切換目錄再以相對路徑」之工作目錄(相對專案根; '' = 專案根; null = 不確定)與 pushd 之堆疊, 跨工具呼叫沿用(規則 R-BT-10 ⑦)
+    let zone = { dir: '', tail: '', stack: [] }
     if (nodeRules && workRoot) {
         listBase = root || path.dirname(path.dirname(workRoot))
         let segs = path.relative(listBase, workRoot).split(/[\\/]+/).filter((x) => x && x !== '.').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
@@ -433,6 +439,37 @@ let scanTrace = ({ workDir, attempt, logFile = null, privateRoot, root = null, w
                             if (!hits.has(kk)) {
                                 hits.set(kk, String(v).replace(/\s+/g, ' ').slice(0, 160))
                             }
+                        }
+                    }
+                }
+                //節點: 萬用字元之前綴與先切換目錄之相對路徑(規則 R-BT-10 ⑦; 排程第 580 項 ①): 路徑字依(切換後之)工作目錄解析成相對專案根之路徑, 以同一組禁區字樣與目錄級之規則比對;
+                //  含萬用字元者依 ZONE_FILES 展開、涵蓋禁區之程式檔(或 domain 夾本身)者列同一個標籤。工作目錄: 帶 workdir / cwd 之欄者以之為準(專案根之外或無法判定 = 不確定); 未帶者為此前之指令切換後之目錄
+                if (nodeRules) {
+                    let rootAbs = root ? path.resolve(root) : ''
+                    let wdz = inp.workdir !== undefined ? inp.workdir : inp.cwd
+                    let zst = zone
+                    if (wdz !== undefined) {
+                        let rel = typeof wdz === 'string' && rootAbs ? path.relative(rootAbs, absOf(rootAbs, wdz)).replace(/\\/g, '/') : null
+                        zst = { dir: rel !== null && !rel.startsWith('..') ? rel : null, tail: '', stack: [] }
+                    }
+                    let zr = typeof inp.command === 'string' ? zoneOf(inp.command, zst, { root: rootAbs }) : zoneToolOf(inp, zst, { root: rootAbs, tool })
+                    if (typeof inp.command === 'string' && wdz === undefined) {
+                        zone = zr.state
+                    }
+                    if (zr.texts.length) {
+                        let joined = zr.texts.join(' ')
+                        test(joined, '指令或路徑')
+                        for (let label of nodeCmdHits('command', joined)) {
+                            let kk = `${label}(指令或路徑)`
+                            if (!hits.has(kk)) {
+                                hits.set(kk, joined.replace(/\s+/g, ' ').slice(0, 160))
+                            }
+                        }
+                    }
+                    if (zr.glob || zr.dirHit) {
+                        let kk = `${ZONE_LABEL}(指令或路徑)`
+                        if (!hits.has(kk)) {
+                            hits.set(kk, String(typeof inp.command === 'string' ? inp.command : (fpTarget || zr.glob || JSON.stringify(inp))).replace(/\s+/g, ' ').slice(0, 160))
                         }
                     }
                 }

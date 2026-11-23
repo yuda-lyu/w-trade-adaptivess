@@ -1,6 +1,6 @@
 import path from 'path'
 import fs from 'fs'
-import { getSettings } from '../cfg.mjs'
+import { getSettings, cliGuard } from '../cfg.mjs'
 import { backtestCfg } from '../domain/backtestCfg.mjs'
 import { configMsgOf } from '../eval/barGrid.mjs'
 import { scanTrace, setGuardExtra, guardExtraOf, allowWorkOf } from '../domain/verify.mjs'
@@ -13,6 +13,8 @@ import { evalHintsOfDocs, isEvalHint } from '../domain/verifyEvalHints.mjs'
 //  迴圈檢查之兩條機械提示(規則 R-REC-43 單峰交付、R-REC-44 選集與他節點相同)與寫回時同一判定(evalHintsOfDocs; 以全部節點文件與其評估紀錄求得), 列於掃描項之後一併對照
 //  側別曝險之提示(規則 R-REC-48)須以樹上之值(raw.metrics、raw.train、evidence)判定, 本工具唯讀而無樹 ⇒ 不在此對照之內(--mode validate 寫回時才併入; 已知限制見 sgud/state/state_REC2.md)
 //  成員依賴之提示(規則 R-REC-51)同(判定讀樹上之 raw.member): 不在此對照之內 —— 節點文件內之該條不列入「節點文件內」之項、不使該份判為不同; --mode validate 之重掃以樹上之值重產(現行者照留一條, 不重複)
+//命令列只認一個位置引數(節點 id 前綴, 逗號分隔; TOOL_FLAGS.scanCheck): 任何旗標、多餘之位置引數一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值; 原: 旗標被當成節點 id 前綴)
+cliGuard('scanCheck')
 let st = getSettings()
 setGuardExtra(guardExtraOf(st)) //專案另加之禁區字樣(與迴圈之掃描同一組)
 //私有根(settings.backtest.privateRoot): settings.backtest 之數值鍵無效(invalid backtest.<鍵>; 排程第 547 項)⇒ 印 ERROR、離開碼 2(唯讀工具, 不拋堆疊); 其餘錯誤照舊拋出

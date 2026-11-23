@@ -145,6 +145,30 @@ describe('tools/fakeRound.mjs:擴充診斷之補算 —— 略過不計失敗(�
         let brief = fs.readFileSync(path.join(x.state, 'work', 'dream_r001', 'brief.md'), 'utf8').split('\n').filter((l) => l.includes('本輪節點之提案'))
         assert.equal(brief.length, 1, '②做夢任務書之「本輪節點之提案」恰 1 列')
         assert(brief[0].includes(`\`${p1.slice(0, 8)}\` 〔新臂〕假新機制`) && !brief[0].includes(p2.slice(0, 8)) && !brief[0].includes(p3.slice(0, 8)), `②只列提案者: ${brief[0]}`)
+        //排程第 588 項 ②(R-REC-52): 做夢任務書「更新專案之指引文件」之 state.md 一項與 synthesis 條之量尺句一致 —— 並列「挑選內容最高且可信」與「回測期 S 最高且可信」之成品(同一個者寫一次並註明、側別曝險者註明);
+        //  原靜態句「目前回測期 S 最高且可信之成品」(只列 S 最高者)不殘留; 此句與 synthesis 條之量尺句(texts.mjs)出自同一組名詞
+        let dreamBrief = fs.readFileSync(path.join(x.state, 'work', 'dream_r001', 'brief.md'), 'utf8')
+        let stateLine = dreamBrief.split('\n').filter((l) => l.includes('`sgud/state/state.md`:只改'))
+        assert.equal(stateLine.length, 1, `做夢任務書之 state.md 一項恰 1 列: ${stateLine.length}`)
+        assert(stateLine[0].includes('**目前「挑選內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品(並列;同一個者寫一次並註明)**') && stateLine[0].includes('為側別曝險者註明'), `state.md 一項依新量尺句並列: ${stateLine[0]}`)
+        assert(!dreamBrief.includes('目前回測期 S 最高且可信之成品'), '原靜態句(只列 S 最高者)不殘留')
+        //排程第 477 項 ③(合成帳本之整輪回歸): 輪末鉤子(afterRound)內「方向未入前緣」一行之呼叫站點(假做夢之方向含一條不合法者 ⇒ 該行在輪末摘要)—— 原只能由真實帳本之整輪觸及
+        let noteHit = []
+        let walkNote = (d) => {
+            for (let e of fs.readdirSync(d, { withFileTypes: true })) {
+                let p = path.join(d, e.name)
+                if (e.isDirectory()) {
+                    walkNote(p)
+                }
+                else if (/\.(md|json|jsonl|log|txt)$/.test(e.name) && /\*\*方向未入前緣 \d+ 條\*\*/.test(fs.readFileSync(p, 'utf8'))) {
+                    noteHit.push(path.relative(x.state, p))
+                }
+            }
+        }
+        walkNote(x.state)
+        assert(noteHit.length > 0 || /\*\*方向未入前緣 \d+ 條\*\*/.test(x.out), `輪末摘要有「方向未入前緣」一行(afterRound 之呼叫站點): ${noteHit.join(',')}`)
+        let synLine = dreamBrief.split('\n').find((l) => l.startsWith('- `synthesis`:'))
+        assert(synLine && synLine.includes('**目前樹上「內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品各是哪一個'), 'synthesis 條之量尺句(對照用)在')
         let nodeMd = (id) => path.join(x.state, 'records', 'nodes', `${id}.md`)
         let doc1 = fs.readFileSync(nodeMd(p1), 'utf8')
         assert(doc1.includes(PROPOSAL_LINE) && doc1.includes('〔新臂〕假新機制'), '③提案者之節點文件列有提案')

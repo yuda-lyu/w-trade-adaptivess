@@ -120,6 +120,27 @@ describe('settings.backtest 之數值鍵(排程第 547 項①)', function () {
             }
         })
 
+        it('g_backtest.mjs / g_toolbox.mjs: settings.backtest.rule.* 與 grade.* 給了而無效(排程第 595 項之接續 ⑦)⇒ ERROR invalid backtest.<路徑>、離開碼 2、不建私有根; 數字字串合格者不被拒', () => {
+            for (let [name, bt, want] of [
+                ['rl1', { rule: { meanMin: 'abc' } }, 'ERROR invalid backtest.rule.meanMin: must be a finite number'],
+                ['rl2', { rule: { worstPhaseMin: true } }, 'ERROR invalid backtest.rule.worstPhaseMin: must be a finite number'],
+                ['gr1', { grade: { pAbove: 1.5 } }, 'ERROR invalid backtest.grade.pAbove: must be a number from 0 to 1'],
+                ['gr2', { grade: { splits: 2.5 } }, 'ERROR invalid backtest.grade.splits: must be a positive integer'],
+            ]) {
+                let root = mkRoot(`bt_${name}`, { ...bt, privateRoot: path.join(t.dir, `pr_${name}`) })
+                let r = run(root, 'backtest.mjs', ['--pick', 'p.mjs', '--name', 'n'], { ARSI_HARNESS: '1' })
+                assert.strictEqual(r.status, 2, `${name}: ${r.out.join('|').slice(0, 200)} ${r.err.slice(0, 200)}`)
+                assert.deepEqual(r.out, [want], name)
+                assert(!fs.existsSync(path.join(t.dir, `pr_${name}`)), `${name}: 不建私有根`)
+                let r2 = run(root, 'toolbox.mjs', [])
+                assert.strictEqual(r2.status, 2, `${name} toolbox: ${r2.out.join('|').slice(0, 200)}`)
+                assert.deepEqual(r2.out, [want], `${name} toolbox`)
+            }
+            let ok = mkRoot('bt_okstr', { rule: { meanMin: '0.1', worstPhaseMin: ' -1 ' }, grade: { pAbove: '0.04', pBelow: '0.96', pStrong: '0.02', splits: '3' } })
+            let r3 = run(ok, 'toolbox.mjs', [])
+            assert(!r3.out.some((l) => l.includes('invalid backtest')), r3.out.join('|').slice(0, 300))
+        })
+
         it('g_toolbox.mjs(唯讀之自檢): 同; 設定合格者不被拒', () => {
             let bad = mkRoot('tb_bad', { replicas: 2.5 })
             let r = run(bad, 'toolbox.mjs', [])

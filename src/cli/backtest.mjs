@@ -38,6 +38,13 @@ if (process.env.ARSI_HARNESS !== '1') {
         console.log(argMsg)
         process.exit(2)
     }
+    //--seed(亂數種子; 決定回測期旗標與參照之結果): 給了而不是整數(小數、非數字、超出安全整數)⇒ 不執行(離開碼 2; 同上之時點; 排程第 595 項之接續, R-EV-44 ④之二; 無值者已於上拒收)
+    //  原: 說明後忽略而沿用設定之種子(結果與使用者所指定者不同)
+    let seedArg0 = argOf('seed', null)
+    if (seedArg0 !== null && !(typeof seedArg0 === 'number' && Number.isSafeInteger(seedArg0))) {
+        console.log('invalid --seed: must be an integer')
+        process.exit(2)
+    }
 }
 let st = getSettings()
 //settings.backtest 之數值鍵(minLadder、replicas、nullDraws、timeoutSec)給了而無效 ⇒ ERROR invalid backtest.<鍵>、離開碼 2(未寫任何檔; 排程第 547 項; 原: 不合者被靜默改用預設)
@@ -217,13 +224,8 @@ let accept = typeof pk.accept === 'function' ? pk.accept : null
 let seedArg = argOf('seed', null)
 let seed = evRun.seed
 if (seedArg !== null) {
-    //--seed 須為整數(安全整數之範圍內; 同 g_eval.mjs 之重放): 給了而不合者說明並沿用設定之種子(原: 小數照用、非數字靜默忽略)
-    if (typeof seedArg === 'number' && Number.isSafeInteger(seedArg)) {
-        seed = seedArg
-    }
-    else {
-        console.log('--seed 須為整數(安全整數之範圍內),已忽略(沿用設定之亂數種子)')
-    }
+    //--seed 須為整數(安全整數之範圍內): 給了而不合者已於檔首(讀設定之前)拒收(離開碼 2), 到此必為安全整數
+    seed = seedArg
 }
 let r2 = (x) => Math.round(x * 100) / 100
 //replay, 以某亂數種子重放一次(七相位); 回各相位之切片與操作績效

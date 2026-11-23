@@ -5,9 +5,11 @@
 //  用法: node tools/improveTrend.mjs [--json]
 import fs from 'fs'
 import path from 'path'
-import { getSettings } from '../cfg.mjs'
+import { getSettings, cliGuard } from '../cfg.mjs'
 import { createFileRecords, tallyDream, roundName, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS } from '../arsi/records.mjs'
 
+//命令列之旗標只認 --json(TOOL_FLAGS.improveTrend): 等號、未列、重複、多餘之值一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值)
+cliGuard('improveTrend')
 let st = getSettings()
 let records = createFileRecords(st.records)
 let fpLegacy = path.join(path.dirname(st.records.dreamDir), 'improveLegacy.json')

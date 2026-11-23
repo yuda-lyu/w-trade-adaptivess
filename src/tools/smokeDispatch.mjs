@@ -1,12 +1,15 @@
 // 派工器之最小探測(讀 + 寫 + 跑指令): 節點角色(Go 版 deepseek)與做夢角色(opus5.5)各一次; 用法: node tools/smokeDispatch.mjs [node|dream|both|deny]
 import fs from 'fs'
 import path from 'path'
-import { getSettings, FD_ROOT, P } from '../cfg.mjs'
+import { getSettings, FD_ROOT, P, cliGuard } from '../cfg.mjs'
 import { makeDispatch } from '../arsi/dispatchers.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
+import { preflightOf } from '../arsi/rsiNums.mjs'
 
 //agent(ARSI_AGENT_ROLE = node / dream)不得派工 ⇒ 拒跑(離開碼 2; 於任何寫入之前; 規則 R-RUN-11)
 guardEntry('smokeDispatch')
+//命令列只認一個位置引數(node、dream、both、deny; TOOL_FLAGS.smokeDispatch): 任何旗標、多餘之位置引數一律拒收(離開碼 2; 於讀設定與任何派工之前; 訊息固定、不帶輸入值)
+cliGuard('smokeDispatch')
 
 let st = getSettings()
 let which = process.argv[2] || 'both'
@@ -15,7 +18,7 @@ agents.node.timeoutMin = 4
 agents.node.fallback = []
 agents.dream.timeoutMin = 4
 agents.dream.effort = 'low'
-let dispatch = makeDispatch({ agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, cwd: FD_ROOT, maxPercent: st.rsi && st.rsi.preflight ? st.rsi.preflight.quotaMaxPercent : undefined })
+let dispatch = makeDispatch({ agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, cwd: FD_ROOT, maxPercent: preflightOf(st.rsi).quotaMaxPercent })
 let dir = P('tmp', 'smoke')
 fs.rmSync(dir, { recursive: true, force: true })
 fs.mkdirSync(dir, { recursive: true })

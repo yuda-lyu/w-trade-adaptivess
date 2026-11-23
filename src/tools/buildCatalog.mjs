@@ -6,12 +6,14 @@
 //  用法: node tools/buildCatalog.mjs
 import fs from 'fs'
 import path from 'path'
-import { P } from '../cfg.mjs'
+import { P, cliGuard } from '../cfg.mjs'
 import { mkArm } from '../domain/armCatalog.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
 //agent(ARSI_AGENT_ROLE = node / dream)⇒ 拒跑(離開碼 2; 於任何寫入之前; 規則 R-RUN-11)
 guardEntry('buildCatalog')
+//命令列之旗標只認 --out <檔>(TOOL_FLAGS.buildCatalog): 等號、未列、重複、無值、多餘之值一律拒收(離開碼 2; 於任何寫入之前; 訊息固定、不帶輸入值)
+cliGuard('buildCatalog')
 
 let layers = {
     A: '資格層:誰能進候選池',

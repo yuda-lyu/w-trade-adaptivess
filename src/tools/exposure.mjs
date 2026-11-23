@@ -1,11 +1,13 @@
 import path from 'path'
-import { getSettings, argOf, argStrOf } from '../cfg.mjs'
+import { getSettings, argOf, argStrOf, cliGuard } from '../cfg.mjs'
 import { peekRunLock } from '../arsi/runner.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
 //agent(ARSI_AGENT_ROLE = node / dream)⇒ 帶任何引數(放行 / 撤銷)者拒跑(離開碼 2; 於組裝專案與任何寫入之前; 規則 R-RUN-11); 無引數之列出照常
 guardEntry('exposure')
+//命令列之旗標只認 --key value(空白分隔)與 TOOL_FLAGS.exposure 所列者(未列、等號、重複、無值、多餘之值一律拒收; 離開碼 2; 於組裝專案與任何寫入之前; 訊息固定、不帶輸入值)
+cliGuard('exposure')
 
 //側別曝險之放行(主控用; 規則 R-REC-48): 側別曝險且未放行之成品不作為補位之底與方向之起點; 主控核對後可逐案放行(仍標示「曝險(已放行)」)
 //  node tools/exposure.mjs                                       列出樹上側別曝險之節點(定性之理由、是否已放行)

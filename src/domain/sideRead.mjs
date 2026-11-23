@@ -1,4 +1,5 @@
 import { phaseText } from '../eval/cfgNum.mjs'
+import { rsiNumOf } from '../arsi/rsiNums.mjs'
 
 
 //全樹之側別讀數(規則 R-REC-50; 純函數): 樹上之高分是否與選集之側別(做多比例)同進退 —— 搜尋地圖 §4 之讀數與警示、輪末摘要之警示一列
@@ -26,8 +27,15 @@ let sideReadCfgOf = (v) => {
         return null
     }
     let o = v && typeof v === 'object' && !Array.isArray(v) ? v : {}
-    let int2 = (x, d) => (Number.isInteger(x) && x >= 2 ? x : d)
-    let unit = (x, d) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 1 ? x : d)
+    //數字或其數字字串轉為數值後使用(K4、K7; 排程第 595 項; 原: 只收 number, 數字字串被當成未給), 無效者用預設(K3)
+    let int2 = (x, d) => {
+        let n = rsiNumOf(x, 'int2')
+        return n === null ? d : n
+    }
+    let unit = (x, d) => {
+        let n = rsiNumOf(x, 'unit')
+        return n === null ? d : n
+    }
     let c = { minNodes: int2(o.minNodes, SIDE_READ_DEFAULT.minNodes), top: int2(o.top, SIDE_READ_DEFAULT.top), corrAbs: unit(o.corrAbs, SIDE_READ_DEFAULT.corrAbs), lo: unit(o.lo, SIDE_READ_DEFAULT.lo), hi: unit(o.hi, SIDE_READ_DEFAULT.hi) }
     if (!(c.lo < c.hi)) {
         c.lo = SIDE_READ_DEFAULT.lo

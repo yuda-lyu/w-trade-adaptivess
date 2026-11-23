@@ -1,6 +1,9 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings } from '../cfg.mjs'
+import { getSettings, cliGuard } from '../cfg.mjs'
+
+//命令列之旗標只認 --nodes、--shape(TOOL_FLAGS.nodeAudit): 等號、未列、重複、多餘之值一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值)
+cliGuard('nodeAudit')
 
 //唯讀(主代理): 跨輪盤點節點之行為, 供研判「節點任務書要改什麼」(不含回測期數字; 只讀節點文件、做夢文件與工作夾之 .evals.log)
 //  node tools/nodeAudit.mjs            逐輪彙總

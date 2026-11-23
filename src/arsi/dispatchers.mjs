@@ -4,6 +4,14 @@ import path from 'path'
 import { createRequire } from 'module'
 import maskDiagText from 'wsemi/src/maskDiagText.mjs'
 import { agentEnvOf } from './agentRole.mjs'
+import { rsiNumOf } from './rsiNums.mjs'
+
+//numOr: 設定之數值之取值(排程第 595 項; K3、K4、K7): 數字或其數字字串轉為數值後使用, 無效或未給取 def(原: Number.isFinite 使數字字串被當成未給;
+//  `cfg.timeoutMin || 120` 使 'abc' 成 NaN 而 0 取預設、負數照用)
+let numOr = (v, kind, def) => {
+    let x = rsiNumOf(v, kind)
+    return x === null ? def : x
+}
 
 
 //額度用盡之處置(規則 R-RUN-8; Gitea #156):
@@ -188,7 +196,7 @@ let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject 
     let keysOf = (name) => String(env[name] || '').split(/[,;]/).map((s) => s.trim()).filter(Boolean)
     let secrets = secretsOf(env, [...new Set(['OPENCODE_GO_KEYS', ...(Array.isArray(wda.providers) ? wda.providers.map((p) => p && p.envVar).filter((x) => typeof x === 'string' && x) : [])])])
     //訂閱之用量守門之預設門檻(與起跑前之額度檢查同一設定: 專案設定 rsi.preflight.quotaMaxPercent); 非有限數取 95
-    let gateMax = Number.isFinite(maxPercent) ? maxPercent : 95
+    let gateMax = numOr(maxPercent, 'num', 95)
 
     //agentEnv(規則 R-RUN-11): 節點與做夢之 agent 子行程另帶 ARSI_AGENT_ROLE = 角色(經 w-dispatch-ai 之 opt.env 只注入該次子行程; 不寫入本行程之環境)
     //  ⇒ agent 所起之指令執行寫檔或起行程之進入檔與模式即被拒跑(src/domain/agentEntries.mjs); 其他角色不帶
@@ -205,7 +213,7 @@ let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject 
             //  不以 permission.external_directory: 'deny' 代替: 使用者規則接在預設之後且比對取最後一筆, 會蓋過預設放行之工具輸出截斷檔夾與暫存夾(opencode 1.19.5)
             config: { permission: { edit: 'allow', write: 'allow', bash: 'allow' }, experimental: { continue_loop_on_deny: true } },
             cwd,
-            timeoutMs: (cfg.timeoutMin || 120) * 60000,
+            timeoutMs: numOr(cfg.timeoutMin, 'timerMin', 120) * 60000,
             validate: 'nonempty',
             detectTruncation: entry.detectTruncation === true,
             onStdout: (chunk) => {
@@ -224,7 +232,7 @@ let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject 
             //用量守門: 任一視窗達門檻或被限流 ⇒ 不派(由 fallback 接手; 結果記為額度之失敗);
             //  門檻 = 該角色之 quotaMaxPercent(agents.<role>.quotaMaxPercent), 未設則取 makeDispatch 之 maxPercent(預設 95);
             //  設為大於 100 之值 = 不以用量守門(用到訂閱實際用盡為止; 被限流者仍不派)
-            let mx = Number.isFinite(cfg.quotaMaxPercent) ? cfg.quotaMaxPercent : gateMax
+            let mx = numOr(cfg.quotaMaxPercent, 'num', gateMax)
             let key = null
             for (let k of keys) {
                 let u = await wda.opencodeGoUsage({ key: k })
@@ -267,7 +275,7 @@ let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject 
             //--output-format stream-json --verbose: 輸出逐步事件(含每次工具呼叫之輸入), 落於 logFile 供事後稽核其操作; cfg.trace === false 時只輸出最終文字
             extraArgs: ['--strict-mcp-config', '--effort', cfg.effort || 'xhigh', ...(cfg.trace === false ? [] : ['--output-format', 'stream-json', '--verbose'])],
             cwd,
-            timeoutMs: (cfg.timeoutMin || 240) * 60000,
+            timeoutMs: numOr(cfg.timeoutMin, 'timerMin', 240) * 60000,
             validate: 'nonempty',
             onStdout: (chunk) => {
                 try {
@@ -288,7 +296,7 @@ let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject 
         let errs = []
         for (let c of chain) {
             //備援條目沿用該角色之逾時與用量門檻(條目自己有給者優先; 門檻非有限數者視同未給)
-            let c2 = { timeoutMin: cfg.timeoutMin, ...c, quotaMaxPercent: Number.isFinite(c.quotaMaxPercent) ? c.quotaMaxPercent : cfg.quotaMaxPercent }
+            let c2 = { ...c, timeoutMin: numOr(c.timeoutMin, 'timerMin', cfg.timeoutMin), quotaMaxPercent: numOr(c.quotaMaxPercent, 'num', cfg.quotaMaxPercent) }
             let info = c2.kind === 'claude' ? { kind: 'claude', model: c2.model, effort: c2.effort || 'xhigh' } : { kind: 'opencode', model: c2.id, variant: c2.variant || null }
             let r
             try {
@@ -348,7 +356,7 @@ let checkQuota = async ({ agents, skillsRoot, envFile, maxPercent = 95, probe = 
     let env = envFile && fs.existsSync(envFile) ? wda.readEnvFile(envFile) : {}
     let keysOf = (name) => String(env[name] || '').split(/[,;]/).map((s) => s.trim()).filter(Boolean)
     let norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-    let gateMax = Number.isFinite(maxPercent) ? maxPercent : 95
+    let gateMax = numOr(maxPercent, 'num', 95)
     //probeFree, 以極小之提示詞試一次免費池之條目(短逾時); 回 true = 因額度而不可用(派工套件回 errorType 'quota'), 其他結果(成功、逾時、斷線、例外)皆 false
     //  工作路徑取系統暫存夾下新建之空夾(用畢即刪): 不載入專案之指引檔; 不直接用系統暫存夾 —— 其內檔案眾多, CLI 啟動時會掃描而變慢
     let probeFree = async (entry, c) => {
@@ -374,7 +382,7 @@ let checkQuota = async ({ agents, skillsRoot, envFile, maxPercent = 95, probe = 
             continue
         }
         //mx: 該角色之門檻(agents.<role>.quotaMaxPercent; 未設則取 maxPercent)—— 與派工時之用量守門同一個值
-        let mx = Number.isFinite(cfg.quotaMaxPercent) ? cfg.quotaMaxPercent : gateMax
+        let mx = numOr(cfg.quotaMaxPercent, 'num', gateMax)
         let row = { role, kind: cfg.kind, model: cfg.kind === 'claude' ? cfg.model : cfg.id, windows: [], blocked: false, note: null, maxPercent: mx, retryAt: null, limited: false }
         try {
             if (cfg.kind === 'claude') {
@@ -448,7 +456,7 @@ let checkQuota = async ({ agents, skillsRoot, envFile, maxPercent = 95, probe = 
                                 }
                                 if (e2.provider === 'opencode-go') {
                                     let sameKeys = (e2.envVar || 'OPENCODE_GO_KEYS') === (entry.envVar || 'OPENCODE_GO_KEYS')
-                                    let mx2 = Number.isFinite(c.quotaMaxPercent) ? c.quotaMaxPercent : mx
+                                    let mx2 = numOr(c.quotaMaxPercent, 'num', mx)
                                     if (sameKeys && (mx2 <= mx || keyLimited.every(Boolean))) {
                                         why.push('同為訂閱之條目, 共用已達門檻之用量')
                                         continue

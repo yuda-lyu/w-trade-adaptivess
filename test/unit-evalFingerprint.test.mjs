@@ -72,9 +72,11 @@ describe('評估器之指紋不含建帳本之檔(規則 R-REC-34、R-EV-44)', f
         for (let dd of ['src/domain', 'src/eval', 'src/cli']) {
             fs.mkdirSync(path.join(root, dd), { recursive: true })
         }
-        for (let f of ['fillKeys.mjs', 'fillPlan.mjs', 'evalVersion.mjs']) {
+        //(排程第 477 項 ②: SRC 由往上找本套件之 package.json 定位 ⇒ 複本之配置須帶 package.json 並複製 pkgRoot.mjs, 否則往上找到本庫之套件根)
+        for (let f of ['fillKeys.mjs', 'fillPlan.mjs', 'evalVersion.mjs', 'pkgRoot.mjs']) {
             fs.copyFileSync(path.join(SRC, 'domain', f), path.join(root, 'src', 'domain', f))
         }
+        fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'w-trade-adaptivess' }), 'utf8')
         let w = (rel, s) => fs.writeFileSync(path.join(root, 'src', rel), s, 'utf8')
         //複本之 src/eval/ 之檔名 = 真實之 src/eval/ 全部之檔(內容為各自之檔名): 逐檔核對「改任一檔 ⇒ 指紋改變、只有 ledgerBuild.mjs 不變」
         let realEval = fs.readdirSync(path.join(SRC, 'eval')).filter((f) => /\.mjs$/.test(f))

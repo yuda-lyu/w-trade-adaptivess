@@ -70,6 +70,74 @@ let patFileOf = (head, t) => {
     }
     return 0
 }
+//famOf(head), 搜尋指令之族: 'rg' / 'grep'(grep、egrep、fgrep、git grep)/ 'ag' / 'ack' / null(findstr 等); 規則 R-BT-8 之樣式來源依族之語法各定
+let famOf = (head) => {
+    if (/(?:^|[\\/])rg(?:\.exe)?$/i.test(head)) {
+        return 'rg'
+    }
+    if (/grep(?:\.exe)?$/i.test(head)) {
+        return 'grep'
+    }
+    if (/(?:^|[\\/])ag(?:\.exe)?$/i.test(head)) {
+        return 'ag'
+    }
+    if (/(?:^|[\\/])ack(?:\.exe)?$/i.test(head)) {
+        return 'ack'
+    }
+    return null
+}
+//eOf(head, t), 選項字 t 是否以「-e 類」給(內容)樣式(grep 族與 rg 之 -e / --regexp、ack 之 --match; 值可附於選項、可置於運算元之後):
+//  回 2 = 值在下一個字(-e、--regexp、--match、短選項群之末為 e: -ie)、字串 = 值附於本字、字串為其中須保留之前綴(-efoo ⇒ '-e'、-iefoo ⇒ '-ie'、-e"foo" ⇒ '-e'、--regexp=foo ⇒ '--regexp='、--match=foo ⇒ '--match=')、0 = 否
+//  短選項群依該指令之帶值之短選項(LR_GNU 之 val)逐字判: 先遇到之帶值之選項為 e 者才算(rg 之 -r 帶值 ⇒ -re 之 e 是其值、不是樣式); ag 無 -e(不在此列)
+let eOf = (head, t) => {
+    let fam = famOf(head)
+    if (fam === 'ack') {
+        return t === '--match' ? 2 : (t.startsWith('--match=') ? '--match=' : 0)
+    }
+    if (fam !== 'grep' && fam !== 'rg') {
+        return 0
+    }
+    //GNU grep 之長選項可縮寫(--reg、--rege、--regex 皆為 --regexp; rg 不收縮寫)
+    if ((fam === 'grep' ? /^--reg(?:e(?:x(?:p)?)?)?(?:=|$)/ : /^--regexp(?:=|$)/).test(t)) {
+        return t.includes('=') ? t.slice(0, t.indexOf('=') + 1) : 2
+    }
+    if (/^-[A-Za-z0-9]/.test(t)) {
+        for (let j = 1; j < t.length; j++) {
+            if (LR_GNU[fam].val.includes(t[j])) {
+                return t[j] === 'e' ? (j === t.length - 1 ? 2 : t.slice(0, j + 1)) : 0
+            }
+        }
+    }
+    return 0
+}
+//AG_ACK, ag 與 ack 之選項(語法與 grep 不同,各自列; 不認得之選項視為不帶值之旗標 ⇒ 至多使一個值被當成樣式而去掉、真樣式照留 ⇒ 多列、不漏列):
+//  val = 帶值之短選項、num = 其中值為數字者(其後之字為數字才當值,否則不吞 —— 例: ack 之 -C 之值選配)、longVal / longNum = 帶值之長選項(值可附於 =)、
+//  nameRe = 其值為檔名樣式之短選項(-g: 不是內容樣式、並使「無位置樣式」: 其後之位置引數皆為路徑)、listOnly = 使「無位置樣式」之旗標(ack 之 -f 只列檔; ag 之 -f 為 --follow、不帶值、不使無位置樣式)
+let AG_ACK = {
+    ag: { val: 'ABCGgmpW', num: 'ABCmW', longVal: ['after', 'before', 'context', 'ignore', 'ignore-dir', 'file-search-regex', 'path-to-ignore', 'max-count', 'depth', 'pager', 'width', 'workers'], longNum: ['after', 'before', 'context', 'max-count', 'depth', 'width', 'workers'], nameRe: 'g', listOnly: '' },
+    ack: { val: 'ABCgm', num: 'ABCm', longVal: ['after-context', 'before-context', 'context', 'type', 'ignore-dir', 'noignore-dir', 'ignore-directory', 'noignore-directory', 'ignore-file', 'files-from', 'max-count', 'output', 'pager'], longNum: ['after-context', 'before-context', 'context', 'max-count'], nameRe: 'g', listOnly: 'f' },
+}
+//aaOpt(fam, t), ag / ack 之選項字 t: 回 { given(是否使「無位置樣式」), val(0 = 不帶值、1 = 值附於本字、2 = 值在下一個字、3 = 值在下一個字且須為數字) }
+let aaOpt = (fam, t) => {
+    let tb = AG_ACK[fam]
+    if (t.startsWith('--')) {
+        let m = /^--([A-Za-z0-9-]+)(=[\s\S]*)?$/.exec(t)
+        if (m && tb.longVal.includes(m[1])) {
+            return { given: false, val: m[2] !== undefined ? 1 : (tb.longNum.includes(m[1]) ? 3 : 2) }
+        }
+        return { given: false, val: 0 }
+    }
+    let given = false
+    for (let j = 1; j < t.length; j++) {
+        if (tb.listOnly.includes(t[j])) {
+            given = true
+        }
+        if (tb.val.includes(t[j])) {
+            return { given: given || tb.nameRe.includes(t[j]), val: j + 1 < t.length ? 1 : (tb.num.includes(t[j]) ? 3 : 2) }
+        }
+    }
+    return { given, val: 0 }
+}
 let stripSearchPatterns = (cmd) => {
     //引號內之內容先以佔位符保護(樣式內之 |、;、& 不是指令分隔)
     let { masked, quoted } = maskQuotes(String(cmd))
@@ -81,31 +149,58 @@ let stripSearchPatterns = (cmd) => {
             return seg
         }
         let isFindstr = /findstr/i.test(m0[0])
+        let fam = famOf(m0[0])
         let toks = body.slice(m0[0].length).split(/(\s+)/)
         let removed = false
         let skipNext = false
+        let endOpts = false
+        //hasSubst, 字內之引號含命令替換($( 或反引號)者: 其內之路徑是實際之存取, 不當成樣式去掉(多列、不漏列)
+        let hasSubst = (w) => [...w.matchAll(MASKS)].some((m) => /\$\(|`/.test(quoted[Number(m[1])]))
         for (let i = 0; i < toks.length; i++) {
             let t = toks[i]
             if (!t || /^\s+$/.test(t)) {
                 continue
             }
-            if (skipNext) {
-                skipNext = false
+            //重導向(<檔、>檔、2>&1)、背景之 &、命令替換($( 、反引號)、括號: 不是本指令之引數 —— 尚無樣式者略過(其字照留); 已定樣式者即停止處理(其後之 -e 類屬於他指令)
+            if (/[&`<>()]|\$\(/.test(dropQuotes(t))) {
+                if (removed) {
+                    break
+                }
                 continue
             }
-            if (/^(-e|--regexp)$/.test(t)) {
+            if (skipNext) {
+                //skipNext = 'num': 值須為數字才算(否則此字照常判)
+                let num = skipNext === 'num'
+                skipNext = false
+                if (!num || /^\d+$/.test(dropQuotes(t))) {
+                    continue
+                }
+            }
+            //「--」之後皆為運算元(非選項): 第一個(尚無樣式者)為樣式、其餘為路徑
+            if (!endOpts && t === '--') {
+                endOpts = true
+                continue
+            }
+            //樣式來源之判定(整段先定; 規則 R-BT-8): -e 類(-e、--regexp、--match; 附值與否皆可、可置於運算元之後)給樣式者, 所有位置引數皆為路徑、只去其值
+            let ev = endOpts ? 0 : eOf(m0[0], t)
+            if (ev === 2) {
                 //其後第一個引數即樣式
                 for (let k = i + 1; k < toks.length; k++) {
                     if (toks[k] && !/^\s+$/.test(toks[k])) {
-                        toks[k] = ' '
+                        if (!hasSubst(toks[k])) {
+                            toks[k] = ' '
+                        }
                         break
                     }
                 }
                 removed = true
                 continue
             }
-            if (/^--regexp=/.test(t)) {
-                toks[i] = '--regexp='
+            if (typeof ev === 'string') {
+                //值附於本字(-efoo、-e"foo"、--regexp=foo): 只留選項本身
+                if (!hasSubst(t)) {
+                    toks[i] = ev
+                }
                 removed = true
                 continue
             }
@@ -121,35 +216,46 @@ let stripSearchPatterns = (cmd) => {
                 continue
             }
             //以檔給樣式(-f 檔、--file 檔、--file=檔、短選項群之 f)或無位置樣式(rg --files): 其後之第一個非選項引數是路徑、不是樣式; 檔名之字照留(讀取該檔仍受查)
-            let pf = patFileOf(m0[0], t)
+            let pf = endOpts ? 0 : patFileOf(m0[0], t)
             if (pf) {
                 removed = true
                 skipNext = pf === 2
                 continue
             }
-            if (SEARCH_OPT_VAL.test(t)) {
+            //ag / ack: 依各自之語法(-f 義異: ack 為只列檔 ⇒ 無位置樣式、ag 為 --follow 不帶值; -g 之值為檔名樣式 ⇒ 無位置樣式)
+            if (!endOpts && (fam === 'ag' || fam === 'ack') && t.startsWith('-')) {
+                let o = aaOpt(fam, t)
+                removed = removed || o.given
+                skipNext = o.val === 2 ? true : (o.val === 3 ? 'num' : false)
+                continue
+            }
+            if (!endOpts && SEARCH_OPT_VAL.test(t)) {
                 skipNext = true
                 continue
             }
-            if (t.startsWith('-')) {
+            if (!endOpts && t.startsWith('-')) {
                 continue
             }
-            //第一個非選項引數 = 樣式(已由 -e / --regexp / /C: / 檔給樣式者, 其餘皆為路徑)
+            //第一個非選項引數 = 樣式(已由 -e 類 / /C: / 檔給樣式者, 其餘皆為路徑)
             if (!removed) {
-                //選項可置於運算元之後(GNU 之選項排列): 其後(至 -- 為止)另有以檔給樣式或無位置樣式之選項者, 此引數是路徑、不去(從嚴: 該字若為他選項之值亦不去 —— 只會多列)
+                //選項可置於運算元之後(GNU 之選項排列): 其後(至 -- 為止)另有給樣式之選項(取自檔、無位置樣式、-e 類)者, 此引數是路徑、不去(從嚴: 該字若為他選項之值亦不去 —— 只會多列)
                 let later = false
                 for (let k = i + 1; k < toks.length && toks[k] !== '--'; k++) {
-                    if (toks[k] && !/^\s+$/.test(toks[k]) && (patFileOf(m0[0], toks[k]) || (isFindstr && /^\/G:/i.test(toks[k])))) {
+                    if (toks[k] && !/^\s+$/.test(toks[k]) && (patFileOf(m0[0], toks[k]) || eOf(m0[0], toks[k]) || ((fam === 'ag' || fam === 'ack') && toks[k].startsWith('-') && aaOpt(fam, toks[k]).given) || (isFindstr && /^\/[CG]:/i.test(toks[k])))) {
                         later = true
                         break
                     }
                 }
                 if (!later) {
-                    toks[i] = ' '
+                    if (!hasSubst(t)) {
+                        toks[i] = ' '
+                    }
+                    removed = true
+                    break
                 }
+                //其後有給樣式之選項: 此引數是路徑; 繼續往後處理(其後之 -e 類之值須去)
                 removed = true
             }
-            break
         }
         return lead + m0[0] + toks.join('')
     })
@@ -817,4 +923,206 @@ let toolListsRoot = (tool, inp, base, stateRoot) => {
     return rlCovers(at, base, stateRoot)
 }
 
-export { absOf, stripSearchPatterns, listRootExempt, entryExecOf, recursiveRootOf, scriptListsRoot, toolListsRoot, LR_CD }
+//── 節點之禁區字樣之補充: 萬用字元之前綴與先切換目錄之相對路徑(規則 R-BT-10 ⑦; 排程第 580 項 ①)──
+//  禁區字樣(verify.mjs 之 forbiddenPats)是路徑字樣(src/domain/verify… 連續出現); 下列兩種寫法不含該連續字樣而實際讀到禁區之檔:
+//    ①萬用字元之前綴: src/domain/ver*、src/domain/{verify,backtest}*.mjs、src/domain/*.mjs、src/dom*/verify.mjs —— 依 ZONE_FILES 展開, 有任一檔(或 src/domain 夾本身)相符即列
+//    ②先切換目錄再以相對路徑: cd src && cat domain/verify.mjs、cd src/tools; cat libCheck.mjs、pushd src\domain & type verify.mjs —— 切換之目錄在同一道指令內或此前之工具呼叫;
+//      相對路徑依切換後之目錄解析成相對專案根之路徑後, 以同一組禁區字樣比對(zoneOf 之 texts); 路徑字先正規化(./、..)、另取去掉引號與跳脫字元(" ' ^ `)之版本;
+//      引號內之內嵌指令(bash -c "cd src && …"、cmd /c "…")遞迴處理; 切換後之目錄本身落在禁區夾(domain/ 夾等)者列(拆成兩段 cd 者之補)
+//  zoneOf 為純函數(只依參數, 不讀檔、不起行程); 切換目標含變數、~、- 者目錄不確定(dir = null)⇒ 其後之相對路徑只依其後之 cd 所累積之相對鏈(tail)解析(基準不明, 比對為超集: 只會多列)
+//ZONE_FILES, 禁區字樣涵蓋之程式檔(相對套件根): src/domain 下之 backtest*、verify*(迴圈驗證之全部原始碼)、libStats.mjs 與 src/tools/libCheck.mjs(庫況體檢之程式; R-BT-10 ①④);
+//  靜態清單 —— 與實際檔案之核對由 unit-verifyZone ⑦ 之盤點守門(新增以 verify / backtest 起首之檔時須補此清單)
+let ZONE_FILES = [
+    ...['backtest.mjs', 'backtestCfg.mjs', 'backtestGrade.mjs', 'verify.mjs', 'verifyCmdScan.mjs', 'verifyEvalHints.mjs', 'verifyExposure.mjs', 'verifyMember.mjs', 'libStats.mjs'].map((f) => `domain/${f}`),
+    'tools/libCheck.mjs',
+]
+//ZONE_TREES, 程式夾之寫法(專案內之 src、舊制之 lib、套件裝於 node_modules 者)
+let ZONE_TREES = ['src', 'lib', 'node_modules/w-trade-adaptivess/src']
+//ZONE_PKG, 套件之建置產物與文件(裝於 node_modules/<套件名>/ 下者; 夾本身與各夾之代表檔)與專案內之 dist/ 之打包檔: 萬用字元之展開用(literal 之路徑由 forbiddenPats 之字樣涵蓋)
+let ZONE_PKG = ['dist/w-trade-adaptivess.umd.js', 'dist/w-trade-adaptivess.umd.js.map', 'docs', 'docs/index.html', 'docs/dist/w-trade-adaptivess.umd.js', 'sgud', 'sgud/rule/rulebook.md', 'sgud/state/state.md', 'test', 'test/unit-texts.test.mjs', 'README.md']
+//ZONE_CANDS, 萬用字元展開之候選(全部禁區之檔與夾之路徑)
+let ZONE_CANDS = [
+    ...ZONE_TREES.flatMap((tree) => [...ZONE_FILES.map((f) => `${tree}/${f}`), `${tree}/domain`]),
+    ...ZONE_PKG.map((f) => `node_modules/w-trade-adaptivess/${f}`),
+    'dist/w-trade-adaptivess.umd.js',
+    'dist/w-trade-adaptivess.umd.js.map',
+]
+//ZONE_DIR_RE, 工作目錄本身落在禁區夾(其下之檔皆禁區): domain/ 夾與套件之 dist、docs、sgud、test 夾
+let ZONE_DIR_RE = /(?:^|\/)(?:(?:lib|src)\/domain|node_modules\/w-trade-adaptivess\/(?:src\/domain|dist|docs|sgud|test))$/i
+//zoneNorm, 路徑字之正規化(反斜線轉 /、去前導 ./); 供萬用字元之比對與切換目錄之解析
+let zoneNorm = (s) => String(s).replace(/\\/g, '/').replace(/^(\.\/)+/, '')
+//globSrc, 萬用字元(* ** ? [..] [!..] {a,b})轉為正規式之本體(* 與 ? 不跨 /; 大括號不巢狀; 連續之 * 摺為一個 ** —— 避免相鄰之 .* 造成指數回溯)
+let globSrc = (g) => {
+    let out = ''
+    for (let i = 0; i < g.length; i++) {
+        let c = g[i]
+        if (c === '*') {
+            if (g[i + 1] === '*') {
+                while (g[i + 1] === '*') {
+                    i++
+                }
+                out += '.*'
+            }
+            else {
+                out += '[^/]*'
+            }
+        }
+        else if (c === '?') {
+            out += '[^/]'
+        }
+        else if (c === '[' && g.indexOf(']', i + 2) > 0) {
+            let j = g.indexOf(']', i + 2)
+            out += `[${g.slice(i + 1, j).replace(/^!/, '^').replace(/\\/g, '\\\\')}]`
+            i = j
+        }
+        else if (c === '{' && g.indexOf('}', i) > 0) {
+            let j = g.indexOf('}', i)
+            out += `(?:${g.slice(i + 1, j).split(',').map(globSrc).join('|')})`
+            i = j
+        }
+        else {
+            out += c.replace(/[.+^$()|{}[\]\\/]/g, '\\$&')
+        }
+    }
+    return out
+}
+//zoneGlobHit(g, root), 一個含萬用字元之路徑字(已正規化、相對專案根或絕對)是否展開後涵蓋禁區之檔或夾(root = 專案根之絕對路徑, 正規化後; 絕對之路徑字以之比)
+//  過長(> 300 字元)或萬用字元過多(* 逾 16 個)之字無正當用途 ⇒ 直接列(也避免病態之回溯); 正規式無法建立或比對拋錯者同(從嚴)
+let zoneGlobHit = (g, root = '') => {
+    if (g.length > 300 || (g.match(/\*/g) || []).length > 16) {
+        return true
+    }
+    try {
+        let re = new RegExp(`^${globSrc(g)}$`, 'i')
+        return ZONE_CANDS.some((c) => re.test(c) || (root && re.test(`${root}/${c}`)))
+    }
+    catch (err) {
+        return true
+    }
+}
+//zoneTokens, 一道指令之一個語句內之「路徑字」: 以空白、引號、| ; & < > ( ) = , 與 { } 之外圍分隔(大括號群 {a,b} 屬字內; 引號內之字亦取 —— node -e "…readFileSync('domain/verify.mjs')…")
+let ZONE_TOKEN = /(?:[^\s"'`|;&<>()=,{}\u0001\u0002]|\{[^{}\s"']*\})+/g // eslint-disable-line no-control-regex
+let ZONE_CD = /^\s*[({]?\s*(?:(?:then|do|else|command|builtin|eval|exec)\s+)?(cd|chdir|pushd|popd|set-location|sl|push-location|pop-location)(?=\s|$|\))/i
+let ZONE_INNER_CD = /(?:^|[;&|\s("'`])(?:cd|chdir|pushd|set-location|sl|push-location)(?=\s)/i
+//zoneOf(cmd, st0, { root }), 一道指令 ⇒ { texts(正規化 / 切換目錄後解析成相對專案根之路徑字), glob(展開後涵蓋禁區之檔之路徑字或 null), dirHit(切換後之目錄本身落在禁區夾), state }
+//  st0 = { dir(相對專案根之工作目錄; '' = 專案根; null = 不確定), tail(dir 為 null 時之相對鏈: 其後 cd 之累積), stack(pushd 之堆疊) }; root = 專案根之絕對路徑(給了才把絕對之切換目標換成相對)
+let zoneOf = (cmd, st0, { root = '', depth = 0 } = {}) => {
+    let st = { dir: st0.dir, tail: st0.tail || '', stack: st0.stack.slice() }
+    let rootN = root ? zoneNorm(root).replace(/\/+$/, '') : ''
+    let { masked, quoted } = maskQuotes(String(cmd))
+    let texts = []
+    let glob = null
+    let dirHit = false
+    let baseOf = () => (st.dir !== null ? st.dir : st.tail)
+    let join = (base, t) => path.posix.normalize(base ? path.posix.join(base, t) : t)
+    for (let part of masked.split(/&&|\|\||[;|&\n\r]/)) {
+        let stmt = unmaskQuotes(part, quoted)
+        let m = ZONE_CD.exec(part)
+        if (m) {
+            let kw = m[1].toLowerCase()
+            if (kw === 'popd' || kw === 'pop-location') {
+                let top = st.stack.length ? st.stack.pop() : { dir: null, tail: '' }
+                st.dir = top.dir
+                st.tail = top.tail
+                continue
+            }
+            //目標: 去掉選項(cmd 之 /d、bash 之 -L -P、PowerShell 之 -Path / -LiteralPath 之名)後之第一個字
+            let ws = part.slice(m[0].length).trim().split(/\s+/).filter(Boolean)
+            let target = null
+            for (let k = 0; k < ws.length; k++) {
+                if (/^(?:\/d|-[A-Za-z-]+)$/i.test(ws[k])) {
+                    continue
+                }
+                target = unmaskQuotes(ws[k], quoted).replace(/^["']|["']$/g, '')
+                break
+            }
+            if (kw === 'pushd' || kw === 'push-location') {
+                st.stack.push({ dir: st.dir, tail: st.tail })
+            }
+            if (target === null || /[$`%~]|^-$/.test(target)) {
+                st.dir = null
+                st.tail = ''
+                continue
+            }
+            let t = zoneNorm(target)
+            if (/^([A-Za-z]:\/|\/)/.test(t)) {
+                let a = absOf(rootN || '/', t).replace(/\\/g, '/').replace(/\/+$/, '')
+                //專案根之內 ⇒ 相對專案根(大小寫不拘地比對前綴、保留原寫法); 專案根之外 ⇒ 絕對路徑
+                st.dir = rootN && a.toLowerCase() === rootN.toLowerCase() ? '' : (rootN && a.toLowerCase().startsWith(`${rootN.toLowerCase()}/`) ? a.slice(rootN.length + 1) : a)
+                st.tail = ''
+            }
+            else {
+                let r = join(baseOf(), t)
+                if (r.startsWith('..')) {
+                    //逾專案根(或不確定之基準之上): 不確定
+                    st.dir = null
+                    st.tail = ''
+                }
+                else if (st.dir !== null) {
+                    st.dir = r === '.' ? '' : r
+                }
+                else {
+                    st.tail = r === '.' ? '' : r
+                }
+            }
+            if (ZONE_DIR_RE.test(baseOf())) {
+                dirHit = true
+            }
+            continue
+        }
+        //引號內之內嵌指令(bash -c "cd src && cat domain/verify.mjs"、cmd /c "…"): 遞迴處理(切換之目錄沿用 —— 從嚴: 子殼層之切換亦當作持續)
+        if (depth < 2) {
+            for (let mm of part.matchAll(/\u0001(\d+)\u0002/g)) { // eslint-disable-line no-control-regex
+                //指令本身可含控制字元(偽造或越界之佔位符): 取不到該段引號者略過(其字照留於 stmt, 由既有之字樣比對處理)
+                let qd = quoted[Number(mm[1])]
+                let inner = typeof qd === 'string' ? qd.slice(1, -1) : ''
+                if (ZONE_INNER_CD.test(inner)) {
+                    let sub = zoneOf(inner, st, { root, depth: depth + 1 })
+                    texts.push(...sub.texts)
+                    glob = glob || sub.glob
+                    dirHit = dirHit || sub.dirHit
+                    st = sub.state
+                }
+            }
+        }
+        //路徑字: 原文與去掉引號 / 跳脫字元(" ' ^ `)之版本(引號拼接 src/dom""ain、"src"/domain、cmd 之 ^、PowerShell 之 `)
+        let base = baseOf()
+        let origToks = new Set(stmt.match(ZONE_TOKEN) || [])
+        for (let variant of [stmt, stmt.replace(/["'^`]/g, '')]) {
+            for (let tok of variant.match(ZONE_TOKEN) || []) {
+                if (tok.startsWith('-') || /[$%]/.test(tok)) {
+                    continue
+                }
+                let t = zoneNorm(tok)
+                //Git Bash 之 /d/… ⇒ 磁碟機路徑
+                let abs = /^([A-Za-z]:\/|\/)/.test(t)
+                let r = abs ? absOf(rootN || '/', t).replace(/\\/g, '/') : join(base, t)
+                //原文已有之字(r 同 t)由既有之字樣直接比對; 解析 / 正規化後不同者、或去引號後才成形之字(拼接)才另列
+                if (r !== t || !origToks.has(tok)) {
+                    texts.push(r)
+                }
+                if (!glob && /[*?[{]/.test(r) && zoneGlobHit(r, rootN)) {
+                    glob = tok
+                }
+            }
+        }
+    }
+    return { texts: [...new Set(texts)], glob, dirHit, state: st }
+}
+//zoneToolOf(inp, st, { root, tool }), 非殼層之工具輸入(Glob / Grep / Read 類)之路徑欄(path、filePath、file_path)與樣式欄(pattern〔Grep 類之 pattern 是內容之正規式, 不當路徑〕、glob、include)—— 樣式欄之字相對於路徑欄(未給 = 工作目錄)展開:
+//  回 { texts(路徑欄 × 樣式欄之接合、正規化 / 切換目錄後解析者; 供禁區字樣比對), glob(展開後涵蓋禁區之檔者或 null) }; 給了路徑欄者樣式欄只以接合後之整串判(不單獨判: 例 path = 自己之工作夾、glob = **/*.mjs 為常見之合法用法)
+let zoneToolOf = (inp, st, { root = '', tool = '' } = {}) => {
+    let rootN = root ? zoneNorm(root).replace(/\/+$/, '') : ''
+    let vals = (ks) => ks.map((k) => inp[k]).filter((x) => typeof x === 'string' && x !== '' && !/[$`%]/.test(x)).map(zoneNorm)
+    let bases = vals(['path', 'filePath', 'file_path'])
+    let globs = vals(/grep|search/i.test(tool) ? ['glob', 'include'] : ['pattern', 'glob', 'include'])
+    let base = st.dir !== null ? st.dir : st.tail
+    let rel = (p) => (/^([A-Za-z]:\/|\/)/.test(p) ? p : path.posix.normalize(base ? path.posix.join(base, p) : p))
+    let raw = [...bases, ...(bases.length ? [] : globs)]
+    let joins = bases.flatMap((b) => globs.map((g) => path.posix.join(b, g)))
+    let glob = [...raw, ...joins].map(rel).find((c) => /[*?[{]/.test(c) && zoneGlobHit(c, rootN)) || null
+    //texts: 切換目錄後解析 / 正規化後與原字不同者與路徑欄 × 樣式欄之接合
+    let texts = [...raw.map(rel).filter((c, i) => c !== raw[i]), ...joins.map(rel)]
+    return { texts: [...new Set(texts)], glob }
+}
+export { absOf, stripSearchPatterns, listRootExempt, entryExecOf, recursiveRootOf, scriptListsRoot, toolListsRoot, LR_CD, zoneOf, zoneToolOf, zoneGlobHit, ZONE_FILES }

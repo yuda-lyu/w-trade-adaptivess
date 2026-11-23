@@ -250,8 +250,10 @@ describe('命令列旗標之嚴格檢查(未列之旗標、重複、無值、列
                     assert.notStrictEqual(r.status, 2, `${mode} --null ${v}`)
                 }
             }
+            //其他模式: --null 不屬該模式(排程第 595 項之接續「模式 × 旗標」; 原: 靜默忽略)⇒ 以模式表之固定訊息拒收(值之檢查只在 fill / extfill)
             let other = runIn('rsi', ['--mode', 'status', '--null', '0'])
-            assert(!other.out.some((l) => l.includes('invalid --null')), '其他模式不檢')
+            assert.strictEqual(other.status, 2)
+            assert.deepEqual(other.out, ['invalid --null: must be used with --mode extfill or fill'], '其他模式拒收(模式 × 旗標)')
             assert.deepEqual(fs.readdirSync(emptyRoot), [], '不寫任何檔')
         })
 

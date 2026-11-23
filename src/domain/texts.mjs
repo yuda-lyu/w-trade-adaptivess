@@ -7,6 +7,8 @@ import { libSizeText, periodLenText, cadenceOf, nullDrawsOf, phaseCountOf, phase
 import { POSTFIT_HEAD, fillBacklogSecOf, autoFillOf } from './fillPlan.mjs'
 import { memberCfgOfSt } from './verifyMember.mjs'
 import { evalLimitsOf } from '../eval/cfgNum.mjs'
+import { maxArmsOf } from '../arsi/rsiNums.mjs'
+import { pkgRootOf } from './pkgRoot.mjs'
 
 
 //OUT_SATURATED_NOTE, 輪末摘要「配比」一列之附註: 可選之臂皆已試過、向外 0 條, 而做夢本輪宣告(或續存)「現行資訊範圍內已無可試之向外方向」(規則 R-REC-29)
@@ -110,10 +112,14 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
     let rel = (p) => path.relative(FD_ROOT, p).replace(/\\/g, '/')
     //codeRel, 迴圈驗證之程式所在之資料夾(相對專案根; 本檔所在之夾): 安裝於專案後為 node_modules/w-trade-adaptivess/src/domain, 於套件夾內為 src/domain
     //  任務書據以寫明節點不得讀取之原始碼位置(與 verify.mjs 之禁區字樣相應)
-    let codeRel = rel(path.dirname(fileURLToPath(import.meta.url)))
-    //codeRootRel, 本套件之程式夾(相對專案根; 本檔所在之夾之上一層): 安裝於專案後為 node_modules/w-trade-adaptivess/src, 於套件夾內為 src
+    //  程式夾由套件根定位(往上找本套件之 package.json; pkgRootOf; 排程第 477 項 ②): 原始檔位於 <套件根>/src/domain; 本檔打包進主入口(dist/*.umd.js)時 import.meta.url 指向 dist 內之打包檔,
+    //  依檔案位置推導會得 dist ⇒ 任務書所指之程式夾錯; 找不到套件根(無本套件之 package.json 之配置)者依檔案位置推導(原作法)
+    let here = path.dirname(fileURLToPath(import.meta.url))
+    let pkgRoot = pkgRootOf(here)
+    let codeRel = rel(pkgRoot ? path.join(pkgRoot, 'src', 'domain') : here)
+    //codeRootRel, 本套件之程式夾(相對專案根; 套件根下之 src): 安裝於專案後為 node_modules/w-trade-adaptivess/src, 於套件夾內為 src
     //  任務書之「不得改」據以寫明(不寫死舊配置之夾名)
-    let codeRootRel = rel(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'))
+    let codeRootRel = rel(pkgRoot ? path.join(pkgRoot, 'src') : path.resolve(here, '..'))
     //共同儲存「自適應挑選策略」區(規則 R-REC-25; src/domain/pickStore.mjs): 已產生(有總表)時才寫進任務書
     let storeRel = rel(path.join(st.rsi.root, 'picks'))
     let hasStore = () => fs.existsSync(path.join(st.rsi.root, 'picks', 'INDEX.md'))
@@ -170,11 +176,12 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
     ].join('\n')
 
     //nodeCriteria, 節點任務書之判準(只列判讀要點; 定義在合約 §2 / §5, 不在任務書重述 —— 任務書越長, 節點之遵循率越低)
-    let nodeCriteria = () => [
-        `- **S** = 0.7 × 等效年化之${ph('相位')}平均 + 0.3 × 最差相位(**回測期** ${pBt})。**你的目標是使 S 更高且各相位皆為正**。階梯:1 = S ≥ ${sc.ladder1.S} 且各虛無之 p ≤ ${sc.ladder1.nullP};2 = 各新鮮度地平線 ≥ ${sc.ladder2.freshMin} 且最差相位 ≥ ${sc.ladder2.worstPhaseMin};3 = 月均單 ≤ ${sc.ladder3.monthlyOrders} 且最大同時持倉 ≤ ${sc.ladder3.peakHold}。硬限制(超過即否決):月均單 ≤ ${lim.monthlyOrders}、最大同時持倉 ≤ ${lim.peakHold}。`,
-        `- **訓練期之績效不是目標**:策略庫之每隻策略都以訓練期(${pTrain})求得,任何挑法在訓練期都賺;同一批策略到回測期隨機挑為負。訓練期之歷史是找結構與特徵之材料(每個決策都看得到決策棒以前之全部歷史),不是績效之依據;\`--period train\` 只供診斷。`,
-        '- **與隨機挑比**:評估輸出之「同劑量虛無」是同決策時點、同選集大小、同執行規則之隨機挑(回測期);超額與 p 說明挑法有沒有內容。**有沒有挑選內容,以「同側同活躍度虛無」(組成對照:每一隻換成同方向、活躍度相近之隨機一隻)與「幾何對照」(再匹配止盈 / 止損)之超額與 p 為準**(完整評估一律算出,不必自己另跑替換版):「組成可重現之比例」接近 100% 者,績效來自方向與活躍度之組成,不是挑中了誰。輸出另有損益依多空 / tag 之歸因與評估期間三等分(含兩種對照於各段之均)。不同持倉上限或選集大小之 S 不能直接比,看超額與 p。',
-        `- **防偶然**:回測期只有${btLenText}。參數看平原(鄰近格點同向)不看單點最高;${ph('個相位')}同向比平均高更重要;含隨機抽取、或主鍵大量同分(入選者實際由同分次序 \`ctx.meta.tie\` 決定)者,其結果隨亂數種子 / 同分次序波動(迴圈會同時換兩者重放)。機制要說得出它抓到什麼結構、為何換一段期間仍可望成立。`,
+    //  isVerify: 「機制要說得出…」一句只在驗證類(探索類之第 6 節第 1 點已要求 plan.hypotheses 之第一條寫該機制之理由與跨期成立,不重述; R-REC-52)
+    let nodeCriteria = (isVerify) => [
+        `- **S** = 0.7 × 等效年化之${ph('相位')}平均 + 0.3 × 最差相位。**你的目標是使 S 更高且各相位皆為正**。階梯:1 = S ≥ ${sc.ladder1.S} 且各虛無之 p ≤ ${sc.ladder1.nullP};2 = 各新鮮度地平線 ≥ ${sc.ladder2.freshMin} 且最差相位 ≥ ${sc.ladder2.worstPhaseMin};3 = 月均單 ≤ ${sc.ladder3.monthlyOrders} 且最大同時持倉 ≤ ${sc.ladder3.peakHold}。硬限制(超過即否決):月均單 ≤ ${lim.monthlyOrders}、最大同時持倉 ≤ ${lim.peakHold}。`,
+        `- **訓練期之績效不是目標**:策略庫之每隻策略都以訓練期(${pTrain})求得,任何挑法在訓練期都賺;同一批策略到回測期隨機挑為負。訓練期之歷史是找結構與特徵之材料,不是績效之依據,**也不計入判讀**;\`--period train\` 只供診斷。`,
+        '- **與隨機挑比**:評估輸出之「同劑量虛無」(同決策時點、同選集大小、同執行規則之隨機挑)之超額與 p 說明挑法有沒有內容。**有沒有挑選內容,以「同側同活躍度虛無」(組成對照)與「幾何對照」之超額與 p 為準**(定義見合約 §5,含損益歸因與三等分;完整評估一律算出,不必自己另跑替換版):「組成可重現之比例」接近 100% 者,績效來自方向與活躍度之組成,不是挑中了誰。不同持倉上限或選集大小之 S 不能直接比,看超額與 p。',
+        `- **防偶然**:回測期只有${btLenText}。參數看平原(鄰近格點同向)不看單點最高;${ph('個相位')}同向比平均高更重要;含隨機抽取、或主鍵大量同分(入選者實際由同分次序 \`ctx.meta.tie\` 決定)者,其結果隨亂數種子 / 同分次序波動(迴圈會同時換兩者重放)。${isVerify ? '機制要說得出它抓到什麼結構、為何換一段期間仍可望成立。' : ''}`,
     ].join('\n')
 
     let nodeBrief = (c) => {
@@ -197,7 +204,7 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
         let isVerify = t.type === 'verify'
         L.push(isVerify
             ? '**任務類型:驗證** —— 檢驗一項既有之主張(見下「待驗之主張」),**不是**找分數更高之新機制。設計由來源方向定死;你的工作是如實實現、對照、回報。'
-            : '**任務類型:探索** —— 以指定之臂寫出新機制(或在起點上加臂、改進),找出使回測期績效更佳之挑法。')
+            : '**任務類型:探索** —— 以指定之臂寫出新機制(或在起點上加臂、改進)。')
         L.push('')
         L.push('「以臂為主軸」:挑選模組之關鍵決策必須來自這些臂之機制;臂以外之環節一律用**中性預設**(固定,不是調參對象),並在 `code.notes` 寫明哪些是指定臂、哪些是中性預設:')
         L.push('')
@@ -215,7 +222,7 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
                 L.push(ENV_CHANGED_HINT)
                 L.push('')
             }
-            L.push(`本節點出自 \`${t.direction.doc}\` 之「給下一輪之方向」。下列為該方向之全文;其中之**實作要求、對照、格點與判定方式都是本節點之任務內容**(與上列中性預設牴觸時以方向為準,並於 \`code.notes\` 註明);做不到或不同意之處,於 \`conclusion.limitations\` 逐項寫明,不要默默略過。`)
+            L.push(`本節點出自 \`${t.direction.doc}\` 之「給下一輪之方向」,下列為其全文;其中之**實作要求、對照、格點與判定方式都是本節點之任務內容**(與上列中性預設牴觸時以方向為準,並於 \`code.notes\` 註明);做不到或不同意之處,於 \`conclusion.limitations\` 逐項寫明,不要默默略過。`)
             L.push('')
             if (t.claim) {
                 L.push(`- **待驗之主張**:${t.claim}`)
@@ -246,7 +253,7 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
         L.push('- `docs/pick-contract.md`:挑選模組合約(**必讀**:`ctx` 提供什麼、`accept` 怎麼寫、限制與常見錯誤)。')
         L.push('- `examples/pick_example.mjs`:可執行之最小範例。')
         if (t.toolbox) {
-            L.push(`- \`${t.toolbox.index}\`:**共用工具索引**(可貼入挑選模組之函式片段、樣板、診斷腳本、評估器自動算出之擴充診斷;現有 ${t.toolbox.nTools} 個)。**先讀其「依情境找工具」一節**(遇到什麼情況 → 用哪個檔);有合用者先用它,不要重寫;挑選模組不得 \`import\`,片段請**複製**進自己的檔。用了哪些寫入 \`code.reused\`。`)
+            L.push(`- \`${t.toolbox.index}\`:**共用工具索引**(函式片段、樣板、診斷腳本、擴充診斷;現有 ${t.toolbox.nTools} 個)。**先讀其「依情境找工具」一節**(遇到什麼情況 → 用哪個檔);有合用者先用它,不要重寫;挑選模組不得 \`import\`,片段請**複製**進自己的檔。用了哪些寫入 \`code.reused\`。`)
         }
         for (let r of t.refs || []) {
             L.push(`- \`${r.path}\`:${r.why}`)
@@ -259,29 +266,30 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
         L.push(`node g_eval.mjs --pick ${wd}/${ex}.mjs --mode quick                              # 迭代用(回測期;相位 0、3;約 10 秒)`)
         L.push(`node g_eval.mjs --pick ${wd}/${ex}.mjs --mode full --out ${wd}/${isVerify ? 'result_full' : 'full_a'}.json   # 完整評估(回測期;${ph('相位')} + 虛無;約 30 ~ 60 秒)`)
         //重疊率以 quick --ref 量、可一次給多個參考(試驗 T1 之條款; 觀察後已採納, 見 src/domain/briefTrials.mjs)
-        L.push(`node g_eval.mjs --pick ${wd}/${ex}.mjs --mode quick --ref ${wd}/control.mjs${t.base ? `,${wd}/base_pick.mjs` : ''}   # 與參考模組之選集重疊率(快速模式即可;可一次給多個參考,逗號分隔)`)
+        L.push(`node g_eval.mjs --pick ${wd}/${ex}.mjs --mode quick --ref ${wd}/control.mjs${t.base ? `,${wd}/base_pick.mjs` : ''}   # 與參考模組之選集重疊率`)
         L.push('```')
         L.push('')
-        L.push('- **評估器預設評估回測期**(每個決策只看得到決策棒以前之資訊;挑選函數自帳本起點連續執行,只有落在回測期之決策計入績效)。`--period train` 可看同一模組在訓練期之表現,**只供診斷**(訓練期是策略庫之求解期,其績效不是目標,也不計入判讀)。')
-        L.push('- 實驗用之其他版本另存檔名(例如 `' + wd + '/try_xxx.mjs`)並同樣以 `g_eval.mjs` 評估;不要自己寫程式讀策略庫或帳本檔計算績效。')
-        L.push('- `--ref <模組>`:輸出本模組與參考模組(對照版、' + (t.base ? '起點之複本 `base_pick.mjs`、' : '') + '§3 所列參考節點成品之複本 `ref_<節點 id 前 8 碼>.mjs`;皆已在你的工作夾內)每次決策之選集重疊率,依決策段分列;不影響任何數字與 `selHash`。**要報「名單換掉多少」「與某成品之重疊率」時用它**,不必自己在 `tag` 內算。**重疊率以 `--mode quick` 量即可,不要為它多跑一次完整評估。**')
-        L.push('- `--member <鹽>:<0|1>`:**成員重抽** —— 以策略庫之一半重跑同一個模組(`0` = 甲半、`1` = 乙半;換鹽 = 換一種切法;模組不必改寫),檢驗內容是否依賴特定成員。結果不是正本(結果檔與評估紀錄另帶 `member`),交付之 `result_full.json` 不帶此選項;每次評估照常記入評估紀錄(`--mode full` 者計入完整評估次數)—— 方向指明、或要自檢「換一批策略是否仍成立」時才用。')
+        L.push('- **評估器預設評估回測期**(每個決策只看得到決策棒以前之資訊;挑選函數自帳本起點連續執行,只有落在回測期之決策計入績效)。`--period train` 可看同一模組在訓練期之表現,**只供診斷**(見 §5)。')
+        L.push('- 實驗用之其他版本(檔名見 §6 第 3 點)同樣以 `g_eval.mjs` 評估;不要自己寫程式讀策略庫或帳本檔計算績效。')
+        L.push('- `--ref <模組>`:輸出本模組與參考模組(對照版、' + (t.base ? '起點之複本 `base_pick.mjs`、' : '') + '§3 所列參考節點成品之複本 `ref_<節點 id 前 8 碼>.mjs`;皆已在你的工作夾內)每次決策之選集重疊率。**要報「名單換掉多少」「與某成品之重疊率」時用它**,不必自己在 `tag` 內算。**重疊率以 `--mode quick` 量即可,不要為它多跑一次完整評估。**')
+        L.push('- `--member <鹽>:<0|1>`:**成員重抽** —— 以策略庫之一半重跑同一個模組(模組不必改寫),檢驗內容是否依賴特定成員;結果不是正本,交付之 `result_full.json` 不帶此選項;每次評估照常記入評估紀錄(`--mode full` 者計入完整評估次數;細節見合約 §5)—— 方向指明、或要自檢「換一批策略是否仍成立」時才用。')
         L.push('')
         L.push('## 5. 判準(定義見 `docs/pick-contract.md` §2 與 §5;此處只列判讀要點)')
         L.push('')
-        L.push(nodeCriteria())
+        L.push(nodeCriteria(isVerify))
         L.push('')
         L.push('## 6. 做法要求')
         L.push('')
         //一實驗一檔與最終版(試驗 T1 之條款已採納: 同一內容不重跑完整評估)
         //  驗證類: 設計由方向定死 ⇒ 交付版一開始就寫成 pick.mjs; 探索類: 依回測期之結果迭代 ⇒ 每個版本一個檔, 最後把選定者與其結果檔複製成 pick.mjs / result_full.json(不重跑)
-        let tailFile = '**同一內容不要完整評估兩次**(只加 `tag`、只加 `--ref` 或換檔名重跑都不是新版本;迴圈會記錄完整評估之次數與相異選集數)。一次只執行一個評估指令(不用 shell 迴圈或 `&&` 串接)。(迴圈會檢查每個已完整評估之版本是否仍有檔可重現。)要寫進 `findings` 之比較以 `full` 為準(`quick` 只跑相位 0、3,排序可能相反)。'
+        //  探索類之第 2 點已寫「迴圈會記錄評估次數與相異選集數」⇒ 此處只在驗證類(第 2 點只寫評估次數)重述
+        let tailFile = '**同一內容不要完整評估兩次**(只加 `tag`、只加 `--ref` 或換檔名重跑都不是新版本' + (isVerify ? ';迴圈會記錄完整評估之次數與相異選集數' : '') + ')。一次只執行一個評估指令(不用 shell 迴圈或 `&&` 串接)。要寫進 `findings` 之比較以 `full` 為準(`quick` 只跑相位 0、3,排序可能相反)。'
         let oneFile = isVerify
             ? '3. **一實驗一檔**:**交付版一開始就寫成 `pick.mjs`**(設計由方向定死),對照與其他檔另存檔名,完整評估都加 `--out`(交付版 `' + wd + '/result_full.json`、其他 `' + wd + '/full_<名>.json`);**評估過之檔不再改寫**(含 `pick.mjs`、`control.mjs`)。' + tailFile
             : '3. **一實驗一檔**:每個版本另存 `try_<版本名>.mjs`,完整評估都加 `--out ' + wd + '/full_<版本名>.json`;**評估過之檔不再改寫**(要改就另存新檔名;含 `control.mjs`)。' + tailFile
         let finalStep = isVerify
             ? '5. `pick.mjs` 之完整評估結果即交付用之 `' + wd + '/result_full.json`(不帶 `--ref`;**已跑過就不必再跑**),把其中之數字**原樣**抄入 `results.claimed`。'
-            : '5. **最終版**:把選定之實驗檔**複製**成 `pick.mjs`,並把它的完整評估結果檔複製成 `' + wd + '/result_full.json`(**內容相同就不必重跑**;須為不帶 `--ref` 之完整評估,不要手改),把其中之數字**原樣**抄入 `results.claimed`。'
+            : '5. **最終版**:把選定之實驗檔**複製**成 `pick.mjs`,並把它的完整評估結果檔複製成 `' + wd + '/result_full.json`(**內容相同就不必重跑**;須為不帶 `--ref` 之完整評估),把其中之數字**原樣**抄入 `results.claimed`。'
         if (isVerify) {
             L.push('1. **先寫規劃再評估**:第一次完整評估之前,先把 `node.json` 之 `plan` 寫好 —— `plan.hypotheses` 之第一條**原樣寫出待驗之主張與其判定方式**(§1 之來源方向),`plan.approach` 寫方向所定之設計(交付版與對照版各是什麼)。(迴圈會檢查 `node.json` 之首次寫入是否早於第一次完整評估。)')
             L.push('2. **只做方向指明之版本與對照**:不另試變體、不調參數、不換交付版;完整評估以方向所列之次數為限(未列者至多 4 次;迴圈會記錄評估次數)。方向之設計做不到或有誤時,**不要自行改設計**:照能如實做到之部分交付,於 `conclusion.limitations` 逐項寫明。每次評估記入 `results.experiments`;沒跑過者不得列數字。')
@@ -292,17 +300,17 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
         }
         else {
             L.push('1. **先寫規劃再評估**:第一次完整評估之前,先把 `node.json` 之 `plan` 寫好 —— 怎麼實現指定之臂、要試哪些變體與格點、各自之機制理由;`plan.hypotheses` 之第一條寫「此機制抓到什麼市場結構或數據特徵,為何可望使回測期之績效更佳、且換一段期間仍成立」。(迴圈會檢查 `node.json` 之首次寫入是否早於第一次完整評估。)')
-            L.push('2. **依回測期之結果迭代,但每一步都要有理由**(完整評估 3 ~ 12 次;迴圈會記錄評估次數與相異選集數):可以依結果改進並交付最佳者,但**交付版須是「平原上的一點」而非單點最高** —— 鄰近之參數同向、' + ph('個相位') + '同向、對照之差明顯;只靠某一個參數值或某一個相位者不要交。試得越多,其中最佳者越可能只是運氣:每次都記入 `results.experiments`(做了什麼、關鍵數字;標明是 S 還是等效年化、選集大小 / 持倉上限),沒跑過者不得列數字;交付版在第幾次、為何選它,寫入 `conclusion.summary`。**依狀態切換之機制**:「狀態 → 動作」之映射須在看回測期之分狀態損益以前依假說寫入規劃;用探針讀出映射者須於節點文件註明,探針之格數計入嘗試,且其安慰劑之勝出不作為內容之證據。')
+            L.push('2. **依回測期之結果迭代,但每一步都要有理由**(完整評估 3 ~ 12 次;迴圈會記錄評估次數與相異選集數):可以依結果改進並交付最佳者,但**交付版須是「平原上的一點」而非單點最高**(見 §5「防偶然」;另須對照之差明顯;只靠某一個參數值或某一個相位者不要交)。試得越多,其中最佳者越可能只是運氣:每次都記入 `results.experiments`(做了什麼、關鍵數字;標明是 S 還是等效年化、選集大小 / 持倉上限),沒跑過者不得列數字;交付版在第幾次、為何選它,寫入 `conclusion.summary`。**依狀態切換之機制**:「狀態 → 動作」之映射須在看回測期之分狀態損益以前依假說寫入規劃;用探針讀出映射者須於節點文件註明,探針之格數計入嘗試,且其安慰劑之勝出不作為內容之證據。')
             L.push(oneFile)
             //有起點而方向未指定對照者: 去臂 = 起點本身(規則 R-REC-19); 新加之臂皆屬取法 / 執行層(D、E)者另註判讀方式
             let newArms = t.base && Array.isArray(t.base.arms) ? t.arms.filter((a) => !t.base.arms.includes(a.id)) : []
             let ruleOnly = newArms.length > 0 && newArms.every((a) => a.layer === 'D' || a.layer === 'E')
             let baseCtl = t.base
-                ? '未指定而**有起點**者(本節點即是),`control.mjs` = **起點成品之逐位複本**(把 `' + wd + '/base_pick.mjs` 原樣複製為 `' + wd + '/control.mjs`):本節點新加之臂之貢獻 = 交付版與起點之配對差。' + (ruleOnly ? '**新加之臂屬取法 / 執行層(' + newArms.map((a) => a.id).join('、') + '):判讀以「同一份排序或選集、只換取法 / 執行規則」之配對差、每單平均損益與組成對照為準** —— 持倉上限、下單閘之類會改變同時持倉之峰值(等效年化之分母),不同規則之間不直接比 S。' : '')
+                ? '未指定而**有起點**者(本節點即是),`control.mjs` = **起點成品之逐位複本**(於工作夾內把 `base_pick.mjs` 原樣複製為 `control.mjs`):本節點新加之臂之貢獻 = 交付版與起點之配對差。' + (ruleOnly ? '**新加之臂屬取法 / 執行層(' + newArms.map((a) => a.id).join('、') + '):判讀以「同一份排序或選集、只換取法 / 執行規則」之配對差、每單平均損益與組成對照為準** —— 持倉上限、下單閘之類會改變同時持倉之峰值(等效年化之分母),不同規則之間不直接比 S。' : '')
                 : '未指定時,另交「同執行規則、同選集大小,只把指定臂換成中性預設」之 `' + wd + '/control.mjs`。'
-            L.push('4. **去臂對照**:**來源方向已指定對照版者,`control.mjs` 即該對照**(多為同種子配對:`ctx.rand` 之消耗與交付版相同);' + baseCtl + '對照版之完整評估存成 `full_control.json`,並於 `conclusion.summary` 寫出兩者之 S、超額之差與**選集組成**(評估輸出之「選集組成」列:每隻訊號數、做多比例)—— 分數受選集之活躍度與多空比例影響很大(回測期內多空行情並不對稱),臂若只改變這兩者,差值就不是臂之內容。選集很大而下單率低時,另把「下單集中度」列寫進 `findings`。')
+            L.push('4. **去臂對照**:**來源方向已指定對照版者,`control.mjs` 即該對照**(多為同種子配對:`ctx.rand` 之消耗與交付版相同);' + baseCtl + '對照版之完整評估存成 `full_control.json`,並於 `conclusion.summary` 寫出兩者之 S、超額之差與**選集組成**(評估輸出之「選集組成」列:每隻訊號數、做多比例;分數受這兩者影響很大,見合約 §5)—— 臂若只改變這兩者,差值就不是臂之內容。選集很大而下單率低時,另把「下單集中度」列寫進 `findings`。')
             L.push(finalStep)
-            L.push('6. 寫結論(`conclusion`):相對比較對象之判定(`improved` / `neutral` / `worse` / `failed`)、發現、限制、後續想法。沒達標如實寫;負面結果同樣有價值。來源方向寫有判定方式(「預期」一欄列出達標條件)者,另填 `claimVerdict` = `confirmed`(各項皆達成)/ `refuted`(任一項未達)與 `claimNote`(一句話:哪一項未過、差多少);方向未寫判定方式者省略這兩鍵。')
+            L.push('6. 寫結論(`conclusion`):相對比較對象之判定(`outcome`,擇一值見範本)、發現、限制、後續想法。沒達標如實寫;負面結果同樣有價值。來源方向寫有判定方式(「預期」一欄列出達標條件)者,另填 `claimVerdict` = `confirmed`(各項皆達成)/ `refuted`(任一項未達)與 `claimNote`(一句話:哪一項未過、差多少);方向未寫判定方式者省略這兩鍵。')
         }
         //資訊來源之自報(規則 R-REC-47): 成品用到庫彙總量(第 3 級)者自報一句; 探索類另交一個兩側席次固定之對照版(可即 control.mjs); 不新增結構化欄位; 名詞定義在合約 §5「判讀名詞」
         //  節點任務書有大小之守門(逾 15,000 位元組即整併; unit-texts、unit-briefTrials) ⇒ 此條務求精簡, 定義不重述(見合約)
@@ -311,20 +319,20 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
         L.push('## 7. 交付(全部放在 `' + wd + '/`)')
         L.push('')
         L.push('- `pick.mjs`:最終挑選模組(含 `export const meta = { arms: [' + t.arms.map((a) => `'${a.id}'`).join(', ') + '], params: {…}, desc }`)。')
-        L.push('- `result_full.json`:最終版之完整評估結果(由 `g_eval.mjs --mode full --out` 產生,不要手改)。')
+        L.push('- `result_full.json`:最終版之完整評估結果(見 §6 第 5 點;不要手改)。')
         L.push('- `control.mjs` 與 `full_control.json`:去臂對照版與其完整評估結果(見 §6 第 4 點)。')
-        L.push('- `node.json`:節點文件之 agent 部分。**照 `' + wd + '/node.template.json` 之鍵填寫**,必須是合法 JSON(UTF-8、雙引號、無註解、無結尾逗號)。`results.claimed` 各欄之來源:`S` ← `score.S`、`ladder` ← `score.ladder`、`eqYrMean` ← `metrics.op.eqYr.mean`、`eqYrMin` ← `metrics.op.eqYr.min`、`monthlyOrders` ← `metrics.op.monthlyOrders.mean`、`peakHold` ← `metrics.op.peakHold.max`、`nullP` ← `metrics.null.p`、`selHash` ← `metrics.selHash`。' + (t.toolbox ? '`code.shareable`:你本次所寫、**其他節點也可能用到**之輔助(函式、診斷腳本、對照樣板)各列一筆 `{ file, what }`,沒有則空陣列 —— 做夢會把值得共用者整併進共用工具區。' : ''))
+        L.push('- `node.json`:節點文件之 agent 部分。**照 `' + wd + '/node.template.json` 之鍵填寫**,必須是合法 JSON(UTF-8、雙引號、無註解、無結尾逗號)。`results.claimed` 各欄之來源:`S` ← `score.S`、`ladder` ← `score.ladder`、`eqYrMean` ← `metrics.op.eqYr.mean`、`eqYrMin` ← `metrics.op.eqYr.min`、`monthlyOrders` ← `metrics.op.monthlyOrders.mean`、`peakHold` ← `metrics.op.peakHold.max`、`nullP` ← `metrics.null.p`、`selHash` ← `metrics.selHash`。' + (t.toolbox ? '`code.shareable`:你本次所寫、**其他節點也可能用到**之輔助各列一筆 `{ file, what }`,沒有則空陣列 —— 做夢會把值得共用者整併進共用工具區。' : ''))
         //未作用之臂(規則 R-REC-20): 指派之臂經實測後於交付版關閉者須如實列出, 看板之各臂成績與補位載體之臂組合才不會把載體之分數算在該臂上
-        L.push('- `code.inactiveArms`:指派之臂中,**交付版未作用者**之 id(例:實測為負而在交付版關閉之下單閘、試過而未採用之取法);沒有則空陣列。試過而關閉是正常結果,如實填寫即可(`meta.arms` 照列指派之全部臂,不必刪)—— 看板之各臂成績、以及其後以本節點為起點之臂組合,只計作用中之臂。')
+        L.push('- `code.inactiveArms`:指派之臂中,**交付版未作用者**之 id;沒有則空陣列。試過而關閉是正常結果,如實填寫即可(`meta.arms` 照列指派之全部臂,不必刪)—— 看板之各臂成績、以及其後以本節點為起點之臂組合,只計作用中之臂。')
         //臂目錄之提案(規則 R-ARM-1): 節點亦可提新臂 / 新層 / 修訂 / 停用; 由做夢彙整、主控審查
-        L.push('- `conclusion.armProposals`(選配;沒有就留空陣列):**臂目錄不是封閉的**。目錄內之臂只是「怎麼挑」之既有分類;你做出來之機制若不屬於任何現有之臂(只是暫掛在指定之臂之下),或你發現某個臂之定義有問題(過寬而涵蓋多種不相干之機制、與他臂重疊、說明有誤、依合約做不到),各列一筆 `{ kind, arm, layer, title, mechanism, boundary, evidence }`:`kind` = `new`(新臂)/ `layer`(新的一層,即新的臂之種類)/ `revise`(修訂既有臂之定義或範圍)/ `retire`(停用或併入他臂);`arm` = 既有臂之 id(`revise` / `retire` 必填);`title` = 名稱(`new` / `layer` 必填);`mechanism` = 機制之中性描述(做什麼、用到什麼資訊;不寫結論與數字。`revise` 寫修訂後之定義、`retire` 寫理由);`boundary` = 與既有臂之界線;`evidence` = 依據。提案由做夢彙整、主控審查,通過者下一輪加入目錄;**提案不影響本節點之任務**(仍以指定之臂交付,不因想提案而多做實驗)。')
+        L.push('- `conclusion.armProposals`(選配;沒有就留空陣列):**臂目錄不是封閉的**。你做出來之機制若不屬於任何現有之臂,或你發現某個臂之定義有問題(過寬而涵蓋多種不相干之機制、與他臂重疊、說明有誤、依合約做不到),各列一筆 `{ kind, arm, layer, title, mechanism, boundary, evidence }`:`kind` = `new`(新臂)/ `layer`(新的一層,即新的臂之種類)/ `revise`(修訂既有臂之定義或範圍)/ `retire`(停用或併入他臂);`arm` = 既有臂之 id(`revise` / `retire` 必填);`title` = 名稱(`new` / `layer` 必填);`mechanism` = 機制之中性描述(做什麼、用到什麼資訊;不寫結論與數字。`revise` 寫修訂後之定義、`retire` 寫理由);`boundary` = 與既有臂之界線;`evidence` = 依據。提案由做夢彙整、主控審查;**提案不影響本節點之任務**(仍以指定之臂交付,不因想提案而多做實驗)。')
         L.push('')
         L.push('## 8. 禁止(迴圈會掃描你執行過之指令與所寫之檔;觸及者記入節點文件,由審計處置)')
         L.push('')
         L.push('- **只能寫自己的工作夾** `' + wd + '/`(含 `--out`、輸出重導向、測試用之暫存檔);不得改 `' + codeRootRel + '/`、`g_*.mjs`、`settings.json`、`arms/`' + (t.toolbox ? '、共用工具區' : '') + ' 與其他任何檔。')
-        L.push('- **可讀**:`docs/`、`examples/`、`rsi/records/`(節點文件 `' + rel(st.records.nodeDir) + '/` 與做夢文件)、`rsi/ARMS_BOARD.md`' + (t.toolbox ? '、共用工具區 `' + t.toolbox.dir + '/`' : '') + (hasStore() ? '、共同儲存區 `' + storeRel + '/`(全部已執行節點之挑選策略:總表 `INDEX.md`、各策略之程式碼複本與欄位;用法見其 `README.md`)' : '') + ',以及本任務書 §1 ~ §3 明列之起點、參考節點之成品與做夢之診斷模組。**不得讀取或列出其他節點之工作夾,也不得列出 `' + rel(st.records.workDir) + '/` 本身**(同輪之節點正在併行,互看會使結果不獨立)。')
+        L.push('- **可讀**:`docs/`、`examples/`、`rsi/records/`(節點文件 `' + rel(st.records.nodeDir) + '/` 與做夢文件)、`rsi/ARMS_BOARD.md`' + (t.toolbox ? '、共用工具區 `' + t.toolbox.dir + '/`' : '') + (hasStore() ? '、共同儲存區 `' + storeRel + '/`(全部已執行節點之挑選策略;見下條)' : '') + ',以及本任務書 §1 ~ §3 明列之起點、參考節點之成品與做夢之診斷模組。**不得讀取或列出其他節點之工作夾,也不得列出 `' + rel(st.records.workDir) + '/` 本身**(同輪之節點正在併行,互看會使結果不獨立)。')
         if (hasStore()) {
-            L.push('- **動手前先看共同儲存區之總表** `' + storeRel + '/INDEX.md`:已有哪些機制、各自之回測期挑選內容與**保留期之正負號**(保留期 = 回測期之後、未用於搜尋之期間;只有正負號,數字不提供;用法與限制見其 README)' + (hasCross() ? '、**其他標的之正負號**(同一挑選模組原樣不改、於另一標的之策略庫上評估;回測期與保留期各一;只有正負號,數字不提供;讀法同保留期)' : '') + '。不重做已有之設計;要參考其他節點之成品者,讀該區內之程式碼複本(不讀其工作夾)。')
+            L.push('- **動手前先看共同儲存區之總表** `INDEX.md`:已有哪些機制、各自之回測期挑選內容與**保留期之正負號**(保留期 = 回測期之後、未用於搜尋之期間;只有正負號,數字不提供;用法與限制見其 README)' + (hasCross() ? '、**其他標的之正負號**(同一挑選模組原樣不改、於另一標的之策略庫上評估;回測期與保留期各一;只有正負號,數字不提供;讀法同保留期)' : '') + '。不重做已有之設計;要參考其他節點之成品者,讀該區內之程式碼複本(不讀其工作夾)。')
         }
         L.push('- **不得**:讀取 `data/`、`tmp/` 或專案夾以外之任何路徑(含策略庫專案、私有資料與舊制之備份);執行 `g_backtest.mjs`;讀取迴圈驗證之原始碼(`g_backtest.mjs`、`' + codeRel + '/backtest*.mjs`、`' + codeRel + '/verify*.mjs` —— 評估時 `ctx` 之行為已寫在合約 §2);以 `--no-log` 或 `--seed` 執行評估(只供迴圈使用);硬編策略序號清單或日期清單;使用決策日之後之資訊(回測期之結果只能經由「依結果改機制」影響你的挑法,不得把回測期之答案寫進模組)。')
         L.push('- 只評估自己工作夾內之模組(要跑範例或他人之成品,先複製進來)。讀過評估器或迴圈之其他原始碼(`g_eval.mjs`、`' + codeRootRel + '/eval/`、`' + codeRootRel + '/arsi/`)者,於 `conclusion.limitations` 寫明讀了哪些檔與原因;覺得評估器或合約有缺陷或沒寫清楚,也寫在那裡。')
@@ -481,7 +489,7 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
         //  句內附所指之處(任務書他處不定義「求解窗後段」): 已有共同儲存區(總表)者為其 postfit 欄; 尚無者不提共同儲存區(規則 R-REC-25), 指節點文件之附算列(POSTFIT_HEAD)
         let pfRef = hasStore() ? '共同儲存區之 `postfit` 欄' : `節點文件摘要之「${POSTFIT_HEAD.replace(/:$/, '')}」一列`
         L.push(`  - **預先核對(跑前登錄)之設計取捨不得以求解窗後段(${pfRef})為判準**:此段只於設計定案後附報(否則該段對該設計即非獨立之佐證)。`)
-        L.push(`  - \`arms\` 須為「可選臂」之 id(清單與各臂之現況見 \`rsi/ARMS_BOARD.md\`;機制說明見 \`arms/catalog.json\`),一個節點至多 ${st.rsi.maxArmsPerNode} 臂。`)
+        L.push(`  - \`arms\` 須為「可選臂」之 id(清單與各臂之現況見 \`rsi/ARMS_BOARD.md\`;機制說明見 \`arms/catalog.json\`),一個節點至多 ${maxArmsOf(st.rsi)} 臂。`)
         L.push('  - `base` 為 null(從零)或一個已採納(accept)且**未被否決**之節點 id(在其成品上加臂 / 改進;被否決者——超過硬限制或審計不可信——不得作為起點);`arms` 是該節點**完整**之臂組合(含起點已有之臂)。探索類:同臂組合 + 同起點之節點若已存在,迴圈會讓該方向之規格另帶一個區分用之鍵(依據文字之雜湊)後照常入前緣;依據文字完全相同者(同一探索之重提)才略過。**無依據文字者、或樹上尚無同規格之節點而前緣內已有同臂同起點之待執行提案者,仍會被略過**(輪末摘要列出)—— 同一機制請勿換個說法重提,不同之機制請在 `rationale` 寫清楚其差異。既有之臂之下已掛多種互不相干之機制者,宜另提新臂(`guidance.armProposals`),使看板之「已試」有意義。**驗證類:去重另含主張**(`claim` 之文字)—— 同一候選之不同主張之驗證(半庫、鄰格、換定義重複)可用相同之臂與起點,各成一個節點;主張之文字完全相同者才略過。')
         L.push('  - 方向要兼顧「擴展有希望者」(回測期 S 較高、對隨機挑之超額顯著之節點:怎麼讓它更高、各相位皆為正、更穩)與「探索未試之層」;`rationale` 寫清楚依據(哪個節點之哪個數字),並說明**此方向抓到什麼市場結構或數據特徵、為何可望使回測期之績效更佳且換一段期間仍成立**;`expect` 寫預期與判定方式(以回測期之 S、最差相位、對隨機挑或對照之差判定)。**判定若含「相鄰 / 平原 / 同向」,須寫量級門檻**(例:鄰點之' + ph('相位') + '平均、或其對組成對照之超額 ≥ 交付版之一半),只看符號不算平原;選集之每隻訊號數為全體隨機之 2 倍以上者(或預期會如此者),判準另含近期活躍度之組成對照(`metrics.ext.nullRecentAct.side`)之超額與 p。**對照以評估器內建之組成對照 / 幾何對照(' + nDraws + ' 抽)為準**,不要求節點另手跑單抽之替換樣板(只有要換活躍度或分組之定義時才指名樣板)。要量選集重疊率時寫「以 `quick --ref` 量」(不計為版本;交付之 `result_full.json` 不帶 `--ref`),不寫「交付版之 full 加 `--ref`」或「不跑 quick」。**探索方向之交付規則須與判定所用之條件一致**:交付規則與判定用同一組量,不另寫較寬之規則。**判定量會隨抽取而變者**(池內隨機抽取之成品;或依鍵取席而迴圈重放之 S 與主分數相差 > 5、下單率 < 30% 之成品)**以 ≥ 3 組抽取之平均為準**(池內隨機用 pick 開頭多耗 0 / 1 / 2 次 `ctx.rand`;依鍵取席用 `snippets/tieAlt.mjs` 之 k 0 / 1 / 2;節點文件與看板已列「正本與兩次重放之平均」,亦可用),不以單抽、也不以「每抽皆 ≥ X」為準 —— 效果略高於門檻時每抽皆過之機率很低,而無內容者單抽即可能過 p ≤ ' + sc.ladder1.nullP + '。')
         L.push('  - 寫方向前自查三件事:①所提之變換在比較群內是否**單調**(例如分側排序下「扣除同側平均」只是常數平移,排序不變,等於沒做);②機制作用在哪一層:挑哪些策略、兩側之配比如何隨狀態改變、還是席次數與下單時機(關側、空手、執行規則)—— 後者會改變絕對績效但不改變「挑得好不好」,判定時須與「同樣席次 / 時機之隨機挑」比(評估輸出之虛無沿用成品每次決策之選集大小與 `accept`);③方向所依據之**組成前提**與**預期作用量**(名單會換掉多少、所針對之量預期變多少)是否已核對 —— 以既有之評估輸出或一次診斷(`quick` 即可;`g_eval.mjs --ref <參考模組>` 可直接得兩個模組之選集重疊率)核對後,把結果寫入 `rationale`;預期作用量很小(例如名單換掉不到 20%,或所針對之量不會變)者不列為方向,改寫入 `openQuestions`。主張含「自適應」「依狀態切換之時機」者,對照須含**同比例、隨機時機之安慰劑**(讀擴充診斷 `metrics.ext.placeboTiming`;判定用 `templates/placebo_randomState.mjs` 之精確版 ≥ 2 抽之平均)—— 固定參數版只分得出「是否只是某一個固定狀態」,分不出時機與各狀態之混合。')

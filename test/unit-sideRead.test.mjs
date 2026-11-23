@@ -32,7 +32,10 @@ describe('全樹之側別讀數(sideRead.mjs;規則 R-REC-50)', function () {
             assert.deepEqual(sideReadCfgOf(v), { minNodes: 10, top: 10, corrAbs: 0.6, lo: 0.2, hi: 0.8 }, JSON.stringify(v))
         }
         assert.deepEqual(sideReadCfgOf({ minNodes: 4, top: 3, corrAbs: 0.5, lo: 0.1, hi: 0.9 }), { minNodes: 4, top: 3, corrAbs: 0.5, lo: 0.1, hi: 0.9 })
-        assert.deepEqual(sideReadCfgOf({ minNodes: 1, top: 2.5, corrAbs: 1.2, lo: -0.1, hi: '0.7' }), { minNodes: 10, top: 10, corrAbs: 0.6, lo: 0.2, hi: 0.8 })
+        assert.deepEqual(sideReadCfgOf({ minNodes: 1, top: 2.5, corrAbs: 1.2, lo: -0.1, hi: 'abc' }), { minNodes: 10, top: 10, corrAbs: 0.6, lo: 0.2, hi: 0.8 })
+        //排程第 595 項(K4、K7): 數字字串轉為數值後使用(原: 只收 number, '0.7' 被當成未給而用預設 0.8); 布林與空字串仍無效
+        assert.deepEqual(sideReadCfgOf({ minNodes: '4', top: ' 3 ', corrAbs: '0.5', lo: '0.1', hi: '0.7' }), { minNodes: 4, top: 3, corrAbs: 0.5, lo: 0.1, hi: 0.7 })
+        assert.deepEqual(sideReadCfgOf({ minNodes: true, top: '', corrAbs: false, lo: [], hi: '0x10' }), { minNodes: 10, top: 10, corrAbs: 0.6, lo: 0.2, hi: 0.8 })
         assert.deepEqual(sideReadCfgOf({ lo: 0.85 }), { minNodes: 10, top: 10, corrAbs: 0.6, lo: 0.2, hi: 0.8 })
     })
 

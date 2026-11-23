@@ -20,6 +20,7 @@ import { createToolbox } from '../arsi/toolbox.mjs'
 import { makeDispatch } from '../arsi/dispatchers.mjs'
 import { createResourceMonitor } from '../arsi/resources.mjs'
 import { resolveRunConfig } from '../arsi/runner.mjs'
+import { maxArmsOf, refCountsOf, reverifyParOf, docLimitsOf, preflightOf } from '../arsi/rsiNums.mjs'
 import { makeTexts, GUIDE, guideText, OUT_SATURATED_NOTE } from './texts.mjs'
 import { nullDrawsOf, nullFloorText, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll } from './factsText.mjs'
 import { makeVerify, summaryOf, notesOf, isHalfOf, scanTrace, shortShareOf, sideFlowIssue, sideFlowCfgOf, extSurfaceOf, extFlagIssue, extBoardMeansOf, runNodeProc, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD, dirWorkIdsOf, dirNodeIdsOf, allowWorkOf } from './verify.mjs'
@@ -331,7 +332,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
     let envKey = `${ledgerMeta.key}|eval${EVAL_VERSION}${uIniOfMeta === null ? '' : `|uIni${uIniOfMeta}`}`
     let idOf = (spec) => nodeIdOf(spec, envKey)
     let normArms = (arr) => [...new Set(arr)].sort()
-    let maxArms = st.rsi.maxArmsPerNode || 4
+    let maxArms = maxArmsOf(st.rsi)
     //層之順序(節點所屬之層 = 其各臂中最後面之層): 基底之 A ~ G, 其後接擴充之新層(有可選臂者; 依代號; 規則 R-ARM-2)
     let layerOrder = LAYER_ORDER + [...new Set(selectable.map((a) => a.layer))].filter((l) => !LAYER_ORDER.includes(l)).sort().join('')
     let layerOfSpec = (spec) => {
@@ -655,6 +656,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //執行規模(每輪幾個節點、同時幾個、一次跑幾輪)與資源上限: 由使用端依自身設備給定(settings.rsi / settings.resources; 命令列可覆寫, 見 g_rsi.mjs)
     let run = resolveRunConfig(st.rsi || {}, inject.run || {})
     let rc = st.resources || {}
+    //資源上限(settings.resources)之數值只收 number(typeof number): 評估器之進入檔(src/cli/eval.mjs)之資源閘另讀同一組鍵(cpuMax、ramUsedMaxGB、ramStartGB),本輪不動評估器 ⇒ 為免兩處解讀不同(同一鍵單一解讀), settings.resources 整組留待下次動評估器時一併收數字字串(排程第 595 項之餘)
     let monitor = createResourceMonitor({ cpuMax: rc.cpuMax, ramUsedMaxGB: rc.ramUsedMaxGB, cpuStart: rc.cpuStart, ramStartGB: rc.ramStartGB, sampleSec: rc.sampleSec, pollSec: rc.pollSec, maxWaitSec: typeof rc.maxWaitMin === 'number' ? rc.maxWaitMin * 60 : undefined, log })
 
     let texts = makeTexts({ st, FD_ROOT })
@@ -692,7 +694,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         }
     })
     //maxPercent: 訂閱之用量守門之門檻, 與起跑前之額度檢查同一個設定(settings.rsi.preflight.quotaMaxPercent; 未設取 95; 規則 R-RUN-8); 各角色另可設 agents.<role>.quotaMaxPercent(優先)
-    let dispatch = typeof inject.dispatch === 'function' ? inject.dispatch : makeDispatch({ agents: st.agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, cwd: FD_ROOT, maxPercent: st.rsi && st.rsi.preflight ? st.rsi.preflight.quotaMaxPercent : undefined })
+    let dispatch = typeof inject.dispatch === 'function' ? inject.dispatch : makeDispatch({ agents: st.agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, cwd: FD_ROOT, maxPercent: preflightOf(st.rsi).quotaMaxPercent })
     let rsi = null
 
     let domain = {
@@ -845,7 +847,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
             base = { nodeId: spec.base, arms: bn && bn.spec && Array.isArray(bn.spec.arms) ? bn.spec.arms.slice() : [], inactiveArms: bn && bn.spec && Array.isArray(bn.spec.arms) ? inactiveArmsOf(bn) : [], S: bn && bn.score ? bn.score.S : null, ladder: bn && bn.score ? bn.score.ladder : null, backtest: (bn && bn.score && bn.score.flags && bn.score.flags.backtest) || null, doc: rel(records.paths.nodeMd(spec.base)) }
             refs.push({ kind: 'node', nodeId: spec.base, path: rel(records.paths.nodeMd(spec.base)), why: '起點節點之節點文件(含審計意見)' })
         }
-        let dreams = records.listDreamDocs().slice(-(st.rsi.refDreams || 2))
+        let refCounts = refCountsOf(st.rsi) //refDreams(預設 2)、refTopNodes(預設 3): 正整數, 數字字串轉為數值(K4、K7)
+        let dreams = records.listDreamDocs().slice(-refCounts.refDreams)
         for (let d of dreams.reverse()) {
             refs.push({ kind: 'dream', dream: d.round, path: rel(records.paths.dreamMd(d.round)), why: `做夢文件 ${roundName(d.round)}(審計、彙整與方向;**先讀開頭之「迴圈註記」(若有;與正文牴觸時以註記為準),再讀「整體研判」(若有)、「給下一輪之方向」與「避免」**)` })
         }
@@ -858,8 +861,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
         //  同級內之次序依排序鍵(rankKeyOf; 規則 R-REC-40): 依鍵所選(含次序)與依 S 所選相同者, 參考之清單與其文字與改前逐字相同; 不同者改列依鍵所選, 文字註明排序鍵
         let cands = rows.map((r) => rsi.store.getNode(r.id)).filter((n) => n && n.score && !(n.score.flags && n.score.flags.vetoed) && !(n.evidence && n.evidence.trust === 'untrusted'))
         let kvOf = (n) => (rankKeyOf(n) === null ? n.score.S : rankKeyOf(n))
-        let topS = cands.slice().sort((a, b) => (audited(b) - audited(a)) || (b.score.S - a.score.S)).slice(0, st.rsi.refTopNodes || 3)
-        let topK = cands.slice().sort((a, b) => (audited(b) - audited(a)) || (kvOf(b) - kvOf(a))).slice(0, st.rsi.refTopNodes || 3)
+        let topS = cands.slice().sort((a, b) => (audited(b) - audited(a)) || (b.score.S - a.score.S)).slice(0, refCounts.refTopNodes)
+        let topK = cands.slice().sort((a, b) => (audited(b) - audited(a)) || (kvOf(b) - kvOf(a))).slice(0, refCounts.refTopNodes)
         let refByKey = topK.some((n, i) => n !== topS[i])
         let top = refByKey ? topK : topS
         //參考節點之成品: 派工時複製為節點工作夾內之 ref_<id 前 8 碼>.mjs(與起點之 base_pick.mjs 同作法), 任務書指向複本 —— 節點不必進他節點之工作夾找檔
@@ -1751,7 +1754,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         //專案指引文件之自動整理(規則 R-REC-17): 經驗檔、回饋檔逾上限即把較舊者原文搬到同夾之 <名>_<年月日>.md, 主檔留索引(只搬不刪; 於更新時間之核對之後才做)
         //  上限取 settings.rsi.docLimits = { maxBytes, keepBytes, keepRows }(預設 30000 / 18000 / 14); settings.rsi.docLimits === false 關閉
         if (st.rsi.docLimits !== false) {
-            let lim = st.rsi.docLimits || {}
+            let lim = docLimitsOf(st.rsi) //maxBytes、keepBytes、keepRows: 數字字串轉為數值、無效者為 undefined ⇒ 用整理函數之預設(K3、K4、K7; 與 tools/archiveDocs.mjs 同一取值)
             try {
                 let a1 = archiveExperience({ fp: path.join(FD_ROOT, 'sgud', 'exp', 'experience.md'), maxBytes: lim.maxBytes, keepBytes: lim.keepBytes })
                 let a2 = archiveFeedback({ fp: path.join(FD_ROOT, 'sgud', 'feedback', 'feedback.md'), maxBytes: lim.maxBytes, keepRows: lim.keepRows })
@@ -2006,7 +2009,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         }
         //  第 2 個以後之工作者每取一個節點前先過資源閘(與迴圈同一個: 全機 CPU / 記憶體逾起始門檻即等); 第 1 個工作者不等 ⇒ 機器忙時退回逐一進行、有餘裕時才併行
         //  (多個重放併行時, 全機 CPU 讀數可能逼近上限; 讀數含本機其他工作之負載)
-        let par = Math.max(1, Math.min(8, Number.isInteger(st.rsi.reverifyParallel) ? st.rsi.reverifyParallel : 4))
+        let par = reverifyParOf(st.rsi)
         let next = 0
         await Promise.all(Array.from({ length: Math.min(par, rows.length) }, async (_, w) => {
             while (next < rows.length) {

@@ -1,11 +1,13 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings, readJson } from '../cfg.mjs'
+import { getSettings, readJson, cliGuard } from '../cfg.mjs'
 import { phaseCountOfMetrics, phaseCountOfAll, phaseText } from '../eval/cfgNum.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
 //agent(ARSI_AGENT_ROLE = node / dream)⇒ 帶 --out(寫出 DIGEST.md)者拒跑(離開碼 2; 規則 R-RUN-11); 只印出者照常
 guardEntry('roundDigest')
+//命令列只認 [輪次] 與 --out(TOOL_FLAGS.roundDigest): 未列之旗標、等號、重複、多餘之位置引數一律拒收(離開碼 2; 於讀設定與任何寫入之前; 訊息固定、不帶輸入值)
+cliGuard('roundDigest')
 
 //唯讀: 某一輪之一頁摘要(不含回測期數字; 只讀輪次結果檔、節點文件、做夢文件與各工作夾之 .evals.log)
 //  node tools/roundDigest.mjs [輪次(預設最近一輪)] [--out]     --out: 另存為 rsi/rounds/rNNN/DIGEST.md

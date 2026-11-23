@@ -219,6 +219,85 @@ let CLI_OWN = {
     rsi: { noValue: ['file'], dup: [] },
 }
 
+//CLI_MODE_FLAGS, 進入檔之「模式 × 旗標」(單一定義; 排程第 595 項之接續: 原 `--mode status --rounds 3`、`--mode validate --only <id>`、`--mode reverify --null 4`、`--mode frontier --close A --base X` 等不屬該模式之旗標被靜默忽略):
+//  進入檔名 → { 模式名: [該模式讀取之旗標(不含 mode 本身)] }; 命令列給了不屬所選模式之旗標 ⇒ 拒收(同一檢查點、離開碼 2、固定訊息、不帶輸入值)
+//  模式名 = CLI_ENUMS.rsi.mode 之集合(unit-cliModeFlags 核對); 各模式所列之旗標 = src/cli/rsi.mjs 該模式區塊內讀取者(同測試以原始碼盤點核對); 每個 CLI_FLAGS.rsi 之旗標至少屬一個模式
+let CLI_MODE_FLAGS = {
+    rsi: {
+        status: [],
+        init: [],
+        board: [],
+        dry: ['nodes', 'arms', 'parallel', 'workers', 'rounds'],
+        round: ['nodes', 'arms', 'parallel', 'workers', 'rounds', 'dream-only', 'file', 'force'],
+        validate: ['force'],
+        reverify: ['why', 'keep-flags', 'only'],
+        extfill: ['ext', 'only', 'force', 'null'],
+        fill: ['dry', 'only', 'force', 'no-postfit', 'ext', 'null', 'par', 'no-member'],
+        frontier: ['close', 'rearm', 'to', 'why', 'base', 'claim'],
+        annotate: ['round', 'file'],
+        dirtype: ['round', 'file'],
+    },
+}
+
+//CLI_MODE_OWN, 模式相容由進入檔自己檢查(其訊息沿用既有之固定訊息; 取決於他旗標〔--file 於 round 須帶 --dream-only〕): 不入本表之通用檢查
+let CLI_MODE_OWN = {
+    rsi: ['file'],
+}
+
+//CLI_MODE_NEEDS, 模式內旗標之相依: 進入檔名 → 模式 → { 旗標: [至少須同時給其一之旗標] }; 不合 ⇒ 拒收(同上)
+//  frontier: 列出前緣不帶任何寫出之旗標; --to、--base 只隨 --rearm(改掛); --why、--claim 只隨 --close 或 --rearm(原: 單獨給之 --base、--to、--why、--claim 被靜默忽略)
+let CLI_MODE_NEEDS = {
+    rsi: {
+        frontier: { to: ['rearm'], base: ['rearm'], why: ['close', 'rearm'], claim: ['close', 'rearm'] },
+    },
+}
+
+//TOOL_FLAGS, 工具(src/tools/*.mjs)認得之旗標(單一定義; 每工具一張表; 排程第 595 項之接續): 工具名 → { flags: { 旗標名(不含 --): 值之格式說明; 布林旗標為 null }, positional: 位置引數之個數上限(Infinity = 不限), own?: [旗標名] }
+//  與 CLI_FLAGS 同一組規則(cliMsgOf / cliGuard): 等號寫法、未列之旗標、單值旗標重複、帶值旗標無值、多餘之值與位置引數一律於工具之開頭(讀設定、組裝專案與任何寫入之前)拒收(離開碼 2、固定訊息、不帶輸入值)
+//  own = 該旗標之無值由工具自己之解析處理(沿用既有之固定訊息; 同 CLI_OWN.noValue)
+//  新增旗標須同時加於本表(unit-toolFlags 以原始碼之盤點核對: 工具讀取之旗標 = 本表之鍵)
+let TOOL_FLAGS = {
+    archiveDocs: { flags: {}, positional: 0 },
+    armDecide: {
+        flags: {
+            'id': '<proposal-id>',
+            'accept': null,
+            'reject': null,
+            'why': '<text>',
+            'why-file': '<file>',
+            'name': '<name>',
+            'layer': '<layer>',
+            'arm-id': '<arm-id>',
+            'title': '<text>',
+            'title-file': '<file>',
+            'desc': '<text>',
+            'desc-file': '<file>',
+            'selectable': '<true|false>',
+            'no-grid': null,
+        },
+        positional: 0,
+    },
+    armInactive: { flags: { node: '<id-prefix>', arms: '<arm>[,<arm>…]|none', why: '<text>', offdef: '<arm>[,<arm>…]' }, positional: 0 },
+    briefPreview: { flags: { out: '<dir>' }, positional: 0 },
+    buildCatalog: { flags: { out: '<file>' }, positional: 0 },
+    dreamProfile: { flags: {}, positional: 1 },
+    exposure: { flags: { node: '<id-prefix>', why: '<text>', undo: null }, positional: 0 },
+    fakeRound: { flags: { two: null, redream: null }, positional: 0 },
+    improveTrend: { flags: { json: null }, positional: 0 },
+    initProject: { flags: { 'root': '<dir>', 'bar-hours': '<h>', 'dry': null, 'force': null }, positional: 0, own: ['bar-hours'] },
+    libCheck: { flags: { 'json': null, 'dir-hi': '<0 ~ 1>', 'dir-lo': '<0 ~ 1>' }, positional: 0, own: ['dir-hi', 'dir-lo'] },
+    nodeAudit: { flags: { nodes: null, shape: null }, positional: 0 },
+    pickStore: { flags: {}, positional: 0 },
+    quota: { flags: { max: '<N>', all: null, probe: null }, positional: 0 },
+    rankCompare: { flags: { k: '<N>' }, positional: 0 },
+    replayCheck: { flags: {}, positional: Infinity },
+    roundDigest: { flags: { out: null }, positional: 1 },
+    scanCheck: { flags: {}, positional: 1 },
+    searchMap: { flags: { quiet: null }, positional: 0 },
+    smokeDispatch: { flags: {}, positional: 1 },
+    waitEvent: { flags: { 'timeout-min': '<N>', 'since': '<ISO-time>', 'poll-sec': '<N>' }, positional: 0 },
+}
+
 //cliMsgOf, 命令列之嚴格檢查(排程第 547、590 項): 一律只認 --key value(空白分隔)與列表內之旗標; 其餘 ⇒ 回固定之單行訊息(不帶輸入值; 旗標名只在其為表所列者〔程式常數〕才寫出), 皆合格回 null;
 //  檢查之次序: ① 帶等號之 --key=value(eqFlagMsgOf) ② 自左至右掃描: 未列之旗標(含拼錯、--period:postfit 之冒號寫法、單獨之 --)、單值旗標重複、帶值旗標無值、列舉旗標之值不在集合、
 //  多餘之值(布林旗標之後接非旗標之值、帶值旗標之值之後再接一個值,如 --phases 0 3)、多餘之位置引數; 帶值旗標之值為空字串或只有空白者視同無值(own 所列者除外)
@@ -226,26 +305,28 @@ let CLI_OWN = {
 /**
  * 命令列之嚴格檢查: 帶等號之寫法、未列之旗標、單值旗標重複、帶值旗標無值、列舉旗標之值不在集合內、多餘之值或位置引數皆回固定之訊息(不帶輸入值); 全部合格回傳 null
  *
- * @param {String} entry 輸入進入檔名,CLI_FLAGS 之鍵(eval、backtest、build、rsi、toolbox、launch)
+ * @param {String} entry 輸入進入檔名(CLI_FLAGS 之鍵: eval、backtest、build、rsi、toolbox、launch)或工具名(TOOL_FLAGS 之鍵: src/tools/ 內之各工具; 其旗標與位置引數之個數取自該表)
  * @param {Array<String>} [argv=process.argv.slice(2)] 輸入命令列引數,預設 process.argv.slice(2)
  * @param {Object} [opt={}] 輸入選項
  * @param {Array<String>} [opt.first=[]] 輸入帶等號時優先報告之旗標名(同 eqFlagMsgOf 之 first),預設[]
- * @param {Integer} [opt.positional=0] 輸入允許之位置引數個數(不屬任何旗標之值者;如 g_launch.mjs 之日誌名為 1),預設0
+ * @param {Integer} [opt.positional] 輸入允許之位置引數個數(不屬任何旗標之值者;如 g_launch.mjs 之日誌名為 1; 工具未給時取 TOOL_FLAGS 之 positional),進入檔預設0
  * @returns {String|null} 回傳拒收之訊息(單行)或 null
  * @example
  * cliMsgOf('eval', ['--pick', 'a.mjs', '--mode', 'ful'])
  * // => 'invalid --mode: must be one of quick, full'
  */
 let cliMsgOf = (entry, argv = process.argv.slice(2), opt = {}) => {
-    let flags = CLI_FLAGS[entry]
+    //命令列進入檔(CLI_FLAGS)或工具(TOOL_FLAGS; 每工具一張表)
+    let isTool = !Object.prototype.hasOwnProperty.call(CLI_FLAGS, entry) && Object.prototype.hasOwnProperty.call(TOOL_FLAGS, entry)
+    let flags = isTool ? TOOL_FLAGS[entry].flags : CLI_FLAGS[entry]
     let first = opt && Array.isArray(opt.first) ? opt.first : []
-    let nPos = opt && Number.isInteger(opt.positional) ? opt.positional : 0
+    let nPos = opt && Number.isInteger(opt.positional) ? opt.positional : (isTool ? TOOL_FLAGS[entry].positional : 0)
     let eq = eqFlagMsgOf(flags, argv, first)
     if (eq !== null) {
         return eq
     }
     let enums = CLI_ENUMS[entry] || {}
-    let own = CLI_OWN[entry] || { noValue: [], dup: [] }
+    let own = isTool ? { noValue: TOOL_FLAGS[entry].own || [], dup: [] } : (CLI_OWN[entry] || { noValue: [], dup: [] })
     let names = Object.keys(flags)
     let known = (nm) => Object.prototype.hasOwnProperty.call(flags, nm)
     let seen = new Set()
@@ -271,8 +352,13 @@ let cliMsgOf = (entry, argv = process.argv.slice(2), opt = {}) => {
         let v = argv[i + 1]
         let hasVal = typeof v === 'string' && !v.startsWith('--')
         if (flags[nm] === null) {
-            //布林旗標: 其後不得接值
+            //布林旗標: 其後不得接值(允許位置引數者〔工具之 `[輪次] [--out]` 等〕: 其後之值算位置引數, 限其個數)
             if (hasVal) {
+                if (nSeen < nPos) {
+                    nSeen++
+                    i++
+                    continue
+                }
                 return 'invalid argument: must be the value of the preceding option (--<key> <value>; a flag without a value is written alone)'
             }
             continue
@@ -296,7 +382,49 @@ let cliMsgOf = (entry, argv = process.argv.slice(2), opt = {}) => {
         }
         i++
     }
+    //模式 × 旗標(CLI_MODE_FLAGS): 所選之模式(--mode 之值已於上列舉檢查; 未給 = status)不讀取之旗標 ⇒ 拒收(命令列次序之第一個); 其後依 CLI_MODE_NEEDS 檢查模式內旗標之相依
+    let modeTbl = CLI_MODE_FLAGS[entry]
+    if (modeTbl) {
+        let im = argv.indexOf('--mode')
+        let md = im >= 0 ? argv[im + 1] : 'status'
+        if (Object.prototype.hasOwnProperty.call(modeTbl, md)) {
+            let skip = CLI_MODE_OWN[entry] || []
+            let said = (arr) => arr.map((x) => `--${x}`).join(' or ')
+            for (let nm of seen) {
+                if (nm === 'mode' || skip.includes(nm) || modeTbl[md].includes(nm)) {
+                    continue
+                }
+                let ms = Object.keys(modeTbl).filter((k) => modeTbl[k].includes(nm))
+                return `invalid --${nm}: must be used with --mode ${ms.length > 1 ? `${ms.slice(0, -1).join(', ')} or ${ms[ms.length - 1]}` : ms[0]}`
+            }
+            let needs = (CLI_MODE_NEEDS[entry] || {})[md] || {}
+            for (let nm of seen) {
+                if (Object.prototype.hasOwnProperty.call(needs, nm) && !needs[nm].some((x) => seen.has(x))) {
+                    return `invalid --${nm}: must be used with ${said(needs[nm])}`
+                }
+            }
+        }
+    }
     return null
+}
+
+/**
+ * 工具(src/tools/*.mjs)與命令列進入檔之開頭呼叫: 命令列依 cliMsgOf 檢查, 不合 ⇒ 印一行固定訊息(不帶輸入值)並以離開碼 2 結束(於讀設定、組裝專案與任何寫入之前); 合格則不做任何事
+ *
+ * @param {String} entry 輸入工具名(TOOL_FLAGS 之鍵)或進入檔名(CLI_FLAGS 之鍵)
+ * @param {Object} [opt={}] 輸入選項,同 cliMsgOf 之 opt
+ * @param {Array<String>} [opt.argv=process.argv.slice(2)] 輸入命令列引數,預設 process.argv.slice(2)
+ * @returns {undefined} 無回傳值
+ * @example
+ * cliGuard('exposure')
+ */
+let cliGuard = (entry, opt = {}) => {
+    let argv = opt && Array.isArray(opt.argv) ? opt.argv : process.argv.slice(2)
+    let msg = cliMsgOf(entry, argv, opt)
+    if (msg !== null) {
+        console.log(msg)
+        process.exit(2)
+    }
 }
 
 /**
@@ -332,4 +460,4 @@ let writeJson = (fp, obj) => {
 }
 
 
-export { FD_ROOT, P, tms, isoOf, getSettings, argOf, argStrOf, CLI_FLAGS, CLI_ENUMS, CLI_OWN, eqFlagMsgOf, cliMsgOf, readJson, writeJson }
+export { FD_ROOT, P, tms, isoOf, getSettings, argOf, argStrOf, CLI_FLAGS, CLI_ENUMS, CLI_OWN, CLI_MODE_FLAGS, CLI_MODE_OWN, CLI_MODE_NEEDS, TOOL_FLAGS, eqFlagMsgOf, cliMsgOf, cliGuard, readJson, writeJson }

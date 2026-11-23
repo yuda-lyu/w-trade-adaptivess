@@ -1,11 +1,14 @@
 import { guardEntry } from '../domain/agentEntries.mjs'
-import { getSettings, argStrOf, P } from '../cfg.mjs'
+import { getSettings, argStrOf, P, cliGuard } from '../cfg.mjs'
 import { loadLedger } from '../eval/ledger.mjs'
 import { trainFromBarOf, checkEvalSettings, periodAt, configMsgOf } from '../eval/barGrid.mjs'
 import { libReportOf, libTextOf, LIB_DIR_HI, LIB_DIR_LO } from '../domain/libStats.mjs'
 
 //agent(ARSI_AGENT_ROLE = node / dream)⇒ 一律拒跑(離開碼 2; 於讀設定之前): 本工具之輸出含評估期內全庫之統計(事後資訊), 只供主控(規則 R-RUN-11、R-EV-48)
 guardEntry('libCheck')
+//命令列之旗標只認 --json、--dir-hi <0 ~ 1>、--dir-lo <0 ~ 1>(TOOL_FLAGS.libCheck): 等號、未列、重複、多餘之值一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值);
+//  --dir-hi、--dir-lo 之無值與值不合沿用下方 rateArg 之固定訊息(own)
+cliGuard('libCheck')
 
 //庫況體檢(主控用; 唯讀、只印, 不寫任何檔; 規則 R-EV-48): 由評估帳本(settings.eval.ledgerDir)列出策略庫之組成, 供 initProject 之後、首次起跑之前判讀(不擋起跑)
 //  node tools/libCheck.mjs [--json] [--dir-hi <0 ~ 1>] [--dir-lo <0 ~ 1>]

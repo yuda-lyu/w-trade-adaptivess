@@ -71,6 +71,12 @@ describe('指令解析模組 verifyCmdScan.mjs', function () {
             'rg -n g_backtest.mjs --files -g "*.mjs"',
             'findstr g_backtest.mjs /G:pats.txt',
             'findstr /S g_backtest.mjs /I /G:pats.txt',
+            //樣式檔之檔名以 - 起首(getopt:選項之值取下一個字、不論其形):-f 之值 -e 是檔名、不是 -e 選項 ⇒ 其後之 g_backtest.mjs 是路徑(只有「-f 之值整個跳過」之寫法抓得到)
+            'grep -f -e g_backtest.mjs',
+            'grep -rf -e g_backtest.mjs',
+            'grep --file -e g_backtest.mjs',
+            'rg -f -e g_backtest.mjs',
+            'rg -nf -e g_backtest.mjs',
         ]
         for (let c of fileForms) {
             assert(kept(c), `禁區之路徑須留: ${c} ⇒ ${stripSearchPatterns(c)}`)
@@ -123,6 +129,133 @@ describe('指令解析模組 verifyCmdScan.mjs', function () {
         assert(scan([{ command: `grep -f pats.txt ${ledgerArg}` }]).issues.some((x) => x.includes('帳本檔')))
         assert.deepEqual(scan([{ command: 'grep -rn "ledger/train" rsi/toolbox/' }]).issues, [], '以禁區字樣為樣式者照不列(既有)')
         assert.deepEqual(scan([{ command: 'grep -f pats.txt rsi/toolbox/x.mjs' }]).issues, [], '路徑非禁區 ⇒ 不列')
+    })
+
+    it('①b 樣式來源整段先定(R-BT-8; 排程第 576 項 ②):-e 附值(-efoo、-ie"foo")、置於運算元之後之 -e、ag / ack 之 -f / -g / --match 與帶值之選項 ⇒ 位置引數是路徑者不去(禁區之路徑照查)、樣式照去', () => {
+        //規格(R-BT-8): 做夢之搜尋指令只去「樣式」、被搜尋之路徑照查; 樣式之來源依各指令之語法定 ——
+        //  grep 族與 rg: -e / --regexp 給樣式(可重複、值可附於選項、可置於運算元之後)⇒ 位置引數皆為路徑; ack: -f 只列檔(無樣式)、-g 之值為檔名樣式(無內容樣式)、--match 給樣式; ag: -f 為 --follow(不帶值)、-g 之值為檔名樣式
+        //  PATX / PATY = 樣式(須去), PATHY = 路徑(須留); 各案 [指令, 須留之字, 須去之字]
+        let cases = [
+            //-e 附值: 選項字內夾帶樣式 ⇒ 其後之第一個位置引數是路徑(改前被當成樣式去掉)
+            ['grep -ePATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep -e"PATX" lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep -e\'PATX\' lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep -iePATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep -ie"PATX" lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['egrep -e"PATX" -n lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['fgrep -ePATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['git -C . grep -ePATX -- lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['rg -ePATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['rg -ie"PATX" lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep -n -ePATX -ePATY lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX', 'PATY']],
+            //-e 置於運算元之後(GNU 之選項排列): 前面之運算元是路徑
+            ['grep lib/PATHY.mjs -e PATX', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep lib/PATHY.mjs -ePATX', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep -n lib/PATHY.mjs --regexp PATX', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep lib/PATHY.mjs --regexp=PATX', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep lib/PATHY.mjs -ie PATX', ['lib/PATHY.mjs'], ['PATX']],
+            ['rg lib/PATHY.mjs -e PATX', ['lib/PATHY.mjs'], ['PATX']],
+            ['rg lib/PATHY.mjs -ePATX', ['lib/PATHY.mjs'], ['PATX']],
+            ['rg lib/PATHY.mjs --regexp PATX', ['lib/PATHY.mjs'], ['PATX']],
+            ['git grep lib/PATHY.mjs -e PATX', ['lib/PATHY.mjs'], ['PATX']],
+            //運算元之後另有 -e(之前已有 -e 者): 其值亦須去
+            ['grep -e PATX lib/PATHY.mjs -e PATY', ['lib/PATHY.mjs'], ['PATX', 'PATY']],
+            ['grep lib/PATHY.mjs -e PATX -e PATY', ['lib/PATHY.mjs'], ['PATX', 'PATY']],
+            ['grep -e PATX lib/PATHY.mjs lib/PATHZ.mjs -ePATY', ['lib/PATHY.mjs', 'lib/PATHZ.mjs'], ['PATX', 'PATY']],
+            //ag: -f 為 --follow(不帶值)⇒ 其後第一個運算元是樣式、再其後為路徑(改前 -f 吞掉樣式、路徑被當成樣式去掉)
+            ['ag -f PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ag -nf PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ag PATX lib/PATHY.mjs -f', ['lib/PATHY.mjs'], ['PATX']],
+            //ag: -g 之值為檔名樣式 ⇒ 無位置樣式(其後皆路徑)
+            ['ag -g PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], []],
+            ['ag lib/PATHY.mjs -g PATX', ['lib/PATHY.mjs'], []],
+            //ack: -f 只列檔、無樣式 ⇒ 位置引數皆路徑
+            ['ack -f lib/PATHY.mjs', ['lib/PATHY.mjs'], []],
+            ['ack -f -n lib/PATHY.mjs', ['lib/PATHY.mjs'], []],
+            ['ack -nf lib/PATHY.mjs', ['lib/PATHY.mjs'], []],
+            ['ack lib/PATHY.mjs -f', ['lib/PATHY.mjs'], []],
+            ['ack -g PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], []],
+            //ack: --match 給樣式 ⇒ 位置引數皆路徑
+            ['ack --match PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ack --match=PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ack lib/PATHY.mjs --match PATX', ['lib/PATHY.mjs'], ['PATX']],
+            //ag / ack 之帶值之選項: 值不是樣式(改前之通用表不認得 --ignore-dir 等而把其值當成樣式、真樣式照留); 值為數字者才當值(ack 之 -C 之值選配: 其後非數字者是樣式)
+            ['ag --ignore-dir node_modules PATX lib/PATHY.mjs', ['lib/PATHY.mjs', 'node_modules'], ['PATX']],
+            ['ag -m 5 PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ag -A 3 PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ack -A 3 PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ack -C PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ack -C 2 PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ack --context PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ack --context=2 PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ack.exe -g PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], []],
+            ['/usr/bin/ack -f lib/PATHY.mjs', ['lib/PATHY.mjs'], []],
+            ['ack --type=js PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ack --type js PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            //不變: 位置引數給樣式者照去(含引號、路徑前綴、.exe)
+            ['ag PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ack "PATX" lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['/usr/bin/ag -i PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ack.exe PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['rg -n PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            //其後之 -e 類屬於另一個指令者不去(背景之 &、命令替換、重導向、括號為界): 該指令之 -e 之值是路徑(改後新增之隱匿 —— 複審所見)
+            ['grep -e PATX x & cat -e lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep -e PATX x $(cat -e lib/PATHY.mjs)', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep -e PATX x `cat -e lib/PATHY.mjs`', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep -e PATX x > out.txt & cat -e lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            //引號內之命令替換($( 、反引號)含路徑 ⇒ 該字不當成樣式去掉(其內之路徑是實際之存取)
+            ['grep -e"$(cat lib/PATHY.mjs)" x', ['lib/PATHY.mjs'], []],
+            ['grep -e "$(cat lib/PATHY.mjs)" x', ['lib/PATHY.mjs'], []],
+            ['grep "$(cat lib/PATHY.mjs)" x', ['lib/PATHY.mjs'], []],
+            ['grep -e `cat lib/PATHY.mjs` x', ['lib/PATHY.mjs'], []],
+            //GNU grep 之長選項縮寫(--reg、--rege、--regex 皆為 --regexp; rg 不收縮寫)
+            ['grep --regex=PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep --reg PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['git grep --rege PATX -- lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            //輸入重導向之目標不是樣式
+            ['grep <lib/PATHY.mjs PATX', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep -n 2>&1 PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            //「--」之後之字皆為運算元: -e 在其後是檔名(非選項)⇒ 前之 -e PATX 仍給樣式
+            ['grep -e PATX -- lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            //「--」之後以 - 起首之字亦是運算元(改前當選項略過 ⇒ 其後之路徑被當成樣式去掉): 第一個(尚無樣式者)為樣式、其餘為路徑
+            ['grep -- -PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['git -C . grep -n -- -PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['rg -- -PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['ag -- -PATX lib/PATHY.mjs', ['lib/PATHY.mjs'], ['PATX']],
+            ['grep -n -e PATX -- -lib/PATHY.mjs', ['-lib/PATHY.mjs'], ['PATX']],
+            //findstr: 多個 /C:(含置於運算元之後者)皆給樣式(改前於第一個運算元後即停止處理 ⇒ 之後之 /C: 之值未去)
+            ['findstr /C:"PATX" lib\\PATHY.mjs /C:"PATY"', ['lib\\PATHY.mjs'], ['PATX', 'PATY']],
+            ['findstr lib\\PATHY.mjs /C:"PATX" /C:"PATY"', ['lib\\PATHY.mjs'], ['PATX', 'PATY']],
+        ]
+        let bad = []
+        for (let [c, keep, drop] of cases) {
+            let r = stripSearchPatterns(c)
+            for (let k of keep) {
+                if (!r.includes(k)) {
+                    bad.push(`須留「${k}」: ${c} ⇒ ${r}`)
+                }
+            }
+            for (let k of drop) {
+                if (r.includes(k)) {
+                    bad.push(`須去「${k}」: ${c} ⇒ ${r}`)
+                }
+            }
+        }
+        assert.equal(bad.length, 0, `${bad.length} 項不合(共 ${cases.length} 案):\n${bad.join('\n')}`)
+        //鑑別前提: 樣式去掉後之字串異於原指令者(有去)與相同者(無樣式可去)皆在表內; 表內有改前即已正確者(對照)與改前錯者
+        assert(cases.some((x) => x[2].length === 0) && cases.some((x) => x[2].length > 1), '表含無樣式可去者與多個樣式者')
+    })
+
+    it('①c 樣式來源整段先定之掃描接線(做夢之操作稽核):-e 附值、置於運算元之後之 -e、ag / ack 之 -f / -g / --match 之形,被搜尋之禁區路徑照列(帳本檔);以禁區字樣為樣式者照不列', () => {
+        let led = 'data/ledger/train/x.f32'
+        for (let c of [`grep -efoo ${led}`, `grep -ie"foo" ${led}`, `rg -efoo ${led}`, `grep ${led} -e foo`, `grep ${led} -efoo`, `rg ${led} -e foo`, `ag -f foo ${led}`, `ack -f ${led}`, `ack -g x.f32 ${led}`, `ag -g x.f32 ${led}`, `ack --match=foo ${led}`, `ack ${led} --match foo`]) {
+            let r = scan([{ command: c }])
+            assert(r.issues.some((x) => x.includes('帳本檔')), `做夢: ${c} ⇒ ${JSON.stringify(r.issues)}`)
+        }
+        for (let c of ['grep -e"ledger/train" rsi/toolbox/', 'grep -eg_backtest rsi/toolbox/', 'grep rsi/toolbox/ -e g_backtest', 'rg rsi/toolbox/ -e g_backtest', 'ag -f "g_backtest" rsi/toolbox/', 'ack --match=g_backtest rsi/toolbox/', 'ack --match g_backtest rsi/toolbox/', 'ag --ignore-dir x g_backtest rsi/toolbox/', 'ack -C g_backtest rsi/toolbox/']) {
+            assert.deepEqual(scan([{ command: c }]).issues, [], `以禁區字樣為樣式者照不列: ${c}`)
+        }
     })
 
     it('② 迴圈專用之環境變數 ARSI_HARNESS 與 ARSI_AGENT_ROLE 同一條禁區字樣、同一個標籤;工具輸入提到者(節點、做夢)皆列;搜尋樣式內者照做夢之既有不列;未提到者不列', () => {
@@ -185,7 +318,8 @@ describe('指令解析模組 verifyCmdScan.mjs', function () {
         assert.equal(count(src, /\[A-Za-z_\]\[A-Za-z0-9_\]\*=/g), 1, '變數指派之正規式只一份')
         assert.equal(count(src, /\bEX_SHELLS\b|\bRL_SHELLS\b|\bRL_WRAP\b/g), 0, '已合併之常數名不再出現')
         //匯出面
-        assert.deepEqual(Object.keys(cmdScan).sort(), ['LR_CD', 'absOf', 'entryExecOf', 'listRootExempt', 'recursiveRootOf', 'scriptListsRoot', 'stripSearchPatterns', 'toolListsRoot'])
+        //(排程第 580 項 ①: 另匯出節點之禁區字樣之補充 —— 萬用字元之前綴與先切換目錄之相對路徑 zoneOf / zoneToolOf / zoneGlobHit 與其依據之檔案清單 ZONE_FILES; 規則 R-BT-10 ⑦)
+        assert.deepEqual(Object.keys(cmdScan).sort(), ['LR_CD', 'ZONE_FILES', 'absOf', 'entryExecOf', 'listRootExempt', 'recursiveRootOf', 'scriptListsRoot', 'stripSearchPatterns', 'toolListsRoot', 'zoneGlobHit', 'zoneOf', 'zoneToolOf'])
         for (let k of ['entryExecOf', 'recursiveRootOf', 'stripSearchPatterns', 'listRootExempt', 'toolListsRoot', 'scriptListsRoot']) {
             assert(!(k in verify), `verify.mjs 不再匯出 ${k}`)
         }

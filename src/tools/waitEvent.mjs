@@ -1,7 +1,9 @@
-import fs from 'fs'
 import path from 'path'
-import { getSettings } from '../cfg.mjs'
-import { readEvents, peekRunLock } from '../arsi/runner.mjs'
+import { getSettings, cliGuard } from '../cfg.mjs'
+import { waitRunEnd } from '../arsi/waitEnd.mjs'
+
+//命令列之旗標只認 --timeout-min、--since、--poll-sec(TOOL_FLAGS.waitEvent; 空白分隔): 等號、未列、重複、無值、多餘之值一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值; 原: 靜默忽略而等到預設之時限)
+cliGuard('waitEvent')
 
 //等待一次執行結束(監看端用; 唯讀): 等事件檔 rsi/logs/events.jsonl 出現新的結束類事件(run-done / run-failed / skipped), 印出後結束
 //  node tools/waitEvent.mjs [--timeout-min 110] [--since <ISO 時間>] [--poll-sec 20]
@@ -20,44 +22,5 @@ let fpLock = path.join(fdLogs, 'round.lock')
 let since = Date.parse(arg('since', new Date().toISOString()))
 let timeoutMs = Number(arg('timeout-min', 110)) * 60000
 let pollMs = Math.max(2, Number(arg('poll-sec', 20))) * 1000
-let t0 = Date.now()
-let seen = 0
-let sawLock = false
-let sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-let CODE = { 'run-done': 0, 'run-failed': 1, 'skipped': 3 }
-for (;;) {
-    let evs = readEvents(fpEvents).filter((e) => Date.parse(e.at) >= since)
-    for (let e of evs.slice(seen)) {
-        if (e.event === 'round-done') {
-            console.log(`ROUND ${JSON.stringify(e)}`)
-        }
-        if (e.event in CODE) {
-            console.log(`END ${JSON.stringify(e)}`)
-            process.exit(CODE[e.event])
-        }
-    }
-    seen = evs.length
-    let lk = peekRunLock(fpLock)
-    if (lk.running) {
-        sawLock = true
-    }
-    else if (sawLock || fs.existsSync(fpLock)) {
-        //鎖檔之行程已不在(或鎖已釋放)而未見結束事件: 再讀一次事件檔(結束事件與釋放鎖之間有極短之間隔), 仍無即為異常結束
-        await sleep(1500)
-        let again = readEvents(fpEvents).filter((e) => Date.parse(e.at) >= since).slice(seen)
-        let end = again.find((e) => e.event in CODE)
-        if (end) {
-            console.log(`END ${JSON.stringify(end)}`)
-            process.exit(CODE[end.event])
-        }
-        if (sawLock) {
-            console.log(`END ${JSON.stringify({ event: 'vanished', detail: '執行之行程已不在而事件檔無結束事件(被外力終止、機器休眠或崩潰);請讀 rsi/logs 之最新日誌' })}`)
-            process.exit(5)
-        }
-    }
-    if (Date.now() - t0 > timeoutMs) {
-        console.log(`END ${JSON.stringify({ event: 'timeout', running: lk.running, pid: lk.pid || null })}`)
-        process.exit(4)
-    }
-    await sleep(pollMs)
-}
+//本體在 src/arsi/waitEnd.mjs(注入時間與讀取、帶觀察回調 opt.onTrace, 供測試以事件同步; 輸出與離開碼與原迴圈逐字相同)
+process.exit(await waitRunEnd({ fpEvents, fpLock, since, timeoutMs, pollMs }))

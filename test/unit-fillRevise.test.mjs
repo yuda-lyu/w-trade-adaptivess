@@ -517,9 +517,11 @@ describe('附算與補算之採信條件與邊界', function () {
         for (let dd of ['src/domain', 'src/eval', 'src/cli']) {
             fs.mkdirSync(path.join(root, dd), { recursive: true })
         }
-        for (let f of ['fillKeys.mjs', 'fillPlan.mjs', 'evalVersion.mjs']) {
+        //(排程第 477 項 ②: SRC 由往上找本套件之 package.json 定位 ⇒ 複本之配置須帶 package.json 並複製 pkgRoot.mjs, 否則往上找到本庫之套件根)
+        for (let f of ['fillKeys.mjs', 'fillPlan.mjs', 'evalVersion.mjs', 'pkgRoot.mjs']) {
             fs.copyFileSync(new URL(`../src/domain/${f}`, import.meta.url), path.join(root, 'src', 'domain', f))
         }
+        fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'w-trade-adaptivess' }), 'utf8')
         fs.writeFileSync(path.join(root, 'src', 'eval', 'a.mjs'), 'export default 1\n', 'utf8')
         let FKc = await import(pathToFileURL(path.join(root, 'src', 'domain', 'fillKeys.mjs')).href)
         //cli/eval.mjs 不在 ⇒ 拋錯
@@ -998,9 +1000,11 @@ describe('附算與補算之採信條件與邊界', function () {
             for (let x of [dd, 'src/eval', 'src/cli']) {
                 fs.mkdirSync(path.join(root, x), { recursive: true })
             }
-            for (let f of ['fillKeys.mjs', 'fillPlan.mjs', 'evalVersion.mjs']) {
+            //排程第 477 項 ②: SRC 由「往上找本套件之 package.json」定位(pkgRoot.mjs)⇒ 配置須帶本套件之 package.json(否則往上找到本庫之套件根)並複製 pkgRoot.mjs
+            for (let f of ['fillKeys.mjs', 'fillPlan.mjs', 'evalVersion.mjs', 'pkgRoot.mjs']) {
                 fs.copyFileSync(new URL(`../src/domain/${f}`, import.meta.url), path.join(root, dd, f))
             }
+            fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'w-trade-adaptivess' }), 'utf8')
             fs.writeFileSync(path.join(root, 'src', 'eval', 'a.mjs'), 'export default 1\n', 'utf8')
             fs.writeFileSync(path.join(root, 'src', 'cli', 'eval.mjs'), 'export default 2\n', 'utf8')
             return root
@@ -1311,6 +1315,8 @@ describe('附算與補算之採信條件與邊界', function () {
         let mkCopy = (name, version) => {
             let root = path.join(t.dir, name)
             fs.cpSync(SRC, path.join(root, 'src'), { recursive: true })
+            //(排程第 477 項 ②: 複本帶本套件之 package.json ⇒ 其 fillKeys 之 SRC 為複本自己之 src)
+            fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'w-trade-adaptivess' }), 'utf8')
             if (version !== null) {
                 let fp = path.join(root, 'src', 'domain', 'evalVersion.mjs')
                 let s = fs.readFileSync(fp, 'utf8')

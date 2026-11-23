@@ -4,6 +4,7 @@ import path from 'path'
 import { getSettings } from '../src/cfg.mjs'
 import { makeTexts } from '../src/domain/texts.mjs'
 import { scanTrace, forbiddenPats, contentHits } from '../src/domain/verify.mjs'
+import * as cmdScan from '../src/domain/verifyCmdScan.mjs'
 import { makeTmp, FD_ROOT } from './tools/synthLedger.mjs'
 
 
@@ -194,5 +195,178 @@ describe('節點之禁區涵蓋迴圈驗證之全部原始碼(規則 R-BT-10)', 
             assert.equal(hit(nodeIssues({ command: c })), false, `不列: ${c}`)
         }
         assert.equal(forbiddenPats(privateRoot, true).filter(([, label]) => label === LABEL).length, 1)
+    })
+
+    //禁區字樣之既有缺口(規則 R-BT-10 ⑦; 排程第 580 項 ①): 禁區字樣為路徑字樣(src/domain/verify… 連續出現); 下列三類寫法讀得到禁區之程式而不含該連續字樣
+    //  ①萬用字元之前綴(src/domain/ver*、{verify,backtest}*、[vb]*、src/dom*/verify.mjs、src/tools/lib*)⇒ 依禁區之程式檔之清單(ZONE_FILES)展開, 有任一檔相符即列(同一個標籤)
+    //  ②先切換目錄再以相對路徑(cd src && cat domain/verify.mjs、cd src/tools; cat libCheck.mjs、pushd、Set-Location、此前之工具呼叫切換者、帶 workdir 之欄者)⇒ 相對路徑依切換後之目錄解析成相對專案根之路徑後同一組禁區字樣判
+    //  ③套件裝於 node_modules/<套件>/ 下之建置產物與文件(dist、docs、sgud、test、README: 內含判定之程式與門檻之值)⇒ 列同一個標籤(契約、範例、臂目錄、package.json 與 src/eval 不列)
+    //  邊界: 非禁區之檔之前綴(src/domain/te*、src/tools/q*)、專案自己之 docs/、他套件之 dist、目錄不確定(含變數)之相對路徑不列
+    //  nodeIssuesAt, 節點以多列工具呼叫依序掃一次(供此前之呼叫切換目錄者): inputs = [{ input, name? }]
+    let nodeIssuesAt = (inputs) => {
+        let fp = path.join(t.dir, 'agent.log')
+        fs.writeFileSync(fp, inputs.map((x) => cl(x.input, x.name || 'Bash')).join('\n'))
+        return scanTrace({ workDir: t.dir, logFile: fp, privateRoot, nodeRules: true, fileHits: 'note' }).issues
+    }
+
+    it('⑦a 萬用字元之前綴:src/domain/ver*、{verify,backtest}*、[vb]*、?、src/dom*/verify.mjs、src/*/verify.mjs、src/tools/lib*、node_modules 下之各形、反斜線與 Glob / Grep 類工具之路徑欄接樣式欄 ⇒ 列;非禁區之檔之前綴不列', () => {
+        let hits = [
+            'cat src/domain/ver*', 'cat src/domain/verify*.mjs', 'head -n 5 src/domain/v*', 'cat src/domain/b*', 'cat src/domain/{verify,backtest}*.mjs', 'cat src/domain/{verify,texts}.mjs',
+            'cat src/domain/[vb]*', 'cat src/domain/ver?fy.mjs', 'cat src/domain/*ify.mjs', 'cat src/domain/*Cmd*', 'cat src/domain/lib*', 'cat src/domain/libStat?.mjs', 'cat ./src/domain/ver*',
+            'cat src/dom*/verify.mjs', 'cat s*/domain/verify.mjs', 'cat src/*/verify.mjs', 'cat src/*/ve*', 'cat sr?/domain/verifyMember.mjs', 'cat src/**/verify.mjs',
+            'cat src/tools/lib*', 'cat src/tools/libC*', 'cat src/tools/*.mjs', 'cat src/tools/{libCheck,quota}.mjs', 'cat src/tool?/libCheck.mjs',
+            'cat node_modules/w-trade-adaptivess/src/domain/ve*', 'cat node_modules/w-trade-adaptivess/src/dom*/v*', 'cat node_modules/*/src/domain/verify.mjs', 'cat node_modules/w-trade-adaptivess/src/tools/lib*',
+            'cat node_modules/**/domain/verify.mjs', 'cat src/dom*', 'ls src/d*',
+            //路徑段之正規化(./、..)與引號 / 跳脫字元之拼接(複審所見之未記繞過)
+            'cat src/domain/./verify.mjs', 'cat src/domain/../domain/verify.mjs', 'cat ./src/./domain/verifyMember.mjs', 'cat src/dom""ain/verify.mjs', 'cat "src"/domain/verify.mjs', 'cat \'src/domain\'/verify.mjs', 'type src\\domain\\v^erify.mjs', 'gc src\\domain\\ver`ify.mjs', 'cat src/domain/ver""*',
+            //套件之建置產物與文件之萬用字元(複審所見: 原只涵蓋 src)
+            'cat node_modules/w-trade-adaptivess/d*/*', 'cat node_modules/w-trade-adaptivess/READ*', 'cat node_modules/w-trade-adaptivess/t*/*', 'cat node_modules/*/sgud/rule/*', 'cat node_modules/w-*/dist/*', 'cat dist/*.js', 'cat dist/w-trade-adaptivess*',
+            'cat lib/domain/ver*', 'rg x src/domain/ver*', 'grep -n x src/domain/back*', 'type src\\domain\\ver*', 'node -e "require(\'fs\').readFileSync(\'src/domain/ver*\')"', 'cat "src/domain/ver*"',
+        ]
+        for (let c of hits) {
+            assert(hit(nodeIssues({ command: c })), `列: ${c}`)
+        }
+        //絕對路徑(專案根給了才能展開): 以專案根之絕對路徑接萬用字元
+        let fp = path.join(t.dir, 'agent.log')
+        fs.writeFileSync(fp, cl({ command: `cat ${FD_ROOT.replace(/\\/g, '/')}/src/domain/ver*` }))
+        assert(hit(scanTrace({ workDir: t.dir, logFile: fp, privateRoot, nodeRules: true, fileHits: 'note', root: FD_ROOT }).issues), '絕對路徑 + 萬用字元(給專案根)')
+        //Glob / Grep / Read 類之工具輸入: 樣式欄、路徑欄 × 樣式欄之接合
+        for (let [input, name] of [[{ pattern: 'src/domain/ver*' }, 'Glob'], [{ pattern: 'domain/ver*', path: 'src' }, 'Glob'], [{ pattern: 'x', glob: 'src/domain/{verify,backtest}*.mjs' }, 'Grep'], [{ pattern: 'x', path: 'src', glob: 'domain/ver*.mjs' }, 'Grep'], [{ filePath: 'src/domain/ver*' }, 'Read'], [{ pattern: 'x', path: 'src/dom*', include: 'v*' }, 'Grep'],
+            [{ pattern: 'dist/*' }, 'Glob'], [{ pattern: 'd*/*', path: 'node_modules/w-trade-adaptivess' }, 'Glob'], [{ pattern: 'x', path: 'node_modules', glob: 'w-trade-adaptivess/d*/**' }, 'Grep'],
+            [{ pattern: '*', path: 'src/domain/../domain' }, 'Glob'], [{ filePath: 'src/domain/../domain/verify.mjs' }, 'Read'], [{ pattern: 'x', path: 'src/domain/..', glob: 'domain/v*' }, 'Grep']]) {
+            assert(hit(nodeIssues(input, name)), `列: ${name} ${JSON.stringify(input)}`)
+        }
+        //有路徑欄者樣式欄只以接合後之整串判; Grep 類之 pattern 是內容之正規式(不當路徑): 節點在自己之工作夾 / 契約 / 範例夾列 .mjs 之常見之合法用法不誤列(複審所見之新增誤報)
+        for (let [input, name] of [[{ pattern: '**/*.mjs', path: 'rsi/work/06c4e5f4bdd6d5f0' }, 'Glob'], [{ pattern: '**/*.mjs', path: 'examples' }, 'Glob'], [{ pattern: 'x', path: 'src/eval', glob: '**/*.mjs' }, 'Grep'], [{ pattern: 'src/domain/ver*', path: 'rsi/records' }, 'Grep'], [{ pattern: 'src/domain/ver*' }, 'Grep'], [{ pattern: 'src/domain/ver*' }, 'Search'], [{ pattern: '**/ver*', path: 'rsi/work/06c4e5f4bdd6d5f0' }, 'Glob'], [{ pattern: '*.mjs', path: 'rsi/work/06c4e5f4bdd6d5f0' }, 'Glob']]) {
+            assert.equal(hit(nodeIssues(input, name)), false, `不列: ${name} ${JSON.stringify(input)}`)
+        }
+        //病態之輸入(複審所見: 連續之 * 使相鄰之 .* 指數回溯; 單一無空白字逾約 32K 字使正規式比對拋錯 ⇒ 整個掃描拋出): 不拋出、於 1 秒內判完; 過長或萬用字元過多之字無正當用途 ⇒ 列
+        for (let c of [`cat ${'*'.repeat(16)}b`, `cat ${'*'.repeat(40)}b`, `cat src/${'a'.repeat(40000)}?`, `cat ${'{'.repeat(2000)}`, `cat ${'['.repeat(2000)}`, `cat ${'*a'.repeat(20)}`, `cat ${'?'.repeat(5000)}`]) {
+            let t0 = Date.now()
+            let r
+            assert.doesNotThrow(() => {
+                r = hit(nodeIssues({ command: c }))
+            }, c.slice(0, 40))
+            assert(Date.now() - t0 < 1000, `${c.slice(0, 30)}…: ${Date.now() - t0} ms`)
+            assert.equal(typeof r, 'boolean')
+        }
+        assert(hit(nodeIssues({ command: `cat src/${'a'.repeat(40000)}?` })), '過長之字列(無正當用途)')
+        assert(hit(nodeIssues({ command: `cat ${'*a'.repeat(20)}` })), '萬用字元過多之字列')
+        let t1 = Date.now()
+        nodeIssues({ command: `cd ..${' && cd ..'.repeat(1600)}` })
+        assert(Date.now() - t1 < 1000, `1600 段 cd .. 於 1 秒內判完(逾專案根者改為不確定): ${Date.now() - t1} ms`)
+        //邊界: 非禁區之檔之前綴與他夾
+        for (let c of ['cat src/domain/te*', 'cat src/domain/t*.mjs', 'cat src/domain/{texts,domain}.mjs', 'cat src/domain/[dt]*.mjs', 'cat src/eval/*.mjs', 'cat src/eval/v*', 'cat src/tools/q*', 'cat src/tools/a*.mjs', 'cat src/tools/{quota,pickStore}.mjs', 'cat src/*.mjs', 'cat docs/ver*', 'ls ver*', 'find . -name "ver*"', 'cat node_modules/wsemi/src/domain/ve*', 'cat src?domain/verify.mjs', 'cat src/domain?verify.mjs']) {
+            assert.equal(hit(nodeIssues({ command: c })), false, `不列: ${c}`)
+        }
+        //做夢(非節點規則)可讀迴圈驗證之程式、套件之文件: 本補充只涵蓋節點 ⇒ 做夢之操作掃描不列此標籤
+        let dreamIssues = (input, name = 'Bash') => {
+            let fp = path.join(t.dir, 'agent.log')
+            fs.writeFileSync(fp, cl(input, name))
+            return scanTrace({ workDir: t.dir, logFile: fp, privateRoot, fileHits: 'note' }).issues
+        }
+        for (let c of ['cat src/domain/ver*', 'cd src && cat domain/verify.mjs', 'cat node_modules/w-trade-adaptivess/README.md', 'cat node_modules/w-trade-adaptivess/dist/w-trade-adaptivess.umd.js']) {
+            assert.equal(hit(dreamIssues({ command: c })), false, `做夢不列: ${c}`)
+        }
+        assert.equal(hit(dreamIssues({ pattern: 'src/domain/ver*' }, 'Glob')), false, '做夢不列: Glob')
+        for (let [input, name] of [[{ pattern: 'src/eval/ve*' }, 'Glob'], [{ pattern: 'ver*.mjs', path: 'rsi/toolbox' }, 'Glob'], [{ pattern: 'verify.*', path: 'rsi/toolbox' }, 'Grep'], [{ pattern: 'x', glob: 'te*.mjs' }, 'Grep']]) {
+            assert.equal(hit(nodeIssues(input, name)), false, `不列: ${name} ${JSON.stringify(input)}`)
+        }
+        //鑑別前提: 清單與實際檔案一致(盤點; 新增以 verify / backtest 起首之檔而未補清單者在此紅)
+        let actual = [...domainFiles(/^(backtest|verify|libStats).*\.mjs$/).map((f) => `domain/${f}`), 'tools/libCheck.mjs'].sort()
+        assert.deepEqual(cmdScan.ZONE_FILES.slice().sort(), actual, 'ZONE_FILES = src/domain 下以 backtest / verify 起首者與 libStats.mjs + src/tools/libCheck.mjs')
+        for (let f of cmdScan.ZONE_FILES) {
+            assert(fs.existsSync(path.join(FD_ROOT, 'src', f)), `src/${f} 存在`)
+            let nm = path.basename(f)
+            assert(hit(nodeIssues({ command: `cat src/${path.dirname(f)}/${nm.slice(0, 4)}*` })), `各檔皆可由其前綴之萬用字元涵蓋: ${f}`)
+        }
+    })
+
+    it('⑦b 先切換目錄再以相對路徑:cd / pushd / Set-Location(同一道指令內、此前之工具呼叫、帶 workdir 之欄)⇒ 相對路徑依切換後之目錄解析;目錄不確定者與非禁區之檔不列', () => {
+        let hits = [
+            'cd src && cat domain/verify.mjs', 'cd src; cat domain/verify.mjs', 'cd src/ && head -n 3 domain/backtest.mjs', 'cd src && grep -n x domain/backtestGrade.mjs', 'cd src && cat domain/verifyCmdScan.mjs | head',
+            'cd src/tools && cat libCheck.mjs', 'cd src && cd tools && cat libCheck.mjs', 'cd src && cat ./tools/libCheck.mjs', 'cd src/tools; node libCheck.mjs', 'cd "src" && cat "domain/verify.mjs"',
+            'cd src\\tools && type libCheck.mjs', 'cd /d src && type domain\\verify.mjs', 'pushd src && cat domain/verify.mjs', 'pushd src\\tools & type libCheck.mjs', 'Set-Location src; Get-Content domain\\verify.mjs',
+            'Set-Location -Path src; Get-Content domain\\verify.mjs', 'sl src; gc domain/verifyMember.mjs', 'chdir src && cat domain/verifyExposure.mjs', '(cd src && cat domain/verify.mjs)',
+            'cd src && cat domain/ver*', 'cd src/domain/.. && cat domain/verify.mjs', 'cd src && cd domain/../tools && cat libCheck.mjs', 'cd src && cat tools/../domain/verify.mjs',
+            'cd src && node -e "require(\'fs\').readFileSync(\'domain/verify.mjs\')"', 'cd src && node -e "import(\'./domain/verifyMember.mjs\')"',
+            //殼層之內嵌指令(引號內)、cd 之前綴與控制結構(複審所見之未記繞過)
+            'bash -c "cd src && cat domain/verify.mjs"', 'sh -c \'cd src; cat domain/verify.mjs\'', 'cmd /c "cd src && type domain\\verify.mjs"', 'powershell -Command "Set-Location src; Get-Content domain\\verify.mjs"',
+            'if true; then cd src; fi; cat domain/verify.mjs', 'for f in a; do cd src; cat domain/verify.mjs; done', 'command cd src && cat domain/verify.mjs', 'builtin cd src && cat domain/verify.mjs', 'eval "cd src"; cat domain/verify.mjs',
+            //切換後之目錄本身落在禁區夾(拆成兩段 cd 者; 字面 cd src/domain 原已由目錄級之規則列): 其後即使不帶路徑字(rg、ls | xargs cat)亦列
+            'cd src && cd domain && rg threshold', 'cd src; cd domain; cat $(ls)', 'cd src && cd domain && ls | xargs cat', 'cd node_modules/w-trade-adaptivess && cd sgud && rg x', 'cd node_modules && cd w-trade-adaptivess && cd src && cd domain && rg x',
+            //pushd 之堆疊: popd 回到原目錄(此處為專案根)之後再 cd 之目錄依回到之目錄解析
+            'pushd src && popd && cd src && cat domain/verify.mjs', 'pushd a && pushd src && popd && popd && cd src && cat domain/verify.mjs',
+            //popd 回到「已切換之非根目錄」(只有它辨得出 pushd 有入堆疊、popd 有取回; 回到專案根者與不確定者結果相同)
+            'cd src && pushd tools && popd && cat domain/verify.mjs', 'cd src/tools && pushd ../.. && popd && cat libCheck.mjs', 'Set-Location src; Push-Location tools; Pop-Location; Get-Content domain\\verify.mjs',
+            //套件裝於 node_modules 者之相對路徑
+            'cd node_modules/w-trade-adaptivess && cat dist/w-trade-adaptivess.umd.js', 'cd node_modules/w-trade-adaptivess && cat README.md', 'cd node_modules/w-trade-adaptivess/sgud && cat rule/rulebook.md',
+            'cd node_modules && cat w-trade-adaptivess/src/domain/verify.mjs',
+        ]
+        for (let c of hits) {
+            assert(hit(nodeIssues({ command: c })), `列: ${c}`)
+        }
+        //此前之工具呼叫切換者(工作目錄跨呼叫沿用)
+        assert(hit(nodeIssuesAt([{ input: { command: 'cd src' } }, { input: { command: 'cat domain/verify.mjs' } }])), '前一呼叫 cd src、其後 cat domain/verify.mjs')
+        assert(hit(nodeIssuesAt([{ input: { command: 'cd src' } }, { input: { command: 'cd tools' } }, { input: { command: 'cat libCheck.mjs' } }])), '兩次切換')
+        assert(hit(nodeIssuesAt([{ input: { command: 'cd src' } }, { input: { filePath: 'domain/verify.mjs' }, name: 'Read' }])), '切換後以 Read 讀相對路徑(非殼層之工具之路徑欄亦依工作目錄解析)')
+        assert(hit(nodeIssuesAt([{ input: { command: 'cd src' } }, { input: { pattern: 'domain/ver*' }, name: 'Glob' }])), '切換後 Glob 之樣式')
+        //切換目標含變數 / ~ / - 使目錄不確定之後, 其後之相對切換仍累積為相對鏈(複審所見: 原「毒化」使其後之 cd src 與讀取全不解析)
+        assert(hit(nodeIssuesAt([{ input: { command: 'cd $HOME' } }, { input: { command: 'cd src && cat domain/verify.mjs' } }])), 'cd $HOME 之後 cd src && cat domain/verify.mjs')
+        assert(hit(nodeIssuesAt([{ input: { command: 'cd ~' } }, { input: { command: 'cd src' } }, { input: { command: 'cat domain/verify.mjs' } }])), 'cd ~ 之後兩呼叫')
+        assert(hit(nodeIssuesAt([{ input: { command: 'cd -' } }, { input: { command: 'cd src/tools && cat libCheck.mjs' } }])), 'cd - 之後')
+        assert.equal(hit(nodeIssuesAt([{ input: { command: 'cd $HOME' } }, { input: { command: 'cat domain/verify.mjs' } }])), false, '基準不明且無相對鏈 ⇒ 只照原樣(不列)')
+        //帶 workdir / cwd 之欄者以之為準(專案根之內 ⇒ 相對專案根; 專案根之外或不確定 ⇒ 不解析)
+        let fp = path.join(t.dir, 'agent.log')
+        let at = (input, root) => {
+            fs.writeFileSync(fp, cl(input))
+            return scanTrace({ workDir: t.dir, logFile: fp, privateRoot, nodeRules: true, fileHits: 'note', root }).issues
+        }
+        assert(hit(at({ command: 'cat domain/verify.mjs', workdir: 'src' }, FD_ROOT)), 'workdir = src')
+        assert(hit(at({ command: 'cat verify.mjs', cwd: path.join(FD_ROOT, 'src', 'domain') }, FD_ROOT)), 'cwd = 絕對之 src/domain')
+        assert.equal(hit(at({ command: 'cat domain/verify.mjs', workdir: 'rsi/work/n1' }, FD_ROOT)), false, 'workdir = 節點之工作夾 ⇒ 不列')
+        //此前切換 + 另一呼叫帶 workdir: 帶者以其 workdir 為準、不受此前切換影響; 其後未帶 workdir 之呼叫仍沿用此前之切換(帶 workdir 之呼叫不改變持續之工作目錄)
+        assert.equal(hit(nodeIssuesAt([{ input: { command: 'cd src' } }, { input: { command: 'cat domain/verify.mjs', workdir: 'rsi/work/n1' } }])), false, '帶 workdir 者以之為準')
+        assert(hit(nodeIssuesAt([{ input: { command: 'cd src' } }, { input: { command: 'echo x', workdir: 'rsi/work/n1' } }, { input: { command: 'cat domain/verify.mjs' } }])), '帶 workdir 之呼叫不改變持續之工作目錄')
+        //切回: 其後之相對路徑依切回後之目錄
+        assert.equal(hit(nodeIssues({ command: 'cd src && cd .. && cat domain/verify.mjs' })), false, '切回專案根後 domain/verify.mjs 相對專案根 ⇒ 非 src/domain')
+        assert.equal(hit(nodeIssues({ command: 'pushd src && popd && cat domain/verify.mjs' })), false, 'pushd / popd 回到原目錄')
+        assert.equal(hit(nodeIssuesAt([{ input: { command: 'cd src' } }, { input: { command: 'cd ..' } }, { input: { command: 'cat domain/verify.mjs' } }])), false, '跨呼叫切回')
+        //邊界: 非禁區之檔、目錄不確定(變數、~、-)、節點自己之工作夾內之正常操作
+        for (let c of ['cd src && cat domain/texts.mjs', 'cd src && cat eval/score.mjs', 'cd src/tools && cat quota.mjs', 'cd rsi/work/nodeX && node ../../../g_eval.mjs --pick pick.mjs --mode quick', 'cd rsi/work/nodeX && cat pick.mjs', 'cd docs && cat pick-contract.md',
+            'cd $D && cat domain/verify.mjs', 'cd ~ && cat domain/verify.mjs', 'cd - && cat domain/verify.mjs', 'cd "$SRC" && cat domain/verify.mjs', 'cd && cat domain/verify.mjs',
+            //逾專案根(上層之同名夾不是本套件之 src): 不確定 ⇒ 不當成 src/domain 解析
+            'cd ../src && cat domain/verify.mjs', 'cd ../../src && cat domain/verify.mjs']) {
+            assert.equal(hit(nodeIssues({ command: c })), false, `不列: ${c}`)
+        }
+    })
+
+    it('⑦c 套件之建置產物與文件(dist、docs、sgud、test、README):節點讀取裝於 node_modules/<套件>/ 下者(路徑、指令、Read、反斜線)皆列同一個標籤;契約、範例、臂目錄、src/eval、他套件之 dist 與專案自己之 docs 不列', () => {
+        let hits = [
+            'cat node_modules/w-trade-adaptivess/dist/w-trade-adaptivess.umd.js', 'cat node_modules/w-trade-adaptivess/dist/x.js', 'ls node_modules/w-trade-adaptivess/dist', 'head -c 2000 node_modules/w-trade-adaptivess/dist/w-trade-adaptivess.umd.js.map', 'grep -n minRetention node_modules/w-trade-adaptivess/README.md',
+            'cat ./node_modules/w-trade-adaptivess/README.md', 'type node_modules\\w-trade-adaptivess\\README.md', 'ls node_modules/w-trade-adaptivess/docs', 'cat node_modules/w-trade-adaptivess/docs/domain_verifyEvalHints.mjs.html',
+            'cat node_modules/w-trade-adaptivess/docs/dist/w-trade-adaptivess.umd.js', 'cat node_modules/w-trade-adaptivess/sgud/rule/rulebook_REC3.md', 'cat node_modules/w-trade-adaptivess/sgud/state/state.md',
+            'cat node_modules/w-trade-adaptivess/test/unit-evalHints.test.mjs', 'rg -n EVAL_HINT node_modules/w-trade-adaptivess/test', 'cat dist/w-trade-adaptivess.umd.js', 'cat ./dist/w-trade-adaptivess.umd.js.map',
+            'node -e "console.log(require(\'fs\').readFileSync(\'node_modules/w-trade-adaptivess/README.md\',\'utf8\'))"',
+        ]
+        for (let c of hits) {
+            assert(hit(nodeIssues({ command: c })), `列: ${c}`)
+        }
+        for (let [input, name] of [[{ file_path: `${FD_ROOT.replace(/\\/g, '/')}/node_modules/w-trade-adaptivess/README.md` }, 'Read'], [{ filePath: 'node_modules/w-trade-adaptivess/dist/w-trade-adaptivess.umd.js' }, 'Read'], [{ pattern: 'x', path: 'node_modules/w-trade-adaptivess/sgud' }, 'Grep']]) {
+            assert(hit(nodeIssues(input, name)), `列: ${name} ${JSON.stringify(input)}`)
+        }
+        //形成同一個標籤、同一條字樣(不另增標籤)
+        assert.equal(forbiddenPats(privateRoot, true).filter(([, label]) => label === LABEL).length, 1)
+        assert(forbiddenPats(privateRoot, true).find(([, label]) => label === LABEL)[0].test('node_modules/w-trade-adaptivess/README.md'))
+        //共用工具區之逐檔檢查(contentHits)亦同一組字樣: 程式內容讀取套件之 README / dist 者列
+        assert(contentHits('import fs from "fs"\nexport default () => fs.readFileSync("node_modules/w-trade-adaptivess/README.md", "utf8")', privateRoot).includes(LABEL))
+        //不列: 套件之契約、範例、臂目錄、package.json、評估器之原始碼; 他套件之 dist 與 README; 專案自己之 docs / README
+        for (let c of ['cat node_modules/w-trade-adaptivess/contract/pick-contract.md', 'cat node_modules/w-trade-adaptivess/examples/pick_example.mjs', 'cat node_modules/w-trade-adaptivess/arms/base.json', 'cat node_modules/w-trade-adaptivess/package.json',
+            'cat node_modules/w-trade-adaptivess/src/eval/evalCore.mjs', 'cat node_modules/w-trade-adaptivess/settings.json', 'cat node_modules/wsemi/dist/wsemi.umd.js', 'cat node_modules/wsemi/README.md', 'cat docs/pick-contract.md', 'cat README.md', 'cat dist/other.js', 'cat examples/pick_example.mjs']) {
+            assert.equal(hit(nodeIssues({ command: c })), false, `不列: ${c}`)
+        }
+        //README 之敘述與禁區一致: README 載有判定之門檻之值者(迴圈檢查之機械提示之條件)在套件裝於 node_modules 下時屬節點之禁區
+        let readme = fs.readFileSync(path.join(FD_ROOT, 'README.md'), 'utf8')
+        assert(readme.includes('門檻之值只在本文件、規則帳本、state 與 `verifyEvalHints.mjs` 之 `EVAL_HINT`') && readme.includes('套件裝於 `node_modules/w-trade-adaptivess/` 下者之 `README.md`、`dist/`、`docs/`、`sgud/`、`test/` 皆在節點之禁區字樣內'), 'README 說明門檻之值之記載處與其禁區')
     })
 })

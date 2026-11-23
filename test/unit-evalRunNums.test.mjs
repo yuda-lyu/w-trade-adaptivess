@@ -721,7 +721,7 @@ describe('評估之執行面之數字(seed、tieSalt、replicaSeeds、replicaNul
             return { status: r.status, out: `${r.stdout}\n${r.stderr}`, o }
         }
 
-        it('seed 為數字字串 ⇒ 複製版之種子為數值之和(原: 字串相接 "202611101"), 結果與數字者逐位相同; --seed 整數者採用、小數與非數字者說明並沿用設定', () => {
+        it('seed 為數字字串 ⇒ 複製版之種子為數值之和(原: 字串相接 "202611101"), 結果與數字者逐位相同; --seed 整數者採用、小數與非數字者拒收', () => {
             let a = runBt({ seed: 20261110 })
             let b = runBt({ seed: '20261110' })
             assert.equal(a.status, 0, a.out.slice(0, 400))
@@ -732,11 +732,12 @@ describe('評估之執行面之數字(seed、tieSalt、replicaSeeds、replicaNul
             assert.notDeepEqual(a.o.replicas[0].byPhase, a.o.replicas[1].byPhase, '鑑別前提: 兩個複製版之結果不同(含亂數之成品, 種子不同)')
             let s5 = runBt({ seed: 20261110 }, ['--seed', '5'])
             assert.deepEqual(s5.o.replicas.map((x) => x.seed), [5, 6], '--seed 整數者採用')
+            //--seed 給了而不是整數(小數、非數字、超出安全整數)⇒ 拒收(離開碼 2; 排程第 595 項之接續, R-EV-53 ③; 原: 說明後忽略而沿用設定之種子 —— 結果與使用者所指定者不同); 不寫結果檔
             for (let sd of ['1.5', 'abc', '1000000000000000000000']) {
                 let r = runBt({ seed: 20261110 }, ['--seed', sd])
-                assert.equal(r.status, 0, `${sd}: ${r.out.slice(0, 300)}`)
-                assert(r.out.split('\n').includes('--seed 須為整數(安全整數之範圍內),已忽略(沿用設定之亂數種子)'), `${sd}: ${r.out.slice(0, 300)}`)
-                assert.deepEqual(r.o.replicas.map((x) => x.seed), [20261110, 20261111], `${sd}: 沿用設定之種子`)
+                assert.equal(r.status, 2, `${sd}: ${r.out.slice(0, 300)}`)
+                assert(r.out.split('\n').includes('invalid --seed: must be an integer'), `${sd}: ${r.out.slice(0, 300)}`)
+                assert.equal(r.o, null, `${sd}: 不寫結果檔`)
             }
         })
 

@@ -8,6 +8,7 @@ import { roundName } from '../arsi/records.mjs'
 import { runRounds, acquireRunLock, appendEvent, readEvents, trailingFailures, planGateOf, roundOkOf } from '../arsi/runner.mjs'
 import { checkQuota } from '../arsi/dispatchers.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
+import { preflightOf } from '../arsi/rsiNums.mjs'
 import { phaseCountOfMetrics, phaseCountOfAll, phaseText } from '../domain/factsText.mjs'
 import { fileURLToPath } from 'url'
 
@@ -33,11 +34,8 @@ guardEntry('rsi')
     }
     //--dream-only 與 --file 之模式相容(排程第 547 項: 原被靜默忽略 —— `--mode round --file <檔>` 忘了 --dream-only 者起一個完整之輪次〔會派工〕而忽略該檔; `--dream-only` 於他模式亦被忽略):
     //  --dream-only 只用於 --mode round; --file 只用於 --mode annotate、--mode dirtype 與 --mode round --dream-only; 不合 ⇒ 離開碼 2(同上之時點)
+    //  --dream-only 與 --claim 之模式相容已由上之 cliMsgOf(模式 × 旗標: CLI_MODE_FLAGS; 訊息與原有者逐字相同)一併判定; --file 取決於 --dream-only ⇒ 留於此(CLI_MODE_OWN)
     let hasDream = process.argv.includes('--dream-only')
-    if (hasDream && md !== 'round') {
-        console.log('invalid --dream-only: must be used with --mode round')
-        process.exit(2)
-    }
     if (process.argv.includes('--file') && !(md === 'annotate' || md === 'dirtype' || (md === 'round' && hasDream))) {
         console.log('invalid --file: must be used with --mode annotate, --mode dirtype or --mode round --dream-only')
         process.exit(2)
@@ -46,10 +44,6 @@ guardEntry('rsi')
     //  原: 不合者靜默視為未給 ——「--close <臂> --claim zz」會把該臂之全部 proposed 提案結案(範圍擴大); 於他模式被忽略
     if (process.argv.includes('--claim')) {
         let cv = argStrOf('claim', undefined)
-        if (md !== 'frontier') {
-            console.log('invalid --claim: must be used with --mode frontier')
-            process.exit(2)
-        }
         if (!(typeof cv === 'string' && /^[0-9a-f]{8}$/.test(cv))) {
             console.log('invalid --claim: must be an 8-digit hexadecimal claim key (as listed after 主張 or 鍵)')
             process.exit(2)
@@ -181,8 +175,10 @@ else if (mode === 'round') {
     let fpEvents = path.join(fdLogs, 'events.jsonl')
     let relOf = (p) => path.relative(st.FD_ROOT, p).replace(/\\/g, '/')
     let ev = (o) => appendEvent(fpEvents, o)
+    //起跑前自檢之數值(lockStaleHours、quotaMaxPercent、maxConsecutiveFailures)依 K3、K4、K7 取值(preflightOf: 數字字串轉數值、無效者用預設; 排程第 595 項; 與 tools/quota.mjs、領域之派工器同一取值)
     let pre = (st.rsi && st.rsi.preflight) || {}
-    let lock = acquireRunLock(path.join(fdLogs, 'round.lock'), { staleMs: (Number.isFinite(pre.lockStaleHours) && pre.lockStaleHours > 0 ? pre.lockStaleHours : 6) * 3600000 })
+    let preNum = preflightOf(st.rsi)
+    let lock = acquireRunLock(path.join(fdLogs, 'round.lock'), { staleMs: preNum.lockStaleHours * 3600000 })
     if (!lock.ok) {
         let msg = lock.why === 'stale'
             ? `本次不啟動: 鎖檔之行程(pid ${lock.pid};自 ${lock.startedAt})仍在而心跳已逾時(最後 ${lock.beatAt}),疑似卡住 —— 須人查明後處理`
@@ -194,7 +190,7 @@ else if (mode === 'round') {
     process.on('exit', () => lock.release())
     let quota = null
     //額度之查詢參數、快照(只留角色、視窗名與百分比)與前後對照之文字(每輪之耗用; 供估「還能跑幾輪」)
-    let quotaArgs = () => ({ agents: st.agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, maxPercent: Number.isFinite(pre.quotaMaxPercent) ? pre.quotaMaxPercent : 95 })
+    let quotaArgs = () => ({ agents: st.agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, maxPercent: preNum.quotaMaxPercent })
     let snapOf = (q) => (q ? q.rows.map((r) => ({ role: r.role, windows: r.windows.map((w) => ({ label: w.label, percent: w.percent })) })) : null)
     let quotaLine = (a, b) => {
         if (!a || !b) {
@@ -218,7 +214,7 @@ else if (mode === 'round') {
             why = ['stop-file', `停止檔 ${relOf(fpStop)} 存在`]
         }
         else if (argOf('force', false) !== true) {
-            let mx = Number.isInteger(pre.maxConsecutiveFailures) ? pre.maxConsecutiveFailures : 2
+            let mx = preNum.maxConsecutiveFailures
             let nf = trailingFailures(readEvents(fpEvents))
             if (mx > 0 && nf >= mx) {
                 why = ['failures', `最近連續 ${nf} 輪失敗(上限 ${mx});查明後加 --force 起跑一次即解除`]

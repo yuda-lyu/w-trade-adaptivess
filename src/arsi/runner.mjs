@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
+import { rsiNumOf } from './rsiNums.mjs'
 
 
 //多輪執行之通用驅動(不含領域用語): 一次執行(run)連跑數輪, 每輪後回報並依條件決定是否續跑
@@ -16,7 +17,8 @@ import { spawnSync } from 'child_process'
 //    appendEvent(fpEvents, obj) / readEvents(fpEvents)   事件檔(每列一個 JSON; 只增): 起跑、每輪結束、整次執行結束、未啟動(及其原因)
 //      監看端(人、代理、其他程式)只須等待此檔出現新的結束類事件, 不必同時看狀態檔與行程
 //    trailingFailures(events)      事件檔末尾連續失敗之輪數(起跑前自檢用: 連續失敗達上限即不再自動起跑, 等人處理)
-let posInt = (v) => (Number.isInteger(v) && v >= 1 ? v : null)
+//posInt: 正整數(數字或其數字字串, 轉為數值後使用; 排程第 595 項, K4、K7: 原 Number.isInteger 使 '4' 被當成未給); 無效回 null(用預設)
+let posInt = (v) => rsiNumOf(v, 'posInt')
 
 /**
  * 解析每輪節點數、同時節點數與每次執行輪數(命令列優先於設定檔,皆須為正整數,否則用預設)

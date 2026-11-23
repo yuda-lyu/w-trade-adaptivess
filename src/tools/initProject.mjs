@@ -5,6 +5,8 @@ import { normBarHours } from '../eval/barGrid.mjs'
 import { evalCfgNumsOf, evalLimitsOf, cfgNumLoose } from '../eval/cfgNum.mjs'
 import { phaseCountOf, phaseText, horizonsOf, periodLenText, dateOf } from '../domain/factsText.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
+import { pkgRootOf } from '../domain/pkgRoot.mjs'
+import { cliGuard } from '../cfg.mjs'
 
 
 //把本套件接到一個專案根: 建立或更新進入檔與參考檔(安裝或升版後執行一次)
@@ -25,7 +27,9 @@ import { guardEntry } from '../domain/agentEntries.mjs'
 //  --bar-hours <h>: 每根 K 棒之小時數(須整除 24;例 24 = 日線)
 //  --dry: 只列出將寫入之檔, 不寫
 //  回傳(initProject 函數): { root, written[], kept[], skipped[], differs[] }
-let FD_PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+//  套件根: 往上找本套件之 package.json(pkgRootOf; 排程第 477 項 ②: 打包進主入口(dist/*.umd.js)時 import.meta.url 指向 dist 內之打包檔, 依檔案位置推導會得套件根之上一層);
+//  找不到(無本套件之 package.json 之配置)⇒ 依檔案位置推導(原作法: 本檔位於 <套件根>/src/tools)
+let FD_PKG = ((here) => pkgRootOf(here) || path.resolve(here, '..', '..'))(path.dirname(fileURLToPath(import.meta.url)))
 let PKG = 'w-trade-adaptivess'
 /**
  * 進入檔首行標記字串; 首行為此標記者視為本工具所產生, 可被覆寫
@@ -325,6 +329,9 @@ let initProject = ({ root, dry = false, force = false, barHours } = {}) => {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     //agent(ARSI_AGENT_ROLE = node / dream)⇒ 拒跑(離開碼 2; 於任何寫入之前; 規則 R-RUN-11); 被匯入時(initProject 函數)不受影響
     guardEntry('initProject')
+    //命令列之旗標只認 --root <專案根>、--bar-hours <h>、--dry、--force(TOOL_FLAGS.initProject; 空白分隔): 等號、未列、重複、多餘之值與 --root 無值一律拒收(離開碼 2; 於任何寫入之前; 訊息固定、不帶輸入值;
+    //  原: 靜默忽略 —— --root=<目錄> 把檔案寫入工作目錄、--dryrun 實際寫入、--root 無值寫入工作目錄); --bar-hours 之無值與值不合沿用 initProject 之 invalid barHours(own)
+    cliGuard('initProject')
     let i = process.argv.indexOf('--root')
     //--bar-hours <h>: 其後無值(或為另一個旗標)者視為無效之值(拋 invalid barHours, 未寫任何檔), 不當成未給
     let ib = process.argv.indexOf('--bar-hours')

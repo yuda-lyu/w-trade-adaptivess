@@ -1,12 +1,14 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings } from '../cfg.mjs'
+import { getSettings, cliGuard } from '../cfg.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { makeTexts } from '../domain/texts.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
 //agent(ARSI_AGENT_ROLE = node / dream)⇒ 帶 --out(寫出任務書)者拒跑(離開碼 2; 於組裝專案與任何寫入之前; 規則 R-RUN-11); 只印大小者照常
 guardEntry('briefPreview')
+//命令列之旗標只認 --out <資料夾>(TOOL_FLAGS.briefPreview): 等號、未列、重複、無值、多餘之值一律拒收(離開碼 2; 於讀設定與任何寫入之前; 訊息固定、不帶輸入值; 原: --out 無值者靜默不寫任務書)
+cliGuard('briefPreview')
 
 //預覽下一輪之節點任務書大小(處理要點 §7: 節點任務書逾 15 KB 即整併): 以前緣內「無起點」之提案產生任務書, 列總位元組數與各節之位元組數
 //  node tools/briefPreview.mjs [--out <資料夾>]      --out: 另把任務書寫到該資料夾(請給 tmp/ 下之路徑)

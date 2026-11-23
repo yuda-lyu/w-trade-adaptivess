@@ -398,9 +398,11 @@ describe('texts:任務類型與共用工具區', function () {
             }
         })
 
-        it('節點任務書:去掉第 7 條後與改前逐字相同(釘死):七種情境之輸出之 sha256 前 16 字,與改前(1.0.40)之輸出逐字相等時所取之值相同;含共同儲存區與其他標的之正負號者之大小仍不逾 15,000 位元組', () => {
-            //取值方式:改前之 texts.mjs 與現行之 texts.mjs 於同一組設定與同一組輸入下產出節點任務書,兩者於去掉第 7 條之後逐字相等(路徑字樣正規化後)才取改前輸出之雜湊記於此;
-            //  新舊之差只能是第 7 條(一整列);任務書之一般文字有意改動時,須重取並於變更說明列出理由
+        it('節點任務書(去掉第 7 條):七種情境之輸出之 sha256 前 16 字(釘死;1.0.46 整併後之取值);含共同儲存區與其他標的之正負號者之大小仍不逾 15,000 位元組', () => {
+            //取值方式:現行之 texts.mjs 於同一組設定與同一組輸入下產出節點任務書,去掉第 7 條、路徑字樣正規化後取雜湊記於此;
+            //  1.0.46(排程第 588 項 ①)整併任務書文字(刪重複、合併同義句;逐處之原句 → 新句見 sgud/state/state_REC2.md 與 rulebook_REC3.md R-REC-52)⇒ 七個值依整併後之輸出重取
+            //  (1.0.46 之前之值:8c0f293cb007f1d3、836629dc02dd5ced、f493f2a552384c39、4606ce4abdc3354e、54712794b404ce39、53462acc9007c693、0ec4c7b045ac2e23;去掉第 7 條後與 1.0.40 之輸出逐字相同);
+            //  之後任務書之一般文字有意改動時,須重取並於變更說明列出理由
             let codeRoot = path.relative(st.FD_ROOT, path.join(FD_ROOT, 'src')).replace(/\\/g, '/')
             //共同儲存區之相對路徑(任務書內寫有; 暫存夾名含行程號)正規化為 <STORE>
             let storeRel = null
@@ -416,11 +418,11 @@ describe('texts:任務類型與共用工具區', function () {
             let baseNode = { nodeId: 'base000011112222', arms: ['A04_act', 'E39_skipWeekend'], inactiveArms: ['E39_skipWeekend'], S: 12.3, ladder: 1, backtest: null, doc: 'rsi/records/nodes/base000011112222.md' }
             let tv = () => task({ type: 'verify', claim: '主張甲', direction: dirV })
             let cases = [
-                ['探索(無起點)', brief(task()), '8c0f293cb007f1d3'],
-                ['探索(有起點;新加之臂屬執行層)', brief(task({ arms: [arm, armE], base: baseNode })), '836629dc02dd5ced'],
-                ['探索(無共用工具區)', brief(task({ toolbox: null })), 'f493f2a552384c39'],
-                ['驗證(來源方向)', brief(tv()), '4606ce4abdc3354e'],
-                ['驗證(無共用工具區)', brief(task({ type: 'verify', claim: '主張甲', direction: dirV, toolbox: null })), '54712794b404ce39'],
+                ['探索(無起點)', brief(task()), 'b48dc96fa658323f'],
+                ['探索(有起點;新加之臂屬執行層)', brief(task({ arms: [arm, armE], base: baseNode })), 'a47ea70b1a3d20ee'],
+                ['探索(無共用工具區)', brief(task({ toolbox: null })), 'c2c02580c402225d'],
+                ['驗證(來源方向)', brief(tv()), 'ca0bd3f4578d44ab'],
+                ['驗證(無共用工具區)', brief(task({ type: 'verify', claim: '主張甲', direction: dirV, toolbox: null })), '1899b6454edbd548'],
             ]
             for (let [name, s, want] of cases) {
                 assert.equal(sha(s), want, name)
@@ -437,8 +439,8 @@ describe('texts:任務類型與共用工具區', function () {
                 let sv = nb(tv())
                 storeRel = path.relative(st.FD_ROOT, path.join(root0, 'picks')).replace(/\\/g, '/')
                 assert(se.includes(storeRel) && sv.includes(storeRel), '任務書內寫有共同儲存區之路徑(正規化之依據)')
-                assert.equal(sha(se), '53462acc9007c693', '探索(有共同儲存區與其他標的之正負號)')
-                assert.equal(sha(sv), '0ec4c7b045ac2e23', '驗證(有共同儲存區與其他標的之正負號)')
+                assert.equal(sha(se), '97a4d03811ef8f17', '探索(有共同儲存區與其他標的之正負號)')
+                assert.equal(sha(sv), 'ea0e7129af95d517', '驗證(有共同儲存區與其他標的之正負號)')
                 for (let s of [se, sv]) {
                     assert(Buffer.byteLength(s) <= 15000, `節點任務書 ${Buffer.byteLength(s)} 位元組`)
                 }

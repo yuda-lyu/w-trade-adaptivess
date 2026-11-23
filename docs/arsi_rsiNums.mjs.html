@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>arsi/rsiNums.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACTIONS">ACTIONS</a></li><li><a href="global.html#AGENT_ROLES">AGENT_ROLES</a></li><li><a href="global.html#AGENT_ROLE_ENV">AGENT_ROLE_ENV</a></li><li><a href="global.html#ARM_ID">ARM_ID</a></li><li><a href="global.html#ARM_KINDS">ARM_KINDS</a></li><li><a href="global.html#CLAIM_VERDICTS">CLAIM_VERDICTS</a></li><li><a href="global.html#CLIS">CLIS</a></li><li><a href="global.html#COLUMNS">COLUMNS</a></li><li><a href="global.html#CROSS_COLUMNS">CROSS_COLUMNS</a></li><li><a href="global.html#CROSS_FIELD_DEFS">CROSS_FIELD_DEFS</a></li><li><a href="global.html#DREAM_SCHEMA">DREAM_SCHEMA</a></li><li><a href="global.html#EVAL_HINT">EVAL_HINT</a></li><li><a href="global.html#EVAL_VERSION">EVAL_VERSION</a></li><li><a href="global.html#EXPAND_DECISIONS">EXPAND_DECISIONS</a></li><li><a href="global.html#EXPOSURE_DEFAULT">EXPOSURE_DEFAULT</a></li><li><a href="global.html#FD_ROOT">FD_ROOT</a></li><li><a href="global.html#FIELD_DEFS">FIELD_DEFS</a></li><li><a href="global.html#FILL_BACKLOG_OFF">FILL_BACKLOG_OFF</a></li><li><a href="global.html#FILL_BACKLOG_ON">FILL_BACKLOG_ON</a></li><li><a href="global.html#FILL_BACKLOG_SEC">FILL_BACKLOG_SEC</a></li><li><a href="global.html#FILL_DIR">FILL_DIR</a></li><li><a href="global.html#FILL_NO_RETRY_KINDS">FILL_NO_RETRY_KINDS</a></li><li><a href="global.html#FILL_SCHEMA">FILL_SCHEMA</a></li><li><a href="global.html#IMPROVE_KINDS">IMPROVE_KINDS</a></li><li><a href="global.html#LEDGER_VERSION">LEDGER_VERSION</a></li><li><a href="global.html#LIB_DIR_HI">LIB_DIR_HI</a></li><li><a href="global.html#LIB_DIR_LO">LIB_DIR_LO</a></li><li><a href="global.html#MARK">MARK</a></li><li><a href="global.html#MEMBER_DEFAULT">MEMBER_DEFAULT</a></li><li><a href="global.html#MEMBER_HEAD">MEMBER_HEAD</a></li><li><a href="global.html#MEMBER_SALTS">MEMBER_SALTS</a></li><li><a href="global.html#MUTABLE_SNAPS">MUTABLE_SNAPS</a></li><li><a href="global.html#NODE_SCHEMA">NODE_SCHEMA</a></li><li><a href="global.html#OUTCOMES">OUTCOMES</a></li><li><a href="global.html#OUT_CHECK_MIN">OUT_CHECK_MIN</a></li><li><a href="global.html#OUT_SATURATED_NOTE">OUT_SATURATED_NOTE</a></li><li><a href="global.html#P">P</a></li><li><a href="global.html#POSTFIT_HEAD">POSTFIT_HEAD</a></li><li><a href="global.html#REPLICA_EXT">REPLICA_EXT</a></li><li><a href="global.html#SIDE_READ_DEFAULT">SIDE_READ_DEFAULT</a></li><li><a href="global.html#SIGNS_CLAUSE">SIGNS_CLAUSE</a></li><li><a href="global.html#SUBSET_MEMBER_MSG">SUBSET_MEMBER_MSG</a></li><li><a href="global.html#SUBSET_MSG">SUBSET_MSG</a></li><li><a href="global.html#TASK_TYPES">TASK_TYPES</a></li><li><a href="global.html#TRUST">TRUST</a></li><li><a href="global.html#VIOL">VIOL</a></li><li><a href="global.html#WTradeAdaptivess">WTradeAdaptivess</a></li><li><a href="global.html#acquireRunLock">acquireRunLock</a></li><li><a href="global.html#adoptError">adoptError</a></li><li><a href="global.html#agentEnvOf">agentEnvOf</a></li><li><a href="global.html#agentRoleOf">agentRoleOf</a></li><li><a href="global.html#alignSeries">alignSeries</a></li><li><a href="global.html#appendEvent">appendEvent</a></li><li><a href="global.html#archiveExperience">archiveExperience</a></li><li><a href="global.html#archiveFeedback">archiveFeedback</a></li><li><a href="global.html#argOf">argOf</a></li><li><a href="global.html#argStrOf">argStrOf</a></li><li><a href="global.html#autoFillOf">autoFillOf</a></li><li><a href="global.html#backtestCfg">backtestCfg</a></li><li><a href="global.html#bodyOf">bodyOf</a></li><li><a href="global.html#buildLedger">buildLedger</a></li><li><a href="global.html#buildPickStore">buildPickStore</a></li><li><a href="global.html#bytesAs">bytesAs</a></li><li><a href="global.html#cadenceOf">cadenceOf</a></li><li><a href="global.html#cfgListOf">cfgListOf</a></li><li><a href="global.html#cfgNumLoose">cfgNumLoose</a></li><li><a href="global.html#cfgNumOf">cfgNumOf</a></li><li><a href="global.html#checkArmProposals">checkArmProposals</a></li><li><a href="global.html#checkDreamAgentPart">checkDreamAgentPart</a></li><li><a href="global.html#checkEvalSettings">checkEvalSettings</a></li><li><a href="global.html#checkIntrinsics">checkIntrinsics</a></li><li><a href="global.html#checkNodeAgentPart">checkNodeAgentPart</a></li><li><a href="global.html#checkQuota">checkQuota</a></li><li><a href="global.html#cliGuard">cliGuard</a></li><li><a href="global.html#cliMsgOf">cliMsgOf</a></li><li><a href="global.html#clipLedger">clipLedger</a></li><li><a href="global.html#configMsgOf">configMsgOf</a></li><li><a href="global.html#copyAll">copyAll</a></li><li><a href="global.html#copyRange">copyRange</a></li><li><a href="global.html#createArsi">createArsi</a></li><li><a href="global.html#createFileRecords">createFileRecords</a></li><li><a href="global.html#createResourceMonitor">createResourceMonitor</a></li><li><a href="global.html#createToolbox">createToolbox</a></li><li><a href="global.html#crossOf">crossOf</a></li><li><a href="global.html#dateOf">dateOf</a></li><li><a href="global.html#decideArgsOf">decideArgsOf</a></li><li><a href="global.html#diagsOf">diagsOf</a></li><li><a href="global.html#directionalOf">directionalOf</a></li><li><a href="global.html#docLimitsOf">docLimitsOf</a></li><li><a href="global.html#entryWrites">entryWrites</a></li><li><a href="global.html#eqFlagMsgOf">eqFlagMsgOf</a></li><li><a href="global.html#evalCfgNumsOf">evalCfgNumsOf</a></li><li><a href="global.html#evalHintsOfDocs">evalHintsOfDocs</a></li><li><a href="global.html#evalLimitsOf">evalLimitsOf</a></li><li><a href="global.html#evalListsOf">evalListsOf</a></li><li><a href="global.html#evalNumsOf">evalNumsOf</a></li><li><a href="global.html#evalRunNumOf">evalRunNumOf</a></li><li><a href="global.html#evalRunNumsOf">evalRunNumsOf</a></li><li><a href="global.html#evaluatorFpOf">evaluatorFpOf</a></li><li><a href="global.html#exposureCfgOf">exposureCfgOf</a></li><li><a href="global.html#exposureHintOf">exposureHintOf</a></li><li><a href="global.html#exposureOf">exposureOf</a></li><li><a href="global.html#extRowOf">extRowOf</a></li><li><a href="global.html#extSurfaceOf">extSurfaceOf</a></li><li><a href="global.html#fillBacklogSecOf">fillBacklogSecOf</a></li><li><a href="global.html#fillDocOf">fillDocOf</a></li><li><a href="global.html#fillFileOf">fillFileOf</a></li><li><a href="global.html#fillLinesOf">fillLinesOf</a></li><li><a href="global.html#fillSigSrcOf">fillSigSrcOf</a></li><li><a href="global.html#forbiddenPats">forbiddenPats</a></li><li><a href="global.html#getSettings">getSettings</a></li><li><a href="global.html#gridCheck">gridCheck</a></li><li><a href="global.html#guardEntry">guardEntry</a></li><li><a href="global.html#guardExtraOf">guardExtraOf</a></li><li><a href="global.html#handOut">handOut</a></li><li><a href="global.html#holdMedianOf">holdMedianOf</a></li><li><a href="global.html#horizonsOf">horizonsOf</a></li><li><a href="global.html#infoOf">infoOf</a></li><li><a href="global.html#initProject">initProject</a></li><li><a href="global.html#integrityError">integrityError</a></li><li><a href="global.html#isCapitalError">isCapitalError</a></li><li><a href="global.html#isIntegrityError">isIntegrityError</a></li><li><a href="global.html#isMutableSnap">isMutableSnap</a></li><li><a href="global.html#isSrcIdx">isSrcIdx</a></li><li><a href="global.html#isoOf">isoOf</a></li><li><a href="global.html#libReportOf">libReportOf</a></li><li><a href="global.html#libSizeText">libSizeText</a></li><li><a href="global.html#libTextOf">libTextOf</a></li><li><a href="global.html#loadExt">loadExt</a></li><li><a href="global.html#loadIds">loadIds</a></li><li><a href="global.html#loadLedger">loadLedger</a></li><li><a href="global.html#loadPick">loadPick</a></li><li><a href="global.html#lowerBound">lowerBound</a></li><li><a href="global.html#makeDispatch">makeDispatch</a></li><li><a href="global.html#makeEvaluator">makeEvaluator</a></li><li><a href="global.html#makeProject">makeProject</a></li><li><a href="global.html#makeTexts">makeTexts</a></li><li><a href="global.html#makeToolboxRules">makeToolboxRules</a></li><li><a href="global.html#makeVerify">makeVerify</a></li><li><a href="global.html#maxArmsOf">maxArmsOf</a></li><li><a href="global.html#memberCfgOfSt">memberCfgOfSt</a></li><li><a href="global.html#memberCheckOf">memberCheckOf</a></li><li><a href="global.html#memberEligibleOf">memberEligibleOf</a></li><li><a href="global.html#memberHintOf">memberHintOf</a></li><li><a href="global.html#memberInfoOf">memberInfoOf</a></li><li><a href="global.html#memberKeyOf">memberKeyOf</a></li><li><a href="global.html#memberLedger">memberLedger</a></li><li><a href="global.html#memberLineOf">memberLineOf</a></li><li><a href="global.html#memberOfFill">memberOfFill</a></li><li><a href="global.html#memberRecentCapableOf">memberRecentCapableOf</a></li><li><a href="global.html#memberRowOf">memberRowOf</a></li><li><a href="global.html#memberRowOfTree">memberRowOfTree</a></li><li><a href="global.html#memberSigOf">memberSigOf</a></li><li><a href="global.html#memberTagsOf">memberTagsOf</a></li><li><a href="global.html#mkArm">mkArm</a></li><li><a href="global.html#mulberry32">mulberry32</a></li><li><a href="global.html#normBarHours">normBarHours</a></li><li><a href="global.html#normUnit">normUnit</a></li><li><a href="global.html#notesOf">notesOf</a></li><li><a href="global.html#ntStaticOf">ntStaticOf</a></li><li><a href="global.html#nullDrawsOf">nullDrawsOf</a></li><li><a href="global.html#nullFloorText">nullFloorText</a></li><li><a href="global.html#objOf">objOf</a></li><li><a href="global.html#onBarGrid">onBarGrid</a></li><li><a href="global.html#osRead">osRead</a></li><li><a href="global.html#outwardNoteOf">outwardNoteOf</a></li><li><a href="global.html#parseSubsetRule">parseSubsetRule</a></li><li><a href="global.html#peekRunLock">peekRunLock</a></li><li><a href="global.html#periodAt">periodAt</a></li><li><a href="global.html#periodLenText">periodLenText</a></li><li><a href="global.html#phaseCountOf">phaseCountOf</a></li><li><a href="global.html#phaseCountOfAll">phaseCountOfAll</a></li><li><a href="global.html#phaseCountOfMetrics">phaseCountOfMetrics</a></li><li><a href="global.html#phaseText">phaseText</a></li><li><a href="global.html#pickHashOf">pickHashOf</a></li><li><a href="global.html#planFill">planFill</a></li><li><a href="global.html#planGateOf">planGateOf</a></li><li><a href="global.html#postfitFileOf">postfitFileOf</a></li><li><a href="global.html#postfitInfoOf">postfitInfoOf</a></li><li><a href="global.html#postfitLineOf">postfitLineOf</a></li><li><a href="global.html#postfitOfFill">postfitOfFill</a></li><li><a href="global.html#postfitRowOf">postfitRowOf</a></li><li><a href="global.html#preflightOf">preflightOf</a></li><li><a href="global.html#proposalOf">proposalOf</a></li><li><a href="global.html#rankCompareOf">rankCompareOf</a></li><li><a href="global.html#readEvents">readEvents</a></li><li><a href="global.html#readFill">readFill</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#refCountsOf">refCountsOf</a></li><li><a href="global.html#registryOf">registryOf</a></li><li><a href="global.html#renderContract">renderContract</a></li><li><a href="global.html#renderDreamMd">renderDreamMd</a></li><li><a href="global.html#renderNodeMd">renderNodeMd</a></li><li><a href="global.html#resolveRunConfig">resolveRunConfig</a></li><li><a href="global.html#reverifyParOf">reverifyParOf</a></li><li><a href="global.html#roundName">roundName</a></li><li><a href="global.html#roundOkOf">roundOkOf</a></li><li><a href="global.html#rsiNumOf">rsiNumOf</a></li><li><a href="global.html#runRounds">runRounds</a></li><li><a href="global.html#safeJson">safeJson</a></li><li><a href="global.html#sameKey">sameKey</a></li><li><a href="global.html#sameUnit">sameUnit</a></li><li><a href="global.html#saturatedLineOf">saturatedLineOf</a></li><li><a href="global.html#scanPick">scanPick</a></li><li><a href="global.html#scanSnippet">scanSnippet</a></li><li><a href="global.html#scanTrace">scanTrace</a></li><li><a href="global.html#scoreOf">scoreOf</a></li><li><a href="global.html#setGuardExtra">setGuardExtra</a></li><li><a href="global.html#shimOf">shimOf</a></li><li><a href="global.html#sideReadCfgOf">sideReadCfgOf</a></li><li><a href="global.html#sideReadOf">sideReadOf</a></li><li><a href="global.html#sideReadTextOf">sideReadTextOf</a></li><li><a href="global.html#signsMentionOf">signsMentionOf</a></li><li><a href="global.html#stripComments">stripComments</a></li><li><a href="global.html#subsetLedger">subsetLedger</a></li><li><a href="global.html#subsetMaskOf">subsetMaskOf</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#tallyDream">tallyDream</a></li><li><a href="global.html#tieBaseOf">tieBaseOf</a></li><li><a href="global.html#tms">tms</a></li><li><a href="global.html#trailingFailures">trailingFailures</a></li><li><a href="global.html#trainFromBarOf">trainFromBarOf</a></li><li><a href="global.html#unitKeyOf">unitKeyOf</a></li><li><a href="global.html#unitNotionalOf">unitNotionalOf</a></li><li><a href="global.html#violationMark">violationMark</a></li><li><a href="global.html#violationSince">violationSince</a></li><li><a href="global.html#wholeBarsOf">wholeBarsOf</a></li><li><a href="global.html#writeJson">writeJson</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">arsi/rsiNums.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import isenum from 'wsemi/src/isenum.mjs'
+
+
+//settings.rsi / settings.agents 之數值鍵之取值(排程第 595 項; 跨套件規格〈輸入參數之檢測機制〉K3、K4、K7): 檢測之值即使用之值
+//  這些鍵屬「執行面與讀數面之選填設定」(每輪節點數、併行數、額度門檻、文件整理上限、側別讀數門檻、逾時): 不決定評估或回測之數字(那些在 settings.eval / settings.backtest: 給了而無效即拒絕, R-EV-44 ④之二、R-EV-50),
+//  依 K3 之分類: 給了而無效 ⇒ 視為未給、改用預設(不拋錯、不當 0); 數字字串(去頭尾空白之十進位寫法, wsemi isenum)轉為數值後才使用(K7; 原: 多數處以 Number.isInteger / typeof number 判定而數字字串被靜默當成未給,
+//  或以 `||`、原值比較而字串與 0 被當成不同之值)
+//  同一物件內一致: settings.rsi.memberCheck、exposure(R-REC-48、R-REC-51)早已用同一口徑(無效即用預設、數字字串轉數值)
+//  只匯入 wsemi 之 isenum
+
+//RSI_NUM_KINDS, 數值之種類: [說明, 值域之判定]
+let RSI_NUM_KINDS = {
+    posInt: ['a positive integer', (x) => Number.isSafeInteger(x) &amp;&amp; x >= 1],
+    nonNegInt: ['a non-negative integer', (x) => Number.isSafeInteger(x) &amp;&amp; x >= 0],
+    //任意正負之整數(maxConsecutiveFailures 之 ≤ 0 = 關閉; reverifyParallel 取值後夾於 1 ~ 8)
+    int: ['an integer', (x) => Number.isSafeInteger(x)],
+    int2: ['an integer of at least 2', (x) => Number.isSafeInteger(x) &amp;&amp; x >= 2],
+    posNum: ['a positive number', (x) => x > 0],
+    nonNegNum: ['a non-negative number', (x) => x >= 0],
+    num: ['a finite number', () => true],
+    unit: ['a number from 0 to 1', (x) => x >= 0 &amp;&amp; x &lt;= 1],
+    //逾時之分鐘數: 正數, 且換成毫秒不超過 2147483647(Node 計時器之上限; 超過者計時器溢位而立即觸發)
+    timerMin: ['a positive number of minutes that is at most 35791', (x) => x > 0 &amp;&amp; x * 60000 &lt;= 2147483647],
+}
+
+//RSI_NUMS, 各鍵之種類(單一定義): 設定之路徑 → 種類; 無效或未給 ⇒ 預設(呼叫端所給); unit-rsiNums 以原始碼之盤點核對「各鍵之讀取皆經 rsiNumOf」
+let RSI_NUMS = {
+    'rsi.nodesPerRound': 'posInt',
+    'rsi.parallelNodes': 'posInt',
+    'rsi.roundsPerRun': 'posInt',
+    'rsi.maxArmsPerNode': 'posInt',
+    'rsi.refDreams': 'posInt',
+    'rsi.refTopNodes': 'posInt',
+    'rsi.reverifyParallel': 'int',
+    'rsi.docLimits.maxBytes': 'posInt',
+    'rsi.docLimits.keepBytes': 'nonNegInt',
+    'rsi.docLimits.keepRows': 'nonNegInt',
+    'rsi.preflight.lockStaleHours': 'posNum',
+    'rsi.preflight.quotaMaxPercent': 'num',
+    'rsi.preflight.maxConsecutiveFailures': 'int',
+    'rsi.sideRead.minNodes': 'int2',
+    'rsi.sideRead.top': 'int2',
+    'rsi.sideRead.corrAbs': 'unit',
+    'rsi.sideRead.lo': 'unit',
+    'rsi.sideRead.hi': 'unit',
+    'agents.&lt;role>.timeoutMin': 'timerMin',
+    'agents.&lt;role>.quotaMaxPercent': 'num',
+}
+
+/**
+ * 設定之數值之取值(K3): 數字與數字字串(wsemi isenum; 去頭尾空白之十進位寫法之有限數)轉為數值後須合種類(RSI_NUM_KINDS); 其餘(未給、null、布林、陣列、物件、非數字字串、NaN、±Infinity、BigInt)與超出值域者回 null(呼叫端用預設)
+ * 數字原樣回傳(逐位不變); 數字字串轉為數值(例: '4' → 4)
+ *
+ * @param {*} v 輸入設定之值
+ * @param {String} kind 輸入種類(RSI_NUM_KINDS 之鍵)
+ * @returns {Number|null} 回傳數值, 無效或未給回傳 null
+ * @example
+ * rsiNumOf('4', 'posInt')
+ * // => 4
+ * rsiNumOf('abc', 'posInt')
+ * // => null
+ */
+let rsiNumOf = (v, kind) => {
+    let k = RSI_NUM_KINDS[kind]
+    if (!k) {
+        throw new Error(`invalid kind: must be one of ${Object.keys(RSI_NUM_KINDS).join(', ')}`)
+    }
+    let x = typeof v === 'number' ? v : (typeof v === 'string' &amp;&amp; isenum(v) ? Number(v) : NaN)
+    return Number.isFinite(x) &amp;&amp; k[1](x) ? x : null
+}
+
+//orOf, 取值或預設(有效取轉換值, 無效或未給取 def)
+let orOf = (v, kind, def) => {
+    let x = rsiNumOf(v, kind)
+    return x === null ? def : x
+}
+
+//objOf, 非物件(含陣列、null)視為空物件
+let objOf = (v) => (v &amp;&amp; typeof v === 'object' &amp;&amp; !Array.isArray(v) ? v : {})
+
+/**
+ * 每個節點至多幾個臂(settings.rsi.maxArmsPerNode; 正整數, 預設 4): 領域之閘門與任務書之說明共用此函數(檢測之值即使用之值)
+ *
+ * @param {Object|null} rsiCfg 輸入設定之 rsi 物件
+ * @returns {Number} 回傳至多幾個臂
+ * @example
+ * maxArmsOf({ maxArmsPerNode: '3' }) // => 3
+ */
+let maxArmsOf = (rsiCfg) => orOf(objOf(rsiCfg).maxArmsPerNode, 'posInt', 4)
+
+/**
+ * 做夢任務書之參考(settings.rsi.refDreams: 近幾份做夢文件, 預設 2; refTopNodes: 前幾名之節點, 預設 3; 皆正整數)
+ *
+ * @param {Object|null} rsiCfg 輸入設定之 rsi 物件
+ * @returns {Object} 回傳 { refDreams, refTopNodes }
+ * @example
+ * refCountsOf({ refDreams: '4' }) // => { refDreams: 4, refTopNodes: 3 }
+ */
+let refCountsOf = (rsiCfg) => {
+    let o = objOf(rsiCfg)
+    return { refDreams: orOf(o.refDreams, 'posInt', 2), refTopNodes: orOf(o.refTopNodes, 'posInt', 3) }
+}
+
+/**
+ * 重算之併行數(settings.rsi.reverifyParallel; 整數取值後夾於 1 ~ 8, 預設 4)
+ *
+ * @param {Object|null} rsiCfg 輸入設定之 rsi 物件
+ * @returns {Number} 回傳併行數
+ * @example
+ * reverifyParOf({ reverifyParallel: '3' }) // => 3
+ */
+let reverifyParOf = (rsiCfg) => Math.max(1, Math.min(8, orOf(objOf(rsiCfg).reverifyParallel, 'int', 4)))
+
+/**
+ * 專案指引文件之自動整理之上限(settings.rsi.docLimits 之 maxBytes、keepBytes、keepRows; 無效或未給者為 undefined ⇒ archiveExperience / archiveFeedback 用其預設)
+ * 領域之輪末與 tools/archiveDocs.mjs 共用(同一鍵單一解讀)
+ *
+ * @param {Object|null} rsiCfg 輸入設定之 rsi 物件(docLimits 為 false 者由呼叫端另判)
+ * @returns {Object} 回傳 { maxBytes, keepBytes, keepRows }
+ * @example
+ * docLimitsOf({ docLimits: { maxBytes: '20000' } }) // => { maxBytes: 20000, keepBytes: undefined, keepRows: undefined }
+ */
+let docLimitsOf = (rsiCfg) => {
+    let d = objOf(objOf(rsiCfg).docLimits)
+    let at = (v, kind) => {
+        let x = rsiNumOf(v, kind)
+        return x === null ? undefined : x
+    }
+    return { maxBytes: at(d.maxBytes, 'posInt'), keepBytes: at(d.keepBytes, 'nonNegInt'), keepRows: at(d.keepRows, 'nonNegInt') }
+}
+
+/**
+ * 起跑前自檢之數值(settings.rsi.preflight 之 lockStaleHours〔正數, 預設 6〕、quotaMaxPercent〔有限數, 預設 95〕、maxConsecutiveFailures〔整數, 預設 2; ≤ 0 = 不以連續失敗擋〕)
+ * g_rsi.mjs、tools/quota.mjs 與領域共用
+ *
+ * @param {Object|null} rsiCfg 輸入設定之 rsi 物件
+ * @returns {Object} 回傳 { lockStaleHours, quotaMaxPercent, maxConsecutiveFailures }
+ * @example
+ * preflightOf({ preflight: { quotaMaxPercent: '90' } }) // => { lockStaleHours: 6, quotaMaxPercent: 90, maxConsecutiveFailures: 2 }
+ */
+let preflightOf = (rsiCfg) => {
+    let p = objOf(objOf(rsiCfg).preflight)
+    return { lockStaleHours: orOf(p.lockStaleHours, 'posNum', 6), quotaMaxPercent: orOf(p.quotaMaxPercent, 'num', 95), maxConsecutiveFailures: orOf(p.maxConsecutiveFailures, 'int', 2) }
+}
+
+//settings.resources(cpuMax、ramUsedMaxGB、cpuStart、ramStartGB、sampleSec、pollSec、maxWaitMin)不在本檔: 評估器之進入檔(src/cli/eval.mjs)之資源閘另讀同一組鍵(typeof number), 本輪不動評估器 ⇒ 為免同一鍵有兩種解讀, 整組留待下次動評估器時一併
+
+export { RSI_NUM_KINDS, RSI_NUMS, rsiNumOf, maxArmsOf, refCountsOf, reverifyParOf, docLimitsOf, preflightOf }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Mon Nov 23 2026 09:44:36 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

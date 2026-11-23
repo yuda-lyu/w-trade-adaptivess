@@ -1,6 +1,9 @@
-import { getSettings, argOf } from '../cfg.mjs'
+import { getSettings, argOf, cliGuard } from '../cfg.mjs'
 import { makeProjectOrExit, rankKeyOf, contentOf } from '../domain/domain.mjs'
 import { rankCompareOf } from '../domain/rankCompare.mjs'
+
+//命令列之旗標只認 --k <前幾名>(TOOL_FLAGS.rankCompare): 等號、未列、重複、無值、多餘之值一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值)
+cliGuard('rankCompare')
 
 //量尺之主鍵改為挑選內容時對名次之影響(唯讀; 規則 R-REC-49 之估法): 只印、不寫任何檔, 不評估; 供主控於設定 settings.rsi.rankBy 之前讀出兩種次序之差
 //  node tools/rankCompare.mjs [--k <前幾名; 預設 10>]

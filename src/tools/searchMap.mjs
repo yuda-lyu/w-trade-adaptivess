@@ -1,11 +1,13 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings } from '../cfg.mjs'
+import { getSettings, cliGuard } from '../cfg.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
 //agent(ARSI_AGENT_ROLE = node / dream)⇒ 拒跑(離開碼 2; 於組裝專案與任何寫入之前; 規則 R-RUN-11)
 guardEntry('searchMap')
+//命令列之旗標只認 --quiet(TOOL_FLAGS.searchMap): 等號、未列、重複、多餘之值一律拒收(離開碼 2; 於讀設定與任何寫入之前; 訊息固定、不帶輸入值)
+cliGuard('searchMap')
 
 //重產並印出搜尋地圖(rsi/SEARCH_MAP.md; 規則 R-REC-14): 逐輪趨勢、各層之覆蓋、譜系、集中度之機械指標
 //  node tools/searchMap.mjs            重產並印出

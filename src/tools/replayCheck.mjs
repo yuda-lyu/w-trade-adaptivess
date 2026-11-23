@@ -1,11 +1,13 @@
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
-import { FD_ROOT } from '../cfg.mjs'
+import { FD_ROOT, cliGuard } from '../cfg.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
 //agent(ARSI_AGENT_ROLE = node / dream)不得以迴圈專用之旗標重放 ⇒ 拒跑(離開碼 2; 於任何寫入之前; 規則 R-RUN-11)
 guardEntry('replayCheck')
+//命令列只認節點 id 前綴(位置引數, 個數不限; TOOL_FLAGS.replayCheck): 任何旗標(含等號寫法)一律拒收(離開碼 2; 於任何重放與寫入之前; 訊息固定、不帶輸入值; 原: 旗標被當成節點 id 前綴而「無此節點」)
+cliGuard('replayCheck')
 
 //評估器改動後之抽樣重放(主控用): 以現行評估器重跑指定節點之成品(迴圈專用之旗標; 不記入節點之評估紀錄), 與樹上之正本(harness_full.json)比 S、階梯與 selHash
 //  node tools/replayCheck.mjs <節點 id 前綴> [...]        離開碼 0 = 全部相同; 1 = 有不同或重放失敗
