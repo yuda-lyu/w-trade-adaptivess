@@ -27,6 +27,8 @@ let READ_CASES = [
     ['armDecide', []],
     ['armInactive', []],
     ['exposure', []],
+    //成品之形式之補記(規則 R-REC-53): 無引數 = 列出(唯讀)
+    ['formSet', []],
     ['rankCompare', []],
     ['briefPreview', []],
     ['quota', ['--max', '90', '--all']],
@@ -78,6 +80,8 @@ let WRITE_CASES = [
     ['armInactive', ['--node', 'abcdef', '--arms', 'none', '--why', 'w']],
     ['exposure', ['--node', 'abcdef', '--why', 'w']],
     ['exposure', ['--undo', '--node', 'abcdef', '--why', 'w']],
+    ['formSet', ['--node', 'abcdef', '--form', 'mechanism', '--why', 'w']],
+    ['formSet', ['--node', 'abcdef', '--form', 'none', '--why', 'w']],
     ['briefPreview', ['--out', 'd']],
     ['quota', ['--probe']],
     ['roundDigest', ['--out']],
@@ -108,8 +112,8 @@ describe('進入檔之拒跑:角色之環境變數與判定表', function () {
         for (let [name, args] of READ_CASES) {
             assert.equal(entryWrites(name, args), false, `${name} ${args.join(' ')}`)
         }
-        //表之鍵 = 4 個命令列 + 15 個工具(只列出內容之工具與 g_eval、g_toolbox 不在表內; libCheck 為主控專用之唯讀工具〔hindsight〕, 規則 R-EV-48)
-        assert.deepEqual(Object.keys(ENTRY_RULES).sort(), ['archiveDocs', 'armDecide', 'armInactive', 'backtest', 'briefPreview', 'build', 'buildCatalog', 'exposure', 'fakeRound', 'initProject', 'launch', 'libCheck', 'pickStore', 'quota', 'replayCheck', 'roundDigest', 'rsi', 'searchMap', 'smokeDispatch'])
+        //表之鍵 = 4 個命令列 + 16 個工具(只列出內容之工具與 g_eval、g_toolbox 不在表內; libCheck 為主控專用之唯讀工具〔hindsight〕, 規則 R-EV-48; formSet 為規則 R-REC-53 所加)
+        assert.deepEqual(Object.keys(ENTRY_RULES).sort(), ['archiveDocs', 'armDecide', 'armInactive', 'backtest', 'briefPreview', 'build', 'buildCatalog', 'exposure', 'fakeRound', 'formSet', 'initProject', 'launch', 'libCheck', 'pickStore', 'quota', 'replayCheck', 'roundDigest', 'rsi', 'searchMap', 'smokeDispatch'])
         //非陣列之引數視為無引數; 數字引數照字串判
         assert.equal(entryWrites('rsi', null), false)
         assert.equal(entryWrites('armDecide', [5]), true)
@@ -252,6 +256,7 @@ describe('進入檔之拒跑:合成專案實跑(命令列程式與工具)', func
             [['tools', 'armDecide.mjs'], ['--id', 'P001', '--reject', '--why', 'w']],
             [['tools', 'armInactive.mjs'], ['--node', 'abcdef', '--arms', 'none', '--why', 'w']],
             [['tools', 'exposure.mjs'], ['--node', 'abcdef', '--why', 'w']],
+            [['tools', 'formSet.mjs'], ['--node', 'abcdef', '--form', 'clue', '--why', 'w']],
             [['tools', 'briefPreview.mjs'], ['--out', path.join(root, 'prev')]],
             [['tools', 'quota.mjs'], ['--probe']],
             [['tools', 'roundDigest.mjs'], ['--out']],
@@ -285,6 +290,7 @@ describe('進入檔之拒跑:合成專案實跑(命令列程式與工具)', func
             [['tools', 'armDecide.mjs'], []],
             [['tools', 'armInactive.mjs'], []],
             [['tools', 'exposure.mjs'], []],
+            [['tools', 'formSet.mjs'], []],
             [['tools', 'rankCompare.mjs'], []],
             [['tools', 'nodeAudit.mjs'], []],
             [['tools', 'scanCheck.mjs'], []],
@@ -293,6 +299,10 @@ describe('進入檔之拒跑:合成專案實跑(命令列程式與工具)', func
         for (let [rel, args] of cases) {
             let what = `${rel.join('/')} ${args.join(' ')}`
             let a = run(rel, args, null)
+            //formSet 無引數 = 列出(規則 R-REC-53): 須真的執行成功(離開碼 0); 否則檔案不存在時兩邊皆為「找不到模組」而輸出相同, 本案於修前亦綠
+            if (rel[1] === 'formSet.mjs') {
+                assert.strictEqual(a.status, 0, `${what}: ${a.stdout}${a.stderr}`.slice(0, 300))
+            }
             for (let role of ['node', 'dream']) {
                 let b = run(rel, args, role)
                 assert.deepEqual(b, a, `${what}(${role})`)

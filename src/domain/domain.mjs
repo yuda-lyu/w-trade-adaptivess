@@ -8,7 +8,7 @@ import { scoreOf } from '../eval/score.mjs'
 import { normUnit } from '../eval/unit.mjs'
 import { checkEvalSettings, configMsgOf } from '../eval/barGrid.mjs'
 import { evalRunNumOf, cfgNumOf, evalScoreOf } from '../eval/cfgNum.mjs'
-import { createFileRecords, roundName, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_LABELS, ARM_KINDS, ARM_LABELS, CLAIM_VERDICTS } from '../arsi/records.mjs'
+import { createFileRecords, roundName, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_LABELS, ARM_KINDS, ARM_LABELS, CLAIM_VERDICTS, FORMS, formLabelOf } from '../arsi/records.mjs'
 import { proposalOf } from './armCatalog.mjs'
 import { buildPickStore } from './pickStore.mjs'
 import { RECENT_DIAG, recentDiagOf, neutralDeltaOf } from './diagRead.mjs'
@@ -24,7 +24,7 @@ import { resolveRunConfig, stopFileOf, stopFileExists } from '../arsi/runner.mjs
 import { maxArmsOf, refCountsOf, reverifyParOf, docLimitsOf, preflightOf, resourceCfgOf } from '../arsi/rsiNums.mjs'
 import { makeTexts, GUIDE, guideText, OUT_SATURATED_NOTE } from './texts.mjs'
 import { nullDrawsOf, nullFloorText, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll } from './factsText.mjs'
-import { makeVerify, summaryOf, notesOf, isHalfOf, scanTrace, shortShareOf, sideFlowIssue, sideFlowCfgOf, extSurfaceOf, extFlagIssue, extBoardMeansOf, runNodeProc, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD, dirWorkIdsOf, dirNodeIdsOf, allowWorkOf } from './verify.mjs'
+import { makeVerify, summaryOf, notesOf, isHalfOf, scanTrace, shortShareOf, sideFlowIssueOfSt, sideFlowCfgOf, extSurfaceOf, extFlagIssue, extBoardMeansOf, runNodeProc, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD, dirWorkIdsOf, dirNodeIdsOf, allowWorkOf } from './verify.mjs'
 import { PEAK_HEAD, TWIN_HEAD, isEvalHint as isTwoHint, evalHintBody, evalHintsOfDocs } from './verifyEvalHints.mjs'
 import { exposureCfgOf, exposureOf, isExposureHint, exposureHintOf } from './verifyExposure.mjs'
 import { memberCfgOfSt, memberRecentCapableOf, memberSigOf, memberTagsOf, memberEligibleOf, memberRowOf, isMemberHint, memberHintOf, memberRowOfTree } from './verifyMember.mjs'
@@ -270,6 +270,18 @@ let contentOf = (n) => {
     let xs = [useRecent ? r0 : (m.nullSideAct ? m.nullSideAct.excess : null), ...rp.map((x) => (useRecent ? x.recent : x.comp))].filter((v) => typeof v === 'number')
     return xs.length ? { v: xs.reduce((a, b) => a + b, 0) / xs.length, kind: useRecent ? '近期活躍度版' : '內建組成對照', n: xs.length } : null
 }
+//formOf, 成品之形式(規則 R-REC-53; 純函數; 單一定義 —— 只計〔機制〕〔規則 R-REC-54〕之補位之底、方向之起點與前置閘門、量尺、參考節點與看板、搜尋地圖之形式之註記共用):
+//  樹上之 evidence.form 在值域內('mechanism' / 'clue')者回其值, 其餘(未給、null、不在值域)回 null(= 未歸類, 不計為〔機制〕)
+//  evidence.form 之來源: 做夢之審計採納時所定(audits[].form)與主控之補記(tools/formSet.mjs); 不讀節點之自標(conclusion.form; 形式須經審計)
+/**
+ * 成品之形式(樹上之 evidence.form;值域內者回其值,其餘回 null = 未歸類)
+ *
+ * @param {Object} n 輸入樹上之節點
+ * @returns {String|null} 回傳 'mechanism'、'clue' 或 null
+ * @example
+ * formOf({ evidence: { form: 'clue' } }) // => 'clue'
+ */
+let formOf = (n) => (n && n.evidence && FORMS.includes(n.evidence.form) ? n.evidence.form : null)
 
 //makeProject(st, inject): inject.dispatch 可換掉派工器(測試以假 agent 走完整流程; 他專案可接自己的派工方式)
 /**
@@ -284,8 +296,9 @@ let contentOf = (n) => {
  * @param {Object} [inject.run] 輸入執行規模覆寫,與 st.rsi 合併後由 resolveRunConfig 解析
  * @param {Function} [inject.runEval] 輸入輪末附算所用之「執行一次評估」之函數 async ({ nodeId, kind, args }) → { code, timeout }(規則 R-REC-34),測試可換為替身;未給則以 g_eval.mjs 之子行程
  * @param {Function} [inject.clock] 輸入輪末附算一併處理待補算之總時長之計時函數(回傳毫秒;規則 R-REC-41),測試可換為假時鐘;未給則用 Date.now
+ * @param {Boolean} [inject.backfill] 輸入是否排補位,只認 false(不排補位之載體;只做夢輪次由 g_rsi.mjs 注入,規則 R-RUN-9 ④);未給則依 settings.rsi.backfill
  * @param {Function} [inject.evalHints] 輸入迴圈檢查之兩條機械提示之判定函數 (docs, workRoot) → Map(節點 id → 提示字串陣列)(規則 R-REC-43、R-REC-44),測試可換為替身(例:拋錯之情形);未給則用 verifyEvalHints.mjs 之 evalHintsOfDocs
- * @returns {Object} 回傳專案物件,主要鍵:st、rsi、arsi、records、toolbox、run、monitor、catalog、selectable、idOf、taskFor(節點任務內容)、typeOf、setDirectionTypes、writeBoard(臂看板)、writeCatalogFile、writeSearchMap、validatePending(補算回測期旗標)、reverifyAll、extFill、fill(附算與補算;R-REC-34)、fillPlanOf(只求計畫)、fillParOf(併行數)、rescanTraces、refreshEvalHints(重產所指節點之兩條提示;R-REC-43、R-REC-44)、rescanSideFlow、pendingDream、redream、requestDreamOnly(登記主控要求之只做夢輪次)、pendingReauditIds(待重審之節點 id)、claimedNodeIds(認領中之節點 id)、inactiveArmsOf、offDefArmsOf、migrateDocs、annotateDream、closeFrontier、rearmFrontier、proposeDirection、exposureOf(側別曝險之判定;R-REC-48)、exposureOn(其是否開啟)、memberCheck(成員穩健性之設定之解讀;關閉者 null;R-REC-51)、hasContent(「有內容」之單一定義;R-REC-49)、rankBy(選配之主鍵;R-REC-49)、gaugeDualOf(量尺之並列)、sideReadOfTree(側別讀數;R-REC-50)、pickStore()、setStatus、getState、setState、log、envKey、layerOfSpec、domain
+ * @returns {Object} 回傳專案物件,主要鍵:st、rsi、arsi、records、toolbox、run、monitor、catalog、selectable、idOf、taskFor(節點任務內容)、typeOf、setDirectionTypes、writeBoard(臂看板)、writeCatalogFile、writeSearchMap、validatePending(補算回測期旗標)、reverifyAll、extFill、fill(附算與補算;R-REC-34)、fillPlanOf(只求計畫)、fillParOf(併行數)、rescanTraces、refreshEvalHints(重產所指節點之兩條提示;R-REC-43、R-REC-44)、rescanSideFlow、pendingDream、redream、requestDreamOnly(登記主控要求之只做夢輪次)、pendingReauditIds(待重審之節點 id)、claimedNodeIds(認領中之節點 id)、inactiveArmsOf、offDefArmsOf、migrateDocs、annotateDream、closeFrontier、rearmFrontier、proposeDirection、exposureOf(側別曝險之判定;R-REC-48)、exposureOn(其是否開啟)、memberCheck(成員穩健性之設定之解讀;關閉者 null;R-REC-51)、hasContent(「有內容」之單一定義;R-REC-49)、rankBy(選配之主鍵;R-REC-49)、gaugeDualOf(量尺之並列;rsi.formGate 開啟者只計〔機制〕)、gaugeClueOf(〔線索〕與未歸類者之並列;R-REC-54)、formOf(成品之形式;R-REC-53)、formGate(只計〔機制〕是否開啟;R-REC-54)、backfill(是否排補位;R-RUN-13)、sideReadOfTree(側別讀數;R-REC-50)、pickStore()、setStatus、getState、setState、log、envKey、layerOfSpec、domain
  * @example
  * let project = makeProject(st)
  * let project2 = makeProject(st, { dispatch: myDispatch })
@@ -510,6 +523,25 @@ let makeProject = (st = getSettings(), inject = {}) => {
         throw new Error('invalid rsi.rankBy: must be one of content, key')
     }
     let rankBy = rankByRaw === 'content' ? 'content' : 'key'
+    //只計〔機制〕(規則 R-REC-54; 選配): settings.rsi.formGate === true ⇒ 補位之底、方向之起點與前置閘門、量尺與其子集、節點任務書之參考節點只計形式為〔機制〕之成品(formOf);
+    //  〔線索〕與未歸類者另列為「〔線索〕之最高(供趨勢參考)」; 其餘之「最高」與純列表次序不變、加註形式; 未給(undefined 或 null)或 false = 關閉(行為與改前逐位相同)
+    //  給了而不是布林 ⇒ 拋 invalid rsi.formGate: must be boolean(組裝時; 不帶輸入值; 同 rsi.rankBy 之寫法, 入口以 inputMsgOf 辨識)
+    let formGateRaw = st.rsi ? st.rsi.formGate : undefined
+    if (formGateRaw !== undefined && formGateRaw !== null && typeof formGateRaw !== 'boolean') {
+        throw new Error('invalid rsi.formGate: must be boolean')
+    }
+    let formGate = formGateRaw === true
+    let isMech = (n) => formOf(n) === 'mechanism'
+    //formWhyOf, 起點之形式不是〔機制〕之理由(方向之提出與前置閘門共用; 規則 R-REC-54)
+    let formWhyOf = (id, n) => `起點 ${String(id).slice(0, 8)} 之形式為${formLabelOf(formOf(n))},不是〔機制〕;只計〔機制〕(設定 rsi.formGate)者不以之為起點 —— 要沿用其線索者,改為無起點之方向並指派其臂`
+    //補位(規則 R-RUN-9 ④、R-RUN-13): settings.rsi.backfill(布林; 未給〔undefined 或 null〕或 true = 現行; false = 一般輪次亦不排補位 ⇒ 每輪之節點數 = 前緣之方向數)
+    //  inject.backfill === false(只做夢輪次; g_rsi.mjs 於組裝時注入 ⇒ 起跑前之乾跑與正式起輪同一個專案物件, 兩者之計畫皆不含補位)
+    //  給了而不是布林 ⇒ 拋 invalid rsi.backfill: must be boolean(同上)
+    let backfillRaw = st.rsi ? st.rsi.backfill : undefined
+    if (backfillRaw !== undefined && backfillRaw !== null && typeof backfillRaw !== 'boolean') {
+        throw new Error('invalid rsi.backfill: must be boolean')
+    }
+    let backfill = backfillRaw !== false && inject.backfill !== false
     let contentValOf = (n) => {
         let c = contentOf(n); return c && hasContentNode(n) ? c.v : null
     }
@@ -537,9 +569,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
     }
     //carrierBase, 補位之底: 可信、未被否決、臂數未滿者中排序鍵最高者(同鍵依 id); 別名不取(規則 R-REC-45; 別名表只在有候選時才求, 冷啟動不讀樹)
     //  側別曝險且未放行者不取, 取其次(規則 R-REC-48; 皆是 ⇒ 無底); rsi.rankBy = content 者依挑選內容、次依排序鍵(規則 R-REC-49)
+    //  rsi.formGate 開啟者另須形式為〔機制〕(規則 R-REC-54; 排序鍵較高之〔線索〕與未歸類者不取; 皆非 ⇒ 無底)
     let carrierBase = (nodes = executedNodes()) => {
         let cands = nodes
-            .filter((n) => n.score && Number.isFinite(n.score.S) && !(n.score.flags && n.score.flags.vetoed) && n.evidence && n.evidence.trust === 'trusted' && n.spec && Array.isArray(n.spec.arms) && activeArmsOf(n).length < maxArms)
+            .filter((n) => n.score && Number.isFinite(n.score.S) && !(n.score.flags && n.score.flags.vetoed) && n.evidence && n.evidence.trust === 'trusted' && n.spec && Array.isArray(n.spec.arms) && activeArmsOf(n).length < maxArms && (!formGate || isMech(n)))
             .sort((a, b) => rankKeyOf(b) - rankKeyOf(a) || (a.id < b.id ? -1 : 1))
         if (!cands.length) {
             return null
@@ -554,6 +587,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //gaugeDualOf, 量尺之並列(規則 R-REC-49; 看板之表前一段與輪末摘要之一列共用): 候選 = 可信(trusted)、未被否決、S 為有限數值之成品
     //  key = 排序鍵最高者(rankKeyOf, 無其值者用 S; 同值依 id); content = 「有內容」且有挑選內容之值者之中其值最高者(contentValOf; 同值依排序鍵、再依 id; 無則 null; 規則 R-REC-49 ⑤)
     //  show = 兩者皆有而不同、或排序鍵最高者為側別曝險(規則 R-REC-48)⇒ 列出; 其餘不列(看板與輪末摘要逐字不變); 不受 rsi.rankBy 影響
+    //  rsi.formGate 開啟者(規則 R-REC-54): 專案物件之 gaugeDualOf 只計〔機制〕(gaugeMainOf); 〔線索〕與未歸類者另以 gaugeClueOf 求(看板一段與輪末摘要一列恆列兩者)
     let gaugeDualOf = (nodes) => {
         let kv = (n) => (rankKeyOf(n) === null ? n.score.S : rankKeyOf(n))
         let idCmp = (a, b) => (a.id < b.id ? -1 : (a.id > b.id ? 1 : 0))
@@ -571,6 +605,15 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let kv = rankKeyOf(gd.key)
         let x = gd.keyEx.hit ? `;**後者為側別曝險**(${gd.keyEx.why}${gd.keyEx.released ? ';主控已放行' : ''})` : ''
         return `${c} / 排序鍵最高且可信者 \`${gd.key.id.slice(0, 8)}\`(S ${f1(gd.key.score.S)}${kv === null ? '' : `;排序鍵 ${f1(kv)}`})${x}`
+    }
+    //gaugeMainOf / gaugeClueOf / gaugeFormText(規則 R-REC-54; rsi.formGate 開啟者才用): 量尺只計〔機制〕; 〔線索〕與未歸類者另列(供趨勢參考)
+    //  主欄無〔機制〕之可信成品 ⇒「—(尚無〔機制〕之可信成品)」; 〔線索〕無者 ⇒「—」; 不拋錯
+    let gaugeMainOf = (nodes) => gaugeDualOf(nodes.filter(isMech))
+    let gaugeClueOf = (nodes) => gaugeDualOf(nodes.filter((n) => !isMech(n)))
+    let gaugeFormText = (nodes) => {
+        let gm = gaugeMainOf(nodes)
+        let gc = gaugeClueOf(nodes)
+        return { main: gm.key ? gaugeDualText(gm) : '—(尚無〔機制〕之可信成品)', clue: gc.key ? gaugeDualText(gc) : '—' }
     }
     //sideReadOfTree, 全樹之側別讀數(規則 R-REC-50; 搜尋地圖 §4 與輪末摘要共用): settings.rsi.sideRead(false = 關閉; 不合之鍵用預設)
     //  對象 = 已執行、未被否決、S 為有限數值、非別名之成品(依 id 排列; 選集指紋相同者只計一次); 不足下限者不讀別名表(冷啟動之讀樹次數不變)
@@ -598,6 +641,11 @@ let makeProject = (st = getSettings(), inject = {}) => {
         //  每次出計畫求值一次(讀樹)
         //  「已試」不計依修訂後之定義不屬該臂之節點(offDefArmsOf): 修訂使唯一之節點不屬該臂者, 該臂依現行定義未試, 仍由載體補位
         //  前緣內尚未執行之做夢方向已含之臂不另出載體: 否則同一輪內同一個未試之臂由方向與載體各試一次(例: 方向已指派新臂, 載體又出其單臂根節點)
+        //  不排補位者(規則 R-RUN-9 ④、R-RUN-13: settings.rsi.backfill = false, 或只做夢輪次之注入)回空物件(不讀樹) ⇒ 計畫只含前緣之方向
+        //  (不可以預算歸零代替: 引擎之策略檔把 arms: 0 當成未給之預設 8, 會改出算子之子節點)
+        if (!backfill) {
+            return {}
+        }
         let nodes = rsi ? executedNodes() : []
         let tried = new Set(nodes.flatMap((n) => triedArmsOf(n)))
         let pend = new Set(rsi ? rsi.store.listFrontier().filter((f) => f && f.status === 'proposed' && f.origin && f.origin.topic === 'dream' && f.spec && Array.isArray(f.spec.arms)).flatMap((f) => f.spec.arms) : [])
@@ -607,6 +655,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
             for (let L of Object.keys(byLayer).sort()) {
                 let a = byLayer[L][i]
                 if (!a || tried.has(a.id) || pend.has(a.id)) {
+                    continue
+                }
+                //rsi.formGate 開啟而無〔機制〕之底(規則 R-REC-54): 須有底之層(D / E / G)之未試臂不出載體(關閉者照舊退為單臂根節點); 其餘層照出
+                if (formGate && !bn && BASED_LAYERS.includes(a.layer)) {
                     continue
                 }
                 //底之臂只帶作用中者(未作用之臂不帶進下一個節點; 規則 R-REC-20)
@@ -750,6 +802,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 if (ex && ex.blocked) {
                     return { ok: false, why: exposureWhyOf(spec.base, ex) }
                 }
+                //起點之形式須為〔機制〕(規則 R-REC-54; rsi.formGate 開啟者; 方向之提出時已拒, 此處攔已在前緣之殘留者); 判定次序在既有各項之後; 關閉者逐字不變
+                if (formGate && full && !isMech(full)) {
+                    return { ok: false, why: formWhyOf(spec.base, full) }
+                }
                 return { ok: true }
             },
         },
@@ -869,7 +925,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let excessOf = (n) => (n.raw && n.raw.metrics && n.raw.metrics.null ? n.raw.metrics.null.excess : -1e9)
         let worstOf = (n) => (n.raw && n.raw.metrics && n.raw.metrics.op ? n.raw.metrics.op.eqYr.min : null)
         //  同級內之次序依排序鍵(rankKeyOf; 規則 R-REC-40): 依鍵所選(含次序)與依 S 所選相同者, 參考之清單與其文字與改前逐字相同; 不同者改列依鍵所選, 文字註明排序鍵
-        let cands = rows.map((r) => rsi.store.getNode(r.id)).filter((n) => n && n.score && !(n.score.flags && n.score.flags.vetoed) && !(n.evidence && n.evidence.trust === 'untrusted'))
+        //  rsi.formGate 開啟者(規則 R-REC-54): 只取形式為〔機制〕者(無則不列參考節點, 同既有之「無可參考者」); 文字註明〔機制〕
+        let cands = rows.map((r) => rsi.store.getNode(r.id)).filter((n) => n && n.score && !(n.score.flags && n.score.flags.vetoed) && !(n.evidence && n.evidence.trust === 'untrusted') && (!formGate || isMech(n)))
         let kvOf = (n) => (rankKeyOf(n) === null ? n.score.S : rankKeyOf(n))
         let topS = cands.slice().sort((a, b) => (audited(b) - audited(a)) || (b.score.S - a.score.S)).slice(0, refCounts.refTopNodes)
         let topK = cands.slice().sort((a, b) => (audited(b) - audited(a)) || (kvOf(b) - kvOf(a))).slice(0, refCounts.refTopNodes)
@@ -908,7 +965,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
             //側別曝險者照列為參考並註明(規則 R-REC-48; 參考不是起點); 未命中者逐字不變
             let ex = exposureOfNode(n)
             let xNote = ex.hit ? (ex.released ? ';側別曝險(已放行)' : ';側別曝險(不作為起點)') : ''
-            refs.push({ kind: 'node', nodeId: n.id, path: rel(records.paths.nodeMd(n.id)), why: `${refByKey ? '目前排序鍵較高之節點(依排序鍵選取,不依單抽之 S;' : '目前回測期 S 較高之節點('}臂 ${n.spec.arms.join('+')};**回測期 S ${n.score.S}**${kNote}、最差相位 ${worstOf(n) === null ? '—' : worstOf(n).toFixed(1)}、對隨機挑之超額 ${excessOf(n) > -1e8 ? excessOf(n).toFixed(1) : '—'};${tr}${xNote};${pickNote(n.id)})` })
+            let mk = formGate ? '〔機制〕' : ''
+            refs.push({ kind: 'node', nodeId: n.id, path: rel(records.paths.nodeMd(n.id)), why: `${refByKey ? `目前排序鍵較高之${mk}節點(依排序鍵選取,不依單抽之 S;` : `目前回測期 S 較高之${mk}節點(`}臂 ${n.spec.arms.join('+')};**回測期 S ${n.score.S}**${kNote}、最差相位 ${worstOf(n) === null ? '—' : worstOf(n).toFixed(1)}、對隨機挑之超額 ${excessOf(n) > -1e8 ? excessOf(n).toFixed(1) : '—'};${tr}${xNote};${pickNote(n.id)})` })
         }
         if (fs.existsSync(path.join(st.rsi.root, 'ARMS_BOARD.md'))) {
             refs.push({ kind: 'file', path: rel(path.join(st.rsi.root, 'ARMS_BOARD.md')), why: '臂看板(各臂已有之節點與最佳 S)' })
@@ -1091,8 +1149,14 @@ let makeProject = (st = getSettings(), inject = {}) => {
             L.push('')
         }
         //量尺之並列(規則 R-REC-49): 挑選內容最高且可信者與排序鍵最高且可信者不同、或後者為側別曝險時才列(否則看板逐字不變)
+        //  rsi.formGate 開啟者(規則 R-REC-54): 恆列 —— 量尺只計〔機制〕, 〔線索〕與未歸類者另列其最高(供趨勢參考); 並說明「形式」一欄
         let gd = gaugeDualOf(nodes)
-        if (gd.show) {
+        if (formGate) {
+            let gf = gaugeFormText(nodes)
+            L.push(`**量尺(並列;只計〔機制〕)**:${gf.main};**〔線索〕之最高(供趨勢參考;〔線索〕與未歸類者)**:${gf.clue} —— 判進度只看〔機制〕(設定 \`rsi.formGate\`);〔線索〕之高低只看出趨勢,不是進度。「形式」一欄 = 做夢之審計所定(或主控補記)之成品之形式:〔機制〕= 逐策略之入選條件,〔線索〕= 依名次、分位、席數或庫比例入選,未歸類 = 尚未判定(不計為〔機制〕)。`)
+            L.push('')
+        }
+        else if (gd.show) {
             L.push(`**量尺(並列)**:${gaugeDualText(gd)} —— 兩者不同時,排序鍵之高低可能只是組成之水準或側別之曝險;判進度以挑選內容為準(同搜尋地圖之量尺)。`)
             L.push('')
         }
@@ -1108,8 +1172,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
             L.push('')
         }
         let keyNoteAt = L.length
-        L.push(`| 節點 | 臂 | 起點 | S | 最差相位 | ${phT('相位', nodes)}平均 | 階梯 | 否決 | 虛無均 | 超額 | z | 虛無 p | 同訊號量超額 / p | 同活躍度超額 / p | 組成對照之超額 / p / 可重現 | 幾何對照之超額 / p | 換種子與同分次序之 S | 正本與重放之 S 之均;超額之均(組成對照 / 近期活躍度版)${anyXm ? ';擴充診斷之看板值之均' : ''} | 擴充診斷之看板值 |${anyMember ? ' 成員穩健性(保持率 中位 / 最小;負之半庫 / 半庫數) |' : ''} 每隻訊號數 | 做多比例 | 下單之做空比例(訓練期 / 回測期) | 月均單 | 最大持倉 | 選集大小 | 可信度 | 輪 | 成品之機制(自述) |`)
-        L.push(`|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|${anyMember ? '---|' : ''}`)
+        L.push(`| 節點 | 臂 | 起點 | S | 最差相位 | ${phT('相位', nodes)}平均 | 階梯 | 否決 | 虛無均 | 超額 | z | 虛無 p | 同訊號量超額 / p | 同活躍度超額 / p | 組成對照之超額 / p / 可重現 | 幾何對照之超額 / p | 換種子與同分次序之 S | 正本與重放之 S 之均;超額之均(組成對照 / 近期活躍度版)${anyXm ? ';擴充診斷之看板值之均' : ''} | 擴充診斷之看板值 |${anyMember ? ' 成員穩健性(保持率 中位 / 最小;負之半庫 / 半庫數) |' : ''} 每隻訊號數 | 做多比例 | 下單之做空比例(訓練期 / 回測期) | 月均單 | 最大持倉 | 選集大小 | 可信度 |${formGate ? ' 形式 |' : ''} 輪 | 成品之機制(自述) |`)
+        L.push(`|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|${anyMember ? '---|' : ''}${formGate ? '---|' : ''}`)
         //正本與各次重放之平均(規則 R-EV-24): S、組成對照之超額、近期活躍度之組成對照之超額; 無重放(結果不依賴種子與同分次序)者即正本
         let avgOf = (n) => {
             let m = n.raw && n.raw.metrics
@@ -1131,7 +1195,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let m = n.raw && n.raw.metrics
             let nu = m && m.null
             let sd = n.raw && Array.isArray(n.raw.seedS) && n.raw.seedS.length ? n.raw.seedS.map((v) => f1(v)).join(' / ') : '—'
-            L.push(`| \`${n.id}\` | ${armsLabel(n)}${hintOf(n, TWIN_HEAD) ? ' 選集與他節點相同' : ''} | ${n.spec.base ? String(n.spec.base).slice(0, 8) : '無'} | **${n.score ? n.score.S : ''}**${keyNoteOf(n)}${hintOf(n, PEAK_HEAD) ? ' 單峰交付' : ''}${expoMark(n)} | ${m ? f1(m.op.eqYr.min) : ''} | ${m ? f1(m.op.eqYr.mean) : ''} | ${n.score ? n.score.ladder : ''} | ${vetoedOf(n) ? '是' : '否'} | ${nu ? f1(nu.mean) : ''} | ${nu ? f1(nu.excess) : ''} | ${nu ? f1(nu.z) : ''} | ${nu ? nu.p : ''} | ${m && m.nullVol ? `${f1(m.nullVol.excess)} / ${m.nullVol.p}` : '—'} | ${m && m.nullAct ? `${f1(m.nullAct.excess)} / ${m.nullAct.p}` : '—'} | ${m && m.nullSideAct ? `${f1(m.nullSideAct.excess)} / ${m.nullSideAct.p} / ${typeof m.nullSideAct.share === 'number' ? `${Math.round(m.nullSideAct.share * 100)}%` : '—'}${m.nullSideAct.triggered === false ? ' *' : ''}${ncOf(n).length ? ' ※' : ''}` : '—'}${actSplitOf(n) ? ' 活躍度定義不一致' : ''} | ${m && m.nullSideGeo ? `${f1(m.nullSideGeo.excess)} / ${m.nullSideGeo.p}` : '—'} | ${sd} | ${avgOf(n)} | ${extCellsOf(n).map((c) => `${c.name} ${c.value}`).join(';') || '—'} |${anyMember ? ` ${memberCellOf(n)} |` : ''} ${m && m.sel && typeof m.sel.sigPerPick === 'number' ? m.sel.sigPerPick.toFixed(2) : ''} |${m && m.sel && typeof m.sel.longRatio === 'number' ? m.sel.longRatio.toFixed(2) : ''} | ${n.raw && n.raw.train && typeof n.raw.train.shortShare === 'number' && shortShareOf(m) !== null ? `${n.raw.train.shortShare.toFixed(2)} / ${shortShareOf(m).toFixed(2)}` : '—'} | ${m ? m.op.monthlyOrders.mean.toFixed(0) : ''} | ${m ? m.op.peakHold.max : ''} | ${m && m.sel ? f1(m.sel.sizeMean) : ''} | ${(n.evidence && n.evidence.trust) || '未審'} | ${roundName(n.round)} | ${descOf(n)} |`)
+            L.push(`| \`${n.id}\` | ${armsLabel(n)}${hintOf(n, TWIN_HEAD) ? ' 選集與他節點相同' : ''} | ${n.spec.base ? String(n.spec.base).slice(0, 8) : '無'} | **${n.score ? n.score.S : ''}**${keyNoteOf(n)}${hintOf(n, PEAK_HEAD) ? ' 單峰交付' : ''}${expoMark(n)} | ${m ? f1(m.op.eqYr.min) : ''} | ${m ? f1(m.op.eqYr.mean) : ''} | ${n.score ? n.score.ladder : ''} | ${vetoedOf(n) ? '是' : '否'} | ${nu ? f1(nu.mean) : ''} | ${nu ? f1(nu.excess) : ''} | ${nu ? f1(nu.z) : ''} | ${nu ? nu.p : ''} | ${m && m.nullVol ? `${f1(m.nullVol.excess)} / ${m.nullVol.p}` : '—'} | ${m && m.nullAct ? `${f1(m.nullAct.excess)} / ${m.nullAct.p}` : '—'} | ${m && m.nullSideAct ? `${f1(m.nullSideAct.excess)} / ${m.nullSideAct.p} / ${typeof m.nullSideAct.share === 'number' ? `${Math.round(m.nullSideAct.share * 100)}%` : '—'}${m.nullSideAct.triggered === false ? ' *' : ''}${ncOf(n).length ? ' ※' : ''}` : '—'}${actSplitOf(n) ? ' 活躍度定義不一致' : ''} | ${m && m.nullSideGeo ? `${f1(m.nullSideGeo.excess)} / ${m.nullSideGeo.p}` : '—'} | ${sd} | ${avgOf(n)} | ${extCellsOf(n).map((c) => `${c.name} ${c.value}`).join(';') || '—'} |${anyMember ? ` ${memberCellOf(n)} |` : ''} ${m && m.sel && typeof m.sel.sigPerPick === 'number' ? m.sel.sigPerPick.toFixed(2) : ''} |${m && m.sel && typeof m.sel.longRatio === 'number' ? m.sel.longRatio.toFixed(2) : ''} | ${n.raw && n.raw.train && typeof n.raw.train.shortShare === 'number' && shortShareOf(m) !== null ? `${n.raw.train.shortShare.toFixed(2)} / ${shortShareOf(m).toFixed(2)}` : '—'} | ${m ? m.op.monthlyOrders.mean.toFixed(0) : ''} | ${m ? m.op.peakHold.max : ''} | ${m && m.sel ? f1(m.sel.sizeMean) : ''} | ${(n.evidence && n.evidence.trust) || '未審'}${formGate ? ` | ${formLabelOf(formOf(n))}` : ''} | ${roundName(n.round)} | ${descOf(n)} |`)
         }
         L.push('')
         L.push('## 各可選臂')
@@ -1160,7 +1224,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let kbHit = !!kb && ss.length > 0 && kb.score.S !== Math.max(...ss)
             armHit = armHit || kbHit
             let kbNote = (n) => (byC ? `(依挑選內容;${contentValOf(n) === null ? `${noValueWhy(n)},排序鍵 ${kvOf(n).toFixed(1)}` : `內容 ${contentValOf(n).toFixed(1)}`})` : `(依排序鍵;排序鍵 ${kvOf(n).toFixed(1)})`)
-            L.push(`| ${a.id} | ${a.layer} | ${a.title} | ${ns.length} | ${ns.length - act.length || '—'} | ${ss.length ? (kbHit ? `${kb.score.S.toFixed(1)}${kbNote(kb)}` : Math.max(...ss).toFixed(1)) : '—'} | ${ex.length ? Math.max(...ex).toFixed(1) : '—'} |`)
+            //rsi.formGate 開啟者(規則 R-REC-54): 次序不變, 於最佳 S 之後註明該成品之形式(kb: 依鍵之最佳; 未因鍵改選者其 S 即最大值)
+            let kbForm = formGate && ss.length && kb ? ` ${formLabelOf(formOf(kb))}` : ''
+            L.push(`| ${a.id} | ${a.layer} | ${a.title} | ${ns.length} | ${ns.length - act.length || '—'} | ${ss.length ? (kbHit ? `${kb.score.S.toFixed(1)}${kbNote(kb)}` : Math.max(...ss).toFixed(1)) : '—'}${kbForm} | ${ex.length ? Math.max(...ex).toFixed(1) : '—'} |`)
         }
         L.push('')
         L.push(`未試之可選臂(${untried.length}):${untried.join('、') || '無'}`)
@@ -1256,10 +1322,12 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let v = r.applicable ? (full ? `中位 ${f2(r.retention.median)} / 最小 ${f2(r.retention.min)}` : `中位 ${f2(r.retention.median)}`) : '不適用'
             return `;成員保持率 ${v}${full ? `(負 ${r.nNeg} / ${r.K})` : ''}`
         }
-        let tag = (n) => (n ? `${f1(sOf(n))}(\`${n.id.slice(0, 8)}\`)` : '—')
+        //rsi.formGate 開啟者(規則 R-REC-54): 量尺以外之「最高」(本輪最高 S、「有內容」之最高 S、各層有內容者之最高 S)次序不變, 於節點之後註明形式(fTag); 關閉者無註記
+        let fTag = (n) => (formGate ? ` ${formLabelOf(formOf(n))}` : '')
+        let tag = (n) => (n ? `${f1(sOf(n))}(\`${n.id.slice(0, 8)}\`${fTag(n)})` : '—')
         let tagOf = (xs) => {
             let n = best(xs)
-            return byKeyOf(n, xs) ? `${f1(sOf(n))}${keyMark(n)}(\`${n.id.slice(0, 8)}\`)` : tag(n)
+            return byKeyOf(n, xs) ? `${f1(sOf(n))}${keyMark(n)}(\`${n.id.slice(0, 8)}\`${fTag(n)})` : tag(n)
         }
         //contentOf(挑選內容之超額)為模組層之單一定義(看板與輪末摘要之並列、選配之主鍵共用; 規則 R-REC-49)
         let L = []
@@ -1275,10 +1343,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
         L.push('## 1. 逐輪趨勢')
         L.push('')
         let keyNoteAt = L.length
-        L.push('**進度之量尺 = 「有內容且可信」者之最高者**,列其 S / 最差相位 / ' + phT('相位', nodes) + '平均 / 對組成對照之超額 / 組成之水準(組成對照之均;S ≈ 組成之水準 + 挑選內容,判進度以超額為主)。**「挑選內容」= 超額之均**:選集之每隻訊號數為全體隨機之 2 倍以上者用近期活躍度版之組成對照,其餘用內建者,取正本與各次重放之平均;挑選內容最高者不等於 S 最高者時兩者並列。「本輪最高 S」含組成,不作量尺。')
+        L.push('**進度之量尺 = 「有內容且可信」者之最高者**,列其 S / 最差相位 / ' + phT('相位', nodes) + '平均 / 對組成對照之超額 / 組成之水準(組成對照之均;S ≈ 組成之水準 + 挑選內容,判進度以超額為主)。**「挑選內容」= 超額之均**:選集之每隻訊號數為全體隨機之 2 倍以上者用近期活躍度版之組成對照,其餘用內建者,取正本與各次重放之平均;挑選內容最高者不等於 S 最高者時兩者並列。「本輪最高 S」含組成,不作量尺。' + (formGate ? '**量尺只計〔機制〕**(設定 `rsi.formGate`;形式 = 做夢之審計所定或主控補記):量尺與「量尺之子集」只取形式為〔機制〕之成品,〔線索〕與未歸類者之最高另列於末欄,只看出趨勢、不是進度;其餘之「最高」次序不變,於節點之後註明形式。' : ''))
         L.push('')
-        L.push('| 輪 | 節點(探索 / 驗證) | 新試之臂 | 本輪最高 S(含組成) | 量尺:截至該輪「有內容且可信」之最高者(S / 最差相位 / ' + phT('相位', nodes) + '平均 / 超額 / 組成之水準) | 截至該輪「有內容」之最高 S(含部分可信與未審) | 做夢之方向(向內 / 向外;探索中押新家族者) | 前次方向之回顧(成立 / 不成立 / 其他) | 整體研判(集中度 / 進度 / 局部最佳點之風險) |')
-        L.push('|---|---|---|---|---|---|---|---|---|')
+        L.push('| 輪 | 節點(探索 / 驗證) | 新試之臂 | 本輪最高 S(含組成) | 量尺:截至該輪「有內容且可信」之最高者(S / 最差相位 / ' + phT('相位', nodes) + '平均 / 超額 / 組成之水準) | 截至該輪「有內容」之最高 S(含部分可信與未審) | 做夢之方向(向內 / 向外;探索中押新家族者) | 前次方向之回顧(成立 / 不成立 / 其他) | 整體研判(集中度 / 進度 / 局部最佳點之風險) |' + (formGate ? ' 〔線索〕之最高(供趨勢參考;「有內容且可信」之〔線索〕與未歸類者) |' : ''))
+        L.push('|---|---|---|---|---|---|---|---|---|' + (formGate ? '---|' : ''))
         let seenArms = new Set()
         for (let r of rounds) {
             let ns = nodes.filter((n) => n.round === r)
@@ -1294,28 +1362,35 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let pd = d && d.harness && d.harness.tally && d.harness.tally.prevDirections
             let ov = d && d.harness && d.harness.tally && d.harness.tally.overview
             let lab = (v) => OVERVIEW_LABELS[v] || '—'
-            let cand = upTo.filter((n) => hasContent(n) && trustOf(n) === 'trusted')
-            let top = best(cand)
-            let gauge = '—'
-            if (top) {
-                let m = top.raw.metrics
-                let c = compOf(top)
-                let ct = contentOf(top)
-                gauge = `\`${top.id.slice(0, 8)}\`${xMark(top)}:${f1(sOf(top))}${byKeyOf(top, cand) ? keyMark(top) : ''} / ${f1(m.op.eqYr.min)} / ${f1(m.op.eqYr.mean)} / ${f1(c.excess)} / ${f1(c.mean)}${ct ? `;挑選內容 ${f1(ct.v)}(${ct.kind};${ct.n} 抽之均)` : ''}${memberMark(top, false)}`
-                //挑選內容(超額之均)最高者不等於 S 最高者時並列(S 之升幅可能只是組成之水準)
-                let topC = cand.map((n) => ({ n, c: contentOf(n) })).filter((x) => x.c).sort((a, b) => b.c.v - a.c.v)[0]
-                if (topC && topC.n.id !== top.id) {
-                    gauge += `;**挑選內容最高** \`${topC.n.id.slice(0, 8)}\`${xMark(topC.n)}:${f1(topC.c.v)}(${topC.c.kind};${topC.c.n} 抽之均;S ${f1(sOf(topC.n))})`
+            //gaugeCellOf, 量尺之格(一組候選之最高者; 規則 R-REC-14、R-REC-40、R-REC-49): rsi.formGate 開啟者以之求〔機制〕之量尺與〔線索〕之最高兩格(規則 R-REC-54)
+            let gaugeCellOf = (cand, none) => {
+                let top = best(cand)
+                let gauge = none
+                if (top) {
+                    let m = top.raw.metrics
+                    let c = compOf(top)
+                    let ct = contentOf(top)
+                    gauge = `\`${top.id.slice(0, 8)}\`${xMark(top)}:${f1(sOf(top))}${byKeyOf(top, cand) ? keyMark(top) : ''} / ${f1(m.op.eqYr.min)} / ${f1(m.op.eqYr.mean)} / ${f1(c.excess)} / ${f1(c.mean)}${ct ? `;挑選內容 ${f1(ct.v)}(${ct.kind};${ct.n} 抽之均)` : ''}${memberMark(top, false)}`
+                    //挑選內容(超額之均)最高者不等於 S 最高者時並列(S 之升幅可能只是組成之水準)
+                    let topC = cand.map((n) => ({ n, c: contentOf(n) })).filter((x) => x.c).sort((a, b) => b.c.v - a.c.v)[0]
+                    if (topC && topC.n.id !== top.id) {
+                        gauge += `;**挑選內容最高** \`${topC.n.id.slice(0, 8)}\`${xMark(topC.n)}:${f1(topC.c.v)}(${topC.c.kind};${topC.c.n} 抽之均;S ${f1(sOf(topC.n))})`
+                    }
                 }
+                return gauge
             }
+            let cand = upTo.filter((n) => hasContent(n) && trustOf(n) === 'trusted' && (!formGate || isMech(n)))
+            let gauge = gaugeCellOf(cand, formGate ? '—(尚無〔機制〕之成品)' : '—')
+            let clueCell = formGate ? ` ${gaugeCellOf(upTo.filter((n) => hasContent(n) && trustOf(n) === 'trusted' && !isMech(n)), '—')} |` : ''
             let exps = dirs.filter((x) => x.type !== 'verify')
             let hasFam = dirs.some((x) => typeof x.newFamily === 'boolean')
-            L.push(`| ${roundName(r)} | ${ns.length}(${ns.length - nV} / ${nV}) | ${newArms.length} | ${tagOf(ns)} | ${gauge} | ${tagOf(upTo.filter(hasContent))} | ${d ? `${dirs.length - nOut} / ${nOut};${hasFam ? `${exps.filter((x) => x.newFamily === true).length} / ${exps.length}` : '未標'}` : '—'} | ${pd && pd.total ? `${pd.confirmed || 0} / ${pd.refuted || 0} / ${pd.total - (pd.confirmed || 0) - (pd.refuted || 0)}` : '—'} | ${ov ? `${lab(ov.coverage)} / ${lab(ov.progress)} / ${lab(ov.localOptimum)}` : '—'} |`)
+            L.push(`| ${roundName(r)} | ${ns.length}(${ns.length - nV} / ${nV}) | ${newArms.length} | ${tagOf(ns)} | ${gauge} | ${tagOf(upTo.filter(hasContent))} | ${d ? `${dirs.length - nOut} / ${nOut};${hasFam ? `${exps.filter((x) => x.newFamily === true).length} / ${exps.length}` : '未標'}` : '—'} | ${pd && pd.total ? `${pd.confirmed || 0} / ${pd.refuted || 0} / ${pd.total - (pd.confirmed || 0) - (pd.refuted || 0)}` : '—'} | ${ov ? `${lab(ov.coverage)} / ${lab(ov.progress)} / ${lab(ov.localOptimum)}` : '—'} |${clueCell}`)
         }
         //量尺之子集(規則 R-REC-27): 擴充診斷自述 subset(子集之名稱)之成品, 依子集另列其內「有內容且可信」之最高者 —— 與上表之量尺並列、不取代
         //  子集之定義(例: 時效 ≥ 15)由診斷自述, 迴圈不寫死哪一個診斷; 另列該診斷之覆蓋(幾個候選有此診斷之值), 無值者不屬任何子集
         {
-            let cand = nodes.filter((n) => !vetoedOf(n) && hasContent(n) && trustOf(n) === 'trusted')
+            //rsi.formGate 開啟者(規則 R-REC-54): 子集為量尺之一部分 ⇒ 只計〔機制〕
+            let cand = nodes.filter((n) => !vetoedOf(n) && hasContent(n) && trustOf(n) === 'trusted' && (!formGate || isMech(n)))
             let groups = new Map()
             for (let n of cand) {
                 for (let s of extSurfaceOf(n.raw && n.raw.metrics).subsets) {
@@ -1328,7 +1403,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             }
             if (groups.size) {
                 L.push('')
-                L.push(`**量尺之子集**(擴充診斷自述;與上表之量尺**並列、不取代**):「有內容且可信」之 ${cand.length} 個節點中,屬於各子集者之最高者 ——`)
+                L.push(`**量尺之子集**(擴充診斷自述;與上表之量尺**並列、不取代**):「有內容且可信」${formGate ? '且為〔機制〕' : ''}之 ${cand.length} 個節點中,屬於各子集者之最高者 ——`)
                 L.push('')
                 for (let g of [...groups.values()].sort((a, b) => a.name.localeCompare(b.name) || a.label.localeCompare(b.label))) {
                     let nHas = cand.filter((n) => {
@@ -1410,7 +1485,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             let xs = extSurfaceOf(n.raw && n.raw.metrics).cells.map((x) => `${x.name} ${x.value}`).join('、')
             //兩版一過一不過(規則 R-REC-38): 於組成對照之後標「活躍度定義不一致」與兩版之判定(notContent 者不標; 兩者不並存)
             let sp = actSplitOf(n)
-            L.push(`${'  '.repeat(lv)}- \`${n.id.slice(0, 8)}\` ${armsLabel(n)}(${roundName(n.round)};${typeOfNode(n) === 'verify' ? '驗證' : '探索'};S ${f1(sOf(n))};組成對照 ${c ? `${f1(c.excess)} / p ${c.p}` : '—'}${ncOf(n).length ? `(不計為挑選內容 —— ${ncOf(n).map((x) => `${x.name}: ${x.text}`).join(';')})` : ''}${sp ? `(活躍度定義不一致 —— 內建版${sp.builtin ? '過' : '不過'}、近期活躍度版${sp.recentOk ? '過' : '不過'}:近期版之超額 ${f1(sp.recent.excess)} / p ${sp.recent.p})` : ''};${trustOf(n) || '未審'}${vetoedOf(n) ? ';否決' : ''}${xMark(n) ? `;**${xMark(n).slice(1, -1)}**` : ''}${hasContent(n) ? ';**有內容**' : ''}${delta}${xs ? `;擴充診斷 ${xs}` : ''}${memberMark(n, true)})〔${famOf(n) || '未歸類'}〕${use.length ? `;用到 ${use.join('、')}` : ''}${ds ? `;${ds}` : ''}`)
+            L.push(`${'  '.repeat(lv)}- \`${n.id.slice(0, 8)}\` ${armsLabel(n)}(${roundName(n.round)};${typeOfNode(n) === 'verify' ? '驗證' : '探索'};S ${f1(sOf(n))};組成對照 ${c ? `${f1(c.excess)} / p ${c.p}` : '—'}${ncOf(n).length ? `(不計為挑選內容 —— ${ncOf(n).map((x) => `${x.name}: ${x.text}`).join(';')})` : ''}${sp ? `(活躍度定義不一致 —— 內建版${sp.builtin ? '過' : '不過'}、近期活躍度版${sp.recentOk ? '過' : '不過'}:近期版之超額 ${f1(sp.recent.excess)} / p ${sp.recent.p})` : ''};${trustOf(n) || '未審'}${formGate ? `;${formLabelOf(formOf(n))}` : ''}${vetoedOf(n) ? ';否決' : ''}${xMark(n) ? `;**${xMark(n).slice(1, -1)}**` : ''}${hasContent(n) ? ';**有內容**' : ''}${delta}${xs ? `;擴充診斷 ${xs}` : ''}${memberMark(n, true)})〔${famOf(n) || '未歸類'}〕${use.length ? `;用到 ${use.join('、')}` : ''}${ds ? `;${ds}` : ''}`)
             for (let k of (kids.get(n.id) || []).slice().sort((a, b) => a.round - b.round)) {
                 line(k, lv + 1)
             }
@@ -1437,7 +1512,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             L.push('- **機制家族**:尚未歸類(由做夢於整體研判之 `families` 歸類後,本檔自動標示)。')
         }
         L.push(`- 譜系(不等於機制家族):根 ${roots.length} 個;最大之譜系(根 \`${biggest ? biggest.id.slice(0, 8) : '—'}\`)含 ${biggest ? sizeOf(biggest) : 0} 個節點(占全部之 ${pct(biggest ? sizeOf(biggest) : 0, nodes.length)})、最深 ${biggest ? Math.max(...roots.map(depthOf)) : 0} 層。`)
-        L.push(`- 有內容之節點 ${contentNodes.length} 個,分屬 ${contentRoots.length} 個譜系(根:${contentRoots.map((id) => `\`${id.slice(0, 8)}\``).join('、') || '—'});含之層:${[...new Set(contentNodes.flatMap(layersOf))].sort().join('、') || '—'}。`)
+        L.push(`- 有內容之節點 ${contentNodes.length} 個${formGate ? `(其中〔機制〕 ${contentNodes.filter(isMech).length} 個)` : ''},分屬 ${contentRoots.length} 個譜系(根:${contentRoots.map((id) => `\`${id.slice(0, 8)}\``).join('、') || '—'});含之層:${[...new Set(contentNodes.flatMap(layersOf))].sort().join('、') || '—'}。`)
         L.push(`- 已試之可選臂 ${selectable.filter((a) => tried.has(a.id)).length} / ${selectable.length};完全未試之層:${layerIds.filter((ly) => selectable.filter((a) => a.layer === ly).every((a) => !tried.has(a.id))).join('、') || '無'}。`)
         let props = rsi.store.listFrontier().filter((f) => f && f.status === 'proposed' && f.spec && Array.isArray(f.spec.arms))
         if (props.length) {
@@ -1480,7 +1555,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
     }))
     let dreamExtra = [
         '2. **更新專案之指引文件**(本專案之累積經驗;只改下列檔,並把改了什麼列入 `dream.json` 之 `docsUpdated`):',
-        '   - `sgud/state/state.md`:只改 **§2「rsi 現況」**(覆寫該節,不追加流水帳;其餘各節由迴圈維護者更新):已跑輪數、樹上節點數與階梯分佈、**目前「挑選內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品(並列;同一個者寫一次並註明)**(各列 id、臂、S、' + phT('相位') + '平均、最差相位、為正之相位數、對隨機挑之超額與 p、換亂數種子與同分次序之 S、可信度;為側別曝險者註明)、**整體研判之結論**(搜尋之集中度、進度、卡在局部最佳點之風險與依據;同 `synthesis.overview`)、各線之現況、已試與未試之臂、前緣、共用工具區之內容、已知問題。',
+        '   - `sgud/state/state.md`:只改 **§2「rsi 現況」**(覆寫該節,不追加流水帳;其餘各節由迴圈維護者更新):已跑輪數、樹上節點數與階梯分佈、' + (formGate ? '**目前〔機制〕之成品中「挑選內容(組成對照之超額)最高且可信」者與「回測期 S 最高且可信」者(並列;同一個者寫一次並註明;只計〔機制〕 —— 尚無者寫明,〔線索〕與未歸類者之最高另述為趨勢,不是進度)**' : '**目前「挑選內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品(並列;同一個者寫一次並註明)**') + '(各列 id、臂、S、' + phT('相位') + '平均、最差相位、為正之相位數、對隨機挑之超額與 p、換亂數種子與同分次序之 S、可信度;為側別曝險者註明)、**整體研判之結論**(搜尋之集中度、進度、卡在局部最佳點之風險與依據;同 `synthesis.overview`)、各線之現況、已試與未試之臂、前緣、共用工具區之內容、已知問題。',
         '   - `sgud/exp/experience.md`:新增本輪之**經驗**條目(條號續編;每條一個可重複使用之教訓:對節點 agent 寫挑選模組 / 做實驗 / 填文件之建議、對審計之建議、對評估器之觀察;附依據之節點 id 與數字)。對個別機制或臂之提示也寫在這裡;**每條開頭以〔〕標明適用範圍**(臂 id、層,或〔通用〕),日後之節點才找得到與自己之臂相關者。',
         '   - `sgud/proc/guide_dream.md`、`sgud/proc/guide_node.md`:**寫法守則**(由你維護;規則見 §3 之改進項一段)—— 有要增、改、刪之守則時直接改這兩個檔,並在 `docsUpdated` 註明改了什麼;沒有就不動。',
         '   - `sgud/feedback/feedback.md`:`dream.json` 之**每一筆改進項**(`guidance.improvements`)各新增一列(日期、類別、對象、內容、依據);類別欄寫該筆之類別名 —— 迴圈架構(`loop`)/ 做夢原則(`dream`)/ 節點原則(`node`)/ 共用工具(`tool`)/ 績效判準(`score`)/ 量尺(`validation`)/ 自有套件、全域技能、全域設定(`external`)。主代理依類別處置並另記處置列。**不是改進項者不入回饋檔**(本輪之審計內容寫在做夢文件;對個別節點或臂之提示寫入經驗)。',
@@ -1590,6 +1665,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 //節點自判之主張判定(選配; 做夢範本之 prevDirections 據以預填)
                 claimVerdict: d && d.conclusion && CLAIM_VERDICTS.includes(d.conclusion.claimVerdict) ? d.conclusion.claimVerdict : null,
                 claimNote: d && d.conclusion && typeof d.conclusion.claimNote === 'string' ? d.conclusion.claimNote.trim().slice(0, 300) : null,
+                //節點自標之成品之形式(conclusion.form; 做夢範本之 audits[].form 據以預填, 由做夢覆核; 無自標或不在值域 ⇒ null; 規則 R-REC-53)
+                form: d && d.conclusion && FORMS.includes(d.conclusion.form) ? d.conclusion.form : null,
                 docMd: rel(records.paths.nodeMd(id)),
                 workDir: rel(path.join(st.records.workDir, id)),
             }
@@ -1651,7 +1728,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 //inactiveArms: 審計有表示意見(給了陣列, 含空陣列)才記入樹; 未給者沿用節點自報(inactiveArmsOf; 規則 R-REC-20)
                 let an = rsi.store.getNode(nodeId)
                 let off = Array.isArray(audit.inactiveArms) ? audit.inactiveArms.filter((a) => an && an.spec && Array.isArray(an.spec.arms) && an.spec.arms.includes(a)) : null
-                rsi.setEvidence(nodeId, { trust: audit.trust, auditRound: audit.round, auditAction: audit.action, ...(off ? { inactiveArms: off } : {}) }, { ref: rel(records.paths.dreamJson(round)), note: (audit.issues || []).join(';').slice(0, 300) })
+                //form(規則 R-REC-53): 採納而做夢有給(值域內)者寫入樹之 evidence.form; 未給者不寫(不以節點自標代替; 既有之值不動)
+                let fm = audit.action === 'accept' && FORMS.includes(audit.form) ? { form: audit.form } : {}
+                rsi.setEvidence(nodeId, { trust: audit.trust, auditRound: audit.round, auditAction: audit.action, ...(off ? { inactiveArms: off } : {}), ...fm }, { ref: rel(records.paths.dreamJson(round)), note: (audit.issues || []).join(';').slice(0, 300) })
             },
             remove: async (nodeId, audit) => {
                 rsi.invalidate([nodeId], `做夢 ${roundName(round)} 判刪除:${audit.deleteWhy}`)
@@ -1668,7 +1747,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 setStatus({ stage: 'rework', reworking: nodeId })
                 try {
                     let { raw } = await arsi.runNode({ nodeId, spec: old.spec, round: old.round, task: taskFor(old.spec, null, { prepare: true, nodeId }), rework: audit.reworkBrief })
-                    let node = makeNode({ id: nodeId, spec: old.spec, parent: old.parent, round: old.round, origin: old.origin, raw, envHash: envKey, evidence: { ...(old.evidence || {}), trust: null, reworkOf: round, reworkedAt: new Date().toISOString() }, notes: old.notes, children: old.children, createdAt: old.createdAt }, domain)
+                    //成品已換 ⇒ 舊之形式(evidence.form; 規則 R-REC-53)與可信度一併失效(形式須經審計; 下一輪之做夢重審時再定); 無此鍵者 evidence 與改前逐位相同
+                    let ev0 = { ...(old.evidence || {}) }
+                    delete ev0.form
+                    let node = makeNode({ id: nodeId, spec: old.spec, parent: old.parent, round: old.round, origin: old.origin, raw, envHash: envKey, evidence: { ...ev0, trust: null, reworkOf: round, reworkedAt: new Date().toISOString() }, notes: old.notes, children: old.children, createdAt: old.createdAt }, domain)
                     rsi.store.putNode(node)
                     pending.push(nodeId)
                     return { ok: true, S: node.score.S, ladder: node.score.ladder }
@@ -1736,7 +1818,12 @@ let makeProject = (st = getSettings(), inject = {}) => {
         try {
             let ns = executedNodes()
             let gd = gaugeDualOf(ns)
-            if (gd.show) {
+            //rsi.formGate 開啟者(規則 R-REC-54): 恆列一列 —— 量尺只計〔機制〕, 〔線索〕與未歸類者之最高另述(一頁摘要之「一眼看完」以「量尺(並列」起首取之)
+            if (formGate) {
+                let gf = gaugeFormText(ns)
+                lines.push(`量尺(並列;樹上可信者;只計〔機制〕):${gf.main};〔線索〕之最高(供趨勢參考):${gf.clue}`)
+            }
+            else if (gd.show) {
                 lines.push(`量尺(並列;樹上可信者):${gaugeDualText(gd)}`)
             }
             let srT = sideReadTextOf(sideReadOfTree(ns), nPhOf(ns))
@@ -3069,7 +3156,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
             if (bt === null || tr === null) {
                 continue
             }
-            let issue = sideFlowIssue(bt, tr, st.score && st.score.sideFlow)
+            //側別曝險之判定關閉者(規則 R-REC-55 ③)不列為問題(與迴圈之驗證同一個判定 sideFlowIssueOfSt; 既有之該條移除), 讀數照補
+            let issue = sideFlowIssueOfSt(bt, tr, st)
             let train = { ...(n.raw.train || { longRatio: ht.metrics.sel ? ht.metrics.sel.longRatio : null, tags: ((ht.metrics.sel && ht.metrics.sel.tags) || []).slice(0, 4) }), shortShare: tr }
             let isFlow = (s) => /^下單流量偏一側/.test(String(s))
             let d = records.getNodeDoc(r.id)
@@ -3130,6 +3218,10 @@ let makeProject = (st = getSettings(), inject = {}) => {
                 let ex = exposureOfNode(b)
                 if (ex.blocked) {
                     return { ok: false, note: exposureWhyOf(spec.base, ex), ...keyed }
+                }
+                //起點(改掛別名之後)之形式不是〔機制〕者(規則 R-REC-54; rsi.formGate 開啟者): 不入前緣(不留存根), 由輪末摘要之「方向未入前緣」逐條列出; 次序在既有各項之後
+                if (formGate && !isMech(b)) {
+                    return { ok: false, note: formWhyOf(spec.base, b), ...keyed }
                 }
             }
             let id = idOf(spec)
@@ -3329,7 +3421,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
         return { ok: true }
     }
 
-    return { st, rsi, arsi, records, toolbox, typeOf, setDirectionTypes, domain, catalog, selectable, run, monitor, idOf, taskFor, writeBoard, writeCatalogFile, writeSearchMap, validatePending, reverifyAll, extFill, fill, fillPlanOf, fillParOf, rescanTraces, refreshEvalHints, rescanSideFlow, pendingDream, redream, requestDreamOnly, pendingReauditIds, claimedNodeIds, inactiveArmsOf, offDefArmsOf, migrateDocs, annotateDream, closeFrontier, rearmFrontier, proposeDirection, exposureOf: exposureOfNode, exposureOn: expCfg !== null, memberCheck: mcfg, hasContent: hasContentNode, rankBy, gaugeDualOf, sideReadOfTree, pickStore: () => buildPickStore(st), setStatus, getState, setState, log, envKey, layerOfSpec }
+    return { st, rsi, arsi, records, toolbox, typeOf, setDirectionTypes, domain, catalog, selectable, run, monitor, idOf, taskFor, writeBoard, writeCatalogFile, writeSearchMap, validatePending, reverifyAll, extFill, fill, fillPlanOf, fillParOf, rescanTraces, refreshEvalHints, rescanSideFlow, pendingDream, redream, requestDreamOnly, pendingReauditIds, claimedNodeIds, inactiveArmsOf, offDefArmsOf, migrateDocs, annotateDream, closeFrontier, rearmFrontier, proposeDirection, exposureOf: exposureOfNode, exposureOn: expCfg !== null, memberCheck: mcfg, hasContent: hasContentNode, rankBy, gaugeDualOf: formGate ? gaugeMainOf : gaugeDualOf, gaugeClueOf, formOf, formGate, backfill, sideReadOfTree, pickStore: () => buildPickStore(st), setStatus, getState, setState, log, envKey, layerOfSpec }
 }
 
 
@@ -3343,7 +3435,7 @@ let makeProjectOrExit = (st, inject = {}) => {
         return makeProject(st, inject)
     }
     catch (err) {
-        //configMsgOf: 評估與期間之設定(評估器之檔); inputMsgOf: 禁區字樣之來源(guard.forbidden、source.libraryRoot)與 rsi.rankBy 與設定檔之節(R-EV-54)
+        //configMsgOf: 評估與期間之設定(評估器之檔); inputMsgOf: 禁區字樣之來源(guard.forbidden、source.libraryRoot)與 rsi.rankBy、rsi.formGate、rsi.backfill 與設定檔之節(R-EV-54、R-REC-54、R-RUN-13)
         let msg = configMsgOf(err) || inputMsgOf(err)
         if (msg !== null) {
             console.log(`ERROR ${msg}`)
@@ -3353,5 +3445,5 @@ let makeProjectOrExit = (st, inject = {}) => {
     }
 }
 
-export { makeProject, makeProjectOrExit, outwardNoteOf, saturatedLineOf, unproposedNoteOf, rebasedNoteOf, prevDirectionOf, signsMentionOf, rankKeyOf, contentOf, OUT_CHECK_MIN }
+export { makeProject, makeProjectOrExit, outwardNoteOf, saturatedLineOf, unproposedNoteOf, rebasedNoteOf, prevDirectionOf, signsMentionOf, rankKeyOf, contentOf, formOf, OUT_CHECK_MIN }
 export default makeProject

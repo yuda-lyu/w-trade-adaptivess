@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { checkNodeAgentPart, checkDreamAgentPart, tallyDream, roundName } from './records.mjs'
+import { checkNodeAgentPart, checkDreamAgentPart, tallyDream, roundName, FORMS } from './records.mjs'
 import { objReq, objAnyReq, strReq, fnReq, fnOpt, badInput } from './inputs.mjs'
 
 
@@ -333,7 +333,8 @@ let createArsi = (opt) => {
                 continue
             }
             //inactiveArms(選配): 審計所定之「指派而交付版未作用之臂」; 有給才帶(未給 = 審計未表示意見, 由專案決定是否沿用節點自報)
-            let audit = { round: doc.round, by: doc.agent ? doc.agent.model : null, trust: a.trust, action: a.action, evidence: a.evidence || [], issues: a.issues || [], reworkBrief: a.reworkBrief || null, deleteWhy: a.deleteWhy || null, ...(Array.isArray(a.inactiveArms) ? { inactiveArms: a.inactiveArms.filter((x) => typeof x === 'string') } : {}) }
+            //form(選配; 規則 R-REC-53): 審計所定之成品之形式 —— 採納(accept)而做夢有給(值域內)者才帶; 未給者不帶(不以節點之自標代替: 形式須經審計); 重做、刪除不帶
+            let audit = { round: doc.round, by: doc.agent ? doc.agent.model : null, trust: a.trust, action: a.action, evidence: a.evidence || [], issues: a.issues || [], reworkBrief: a.reworkBrief || null, deleteWhy: a.deleteWhy || null, ...(Array.isArray(a.inactiveArms) ? { inactiveArms: a.inactiveArms.filter((x) => typeof x === 'string') } : {}), ...(a.action === 'accept' && FORMS.includes(a.form) ? { form: a.form } : {}) }
             nd.audit = audit
             records.putNodeDoc(nd)
             if (a.action === 'delete') {

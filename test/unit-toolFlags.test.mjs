@@ -27,6 +27,8 @@ let FLAGS = {
     dreamProfile: [],
     exposure: ['node', 'why', 'undo'],
     fakeRound: ['two', 'redream'],
+    //成品之形式之補記(規則 R-REC-53)
+    formSet: ['node', 'form', 'why'],
     improveTrend: ['json'],
     initProject: ['root', 'bar-hours', 'dry', 'force'],
     libCheck: ['json', 'dir-hi', 'dir-lo'],
@@ -357,6 +359,8 @@ describe('工具(src/tools/*.mjs)之命令列旗標之嚴格檢查(排程第 595
                 ['armDecide', []],
                 ['armInactive', []],
                 ['exposure', []],
+                ['formSet', []],
+                ['formSet', ['--node', 'abcdef', '--form', 'clue', '--why', 'w']],
                 ['quota', ['--max', '90', '--all']],
                 ['smokeDispatch', ['both']],
                 ['briefPreview', []],

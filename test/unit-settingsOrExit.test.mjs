@@ -19,7 +19,7 @@ let ENTRIES = [
     ['src/cli/build.mjs', [], {}],
     ['src/cli/rsi.mjs', ['--mode', 'status'], {}],
     ['src/cli/toolbox.mjs', [], {}],
-    ...['archiveDocs', 'armDecide', 'armInactive', 'briefPreview', 'dreamProfile', 'exposure', 'fakeRound', 'improveTrend', 'libCheck', 'nodeAudit', 'pickStore', 'quota', 'rankCompare', 'roundDigest', 'scanCheck', 'searchMap', 'smokeDispatch', 'waitEvent'].map((n) => [`src/tools/${n}.mjs`, [], {}]),
+    ...['archiveDocs', 'armDecide', 'armInactive', 'briefPreview', 'dreamProfile', 'exposure', 'fakeRound', 'formSet', 'improveTrend', 'libCheck', 'nodeAudit', 'pickStore', 'quota', 'rankCompare', 'roundDigest', 'scanCheck', 'searchMap', 'smokeDispatch', 'waitEvent'].map((n) => [`src/tools/${n}.mjs`, [], {}]),
 ]
 let NO_SETTINGS = ['src/cli/launch.mjs', 'src/tools/buildCatalog.mjs', 'src/tools/initProject.mjs', 'src/tools/replayCheck.mjs']
 
@@ -84,7 +84,8 @@ describe('進入檔與工具讀設定之唯一入口 settingsOrExit(R-EV-56)', f
             let cfg = fs.readFileSync(path.join(FD_ROOT, 'src', 'cfg.mjs'), 'utf8')
             assert(/^let getSettings = /m.test(cfg) && /^let settingsOrExit = /m.test(cfg))
             assert(/export \{[^}]*\bsettingsOrExit\b/.test(cfg))
-            assert.equal(ENTRIES.length, 23, '讀設定之入口 23 個(cli 5、tools 18)')
+            //規則 R-REC-53 之 tools/formSet.mjs 加入後為 24 個(tools 19)
+            assert.equal(ENTRIES.length, 24, '讀設定之入口 24 個(cli 5、tools 19)')
         })
     })
 

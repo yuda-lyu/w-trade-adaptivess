@@ -28,6 +28,9 @@ let realRoot = st.rsi.root
 //  須於下一行改寫 st.rsi.root 與 st.records 之前取得(其後 st 為假專案之設定)
 let realToolboxDir = st.records.toolboxDir || path.join(realRoot, 'toolbox')
 st.rsi.root = path.join(root, 'rsi')
+//假輪次之核對(補位載體、量尺等)依預設之補位與量尺: 只計〔機制〕與補位之開關(規則 R-REC-54、R-RUN-13)於假專案一律取預設(真實專案之設定不帶入假專案; 不合之值仍由真實專案之組裝於他處拒絕)
+st.rsi.formGate = false
+st.rsi.backfill = true
 st.records = { nodeDir: path.join(root, 'rsi/records/nodes'), dreamDir: path.join(root, 'rsi/records/dreams'), trashDir: path.join(root, 'rsi/records/trash'), workDir: path.join(root, 'rsi/work') }
 
 st.backtest = { ...(st.backtest || {}), resultDir: path.join(root, 'private-backtest') } //假輪次之回測期結果不與正式者混放(全期帳本仍用正式之私有根)
@@ -83,7 +86,8 @@ let dispatch = async (role, { prompt, logFile }) => {
         if (first) {
             firstDone = true
         }
-        let src = (first ? winAsc : example).replace(/arms: \[\]/, `arms: [${arms}]`).replace('book.open < 30', isRework ? 'book.open < 20' : 'book.open < 30')
+        //重做之交付換一個執行規則(使重做之成品與原成品不同): 範例之 accept 為兩側各自之上限(規則 R-REC-55 ④; 原為 book.open < 30)
+        let src = (first ? winAsc : example).replace(/arms: \[\]/, `arms: [${arms}]`).replace('book.open < 30', isRework ? 'book.open < 20' : 'book.open < 30').replace('book.openLong < 25 : book.openShort < 25', isRework ? 'book.openLong < 10 : book.openShort < 10' : 'book.openLong < 25 : book.openShort < 25')
         fs.writeFileSync(path.join(wd, 'pick.mjs'), src, 'utf8')
         spawnSync(process.execPath, [P('g_eval.mjs'), '--pick', path.join(wd, 'pick.mjs'), '--mode', 'full', '--out', path.join(wd, 'result_full.json')], { cwd: FD_ROOT, windowsHide: true })
         let r = JSON.parse(fs.readFileSync(path.join(wd, 'result_full.json'), 'utf8'))

@@ -388,9 +388,11 @@ describe('texts:任務類型與共用工具區', function () {
             let l7v = v.split('\n').find((l) => l.startsWith('7. **資訊來源**:'))
             assert(l7v.endsWith(';驗證類不另交對照版。') && !v.includes('兩側席次固定'))
             //不新增必填之結構化欄位: 範本之鍵與改前相同(自報寫在 conclusion.summary)
+            //  規則 R-REC-53 另加選配之 form(成品之形式之自填; 預填 null = 未歸類; 檢核不要求)⇒ 範本之鍵之末多 form, 其餘之鍵與次序不變
             let keysOf = (t) => Object.keys(texts.nodeTemplate({ workDir: wd, task: t }).conclusion)
-            assert.deepEqual(keysOf(task()), ['outcome', 'summary', 'findings', 'limitations', 'nextIdeas', 'armProposals'])
-            assert.deepEqual(keysOf(task({ type: 'verify', claim: '主張甲', direction: dirV })), ['summary', 'findings', 'limitations', 'nextIdeas', 'armProposals', 'claimVerdict', 'claimNote'])
+            assert.deepEqual(keysOf(task()), ['outcome', 'summary', 'findings', 'limitations', 'nextIdeas', 'armProposals', 'form'])
+            assert.deepEqual(keysOf(task({ type: 'verify', claim: '主張甲', direction: dirV })), ['summary', 'findings', 'limitations', 'nextIdeas', 'armProposals', 'claimVerdict', 'claimNote', 'form'])
+            assert.strictEqual(texts.nodeTemplate({ workDir: wd, task: task() }).conclusion.form, null, 'form 預填 null(未歸類)')
             assert.deepEqual(Object.keys(texts.nodeTemplate({ workDir: wd, task: task() })), ['plan', 'code', 'results', 'conclusion'])
             //大小: 本條務求精簡(節點任務書逾 15,000 位元組即整併); 無起點之探索與驗證、有無共同儲存區與其他標的之正負號之最大者皆不逾
             for (let t of [task(), task({ type: 'verify', claim: '主張甲', direction: dirV })]) {
@@ -406,7 +408,27 @@ describe('texts:任務類型與共用工具區', function () {
             let codeRoot = path.relative(st.FD_ROOT, path.join(FD_ROOT, 'src')).replace(/\\/g, '/')
             //共同儲存區之相對路徑(任務書內寫有; 暫存夾名含行程號)正規化為 <STORE>
             let storeRel = null
-            let sha = (s) => {
+            //規則 R-REC-55(1.0.49 之上): §1 之中性預設改寫(①)與為守 15,000 位元組之整併(⑤:§1 首句併入「必須偏離時說明理由」、末句刪「本節點之成績…(§5)」、§4 之括號改指合約 §2、§6 第 2 點刪「試得越多…運氣:」、§7 code.inactiveArms 之末縮短)
+            //  ⇒ 取雜湊之前把這幾處之新句換回改前(1.0.49)之原文(字面值, 不由新碼推得); 七個雜湊值不改 —— 其餘文字之任何改動仍使本案轉紅; 各新句另斷言其出現次數
+            let REVERT = [
+                ['「以臂為主軸」:挑選模組之關鍵決策必須來自這些臂之機制;臂以外之環節一律用**中性預設**(固定,不是調參對象;必須偏離時說明理由),並在 `code.notes` 寫明哪些是指定臂、哪些是中性預設:', '「以臂為主軸」:挑選模組之關鍵決策必須來自這些臂之機制;臂以外之環節一律用**中性預設**(固定,不是調參對象),並在 `code.notes` 寫明哪些是指定臂、哪些是中性預設:', 1],
+                [['- 執行規則 `accept` 依 `sig.mode` 只看該側之在倉數(做多 `book.openLong < 25`、做空 `book.openShort < 25`),不設每日上限(要改執行層須指定之臂含 E 層)。', '- 入選:各策略依自身之量是否達門檻;兩側各一條件(無把握之側寫「該側尚無條件」而不入選,不以值域外之門檻代替);入選數與多空組成是結果(可為零),不取名次、分位、前 K、固定席數或庫比例。', '- 指定之臂不含 A / B 層時,不以績效或活躍度當入選條件;入選之中性預設 =「全體」或「`ctx.rand()` 逐策略獨立隨機(機率固定)」。', '- 須定先後時以 `ctx.meta.tie[s]`,不用序號(合約 §6)。'].join('\n'), ['- 執行規則 `accept` = `book.open < 30`、不設每日上限(要改執行層須指定之臂含 E 層)。', '- 選集 40 隻(指定之臂屬量能 / 席次類者除外)。', '- 指定之臂不含 A / B 層時,不以績效或活躍度當資格或排序,只能「全體」或「以 `ctx.rand()` 隨機」。', '- 排序同分以 `ctx.meta.tie[s]` 為次鍵,不用序號(序號帶有資訊;合約 §6)。'].join('\n'), 1],
+                ['**臂之貢獻以「有臂 vs 去臂(換回中性預設)」之差衡量**。交付須為〔機制〕之形式(`conclusion.form` 填 `mechanism`);做不到者如實填 `clue` 並說明(見合約 §5)。', '必須偏離時在 `code.notes` 說明理由。**臂之貢獻以「有臂 vs 去臂(換回中性預設)」之差衡量**;本節點之成績則看回測期之 S 與最差相位(§5)。', 1],
+                ['- **評估器預設評估回測期**(`ctx` 之行為見合約 §2)。', '- **評估器預設評估回測期**(每個決策只看得到決策棒以前之資訊;挑選函數自帳本起點連續執行,只有落在回測期之決策計入績效)。', 1],
+                ['只靠某一個參數值或某一個相位者不要交)。每次都記入 `results.experiments`', '只靠某一個參數值或某一個相位者不要交)。試得越多,其中最佳者越可能只是運氣:每次都記入 `results.experiments`', null],
+                ['(`meta.arms` 照列指派之全部臂,不必刪)—— 各臂之成績只計作用中之臂。', '(`meta.arms` 照列指派之全部臂,不必刪)—— 看板之各臂成績、以及其後以本節點為起點之臂組合,只計作用中之臂。', 1],
+            ]
+            let revert = (s) => {
+                let t = s
+                for (let [nw, old, n] of REVERT) {
+                    let k = t.split(nw).length - 1
+                    assert(n === null ? k <= 1 : k === n, `新句之出現次數 ${k}:${nw.slice(0, 30)}`)
+                    t = t.split(nw).join(old)
+                }
+                return t
+            }
+            let sha = (s0) => {
+                let s = revert(s0)
                 let ls = s.split('\n')
                 let idx = ls.map((x, i) => (x.startsWith('7. **資訊來源**:') ? i : -1)).filter((i) => i >= 0)
                 assert.equal(idx.length, 1, '第 7 條恰出現一次')
@@ -454,7 +476,8 @@ describe('texts:任務類型與共用工具區', function () {
             let ref = fs.readFileSync(path.join(FD_ROOT, 'contract', 'pick-contract.md'), 'utf8')
             let sec5 = ref.slice(ref.indexOf('\n## 5. 評估指令\n'), ref.indexOf('\n## 6. 常見錯誤\n'))
             assert(sec5.length > 100, '找得到 §5')
-            let TERMS = ['**資訊來源之三級**', '**側別中性(兩側席次固定)**', '**組成位移**', '**內容保持率**']
+            //規則 R-REC-53 / R-REC-55 ④: 判讀名詞之末加「形式」(〔機制〕/〔線索〕與單押之界定)
+            let TERMS = ['**資訊來源之三級**', '**側別中性(兩側席次固定)**', '**組成位移**', '**內容保持率**', '**形式**']
             let blockOf = (text) => {
                 let ls = text.split('\n')
                 let i = ls.findIndex((l) => l.startsWith('- **判讀名詞**('))
@@ -470,7 +493,7 @@ describe('texts:任務類型與共用工具區', function () {
             }
             for (let [name, text] of [['參考版', sec5], ['每根 24 小時', renderContract(ref, { barHours: 24 })]]) {
                 let ls = blockOf(text)
-                assert.equal(ls.length, TERMS.length, `${name}:四個名詞`)
+                assert.equal(ls.length, TERMS.length, `${name}:五個名詞`)
                 TERMS.forEach((t, k) => {
                     assert(ls[k].startsWith(`  - ${t}:`), `${name}:第 ${k + 1} 個應為 ${t}`)
                     let n = (ls[k].match(/。/g) || []).length

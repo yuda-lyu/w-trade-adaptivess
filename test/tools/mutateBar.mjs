@@ -6,7 +6,7 @@ import { FD_ROOT, FD_TMP } from './synthLedger.mjs'
 import { dupIdsOf } from './mutateIds.mjs'
 
 
-//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(verifyCmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); EH 系列為 R-REC-43、R-REC-44(迴圈檢查之提示「單峰交付」「選集與他節點相同」; 判定在 verifyEvalHints.mjs, EH37 之錨點在 verify.mjs 之 dirNodeIdsOf); VZ 系列為 R-BT-10(節點之禁區涵蓋 verify* / backtest* 與任務書之檔名樣式一致)、AW 系列為 R-BT-9(可讀之他節點工作夾三處共用 verify.mjs 之 allowWorkOf; 皆為 Gitea #200 之主控另加); SD 系列為 R-REC-47(任務書之「可疑方向」、資訊來源之三級、量尺句、審組成之一句與合約之判讀名詞; 錨點在 texts.mjs 與 contract/pick-contract.md); SB 系列為 R-EV-47(子庫之規則與 --subset)與 R-EV-48(庫況體檢與其拒跑);EX 系列為 R-REC-48(側別曝險之判定、效果與放行)、SR 系列為 R-REC-50(全樹之側別讀數)、GD 系列為 R-REC-49(量尺之並列與選配之主鍵); MC 系列為 R-REC-51(成員穩健性之附算與「成員依賴」之提示)、PD 系列為 R-REC-51 ⑤(附算之時點: 求解窗後段與成員穩健性移到派做夢之前、同一項每輪至多一次、紀錄每輪記一次)、HC 系列為 R-REC-49 ⑤(「有內容」之單一定義: 並列、主鍵、補位之底、估法之候選)、VZ08 為 R-BT-10 ⑥(成員依賴之判定與門檻在禁區內之檔); 指令解析已自 verify.mjs 搬入 verifyCmdScan.mjs[原 cmdScan.mjs], 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
+//變異檢查(規則 R-EV-44、R-REC-36、R-REC-34 之守門之鑑別力; Gitea #184; Q 系列為 R-EV-46 之 api.fillRandom; M 系列為 R-REC-38、R 系列為 R-BT-6; G、H 系列為 R-RUN-11、N、O 系列為 R-BT-7、U 系列為 R-REC-39; Y 系列為搜尋樣式取自檔(verifyCmdScan.mjs 之 patFileOf)、J 系列為近期版之超額之取值(domain.mjs 之 recentDiagOf / recentExcessOf)、Z 系列為迴圈專用之環境變數(verify.mjs 之 forbiddenPats; 皆為 Gitea #198 之主控另加之三項); SK 系列為 R-REC-40(排序鍵)、BL 系列為 R-REC-41(輪末之附算一併處理待補算; BL17 起為不重試之失敗之紀錄)、RX 系列為 R-REC-42(迴圈之重放一併載入擴充診斷); DR 系列為 R-REC-38 ⑦(近期活躍度版之診斷之「有值」之唯一判準; diagRead.mjs 之 recentDiagOf 與驗證、共同儲存區之讀取點)、UQ 系列為 R-PKG-9(變異工具之 --check 另核編號唯一; 皆為 Gitea #199 之主控另加); EH 系列為 R-REC-43、R-REC-44(迴圈檢查之提示「單峰交付」「選集與他節點相同」; 判定在 verifyEvalHints.mjs, EH37 之錨點在 verify.mjs 之 dirNodeIdsOf); VZ 系列為 R-BT-10(節點之禁區涵蓋 verify* / backtest* 與任務書之檔名樣式一致)、AW 系列為 R-BT-9(可讀之他節點工作夾三處共用 verify.mjs 之 allowWorkOf; 皆為 Gitea #200 之主控另加); SD 系列為 R-REC-47(任務書之「可疑方向」、資訊來源之三級、量尺句、審組成之一句與合約之判讀名詞; 錨點在 texts.mjs 與 contract/pick-contract.md); SB 系列為 R-EV-47(子庫之規則與 --subset)與 R-EV-48(庫況體檢與其拒跑);EX 系列為 R-REC-48(側別曝險之判定、效果與放行)、SR 系列為 R-REC-50(全樹之側別讀數)、GD 系列為 R-REC-49(量尺之並列與選配之主鍵); MC 系列為 R-REC-51(成員穩健性之附算與「成員依賴」之提示)、PD 系列為 R-REC-51 ⑤(附算之時點: 求解窗後段與成員穩健性移到派做夢之前、同一項每輪至多一次、紀錄每輪記一次)、HC 系列為 R-REC-49 ⑤(「有內容」之單一定義: 並列、主鍵、補位之底、估法之候選)、VZ08 為 R-BT-10 ⑥(成員依賴之判定與門檻在禁區內之檔); FM 系列為 R-REC-53(成品之形式之紀錄)、FG 系列為 R-REC-54(只計〔機制〕)、BK 系列為 R-RUN-9 ④ 與 R-RUN-13(補位之開關)、NE 系列為 R-REC-55(任務書之舊預設與側別曝險之句); 指令解析已自 verify.mjs 搬入 verifyCmdScan.mjs[原 cmdScan.mjs], 錨點之檔隨之): 於 test/_tmp/ 之複本逐一植入一處變異(把新檢測或新接線改回舊行為, 或改成錯的寫法), 跑守門之測試, 須轉紅(被殺)
 //  用法(測試以 quiet-run --lock 執行): node test/tools/mutateBar.mjs [--list] [--check] [--control-only] [--only <id,id…>] [--from <序> --to <序>] [--out <結果.json>]
 //    --check 只核對各變異之錨點(須恰出現一次; all 者至少一次), 不跑測試; 另核全部變異之編號唯一(重複者列出並以非 0 離開; R-PKG-9);未被殺者(survived)為測試之缺口 —— 補測試,不是補斷言(見 sgud/exp 之變異作法)
 //    --control-only 只跑對照(守門之測試與所選變異之優先測試, 不植入變異)並列出所選變異中「無法判定」者, 供不重跑全部變異而盤點分類
@@ -771,10 +771,11 @@ let M = [
     //── 任務書之「可疑方向」與資訊來源之三級(SD 系列; 規則 R-REC-47; 做夢任務書 §3 一段、量尺句、審計規程第 8 點之一句; 節點任務書 §6 第 7 條; 合約 §5 之判讀名詞)──
     ['SD01', 'src/domain/texts.mjs', [["L.push('- **可疑方向**(彙整與寫方向之前先過一遍;", "void ('- **可疑方向**(彙整與寫方向之前先過一遍;"]], ['unit-texts']], //不列「可疑方向」之標題列
     ['SD02', 'src/domain/texts.mjs', [["L.push('  - **資訊來源分三級**", "void ('  - **資訊來源分三級**"]], ['unit-texts']], //不列資訊來源三級之子條
-    ['SD03', 'src/domain/texts.mjs', [["L.push('  - **1. 側別曝險冒充挑選**", "void ('  - **1. 側別曝險冒充挑選**"]], ['unit-texts']], //缺第 1 項
+    //  SD03 / SD06: 規則 R-REC-55 ③ 起第 1 項與第 4 項依 rsi.exposure 取原句或關閉時之句(錨點改為新寫法之 L.push; 變異同為「缺該項」); SD07 / SD08 之序號固定(錨點同改前)
+    ['SD03', 'src/domain/texts.mjs', [["L.push(exposureOn\n            ? '  - **1. 側別曝險冒充挑選**", "void (exposureOn\n            ? '  - **1. 側別曝險冒充挑選**"]], ['unit-texts']], //缺第 1 項
     ['SD04', 'src/domain/texts.mjs', [["L.push('  - **2. 以庫彙總量定側別或席次**", "void ('  - **2. 以庫彙總量定側別或席次**"]], ['unit-texts']], //缺第 2 項
     ['SD05', 'src/domain/texts.mjs', [["L.push('  - **3. 以落後之延續規則定側別**", "void ('  - **3. 以落後之延續規則定側別**"]], ['unit-texts']], //缺第 3 項
-    ['SD06', 'src/domain/texts.mjs', [["L.push('  - **4. 同一個底之連續疊加**", "void ('  - **4. 同一個底之連續疊加**"]], ['unit-texts']], //缺第 4 項
+    ['SD06', 'src/domain/texts.mjs', [["L.push(exposureOn\n            ? '  - **4. 同一個底之連續疊加**", "void (exposureOn\n            ? '  - **4. 同一個底之連續疊加**"]], ['unit-texts']], //缺第 4 項
     ['SD07', 'src/domain/texts.mjs', [["L.push('  - **5. 成員依賴**", "void ('  - **5. 成員依賴**"]], ['unit-texts']], //缺第 5 項
     ['SD08', 'src/domain/texts.mjs', [["L.push('  - **6. 內容只在庫之某一類成員成立**", "void ('  - **6. 內容只在庫之某一類成員成立**"]], ['unit-texts']], //缺第 6 項
     ['SD09', 'src/domain/texts.mjs', [["隨機半庫(至少 6 個;", "隨機半庫(至少 2 個;"]], ['unit-texts']], //第 3 級之重算只要 2 個半庫
@@ -782,7 +783,8 @@ let M = [
     ['SD11', 'src/domain/texts.mjs', [["**探索類之方向與預先核對至少一半改用側別中性之底**", "**探索類之方向與預先核對至少一個改用側別中性之底**"]], ['unit-texts']], //連續疊加之處置由至少一半放寬為至少一個
     ['SD12', 'src/domain/texts.mjs', [["隨機半庫之內容保持率之中位 < 0.5,", "隨機半庫之內容保持率之中位 < 0.9,"]], ['unit-texts']], //成員依賴之門檻改變
     ['SD13', 'src/domain/texts.mjs', [["**不列為已驗證之最高、不作為其後方向與預先核對之起點**", "**不作為其後方向與預先核對之起點**"]], ['unit-texts']], //側別曝險仍可列為已驗證之最高
-    ['SD14', 'src/domain/texts.mjs', [["每輪在 `summary` **並列**寫明", "每輪在 `summary` 寫明"]], ['unit-texts']], //量尺句不並列
+    //  SD14: 規則 R-REC-54 起量尺句為樣板字串(反引號跳脫); 錨點取未開 rsi.formGate 之一支
+    ['SD14', 'src/domain/texts.mjs', [["每輪在 \\`summary\\` **並列**寫明**目前樹上「內容", "每輪在 \\`summary\\` 寫明**目前樹上「內容"]], ['unit-texts']], //量尺句不並列
     ['SD15', 'src/domain/texts.mjs', [["、後者是否命中下述「可疑方向」第 1 項(命中者只是側別曝險,不是進度)", ""]], ['unit-texts']], //量尺句不寫後者是否命中第 1 項
     ['SD16', 'src/domain/texts.mjs', [[" **迴圈檢查列「下單流量偏一側」、或擴充診斷之提示指出成品等同某一個固定狀態(例:`fixedState`)、同比例隨機時機之安慰劑(`placeboTiming`)無內容者,其優勢歸為側別曝險:彙整時不列 `worked`、不作為方向之起點;要保留其側內之機制者,於方向內指明以兩側席次固定之版本重做**(見 §3「可疑方向」)。", ""]], ['unit-texts']], //審計規程第 8 點不加該句
     ['SD17', 'src/domain/texts.mjs', [["彙整時不列 `worked`、不作為方向之起點;要保留其側內之機制者", "彙整時不列 `worked`;要保留其側內之機制者"]], ['unit-texts']], //審計規程之新句缺「不作為方向之起點」
@@ -924,7 +926,8 @@ let M = [
     ['GD11', 'src/domain/domain.mjs', [["return ra.reduce((d, x, i) => d || (x - rb[i]), 0)", "return (ra[0] - rb[0]) || (ra[1] - rb[1])"]], ['unit-gaugeDual']], //次序只比前兩項(主鍵之值與次鍵不比)
     ['GD12', 'src/domain/domain.mjs', [["reduce((b, n) => (b === null || byContent(kvOf)(n, b) < 0 ? n : b), null)", "reduce((b, n) => (b === null || kvOf(n) > kvOf(b) ? n : b), null)"]], ['unit-gaugeDual']], //各臂之最佳不依主鍵
     ['GD13', 'src/domain/domain.mjs', [[".sort(byContent(kvOf))[0] || null", ".sort((a, b) => kvOf(b) - kvOf(a))[0] || null"]], ['unit-gaugeDual']], //搜尋地圖之最高不依主鍵
-    ['GD14', 'src/domain/domain.mjs', [["**目前「挑選內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品(並列;同一個者寫一次並註明)**(各列 id、", "**目前回測期 S 最高且可信之成品**(id、"]], ['unit-gaugeDual']], //做夢更新 state 之句回到改前
+    //  GD14: 規則 R-REC-54 起該句依 rsi.formGate 分兩支(錨點取未開之一支)
+    ['GD14', 'src/domain/domain.mjs', [["'**目前「挑選內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品(並列;同一個者寫一次並註明)**') + '(各列 id、", "'**目前回測期 S 最高且可信之成品**') + '(id、"]], ['unit-gaugeDual']], //做夢更新 state 之句回到改前
     ['GD15', 'src/tools/roundDigest.mjs', [["/^量尺\\(並列/", "/^量尺\\(並列X/"]], ['unit-exposure']], //一頁摘要不取並列之列
     ['GD16', 'src/domain/rankCompare.mjs', [["let den = Math.sqrt((c + d + tx) * (c + d + ty))", "let den = Math.sqrt((c + d) * (c + d))"]], ['unit-gaugeDual']], //τ-b 之分母不計同值之對
     ['GD17', 'src/domain/rankCompare.mjs', [["r[idx[j].i] = (s + e) / 2 + 1", "r[idx[j].i] = s + 1"]], ['unit-gaugeDual']], //同值不取平均名次
@@ -1442,8 +1445,9 @@ let M = [
     ['IN35', 'src/cfg.mjs', [["if (typeof v !== 'string' || v === '') {\n            throw new Error(`invalid ${where}: must be a non-empty string`)", "if (typeof v !== 'string') {\n            throw new Error(`invalid ${where}: must be a non-empty string`)"]], ['unit-inputGates']],
     ['IN36', 'src/cfg.mjs', [["if (typeof st.dispatch.skillsRoot !== 'string') {", "if (false) {"]], ['unit-inputGates']],
     ['IN37', 'src/cfg.mjs', [["        agentsCheck(st.agents, 'settings.agents')", "        void 0"]], ['unit-inputGates']],
-    ['IN38', 'src/cfg.mjs', [["source\\.libraryRoot|rsi\\.rankBy|settings[.:]|backtest:", "source\\.libraryRoot|settings[.:]|backtest:"]], ['unit-inputGates']],
-    ['IN39', 'src/cfg.mjs', [["rsi\\.rankBy|settings[.:]|backtest:", "rsi\\.rankBy|settings\\.|backtest:"]], ['unit-inputGates']],
+    //  IN38 ~ IN40: 規則 R-REC-54、R-RUN-13 起該正規式另認 rsi.formGate / rsi.backfill(錨點隨之; 變異同前)
+    ['IN38', 'src/cfg.mjs', [["source\\.libraryRoot|rsi\\.(?:rankBy|formGate|backfill)|settings[.:]|backtest:", "source\\.libraryRoot|settings[.:]|backtest:"]], ['unit-inputGates']],
+    ['IN39', 'src/cfg.mjs', [["rsi\\.(?:rankBy|formGate|backfill)|settings[.:]|backtest:", "rsi\\.(?:rankBy|formGate|backfill)|settings\\.|backtest:"]], ['unit-inputGates']],
     ['IN40', 'src/cfg.mjs', [["settings[.:]|backtest:|score\\.freqBands:)", "settings[.:]|score\\.freqBands:)"]], ['unit-inputGates']], //錨點隨 R-EV-57(inputMsgOf 加 score.freqBands:)而改
     //  進入檔與工具之讀取處(取檢查合格之轉換值; 字串旗標取原字串)
     ['IN41', 'src/cli/rsi.mjs', [["let cliInt = (k) => argNumOf(k, 'posInt', null)", "let cliInt = (k) => {\n    let v = argOf(k, null)\n    return Number.isInteger(v) && v >= 1 ? v : null\n}"]], ['unit-cliValues']],
@@ -1677,6 +1681,88 @@ let M = [
     ['CB02', 'src/cli/rsi.mjs', [["let bsc = argStrOf('base', undefined)", "let bsc = argOf('base', undefined)"]], ['unit-frontierOps']], //--base 經數值轉型(全數字之 id 被丟掉位數)
     ['CB03', 'src/cli/rsi.mjs', [["        if (k === 0 && typeof bsc === 'string' && bsc) {\n", "        if (false) {\n"]], ['unit-frontierOps']], //--base 未命中不提示須為完整 id
     ['CB04', 'src/cli/rsi.mjs', [["        let k = P.closeFrontier({ arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof bsc === 'string' && bsc ? { base: bsc } : {}), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) })", "        let k = P.closeFrontier({ arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof bsc === 'string' && bsc && !process.argv.includes('--rearm') ? { base: bsc } : {}), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) })"]], ['unit-frontierOps']], //與 --rearm 並用時 --close 不受 --base 限(原行為)
+    //── 成品之形式之紀錄(FM 系列; 規則 R-REC-53)──
+    ['FM01', 'src/arsi/records.mjs', [["if (a.conclusion.form !== undefined && a.conclusion.form !== null && !FORMS.includes(a.conclusion.form)) {", "if (false) {"]], ['unit-formRecord']], //節點文件之形式不檢
+    ['FM02', 'src/arsi/records.mjs', [["if (x.form !== undefined && x.form !== null && !FORMS.includes(x.form)) {", "if (false) {"]], ['unit-formRecord']], //審計之形式不檢
+    ['FM03', 'src/arsi/records.mjs', [["if (a.conclusion.form !== undefined && a.conclusion.form !== null && !FORMS.includes(a.conclusion.form)) {", "if (a.conclusion.form !== undefined && !FORMS.includes(a.conclusion.form)) {"]], ['unit-formRecord']], //null(未歸類)被拒
+    ['FM04', 'src/arsi/arsi.mjs', [["...(a.action === 'accept' && FORMS.includes(a.form) ? { form: a.form } : {})", "...(FORMS.includes(a.form) ? { form: a.form } : {})"]], ['unit-formRecord']], //重做之審計亦帶形式
+    ['FM05', 'src/domain/domain.mjs', [["let fm = audit.action === 'accept' && FORMS.includes(audit.form) ? { form: audit.form } : {}", "let fm = {}"]], ['unit-formRecord']], //採納不寫樹之形式
+    ['FM06', 'src/domain/domain.mjs', [["                    delete ev0.form\n", ""]], ['unit-formRecord']], //重做沿用舊之形式
+    ['FM07', 'src/domain/domain.mjs', [["form: d && d.conclusion && FORMS.includes(d.conclusion.form) ? d.conclusion.form : null,", "form: null,"]], ['unit-formRecord']], //做夢之 context 不帶節點之自標(範本不預填)
+    ['FM08', 'src/domain/texts.mjs', [["form: FORMS.includes(cn.form) ? cn.form : null,", "form: null,"]], ['unit-formRecord']], //做夢範本不預填自標
+    ['FM09', 'src/domain/texts.mjs', [["'(一句話: 哪一項未過、差多少;皆達成則寫各項之數字)' } : {}), form: null },", "'(一句話: 哪一項未過、差多少;皆達成則寫各項之數字)' } : {}) },"]], ['unit-formRecord']], //節點範本無 form
+    ['FM10', 'src/domain/domain.mjs', [["let formOf = (n) => (n && n.evidence && FORMS.includes(n.evidence.form) ? n.evidence.form : null)", "let formOf = (n) => (n && n.evidence && n.evidence.form ? n.evidence.form : null)"]], ['unit-formRecord']], //值域外之值亦當形式
+    ['FM11', 'src/arsi/records.mjs', [["        out.push(`- 形式(agent 自填): ${FORM_LABELS[d.conclusion.form]}`)\n", ""]], ['unit-formRecord']], //節點文件不列自標
+    ['FM12', 'src/arsi/records.mjs', [["            out.push(`- 形式(審計所定): ${FORM_LABELS[au.form]}`)\n", ""]], ['unit-formRecord']], //節點文件不列審計所定
+    ['FM13', 'src/arsi/records.mjs', [["        out.push(`- 形式(主控補記${typeof c.at === 'string' ? `;${c.at.slice(0, 10)}` : ''};以此為準): ${formLabelOf(c.form)}${typeof c.why === 'string' && c.why ? ` —— ${c.why}` : ''}`)\n", ""]], ['unit-formRecord']], //節點文件不列主控補記
+    ['FM14', 'src/arsi/records.mjs', [["            out.push(`- 形式: ${FORM_LABELS[a.form]}`)\n", ""]], ['unit-formRecord']], //做夢文件不列形式
+    ['FM15', 'src/tools/formSet.mjs', [["if (lock.running) {", "if (false) {"]], ['unit-formRecord']], //輪次進行中不拒
+    ['FM16', 'src/tools/formSet.mjs', [["let fv = formArg.trim() === 'none' ? null : formArg.trim()", "let fv = formArg.trim()"]], ['unit-formRecord']], //none 不清除
+    ['FM17', 'src/tools/formSet.mjs', [["    doc.control = { ...(doc.control || {}), form: { form: fv, why: why.trim().slice(0, 300), at: new Date().toISOString() } }\n", ""]], ['unit-formRecord']], //節點文件不同步
+    ['FM18', 'src/tools/formSet.mjs', [["let b = P.writeBoard()", "let b = { nNodes: 0 }"]], ['unit-formRecord']], //看板不重產
+    ['FM19', 'src/domain/agentEntries.mjs', [["formSet: { label: 'tools/formSet.mjs 之補記', writes: (args) => args.length > 0 },", "formSet: { label: 'tools/formSet.mjs 之補記', writes: () => false },"]], ['unit-formRecord']], //agent 帶引數不拒
+    ['FM20', 'src/cfg.mjs', [["formSet: { form: { enum: ['mechanism', 'clue', 'none'] } },", "formSet: {},"]], ['unit-formRecord']], //--form 之值不檢
+    //── 只計〔機制〕(FG 系列; 規則 R-REC-54)──
+    ['FG01', 'src/domain/domain.mjs', [["if (formGateRaw !== undefined && formGateRaw !== null && typeof formGateRaw !== 'boolean') {", "if (false) {"]], ['unit-formGate']], //不合之值不拒
+    ['FG02', 'src/cfg.mjs', [["rsi\\.(?:rankBy|formGate|backfill)", "rsi\\.(?:rankBy|backfill)"]], ['unit-formGate']], //入口不認 invalid rsi.formGate
+    ['FG03', 'src/domain/domain.mjs', [["activeArmsOf(n).length < maxArms && (!formGate || isMech(n)))", "activeArmsOf(n).length < maxArms)"]], ['unit-formGate']], //補位之底不分形式
+    ['FG04', 'src/domain/domain.mjs', [["if (formGate && !bn && BASED_LAYERS.includes(a.layer)) {", "if (false) {"]], ['unit-formGate']], //無〔機制〕之底時 D / E / G 照出單臂根節點
+    ['FG05', 'src/domain/domain.mjs', [["if (formGate && full && !isMech(full)) {", "if (false) {"]], ['unit-formGate']], //前置閘門不攔
+    ['FG06', 'src/domain/domain.mjs', [["if (formGate && !isMech(b)) {", "if (false) {"]], ['unit-formGate']], //方向之提出不拒
+    ['FG07', 'src/domain/domain.mjs', [["之形式為${formLabelOf(formOf(n))},不是〔機制〕", "之形式為〔線索〕,不是〔機制〕"]], ['unit-formGate']], //訊息不寫實際之形式
+    ['FG08', 'src/domain/domain.mjs', [["let gaugeMainOf = (nodes) => gaugeDualOf(nodes.filter(isMech))", "let gaugeMainOf = (nodes) => gaugeDualOf(nodes)"]], ['unit-formGate']], //量尺不只計〔機制〕
+    ['FG09', 'src/domain/domain.mjs', [["let gaugeClueOf = (nodes) => gaugeDualOf(nodes.filter((n) => !isMech(n)))", "let gaugeClueOf = (nodes) => gaugeDualOf(nodes)"]], ['unit-formGate']], //〔線索〕之最高含〔機制〕
+    ['FG10', 'src/domain/domain.mjs', [["        if (formGate) {\n            let gf = gaugeFormText(nodes)", "        if (false) {\n            let gf = gaugeFormText(nodes)"]], ['unit-formGate']], //看板不列只計〔機制〕之一段
+    ['FG11', 'src/domain/domain.mjs', [["            if (formGate) {\n                let gf = gaugeFormText(ns)", "            if (false) {\n                let gf = gaugeFormText(ns)"]], ['unit-formGate']], //輪末摘要不列
+    ['FG12', 'src/domain/domain.mjs', [["let cand = upTo.filter((n) => hasContent(n) && trustOf(n) === 'trusted' && (!formGate || isMech(n)))", "let cand = upTo.filter((n) => hasContent(n) && trustOf(n) === 'trusted')"]], ['unit-formGate']], //搜尋地圖之量尺不分形式
+    ['FG13', 'src/domain/domain.mjs', [["let clueCell = formGate ? ", "let clueCell = false ? "]], ['unit-formGate']], //搜尋地圖無〔線索〕之欄
+    ['FG14', 'src/domain/domain.mjs', [["let cand = nodes.filter((n) => !vetoedOf(n) && hasContent(n) && trustOf(n) === 'trusted' && (!formGate || isMech(n)))", "let cand = nodes.filter((n) => !vetoedOf(n) && hasContent(n) && trustOf(n) === 'trusted')"]], ['unit-formGate']], //量尺之子集不分形式
+    ['FG15', 'src/domain/domain.mjs', [["let fTag = (n) => (formGate ? ", "let fTag = (n) => (false ? "]], ['unit-formGate']], //其餘之最高不註形式
+    ['FG16', 'src/domain/domain.mjs', [["${formGate ? `;${formLabelOf(formOf(n))}` : ''}${vetoedOf(n) ? ';否決' : ''}", "${vetoedOf(n) ? ';否決' : ''}"]], ['unit-formGate']], //譜系不註形式
+    ['FG17', 'src/domain/domain.mjs', [["${formGate ? `(其中〔機制〕 ${contentNodes.filter(isMech).length} 個)` : ''}", ""]], ['unit-formGate']], //§4 不註〔機制〕之數
+    ['FG18', 'src/domain/domain.mjs', [["${formGate ? ` | ${formLabelOf(formOf(n))}` : ''} | ${roundName(n.round)} | ${descOf(n)} |", " | ${roundName(n.round)} | ${descOf(n)} |"]], ['unit-formGate']], //看板之列無形式之格
+    ['FG19', 'src/domain/domain.mjs', [["let kbForm = formGate && ss.length && kb ?", "let kbForm = false && ss.length && kb ?"]], ['unit-formGate']], //各臂之最佳 S 不註形式
+    ['FG20', 'src/domain/domain.mjs', [["!(n.evidence && n.evidence.trust === 'untrusted') && (!formGate || isMech(n)))", "!(n.evidence && n.evidence.trust === 'untrusted'))"]], ['unit-formGate']], //參考節點不分形式
+    ['FG21', 'src/domain/domain.mjs', [["let mk = formGate ? '〔機制〕' : ''", "let mk = ''"]], ['unit-formGate']], //參考節點之文字不註〔機制〕
+    ['FG22', 'src/domain/domain.mjs', [["(formGate ? '**目前〔機制〕之成品中", "(false ? '**目前〔機制〕之成品中"]], ['unit-formGate']], //更新 state 之句不改述
+    ['FG23', 'src/domain/texts.mjs', [["let formGateOn = !!(st.rsi && st.rsi.formGate === true)", "let formGateOn = false"]], ['unit-formGate']], //做夢任務書之量尺句等不改述
+    ['FG24', 'src/domain/texts.mjs', [["let gaugeSentence = formGateOn", "let gaugeSentence = false"]], ['unit-formGate']], //量尺句不改述
+    ['FG25', 'src/domain/texts.mjs', [["(formGateOn ? '**以「有內容且可信」之〔機制〕成品對組成對照之超額為主**", "(false ? '**以「有內容且可信」之〔機制〕成品對組成對照之超額為主**"]], ['unit-formGate']], //progress 不改述
+    ['FG26', 'src/domain/texts.mjs', [["(formGateOn ? '〔機制〕成品為底、對照即該成品,尚無〔機制〕之成品者這些層不補位'", "(false ? '〔機制〕成品為底、對照即該成品,尚無〔機制〕之成品者這些層不補位'"]], ['unit-formGate']], //補位一句不改述
+    //── 補位之開關(BK 系列; 規則 R-RUN-9 ④、R-RUN-13)──
+    ['BK01', 'src/domain/domain.mjs', [["if (backfillRaw !== undefined && backfillRaw !== null && typeof backfillRaw !== 'boolean') {", "if (false) {"]], ['unit-backfill']], //不合之值不拒
+    ['BK02', 'src/cfg.mjs', [["rsi\\.(?:rankBy|formGate|backfill)", "rsi\\.(?:rankBy|formGate)"]], ['unit-backfill']], //入口不認 invalid rsi.backfill
+    ['BK03', 'src/domain/domain.mjs', [["let backfill = backfillRaw !== false && inject.backfill !== false", "let backfill = inject.backfill !== false"]], ['unit-backfill']], //設定之 false 不生效
+    ['BK04', 'src/domain/domain.mjs', [["let backfill = backfillRaw !== false && inject.backfill !== false", "let backfill = backfillRaw !== false"]], ['unit-backfill']], //注入之 false 不生效
+    ['BK05', 'src/domain/domain.mjs', [["        if (!backfill) {\n            return {}\n        }\n", ""]], ['unit-backfill']], //不排補位時照出載體
+    ['BK06', 'src/cli/rsi.mjs', [["...(dreamOnly ? { backfill: false } : {})", "...({})"]], ['unit-backfill', 'unit-dreamOnly']], //只做夢輪次照排補位(閘門不受理)
+    ['BK07', 'src/cli/rsi.mjs', [["    if (st.rsi && st.rsi.backfill === false) {\n        console.log('  (補位已關閉", "    if (false) {\n        console.log('  (補位已關閉"]], ['unit-backfill']], //乾跑不印補位已關閉
+    ['BK08', 'src/domain/texts.mjs', [["            L.push(!backfillOn\n", "            L.push(false\n"]], ['unit-backfill']], //做夢任務書之補位一句不改述
+    ['BK09', 'src/domain/texts.mjs', [["let backfillOn = !(st.rsi && st.rsi.backfill === false)", "let backfillOn = true"]], ['unit-backfill']], //同上(取值處)
+    //── 任務書之舊預設與側別曝險之句(NE 系列; 規則 R-REC-55)──
+    ['NE01', 'src/domain/texts.mjs', [["        L.push('- 入選:各策略依自身之量是否達門檻;", "        void ('- 入選:各策略依自身之量是否達門檻;"]], ['unit-briefDefaults', 'unit-texts']], //節點任務書缺入選之條
+    ['NE02', 'src/domain/texts.mjs', [["`book.openShort < 25`),不設每日上限", "`book.openShort < 30`),不設每日上限"]], ['unit-briefDefaults', 'unit-texts']], //做空之上限寫錯
+    ['NE03', 'src/domain/texts.mjs', [["交付須為〔機制〕之形式(`conclusion.form` 填 `mechanism`);做不到者如實填 `clue` 並說明(見合約 §5)。", ""]], ['unit-briefDefaults', 'unit-texts']], //節點任務書不要求自填形式
+    ['NE04', 'src/domain/texts.mjs', [["**判定成品之形式**:", "**判讀**:"]], ['unit-briefDefaults', 'unit-dreamOnly']], //做夢任務書不要求判定形式
+    ['NE05', 'src/domain/texts.mjs', [["let exposureOn = exposureCfgOf(st.rsi ? st.rsi.exposure : undefined) !== null", "let exposureOn = true"]], ['unit-briefDefaults']], //側別曝險之句不隨設定
+    ['NE06', 'src/domain/texts.mjs', [["(exposureOn ? ' **迴圈檢查列「下單流量偏一側」", "(true ? ' **迴圈檢查列「下單流量偏一側」"]], ['unit-briefDefaults']], //關閉者仍列第 8 點之末句
+    ['NE07', 'src/domain/texts.mjs', [["let expTail = exposureOn ? ", "let expTail = true ? "]], ['unit-briefDefaults']], //關閉者仍列量尺句之後半
+    ['NE08', 'src/domain/texts.mjs', [["L.push(exposureOn\n            ? '  - **4. 同一個底之連續疊加**", "L.push(true\n            ? '  - **4. 同一個底之連續疊加**"]], ['unit-briefDefaults']], //關閉者仍列第 4 項之原句(兩側席次固定之版本)
+    ['NE09', 'src/domain/texts.mjs', [["L.push(exposureOn\n            ? '  - **1. 側別曝險冒充挑選**", "L.push(true\n            ? '  - **1. 側別曝險冒充挑選**"]], ['unit-briefDefaults']], //關閉者仍列第 1 項(不改列單押之界定)
+    ['NE10', 'src/domain/texts.mjs', [["**探索類之方向與預先核對至少一半不以該成品為起點**(改為無起點之方向、其他資訊源或尚未試過之臂)", "**探索類之方向與預先核對至少一半改用側別中性之底**(兩側席次固定之版本)"]], ['unit-briefDefaults']], //關閉者之第 4 項之補救回到兩側席次固定之版本
+    ['NE11', 'src/domain/texts.mjs', [["(!exposureOn ? '。' :", "(false ? '。' :"]], ['unit-briefDefaults']], //節點任務書第 7 條仍要求兩側席次固定之對照版
+    ['NE12', 'src/domain/verify.mjs', [["(st && st.rsi && st.rsi.exposure === false ? null : sideFlowIssue(", "(false ? null : sideFlowIssue("]], ['unit-briefDefaults']], //關閉者仍列下單流量偏一側
+    ['NE13', 'src/domain/verify.mjs', [["let sf = sideFlowIssueOfSt(shortShareOf(out.metrics), train.shortShare, st)", "let sf = sideFlowIssue(shortShareOf(out.metrics), train.shortShare, st.score && st.score.sideFlow)"]], ['unit-briefDefaults']], //迴圈之驗證不經單一之判定(接線)
+    ['NE14', 'src/domain/domain.mjs', [["let issue = sideFlowIssueOfSt(bt, tr, st)", "let issue = sideFlowIssueOfSt(bt, tr, { ...st, rsi: {} })"]], ['unit-briefDefaults']], //補算不看側別曝險之開關
+    ['NE15', 'contract/pick-contract.md', [["    return sig.mode === 1 ? book.openLong < 25 : book.openShort < 25      // 各側", "    return book.open < 30      // 各側"]], ['unit-briefDefaults']], //合約之範例回到舊預設
+    ['NE16', 'contract/pick-contract.md', [["  - **形式**:成品之入選方式", "  - 形式:成品之入選方式"]], ['unit-briefDefaults', 'unit-texts']], //合約缺形式之名詞
+    ['NE17', 'examples/pick_example.mjs', [["    return sig.mode === 1 ? book.openLong < 25 : book.openShort < 25", "    return book.open < 30"]], ['unit-briefDefaults']], //範例之 accept 回到舊預設
+    ['NE18', 'src/domain/texts.mjs', [["L.push('  - **5. 成員依賴**", "L.push('  - **' + (exposureOn ? '5' : '4') + '. 成員依賴**"]], ['unit-briefDefaults']], //關閉者之序號遞補(改前之寫法)
+    ['NE19', 'src/domain/texts.mjs', [["        L.push(exposureOn\n            ? '  - **4. 同一個底之連續疊加**", "        if (exposureOn) L.push(exposureOn\n            ? '  - **4. 同一個底之連續疊加**"]], ['unit-briefDefaults']], //關閉者整條不列第 4 項(改前之寫法)
+    ['NE20', 'src/domain/texts.mjs', [["不以績效或活躍度當入選條件;入選之中性預設 =「全體」", "不以績效或活躍度當入選條件;無條件之側 =「全體」"]], ['unit-briefDefaults', 'unit-texts']], //節點任務書第 3 點之用詞回到「無條件之側」(與第 2 點之「該側尚無條件」相撞)
+    //  NE21 ~ NE22: 兩批(R-EV-57 之 K3 取值 × R-REC-55 ③ 之 sideFlowIssueOfSt)交會處之接線: 同 SF01、SF11 之變異, 由 unit-briefDefaults 之取值案(經 sideFlowIssueOfSt)抓出
+    ['NE21', 'src/domain/verify.mjs', [["        return ok(x) ? x : def\n", "        return x\n"]], ['unit-briefDefaults']], //門檻值域不檢(經 sideFlowIssueOfSt 仍受檢測)
+    ['NE22', 'src/domain/verify.mjs', [["        let x = cfgNumOf(v, def, 'sideFlow', 'num')\n", "        let x = typeof v === 'number' ? v : def\n"]], ['unit-briefDefaults']], //數字字串不轉為數值(經 sideFlowIssueOfSt)
 ]
 
 let args = process.argv.slice(2)

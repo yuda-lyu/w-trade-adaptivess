@@ -69,6 +69,7 @@ let FP_DIGEST = fileURLToPath(new URL('../tools/roundDigest.mjs', import.meta.ur
 //  node g_rsi.mjs --mode round --dream-only --file <文字檔>
 //                                             主控要求之「只做夢」輪次(規則 R-RUN-9): 前緣為空時, 讓做夢在沒有新節點之情形下重新彙整、預先核對、擴建並給方向(審計 0; 輪號照常遞增; 只跑 1 輪)
 //                                             文字檔(UTF-8)= 主控對本輪做夢之要求(原文列於做夢任務書之最前; 不得為空); 計畫有節點、有待重審之節點或有認領中之節點時不受理(reason 'dream-only-busy')
+//                                             只做夢輪次之計畫不排補位(未試之臂之載體; 乾跑與正式起輪皆然)⇒ 前緣無待執行之方向者即受理(規則 R-RUN-9 ④)
 //  node g_rsi.mjs --mode status               現況
 //  node g_rsi.mjs --mode board                重產臂看板(另重寫供 agent 閱讀之生效目錄 arms/catalog.json)
 //  node g_rsi.mjs --mode validate [--force]   對已入樹而尚無回測期旗標之節點補算旗標(需先有全期帳本: 由使用端以聚合入口之 buildLedger 自建於 settings.backtest.ledgerDir, 與評估帳本用同一個 source.startTime; g_build.mjs 不建它)
@@ -110,7 +111,8 @@ let cliInt = (k) => argNumOf(k, 'posInt', null)
 //設定(排程第 547 項: 旗標之檢查皆已於此之前, 含只做夢輪次之 --file; 原: 讀設定在最前)
 let st = settingsOrExit()
 //組裝時之設定預檢(規則 R-EV-44; 期間之界線、eval.fitEnd、eval.trainFromStart)不合 ⇒ 印 ERROR invalid …、離開碼 2(同 g_eval.mjs; 不取鎖、不記事件)
-let P = makeProjectOrExit(st, { run: { nodesPerRound: cliInt('nodes') || cliInt('arms'), parallelNodes: cliInt('parallel') || cliInt('workers'), roundsPerRun: cliInt('rounds') } })
+//只做夢輪次(規則 R-RUN-9 ④): 組裝時注入 backfill: false ⇒ 起跑前之乾跑(計畫判斷)與正式起輪之計畫皆不含補位之載體(同一個專案物件; 只改閘門之計數而不關補位者, 正式起輪會重排計畫而派出補位之節點)
+let P = makeProjectOrExit(st, { run: { nodesPerRound: cliInt('nodes') || cliInt('arms'), parallelNodes: cliInt('parallel') || cliInt('workers'), roundsPerRun: cliInt('rounds') }, ...(dreamOnly ? { backfill: false } : {}) })
 //onlyOf, --only <id 前綴,…> 之解析(reverify / extfill / fill 共用): 取原字串(argStrOf; 全數字之前綴經數值轉型會使清單為空、範圍靜默擴為全樹);
 //  未給 ⇒ null(全部); 給了而無值、前綴不足 6 碼、或未命中任何已執行之節點 ⇒ 印原因、離開碼 2(於取鎖與任何寫入之前呼叫); 命中者印其數
 let onlyOf = () => {
@@ -155,6 +157,11 @@ else if (mode === 'board') {
 else if (mode === 'dry') {
     let r = await rsi.explore({ dry: true, arms: P.run.nodesPerRound, novelty: P.run.nodesPerRound })
     console.log(`下一輪 ${roundName(r.round)} 之計畫(${r.items.length} 個節點;同時 ${P.run.parallelNodes} 個;本次執行連跑 ${P.run.roundsPerRun} 輪):`)
+    //補位之關閉(規則 R-RUN-13: settings.rsi.backfill = false)者另印一句(計畫照實不含補位之載體); 未關閉者逐字不變
+    //  判定取設定本身(與訊息所寫之原因一致; 只做夢輪次之注入不在乾跑之路徑 —— --dream-only 只收於 --mode round)
+    if (st.rsi && st.rsi.backfill === false) {
+        console.log('  (補位已關閉:settings.rsi.backfill = false;計畫只含前緣之方向)')
+    }
     for (let it of r.items) {
         console.log(`  ${it.id.slice(0, 10)} ${it.kindOf} ${P.typeOf(it.spec) === 'verify' ? '〔驗證〕' : '〔探索〕'}${it.spec.arms.join('+')}${it.spec.base ? ` ←${it.spec.base.slice(0, 8)}` : ''}${it.spec.claim ? `〔${P.typeOf(it.spec) === 'verify' ? '主張' : '鍵'} ${it.spec.claim}〕` : ''} | ${it.reason || ''}`)
     }

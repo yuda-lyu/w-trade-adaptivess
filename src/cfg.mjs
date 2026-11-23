@@ -291,6 +291,8 @@ let CLI_VALUES = {
     waitEvent: { 'timeout-min': 'timerMin', 'poll-sec': 'timerSec', 'since': 'time' },
     //--selectable: 布林(B2 之字串寫法; K5: 0、1 與其他字串皆非布林 ⇒ 原: `--selectable 0` 取 true、`abc` 取 true)
     armDecide: { selectable: { enum: ['true', 'false'] } },
+    //--form: 成品之形式之補記(規則 R-REC-53; none = 清除)
+    formSet: { form: { enum: ['mechanism', 'clue', 'none'] } },
 }
 
 //timeMsOf, 時間字串(T2)之毫秒數: 原字串(不去空白)須為 YYYY-MM-DDTHH:mm:ss(可帶 .SSS、可帶 Z 或 ±hh:mm)且為真實存在之時刻; 無效回 null(單一定義: cliMsgOf 之檢查與 tools/waitEvent.mjs 之取值共用)
@@ -444,6 +446,7 @@ let TOOL_FLAGS = {
     dreamProfile: { flags: {}, positional: 1, pos: [{ name: 'round', kind: 'posInt' }] },
     exposure: { flags: { node: '<id-prefix>', why: '<text>', undo: null }, positional: 0 },
     fakeRound: { flags: { two: null, redream: null }, positional: 0 },
+    formSet: { flags: { node: '<id-prefix>', form: '<mechanism|clue|none>', why: '<text>' }, positional: 0 },
     improveTrend: { flags: { json: null }, positional: 0 },
     initProject: { flags: { 'root': '<dir>', 'bar-hours': '<h>', 'dry': null, 'force': null }, positional: 0, own: ['bar-hours'] },
     libCheck: { flags: { 'json': null, 'dir-hi': '<0 ~ 1>', 'dir-lo': '<0 ~ 1>' }, positional: 0, own: ['dir-hi', 'dir-lo'] },
@@ -605,10 +608,10 @@ let cliGuard = (entry, opt = {}) => {
     }
 }
 
-//inputMsgOf, 設定之輸入不合之錯誤之訊息(R-EV-54): 屬 settings.guard / source.libraryRoot / rsi.rankBy / 設定檔之節、路徑欄與派工設定(getSettings)/ settings.backtest 本身(invalid backtest: must be an object; 其下之鍵為 invalid backtest.<鍵>, 由 configMsgOf 認得)/ settings.score.freqBands 之順序(R-EV-57; getSettings 之 freqBandsCheck)者回其固定訊息(invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy、invalid settings.…、invalid backtest:、invalid score.freqBands:), 其餘回 null(照舊拋出)
+//inputMsgOf, 設定之輸入不合之錯誤之訊息(R-EV-54): 屬 settings.guard / source.libraryRoot / rsi.rankBy / rsi.formGate / rsi.backfill(R-REC-54、R-RUN-13) / 設定檔之節、路徑欄與派工設定(getSettings)/ settings.backtest 本身(invalid backtest: must be an object; 其下之鍵為 invalid backtest.<鍵>, 由 configMsgOf 認得)/ settings.score.freqBands 之順序(R-EV-57; getSettings 之 freqBandsCheck)者回其固定訊息(invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy、invalid settings.…、invalid backtest:、invalid score.freqBands:), 其餘回 null(照舊拋出)
 //  與 eval/barGrid.mjs 之 configMsgOf(評估器; 認得 invalid eval. / periods. / backtest. 等)分開(configMsgOf 亦認 invalid score.): 本檔之前綴屬設定檔之節與路徑欄、禁區字樣之來源、rsi.rankBy、派工設定等, 不屬評估器之預檢; 入口以 `configMsgOf(err) || inputMsgOf(err)` 判定
 /**
- * 設定之輸入不合之錯誤之訊息: invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy、invalid settings.… 回其訊息(單行), 其餘回傳 null
+ * 設定之輸入不合之錯誤之訊息: invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy / formGate / backfill、invalid settings.… 回其訊息(單行), 其餘回傳 null
  *
  * @param {*} err 輸入錯誤
  * @returns {String|null} 回傳訊息或 null
@@ -617,7 +620,8 @@ let cliGuard = (entry, opt = {}) => {
  */
 let inputMsgOf = (err) => {
     let msg = String((err && err.message) || err).split('\n')[0]
-    return /^invalid (guard[.:]|source\.libraryRoot|rsi\.rankBy|settings[.:]|backtest:|score\.freqBands:)/.test(msg) ? msg : null
+    //rsi.formGate / rsi.backfill(規則 R-REC-54、R-RUN-13): 同 rsi.rankBy(組裝時拋 invalid rsi.<鍵>: must be boolean; 不帶輸入值)
+    return /^invalid (guard[.:]|source\.libraryRoot|rsi\.(?:rankBy|formGate|backfill)|settings[.:]|backtest:|score\.freqBands:)/.test(msg) ? msg : null
 }
 
 //settingsOrExit, 命令列與工具之入口讀設定之唯一入口(排程第 611 項 ①; R-EV-54): 各進入檔(src/cli/*.mjs)與工具(src/tools/*.mjs)一律以它取設定, 不直接呼叫 getSettings(unit-settingsOrExit 以原始碼之盤點守門)

@@ -187,6 +187,9 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
             let SUM_OLD = '每輪在 `summary` 寫明**目前樹上回測期 S 最高且可信之成品是哪一個、S 與最差相位各多少**(進度之量尺)。'
             let SUM_NEW = '每輪在 `summary` **並列**寫明**目前樹上「內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品各是哪一個、S 與最差相位各多少**(進度之量尺),並寫明兩者是否為同一個、後者是否命中下述「可疑方向」第 1 項(命中者只是側別曝險,不是進度)。'
             let ITEM8_ADD = ' **迴圈檢查列「下單流量偏一側」、或擴充診斷之提示指出成品等同某一個固定狀態(例:`fixedState`)、同比例隨機時機之安慰劑(`placeboTiming`)無內容者,其優勢歸為側別曝險:彙整時不列 `worked`、不作為方向之起點;要保留其側內之機制者,於方向內指明以兩側席次固定之版本重做**(見 §3「可疑方向」)。'
+            //審計規程第 1 點之中性預設改寫與「判定成品之形式」(規則 R-REC-55 ②、R-REC-53; 1.0.50): 雜湊取「把新句換回改前(1.0.49)之原文(字面值)」之後之全文 ⇒ 四個雜湊值不改; 新句另斷言恰出現一次
+            let ITEM1_OLD = '是否守中性預設(`book.open < 30`、無日上限、非指定之層不用績效 / 活躍度、選集 40、同分以 `ctx.meta.tie` 為次鍵;偏離者有無說明)?'
+            let ITEM1_NEW = '是否守中性預設(`accept` 依 `sig.mode` 只看該側之在倉數 —— 做多 `book.openLong < 25`、做空 `book.openShort < 25`,無日上限;入選由各策略自身之量是否達門檻決定、兩側各一條件、入選數與多空組成是結果,不取名次、分位、前 K、固定席數或庫比例;非指定之層不以績效 / 活躍度當入選條件;須定先後者以 `ctx.meta.tie`;偏離者有無說明)?**判定成品之形式**:〔機制〕(逐策略之入選條件)之 `form` 填 `mechanism`,〔線索〕(依名次、分位、前 K、固定席數、庫比例或庫彙總量入選)填 `clue`(範本已預填節點之自標;與節點自標不一致時以你為準,理由記於 `evidence`;名詞見合約 §5)。'
             let revertSuspect = (s) => {
                 let ls = s.split('\n')
                 let heads = ls.map((x, i) => (x.startsWith(SUSPECT_HEAD) ? i : -1)).filter((i) => i >= 0)
@@ -200,7 +203,9 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
                 assert.equal(t.split(SUM_NEW).length - 1, 1, '新量尺句恰出現一次')
                 assert.equal(t.split(ITEM8_ADD).length - 1, 1, '審計規程第 8 點新增之句恰出現一次')
                 assert.equal(t.split(SUM_OLD).length - 1, 0, '改前之量尺句不殘留')
-                return t.split(SUM_NEW).join(SUM_OLD).split(ITEM8_ADD).join('')
+                assert.equal(t.split(ITEM1_NEW).length - 1, 1, '審計規程第 1 點之新句恰出現一次')
+                assert.equal(t.split(ITEM1_OLD).length - 1, 0, '審計規程第 1 點之原句不殘留')
+                return t.split(SUM_NEW).join(SUM_OLD).split(ITEM8_ADD).join('').split(ITEM1_NEW).join(ITEM1_OLD)
             }
             let sha = (s0, nFill) => {
                 let s = revertSuspect(s0)
@@ -540,7 +545,8 @@ module.exports = {
             let st = JSON.parse(fs.readFileSync(path.join(FD_ROOT, 'settings.json'), 'utf8'))
             st.eval.ledgerDir = './ledger'
             st.dispatch = { skillsRoot: path.join(dir, 'skills'), envFile: path.join(dir, '.env') }
-            st.rsi = { ...st.rsi, nodesPerRound: 1, parallelNodes: 1 }
+            //與補位、量尺有關之設定明設(規則 R-RUN-9 ④、R-RUN-13、R-REC-54; 不沿用參考設定之未給)
+            st.rsi = { ...st.rsi, nodesPerRound: 1, parallelNodes: 1, backfill: true, formGate: false, exposure: true, rankBy: 'key' }
             st.resources = {}
             st.agents = { node: { kind: 'opencode', id: 'ocgo:opencode-go/m', variant: 'high', timeoutMin: 1 }, dream: { kind: 'claude', model: 'claude-opus-5-5', effort: 'xhigh', timeoutMin: 1 } }
             fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify(st, null, 1))
@@ -863,8 +869,21 @@ module.exports = {
             assert.deepEqual([stt.done, 'outwardSaturated' in stt.run], [true, false])
         })
 
-        it('只做夢輪次而計畫有節點(可選之臂尚未試)⇒ 不受理:離開碼 0、事件 run-done(rounds 0、reason dream-only-busy)、不建輪夾、不派工', () => {
+        //改寫(規則 R-RUN-9 ④; 1.0.49 之上): 原「只做夢輪次而計畫有節點(可選之臂尚未試)⇒ 不受理(dream-only-busy)」—— 該計畫之節點全為補位之載體;
+        //  只做夢輪次之計畫不再排補位 ⇒ 前緣無方向者受理(正式起輪之計畫 0 個節點); 不受理之情形改以「前緣有待執行之方向」守(同檔之狀態檔與事件之斷言照留)
+        it('只做夢輪次而前緣有待執行之方向(可選之臂亦尚未試)⇒ 不受理:離開碼 0、事件 run-done(rounds 0、reason dream-only-busy)、不建輪夾、不派工;只有補位之載體者受理而不派節點', () => {
             let dir = mkProject('busy', { emptyPlan: false })
+            //可選之臂尚未試(補位有載體)而前緣無方向 ⇒ 受理: 只派做夢、正式起輪之計畫 0 個節點
+            let r0 = runCli(dir, ['--mode', 'round', '--dream-only', '--file', path.join(dir, 'why.txt')])
+            assert.equal(r0.status, 0, r0.out)
+            assert.deepEqual(r0.events.map((e) => e.event), ['run-start', 'round-done', 'run-done'], r0.out)
+            assert.deepEqual(r0.calls, [{ fn: 'dispatchClaude', nAudits: 0, hasRequest: true, quoted: true }])
+            assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'rsi', 'rounds', 'r001', 'plan.json'), 'utf8')).items, [])
+            fs.rmSync(path.join(dir, 'rsi'), { recursive: true, force: true })
+            seedState(dir, (P) => {
+                let spec = { arms: ['C22_calendar'], base: null }
+                P.rsi.store.pushFrontier([{ spec, specHash: specHash(spec), kind: 'arm', reason: '測試用之前緣提案', origin: { topic: 'dream', operator: 'dream', round: 1 }, priority: 1 }])
+            })
             let r = runCli(dir, ['--mode', 'round', '--dream-only', '--file', path.join(dir, 'why.txt'), '--rounds', '2'])
             assert.equal(r.status, 0, r.out)
             assert.deepEqual(r.events.map((e) => e.event), ['run-start', 'run-done'], r.out)
@@ -873,6 +892,7 @@ module.exports = {
             assert.deepEqual([stb.dreamOnly, stb.run.reason, stb.run.done, stb.done], [true, 'dream-only-busy', 0, true], '不起之情形之狀態檔描述本次執行')
             assert.deepEqual([r.events[1].rounds, r.events[1].reason], [0, 'dream-only-busy'])
             assert(/不受理只做夢輪次/.test(r.events[1].stopped) && /起一般輪次即可/.test(r.events[1].stopped))
+            assert(/下一輪之計畫有 1 個節點/.test(r.events[1].stopped), '只計前緣之方向(補位之載體不計)')
             assert.deepEqual(roundDirs(dir), [])
             assert.deepEqual(r.calls, [])
         })

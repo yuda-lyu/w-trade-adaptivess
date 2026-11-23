@@ -17,16 +17,16 @@ import { objReq, strReq, strOpt } from './inputs.mjs'
 //    plan        { target, approach, hypotheses[] }                                   —— agent 填
 //    code        { artifact(成品路徑), files[], reused[], notes, inactiveArms?[](指派之臂中, 交付版未作用者之 id) } —— agent 填
 //    results     { claimed{ 鍵: 值 }(自報之最終結果; 鍵由專案之任務書規定), experiments[{ what, outcome }] } —— agent 填
-//    conclusion  { outcome('improved' | 'neutral' | 'worse' | 'failed'), summary, findings[], limitations[], nextIdeas[] } —— agent 填
+//    conclusion  { outcome('improved' | 'neutral' | 'worse' | 'failed'), summary, findings[], limitations[], nextIdeas[], form?('mechanism' | 'clue' | null; 成品之形式之自填; 見 FORMS) } —— agent 填
 //    harness     迴圈重跑成品之結果(正本):
 //                { ok, summary[{ key, label, value }](與 claimed 同鍵者並列對照), notes[字串](專案之補充說明列), score{ S, ladder, flags{ vetoed, why[] } },
 //                  fingerprint(成品行為之指紋), checks{ issues[字串], …專案之其他機械檢查值 }, validation{ name, flag(專案自訂之旗標字串, 如 'pass' / 'fail' 或分級; null = 未取得), label(選配; 給人讀之說明), at, error }(選配之獨立驗證),
 //                  raw(專案之完整數字), evalJson(重跑結果檔), error }
-//    audit       做夢之審計 { round, by, trust, action, evidence[], issues[], reworkBrief, deleteWhy, inactiveArms?[](審計所定之「未作用之臂」; 有此鍵者優先於節點自報) }
+//    audit       做夢之審計 { round, by, trust, action, evidence[], issues[], reworkBrief, deleteWhy, inactiveArms?[](審計所定之「未作用之臂」; 有此鍵者優先於節點自報), form?(採納而做夢有給形式者才有) }
 //    history     重做前各次之摘要 [{ attempt, S, fingerprint, audit }]
 //  做夢文件 arsi.dream/3(/2 → /3 之選配欄見下方「/2 → /3」; /1 → /2: guidance.toolRequests(未分類之字串)改為 guidance.improvements(分類之改進項); 加 synthesis.prevDirections(前次方向之回顧); /1 之文件照常可讀可渲染):
 //    round, createdAt, updatedAt, agent, scope{ nodes[], reworked[], request?{ why, dreamOnly }(主控對本輪做夢之要求; 只做夢輪次 dreamOnly 為 true 而 nodes 為空; 規則 R-RUN-9) }
-//    audits[{ nodeId, trust('trusted' | 'partial' | 'untrusted'), action('accept' | 'rework' | 'delete'), evidence[], issues[], reworkBrief?, deleteWhy?, inactiveArms?[] }]
+//    audits[{ nodeId, trust('trusted' | 'partial' | 'untrusted'), action('accept' | 'rework' | 'delete'), evidence[], issues[], reworkBrief?, deleteWhy?, inactiveArms?[], form?('mechanism' | 'clue' | null) }]
 //    synthesis{ summary, worked[], failed[], patterns[], prevDirections?[{ round, arms[], verdict, note }], overview?{ coverage{ verdict, why }, progress{ verdict, why }, localOptimum{ risk, why }, blindSpots?[], adjust?, prevReview? }(整體研判; 值域見 OVERVIEW_*) }
 //    guidance{ directions[{ arms[], base, rationale, expect }], avoid[], openQuestions[], improvements?[{ kind, target, what, evidence? }], toolRequests?[](/1 之舊欄) }
 //    docsUpdated[{ file, what }], harness{ docIssues[], tally(見 tallyDream), applied{ accepted, rework, deleted, proposals, skipped } }
@@ -136,6 +136,27 @@ let OVERVIEW_LABELS = { concentrated: '過於集中', balanced: '均衡', scatte
  */
 let CLAIM_VERDICTS = ['confirmed', 'refuted']
 let CLAIM_LABELS = { confirmed: '成立', refuted: '不成立' }
+//成品之形式(選配; 規則 R-REC-53): 節點文件 conclusion.form(節點自填)、做夢文件 audits[].form(做夢覆核)
+//  mechanism = 〔機制〕(逐策略之入選條件: 每隻策略是否入選由其自身之量是否達門檻決定, 入選之隻數與多空組成是結果)
+//  clue = 〔線索〕(入選依名次、分位、前 K、固定席數、庫比例或庫彙總量決定; 與候選之全體之特徵有關, 只供看出趨勢)
+//  未給或 null = 未歸類(節點文件: 未自填; 做夢文件: 不表示意見); 給了而不在值域 ⇒ 檢核不過
+/**
+ * 成品之形式之合法值('mechanism' 〔機制〕、'clue' 〔線索〕);未給或 null = 未歸類
+ *
+ * @type {Array}
+ */
+let FORMS = ['mechanism', 'clue']
+let FORM_LABELS = { mechanism: '〔機制〕', clue: '〔線索〕' }
+/**
+ * 成品之形式之顯示文字:值域內者回〔機制〕/〔線索〕,其餘(未給、null、不在值域)回「未歸類」
+ *
+ * @param {*} f 輸入形式之值
+ * @returns {String} 回傳顯示文字
+ * @example
+ * formLabelOf('clue') // => '〔線索〕'
+ * formLabelOf(null) // => '未歸類'
+ */
+let formLabelOf = (f) => (FORMS.includes(f) ? FORM_LABELS[f] : '未歸類')
 /**
  * 臂目錄提案之 kind 合法值('new' 新臂、'layer' 新層、'revise' 修訂、'retire' 停用)
  *
@@ -259,6 +280,10 @@ let checkNodeAgentPart = (a) => {
         if (a.conclusion.claimNote !== undefined && a.conclusion.claimNote !== null && !isStr(a.conclusion.claimNote)) {
             e.push('conclusion.claimNote 須為字串')
         }
+        //form(選配; 規則 R-REC-53): 成品之形式之自填; 未給或 null = 未歸類(不擋)
+        if (a.conclusion.form !== undefined && a.conclusion.form !== null && !FORMS.includes(a.conclusion.form)) {
+            e.push(`conclusion.form 須為 ${FORMS.join(' / ')}(成品之形式:mechanism = 〔機制〕、clue = 〔線索〕;未歸類給 null)`)
+        }
     }
     return e
 }
@@ -309,6 +334,10 @@ let checkDreamAgentPart = (a, scope = []) => {
             }
             if (x.inactiveArms !== undefined && !strArr(x.inactiveArms)) {
                 e.push(`audits[${x.nodeId.slice(0, 8)}].inactiveArms 須為字串陣列(該節點指派之臂中, 交付版未作用者之 id;沒有則空陣列)`)
+            }
+            //form(選配; 規則 R-REC-53): 做夢所定之成品之形式; 未給或 null = 不表示意見
+            if (x.form !== undefined && x.form !== null && !FORMS.includes(x.form)) {
+                e.push(`audits[${x.nodeId.slice(0, 8)}].form 須為 ${FORMS.join(' / ')}(成品之形式:mechanism = 〔機制〕、clue = 〔線索〕;不表示意見給 null)`)
             }
         }
         for (let id of scope) {
@@ -619,6 +648,10 @@ let renderNodeMd = (d) => {
     if (d.conclusion && CLAIM_VERDICTS.includes(d.conclusion.claimVerdict)) {
         out.push(`- **主張之判定(agent 依方向所寫之判定方式自判): ${CLAIM_LABELS[d.conclusion.claimVerdict]}**${isStr(d.conclusion.claimNote) && d.conclusion.claimNote.trim() ? ` —— ${d.conclusion.claimNote.trim()}` : ''}`)
     }
+    //成品之形式之自填(conclusion.form; 選配; 規則 R-REC-53): 有值者才列(無值者逐字不變)
+    if (d.conclusion && FORMS.includes(d.conclusion.form)) {
+        out.push(`- 形式(agent 自填): ${FORM_LABELS[d.conclusion.form]}`)
+    }
     //驗證類節點(task.type = verify)而有主張之判定者不列「相對比較對象之判定」: 其結論即主張之判定 —— 半庫等驗證之交付版其 S 本來就低於對照,
     //  並列「判定 worse」與「主張之判定 成立」只生混淆, 文字條款擋不住; 探索類照列
     if (!(d.task && d.task.type === 'verify' && d.conclusion && CLAIM_VERDICTS.includes(d.conclusion.claimVerdict))) {
@@ -653,6 +686,10 @@ let renderNodeMd = (d) => {
         if (isArr(au.inactiveArms)) {
             out.push(`- 未作用之臂(審計所定): ${au.inactiveArms.length ? au.inactiveArms.join('、') : '無'}`)
         }
+        //審計所定之成品之形式(audit.form; 採納時才記; 規則 R-REC-53): 有值者才列
+        if (FORMS.includes(au.form)) {
+            out.push(`- 形式(審計所定): ${FORM_LABELS[au.form]}`)
+        }
     }
     else {
         out.push('(尚未審計)')
@@ -666,6 +703,11 @@ let renderNodeMd = (d) => {
     if (isObj(d.control) && isObj(d.control.exposureRelease)) {
         let c = d.control.exposureRelease
         out.push(`- 側別曝險之放行(主控${typeof c.at === 'string' ? `;${c.at.slice(0, 10)}` : ''};綁定之指紋 ${typeof c.fingerprint === 'string' ? c.fingerprint.slice(0, 12) : '—'}): ${typeof c.why === 'string' ? c.why : ''}`)
+    }
+    //主控補記之成品之形式(tools/formSet.mjs; 規則 R-REC-53): 以此列為準; 清除者記 form: null(列「未歸類」); 無此欄者逐字不變
+    if (isObj(d.control) && isObj(d.control.form)) {
+        let c = d.control.form
+        out.push(`- 形式(主控補記${typeof c.at === 'string' ? `;${c.at.slice(0, 10)}` : ''};以此為準): ${formLabelOf(c.form)}${typeof c.why === 'string' && c.why ? ` —— ${c.why}` : ''}`)
     }
     out.push('')
     return out.join('\n')
@@ -725,6 +767,10 @@ let renderDreamMd = (d) => {
         }
         if (isArr(a.inactiveArms) && a.inactiveArms.length) {
             out.push(`- 未作用之臂(指派而交付版未實現者): ${a.inactiveArms.join('、')}`)
+        }
+        //成品之形式(audits[].form; 規則 R-REC-53): 有值者才列
+        if (FORMS.includes(a.form)) {
+            out.push(`- 形式: ${FORM_LABELS[a.form]}`)
         }
     }
     out.push('')
@@ -933,4 +979,4 @@ let createFileRecords = (opt) => {
 }
 
 
-export { NODE_SCHEMA, DREAM_SCHEMA, TRUST, ACTIONS, OUTCOMES, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, TASK_LABELS, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_COVERAGE, OVERVIEW_PROGRESS, OVERVIEW_RISK, OVERVIEW_LABELS, CLAIM_VERDICTS, CLAIM_LABELS, ARM_KINDS, ARM_LABELS, checkArmProposals, armProposalLine, checkNodeAgentPart, checkDreamAgentPart, tallyDream, renderNodeMd, renderDreamMd, createFileRecords, roundName }
+export { NODE_SCHEMA, DREAM_SCHEMA, TRUST, ACTIONS, OUTCOMES, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, TASK_LABELS, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_COVERAGE, OVERVIEW_PROGRESS, OVERVIEW_RISK, OVERVIEW_LABELS, CLAIM_VERDICTS, CLAIM_LABELS, FORMS, FORM_LABELS, formLabelOf, ARM_KINDS, ARM_LABELS, checkArmProposals, armProposalLine, checkNodeAgentPart, checkDreamAgentPart, tallyDream, renderNodeMd, renderDreamMd, createFileRecords, roundName }

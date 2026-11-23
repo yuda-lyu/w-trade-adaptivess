@@ -894,6 +894,10 @@ let sideFlowIssue = (bt, tr, cfg = null) => {
     }
     return `下單流量偏一側: 做空單之比例 訓練期 ${tr} / 回測期 ${bt}(全體隨機約 ${c.baseShort.train} / ${c.baseShort.backtest};兩期皆${up ? `≥ ${c.hi} 倍` : `≤ ${c.lo} 倍`} ⇒ 下單偏${up ? '做空' : '做多'}側屬組成,回測期之方向可能經由兩側活躍度之不對稱寫進模組;由審計判定)`
 }
+//sideFlowIssueOfSt, 迴圈檢查之「下單流量偏一側」是否列為問題(規則 R-REC-15、R-REC-55 ③; 迴圈之驗證〔makeVerify〕與補算〔domain.mjs 之 rescanSideFlow〕共用此單一定義):
+//  側別曝險之判定關閉者(settings.rsi.exposure === false; 與 verifyExposure.mjs 之 exposureCfgOf 回 null 同一條件)回 null —— 多空兩側各自運行, 某時段只有一側下單是各策略自身之條件之結果, 不列為問題(讀數照留:
+//  節點文件之「下單之做空比例」一列與樹之 raw.train.shortShare); 其餘 = sideFlowIssue(門檻取 settings.score.sideFlow, 經 sideFlowIssue 內之 sideFlowCfgOf 取值〔R-EV-57 ②、K3 單一來源: 無效之值取內建值、數字字串轉為數值〕, 本函數不另讀設定; 與改前逐字相同); 側別曝險之判定本身(verifyExposure.mjs)直接用 sideFlowIssue, 不經本函數
+let sideFlowIssueOfSt = (bt, tr, st) => (st && st.rsi && st.rsi.exposure === false ? null : sideFlowIssue(bt, tr, st && st.score && st.score.sideFlow))
 
 //  replays(選配): 各次重放之 { S, comp(組成對照之超額), recent(近期活躍度之組成對照之超額), [ext](一併載入之擴充診斷之摘要; 規則 R-REC-42) }(規則 R-EV-24; 有給時該列一併列出; 帶 ext 者另列各診斷之看板值之多抽之均)
 /**
@@ -1163,7 +1167,8 @@ let makeVerify = ({ st, FD_ROOT, layerOfSpec, refsOf = null }) => {
                     issues.push(`固定側別: 選集之做多比例 訓練期 ${a} / 回測期 ${b}(兩期皆只挑${a < 0.1 ? '做空' : '做多'}側;回測期之行情方向可能被寫進模組,由審計判定)`)
                 }
                 //下單流量偏一側(規則 R-REC-15): 席次之做多比例正常, 仍可經由兩側活躍度之不對稱使下單集中在一側
-                let sf = sideFlowIssue(shortShareOf(out.metrics), train.shortShare, st.score && st.score.sideFlow)
+                //  側別曝險之判定關閉者不列為問題(規則 R-REC-55 ③; 判定在 sideFlowIssueOfSt)
+                let sf = sideFlowIssueOfSt(shortShareOf(out.metrics), train.shortShare, st)
                 if (sf) {
                     issues.push(sf)
                 }
@@ -1399,5 +1404,5 @@ let dirNodeIdsOf = (direction, ids) => {
 //allowWorkOf, 節點文件 d 可讀之他節點工作夾之 id: 起點(spec.base)、任務書列為參考之節點(task.refs)、方向內提到之工作夾與指名之節點
 let allowWorkOf = (d, { workRel, ids }) => [...(d.spec && d.spec.base ? [d.spec.base] : []), ...(((d.task && d.task.refs) || []).filter((r) => r.nodeId).map((r) => r.nodeId)), ...dirWorkIdsOf(d.task && d.task.direction, workRel), ...dirNodeIdsOf(d.task && d.task.direction, ids)]
 
-export { makeVerify, scanTrace, deniedHalt, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, isHalfOf, runNodeProc, fixedSideOf, shortShareOf, sideFlowIssue, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD, replicaExtOf, replicaExtArgsOf, replayExtOf, boardMeanOf, extBoardMeansOf, REPLICA_EXT, evalLines, dirWorkIdsOf, dirNodeIdsOf, allowWorkOf }
+export { makeVerify, scanTrace, deniedHalt, stripInlinePatterns, forbiddenPats, setGuardExtra, guardExtraOf, PKG_NAME, contentHits, datedIn, evalsLogged, evalsDistinct, noLogTried, lostVersions, summaryOf, notesOf, isHalfOf, runNodeProc, fixedSideOf, shortShareOf, sideFlowIssue, sideFlowIssueOfSt, sideFlowCfgOf, SIDE_FLOW, extSurfaceOf, extFlagIssue, EXT_FLAG_HEAD, replicaExtOf, replicaExtArgsOf, replayExtOf, boardMeanOf, extBoardMeansOf, REPLICA_EXT, evalLines, dirWorkIdsOf, dirNodeIdsOf, allowWorkOf }
 export default makeVerify

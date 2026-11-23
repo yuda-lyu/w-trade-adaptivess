@@ -54,6 +54,7 @@ let ENTRY_RULES = {
     armDecide: { label: 'tools/armDecide.mjs 之審定', writes: (args) => args.length > 0 },
     armInactive: { label: 'tools/armInactive.mjs 之補記', writes: (args) => args.length > 0 },
     exposure: { label: 'tools/exposure.mjs 之放行', writes: (args) => args.length > 0 },
+    formSet: { label: 'tools/formSet.mjs 之補記', writes: (args) => args.length > 0 },
     briefPreview: { label: 'tools/briefPreview.mjs --out', writes: (args) => has(args, '--out') },
     quota: { label: 'tools/quota.mjs --probe', writes: (args) => has(args, '--probe') },
     roundDigest: { label: 'tools/roundDigest.mjs --out', writes: (args) => has(args, '--out') },
