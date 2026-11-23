@@ -79,7 +79,7 @@ let FP_DIGEST = fileURLToPath(new URL('../tools/roundDigest.mjs', import.meta.ur
 //  node g_rsi.mjs --mode fill [--dry] [--only <id 前綴,…>] [--force] [--no-postfit] [--ext <診斷名,…> | none] [--null N] [--par N] [--no-member]
 //                                             附算與補算(規則 R-REC-34): 求解窗後段之值與所缺或已過時之擴充診斷(佐證; 不動數字、分數、階梯; 存於狀態根之 fill/);
 //                                             輪末鉤子只算本輪之節點與待重試者, 其餘以此補齊; 與輪次共用同一把鎖(離開碼 3 = 有輪次或另一次重算執行中)
-//  node g_rsi.mjs --mode frontier [--close <臂+臂> --why <理由>]   列出前緣; 主代理把尚未執行之提案結案
+//  node g_rsi.mjs --mode frontier [--close <臂+臂> --why <理由> [--base <起點 id>] [--claim <主張鍵>]]   列出前緣; 主代理把尚未執行之提案結案(--base 限定起點)
 //  node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why <理由> [--base <起點 id>] [--claim <主張鍵>]
 //                                             主控通過新臂後, 把做夢暫掛於既有臂之未執行方向改掛新臂(規則 R-ARM-4; 只改臂之歸屬)
 //  node g_rsi.mjs --mode annotate --round N --file <文字檔>      於該輪做夢文件加「迴圈註記」(文件完成後之更正)
@@ -632,7 +632,8 @@ else if (mode === 'fill') {
     process.exit(bad.length || r.stateError ? 5 : 0)
 }
 else if (mode === 'frontier') {
-    //列出前緣; 或結案: node g_rsi.mjs --mode frontier --close A02_ntPit[+B14_pitKey] --why "<理由>" [--claim <主張鍵>]
+    //列出前緣; 或結案: node g_rsi.mjs --mode frontier --close A02_ntPit[+B14_pitKey] --why "<理由>" [--base <起點 id>] [--claim <主張鍵>]
+    //  --base: 起點之節點 id(完整; 與 --rearm 之 --base 同; 排程第 481 項之核實: 原 --close 不收 --base ⇒ 同臂之提案不論起點全部結案; 未給 = 不限〔不變〕; 未命中 ⇒ 結案 0 條); 同時給 --close 與 --rearm 者,兩者共用之
     //  --claim: 主張鍵(8 個十六進位字; 列示中之〔主張 …〕; 探索類之區分用之鍵列為〔鍵 …〕, 同以本參數指明); 取命令列之原字串(全為數字之鍵不得被轉成數值)
     let claimArg = () => {
         let i = process.argv.indexOf('--claim'); let v = i > 0 ? process.argv[i + 1] : undefined; return typeof v === 'string' && /^[0-9a-f]{8}$/.test(v) ? v : undefined
@@ -640,8 +641,13 @@ else if (mode === 'frontier') {
     let cl = argOf('close', '')
     if (cl && cl !== true) {
         let ckc = claimArg()
-        let k = P.closeFrontier({ arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) })
+        let bsc = argStrOf('base', undefined)
+        let k = P.closeFrontier({ arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof bsc === 'string' && bsc ? { base: bsc } : {}), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) })
         console.log(`結案 ${k} 條`)
+        //--base 未命中者提示(列示只印起點 id 之前 8 碼, 而 --base 須為完整之 id; 複審所見: 照列示抄前 8 碼者原只得「結案 0 條」而無從知其故)
+        if (k === 0 && typeof bsc === 'string' && bsc) {
+            console.log('提示: --base 須為完整之起點節點 id(列示之 ←xxxxxxxx 只印前 8 碼)')
+        }
     }
     //改掛(規則 R-ARM-4): node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why "<理由>" [--base <起點 id>]
     //  主控通過新臂後, 把做夢「暫掛於既有臂」之未執行方向改掛新臂; 只改臂之歸屬、不改方向之內容; 輪次進行中不得執行

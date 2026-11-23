@@ -50,6 +50,7 @@ import os from 'os'
 import path from 'path'
 import { rsiNumOf, RSI_NUM_KINDS } from './arsi/rsiNums.mjs'
 import { agentsCheck } from './arsi/inputs.mjs'
+import { evalScoreOf } from './eval/cfgNum.mjs'
 
 
 //專案根(唯一之路徑錨點)與設定載入; 設定內之相對路徑一律以專案根解析
@@ -95,6 +96,23 @@ let tms = (s) => Date.parse(`${s}Z`)
  * let s = isoOf(tms('2022-07-01T00:00:00'))
  */
 let isoOf = (ms) => new Date(ms).toISOString().slice(0, 19)
+
+//freqBandsCheck, settings.score.freqBands 之順序(排程第 612 項 ②; R-EV-57; R-EV-44 ④之二): 月均單之分段界線 [b1, b2] 須 b1 ≤ b2(順序顛倒者之「中」段恆空、搜尋地圖之格〔scoreOf 之 cell〕無意義 ⇒ 給了而無效即拒絕)
+//  比較取評估器之 evalScoreOf 之轉換值(數字字串依數值比較: ['9', '10'] 合格); 他種之無效(非陣列、非非負數等)不在此處理(留待組裝時之預檢: invalid score.…, 訊息與離開碼不變)
+//  本檢查置於讀設定處而不在 evalScoreOf: 評估器之指紋不得因本項而改變(src/eval/*.mjs 與 src/cli/eval.mjs 不動); 直接以 API 組 st 者不經此處(列 sgud 已知限制: 待下次動評估器時移入 evalScoreOf 之單一來源)
+let FREQ_BANDS_MSG = 'invalid score.freqBands: must be two non-negative numbers with b1 &lt;= b2'
+let freqBandsCheck = (score) => {
+    let sc = null
+    try {
+        sc = evalScoreOf(score, 'score')
+    }
+    catch (err) {
+        return
+    }
+    if (sc.freqBands[0] > sc.freqBands[1]) {
+        throw new Error(FREQ_BANDS_MSG)
+    }
+}
 
 //getSettings, 讀專案根之 settings.json; 路徑欄(eval.ledgerDir、rsi.root、records.*)轉為絕對路徑
 //  dispatch.skillsRoot 未給時取使用者家目錄下之 .claude/skills(派工套件 w-dispatch-ai 之所在; 見 arsi/dispatchers.mjs)
@@ -143,6 +161,8 @@ let getSettings = () => {
     if (st.agents !== undefined &amp;&amp; st.agents !== null) {
         agentsCheck(st.agents, 'settings.agents')
     }
+    //判讀之門檻之順序(settings.score.freqBands 之 b1 ≤ b2; R-EV-57): 給了而顛倒 ⇒ 拋固定訊息(不帶輸入值)
+    freqBandsCheck(st.score)
     st.FD_ROOT = FD_ROOT
     return st
 }
@@ -404,7 +424,7 @@ let CLI_OWN = {
     rsi: { noValue: ['file'], dup: [] },
 }
 
-//CLI_MODE_FLAGS, 進入檔之「模式 × 旗標」(單一定義; 排程第 595 項之接續: 原 `--mode status --rounds 3`、`--mode validate --only &lt;id>`、`--mode reverify --null 4`、`--mode frontier --close A --base X` 等不屬該模式之旗標被靜默忽略):
+//CLI_MODE_FLAGS, 進入檔之「模式 × 旗標」(單一定義; 排程第 595 項之接續: 原 `--mode status --rounds 3`、`--mode validate --only &lt;id>`、`--mode reverify --null 4`、`--mode frontier --base X`〔無 --close / --rearm〕等不屬該模式之旗標被靜默忽略):
 //  進入檔名 → { 模式名: [該模式讀取之旗標(不含 mode 本身)] }; 命令列給了不屬所選模式之旗標 ⇒ 拒收(同一檢查點、離開碼 2、固定訊息、不帶輸入值)
 //  模式名 = CLI_ENUMS.rsi.mode 之集合(unit-cliModeFlags 核對); 各模式所列之旗標 = src/cli/rsi.mjs 該模式區塊內讀取者(同測試以原始碼盤點核對); 每個 CLI_FLAGS.rsi 之旗標至少屬一個模式
 let CLI_MODE_FLAGS = {
@@ -430,10 +450,11 @@ let CLI_MODE_OWN = {
 }
 
 //CLI_MODE_NEEDS, 模式內旗標之相依: 進入檔名 → 模式 → { 旗標: [至少須同時給其一之旗標] }; 不合 ⇒ 拒收(同上)
-//  frontier: 列出前緣不帶任何寫出之旗標; --to、--base 只隨 --rearm(改掛); --why、--claim 只隨 --close 或 --rearm(原: 單獨給之 --base、--to、--why、--claim 被靜默忽略)
+//  frontier: 列出前緣不帶任何寫出之旗標; --to 只隨 --rearm(改掛); --base、--why、--claim 只隨 --close 或 --rearm(原: 單獨給之 --base、--to、--why、--claim 被靜默忽略;
+//    排程第 481 項之核實: --base 原只隨 --rearm、與 --close 並用被拒收 ⇒ 結案無從以起點指明, 同臂之提案不論起點全部結案; 今 --close 亦收 --base,與 --rearm 對稱)
 let CLI_MODE_NEEDS = {
     rsi: {
-        frontier: { to: ['rearm'], base: ['rearm'], why: ['close', 'rearm'], claim: ['close', 'rearm'] },
+        frontier: { to: ['rearm'], base: ['close', 'rearm'], why: ['close', 'rearm'], claim: ['close', 'rearm'] },
     },
 }
 
@@ -631,7 +652,7 @@ let cliGuard = (entry, opt = {}) => {
     }
 }
 
-//inputMsgOf, 設定之輸入不合之錯誤之訊息(R-EV-54): 屬 settings.guard / source.libraryRoot / rsi.rankBy / 設定檔之節、路徑欄與派工設定(getSettings)/ settings.backtest 本身(invalid backtest: must be an object; 其下之鍵為 invalid backtest.&lt;鍵>, 由 configMsgOf 認得)者回其固定訊息(invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy、invalid settings.…、invalid backtest:), 其餘回 null(照舊拋出)
+//inputMsgOf, 設定之輸入不合之錯誤之訊息(R-EV-54): 屬 settings.guard / source.libraryRoot / rsi.rankBy / 設定檔之節、路徑欄與派工設定(getSettings)/ settings.backtest 本身(invalid backtest: must be an object; 其下之鍵為 invalid backtest.&lt;鍵>, 由 configMsgOf 認得)/ settings.score.freqBands 之順序(R-EV-57; getSettings 之 freqBandsCheck)者回其固定訊息(invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy、invalid settings.…、invalid backtest:、invalid score.freqBands:), 其餘回 null(照舊拋出)
 //  與 eval/barGrid.mjs 之 configMsgOf(評估器; 認得 invalid eval. / periods. / backtest. 等)分開(configMsgOf 亦認 invalid score.): 本檔之前綴屬設定檔之節與路徑欄、禁區字樣之來源、rsi.rankBy、派工設定等, 不屬評估器之預檢; 入口以 `configMsgOf(err) || inputMsgOf(err)` 判定
 /**
  * 設定之輸入不合之錯誤之訊息: invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy、invalid settings.… 回其訊息(單行), 其餘回傳 null
@@ -643,7 +664,7 @@ let cliGuard = (entry, opt = {}) => {
  */
 let inputMsgOf = (err) => {
     let msg = String((err &amp;&amp; err.message) || err).split('\n')[0]
-    return /^invalid (guard[.:]|source\.libraryRoot|rsi\.rankBy|settings[.:]|backtest:)/.test(msg) ? msg : null
+    return /^invalid (guard[.:]|source\.libraryRoot|rsi\.rankBy|settings[.:]|backtest:|score\.freqBands:)/.test(msg) ? msg : null
 }
 
 //settingsOrExit, 命令列與工具之入口讀設定之唯一入口(排程第 611 項 ①; R-EV-54): 各進入檔(src/cli/*.mjs)與工具(src/tools/*.mjs)一律以它取設定, 不直接呼叫 getSettings(unit-settingsOrExit 以原始碼之盤點守門)
@@ -716,7 +737,7 @@ export { FD_ROOT, P, tms, isoOf, getSettings, argOf, argStrOf, argNumOf, CLI_FLA
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Mon Nov 23 2026 21:49:34 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Tue Nov 24 2026 02:44:15 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>

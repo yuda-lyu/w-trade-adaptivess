@@ -164,7 +164,7 @@ let M = [
     //── pickStore / verify ──
     ['P01', 'src/domain/pickStore.mjs', [['${hoFrom ? `(${hoFrom} 起)` : \'\'}', '(2026-08-01 起)']], ['unit-barHours']],
     ['P02', 'src/domain/pickStore.mjs', [["st.periods && typeof st.periods.holdoutFrom === 'string' && st.periods.holdoutFrom ? st.periods.holdoutFrom.slice(0, 10) : null", "'2026-08-01'"]], ['unit-barHours']],
-    ['W01', 'src/domain/verify.mjs', [['let sideFlowCfgOf = (cfg = null) => ({ ...SIDE_FLOW, ...(cfg || {}), baseShort: { ...SIDE_FLOW.baseShort, ...((cfg && cfg.baseShort) || {}) } })', 'let sideFlowCfgOf = (cfg = null) => ({ ...SIDE_FLOW })']], ['unit-barHours']],
+    ['W01', 'src/domain/verify.mjs', [['let sideFlowCfgOf = (cfg = null) => {\n    let c = sideObjOf(cfg)\n', 'let sideFlowCfgOf = (cfg = null) => {\n    return { ...SIDE_FLOW }\n    let c = sideObjOf(cfg)\n']], ['unit-barHours']], //錨點隨排程第 612 項 ②(取值改經 sideNumOf)而改: 判讀不採 settings.score.sideFlow
     ['W02', 'src/domain/verify.mjs', [['let sfBase = sideFlowCfgOf(sideFlow).baseShort', 'let sfBase = SIDE_FLOW.baseShort']], ['unit-barHours']],
     ['W03', 'src/domain/verify.mjs', [['notes: notesOf(out.metrics, seedS, train, replays, isHalf, st.score && st.score.sideFlow),', 'notes: notesOf(out.metrics, seedS, train, replays, isHalf),']], ['unit-barHours']],
     //半庫版之判定(迴圈之驗證與補算取同一函數 isHalfOf; Gitea #196 之併入項): W04 只認 0、W05 把 0 與 1 以外之值也當半庫版、W06 迴圈之驗證不帶半庫判定、W07 notesOf 不列半庫版之說明列
@@ -261,7 +261,7 @@ let M = [
     ['M11', 'src/domain/domain.mjs', [['        if (spRows.length) {', '        if (true) {']], ['unit-searchMapRecent']],
     ['M12', 'src/domain/domain.mjs', [["${actSplitOf(n) ? ' 活躍度定義不一致' : ''}", '']], ['unit-searchMapRecent']],
     ['M13', 'src/domain/domain.mjs', [['            let sp = actSplitOf(n)', '            let sp = null']], ['unit-searchMapRecent']],
-    ['M14', 'src/domain/domain.mjs', [["let contentPMax = () => evalScoreOf(st.score, 'score').ladder1.nullP || 0.05", 'let contentPMax = () => 0.05']], ['unit-searchMapRecent']],
+    ['M14', 'src/domain/domain.mjs', [["let contentPMax = () => evalScoreOf(st.score, 'score').ladder1.nullP\n", 'let contentPMax = () => 0.05\n']], ['unit-searchMapRecent', 'unit-contentNullP']], //錨點隨排程第 612 項 ①(去掉 `|| 0.05`)而改
     ['M15', 'src/domain/domain.mjs', [["c.excess > 0 && typeof c.p === 'number' && c.p <= pMax", "c.excess >= 0 && typeof c.p === 'number' && c.p <= pMax"]], ['unit-searchMapRecent']],
     ['M16', 'src/domain/domain.mjs', [["c.excess > 0 && typeof c.p === 'number' && c.p <= pMax", "c.excess > 0 && typeof c.p === 'number' && c.p < pMax"]], ['unit-searchMapRecent']],
     ['M17', 'src/domain/domain.mjs', [['c.share >= 0.8)', 'c.share > 0.8)']], ['unit-searchMapRecent']],
@@ -1252,7 +1252,7 @@ let M = [
     ['TM11', 'src/cfg.mjs', [["return `invalid --${nm}: must be used with --mode ${ms.length > 1 ?", "return `invalid --${nm}: must be used with --mode ${false ?"]], ['unit-cliModeFlags']], //所屬之模式只列第一個
     ['TM12', 'src/cfg.mjs', [["        reverify: ['why', 'keep-flags', 'only'],", "        reverify: ['why', 'keep-flags', 'only', 'null'],"]], ['unit-cliModeFlags']], //reverify 收 --null
     ['TM13', 'src/cfg.mjs', [["        status: [],", "        status: ['rounds'],"]], ['unit-cliModeFlags']], //status 收 --rounds
-    ['TM14', 'src/cfg.mjs', [["base: ['rearm'],", "base: ['rearm', 'close'],"]], ['unit-cliModeFlags']], //--base 於 --close 通過
+    ['TM14', 'src/cfg.mjs', [["base: ['close', 'rearm'],", "base: ['rearm'],"]], ['unit-cliModeFlags', 'unit-frontierOps']], //--base 於 --close 被拒(排程第 481 項之核實前之寫法; 錨點與方向隨之反轉)
     ['TM15', 'src/cfg.mjs', [["            'selectable': '<true|false>',\n", ""]], ['unit-toolFlags']], //armDecide 之表缺 --selectable
     ['TM16', 'src/cfg.mjs', [["'since': '<ISO-time>', 'poll-sec': '<N>' }", "'since': '<ISO-time>' }"]], ['unit-toolFlags']], //waitEvent 之表缺 --poll-sec
     ['TM17', 'src/cfg.mjs', [["roundDigest: { flags: { out: null }, positional: 1, pos:", "roundDigest: { flags: { out: null }, positional: 0, pos:"]], ['unit-toolFlags']], //roundDigest 不收輪次
@@ -1444,7 +1444,7 @@ let M = [
     ['IN37', 'src/cfg.mjs', [["        agentsCheck(st.agents, 'settings.agents')", "        void 0"]], ['unit-inputGates']],
     ['IN38', 'src/cfg.mjs', [["source\\.libraryRoot|rsi\\.rankBy|settings[.:]|backtest:", "source\\.libraryRoot|settings[.:]|backtest:"]], ['unit-inputGates']],
     ['IN39', 'src/cfg.mjs', [["rsi\\.rankBy|settings[.:]|backtest:", "rsi\\.rankBy|settings\\.|backtest:"]], ['unit-inputGates']],
-    ['IN40', 'src/cfg.mjs', [["rsi\\.rankBy|settings[.:]|backtest:)", "rsi\\.rankBy|settings[.:])"]], ['unit-inputGates']],
+    ['IN40', 'src/cfg.mjs', [["settings[.:]|backtest:|score\\.freqBands:)", "settings[.:]|score\\.freqBands:)"]], ['unit-inputGates']], //錨點隨 R-EV-57(inputMsgOf 加 score.freqBands:)而改
     //  進入檔與工具之讀取處(取檢查合格之轉換值; 字串旗標取原字串)
     ['IN41', 'src/cli/rsi.mjs', [["let cliInt = (k) => argNumOf(k, 'posInt', null)", "let cliInt = (k) => {\n    let v = argOf(k, null)\n    return Number.isInteger(v) && v >= 1 ? v : null\n}"]], ['unit-cliValues']],
     ['IN42', 'src/cli/rsi.mjs', [["let parArg = argNumOf('par', 'posInt', null)", "let parArg = argOf('par', null)"]], ['unit-cliValues']],
@@ -1585,7 +1585,7 @@ let M = [
     //── 排程第 606、611、545、564 項(tadm5; 1.0.48): settingsOrExit(SO)、範圍外輸入值回顯之改寫(EC)、settings.resources(RC)、settings.score(SG)、--seed / --tie-salt(SZ)、補算之停止檔(FQ)、一致性核對之進場數之來源(NT) ──
     ['SO01', 'src/cfg.mjs', [["console.log(msg !== null ? `ERROR ${msg}` :", 'console.log(false ? `ERROR ${msg}` :']], ['unit-settingsOrExit']], //設定之節 / 路徑欄不合者亦印「無法讀取專案設定」(不指出何者不合)
     ['SO02', 'src/cfg.mjs', [["console.log(msg !== null ? `ERROR ${msg}` :", 'console.log(msg !== null ? msg :']], ['unit-settingsOrExit']], //不合之訊息無 ERROR 起首
-    ['SO03', 'src/cfg.mjs', [['|settings[.:]|backtest:)/.test(msg)', '|backtest:)/.test(msg)']], ['unit-settingsOrExit']], //inputMsgOf 不認 invalid settings.…
+    ['SO03', 'src/cfg.mjs', [['|settings[.:]|backtest:|score\\.freqBands:)/.test(msg)', '|backtest:|score\\.freqBands:)/.test(msg)']], ['unit-settingsOrExit']], //inputMsgOf 不認 invalid settings.…(錨點隨 R-EV-57 而改)
     ['EC01', 'src/domain/armCatalog.mjs', [['<流水號>_<英數名>(現有層:', '<流水號>_<英數名>(收到 ${armId};現有層:']], ['unit-inputEcho']], //--arm-id 之訊息帶輸入之臂代號
     ['EC02', 'src/tools/armInactive.mjs', [['console.error(`節點前綴符合 ${hits.length} 個(須恰為 1 個)`)', 'console.error(`節點 ${key}: 符合 ${hits.length} 個(須恰為 1 個)`)']], ['unit-inputEcho']], //armInactive 之訊息帶輸入之前綴
     ['EC03', 'src/tools/exposure.mjs', [['console.error(`節點前綴符合 ${hits.length} 個(須恰為 1 個)`)', 'console.error(`節點 ${key}: 符合 ${hits.length} 個(須恰為 1 個)`)']], ['unit-inputEcho']], //exposure 之訊息帶輸入之前綴
@@ -1648,6 +1648,35 @@ let M = [
     ['NT03', 'src/eval/ledgerBuild.mjs', [[": (typeof s.numTrade === 'number' ? s.numTrade : undefined)", ': (typeof s.numTrade === \'number\' ? s.numTrade : (s.summary && typeof s.summary.numTrade === \'number\' ? s.summary.numTrade : undefined))']], ['unit-ledgerNumTrade']], //頂層已帶而非數字者亦後備
     ['NT04', 'src/eval/ledgerBuild.mjs', [["let ntFile = s.numTrade === undefined || s.numTrade === null ? (s.summary && typeof s.summary.numTrade === 'number' ? s.summary.numTrade : undefined) : (typeof s.numTrade === 'number' ? s.numTrade : undefined)", "let ntFile = s.summary && typeof s.summary.numTrade === 'number' ? s.summary.numTrade : (typeof s.numTrade === 'number' ? s.numTrade : undefined)"]], ['unit-ledgerNumTrade']], //summary 為先(頂層為後備)
     ['NT05', 'src/eval/ledgerBuild.mjs', [['diffs.push({ f: files[si], ledger: cnt, file: ntFile })', 'diffs.push({ f: files[si], ledger: cnt, file: s.numTrade })']], ['unit-ledgerNumTrade']], //diffs 之 file 仍取頂層
+    //── 排程第 612 項、第 481 項之核實後當輪修(第五輪〔tadm6〕; R-EV-57): CP「有內容」之門檻、SF sideFlow 之取值、FB freqBands 之順序、DA 含重複臂之來源方向、RB 改掛至已結案之同規格、CB 結案之 --base ──
+    ['CP01', 'src/domain/domain.mjs', [["let contentPMax = () => evalScoreOf(st.score, 'score').ladder1.nullP\n", "let contentPMax = () => evalScoreOf(st.score, 'score').ladder1.nullP || 0.05\n"]], ['unit-contentNullP']], //nullP 為 0 者取 0.05(同改前)
+    ['CP02', 'src/domain/domain.mjs', [["let contentPMax = () => evalScoreOf(st.score, 'score').ladder1.nullP\n", "let contentPMax = () => (st.score && st.score.ladder1 && typeof st.score.ladder1.nullP === 'number' ? st.score.ladder1.nullP : 0.05)\n"]], ['unit-contentNullP']], //不經 evalScoreOf(數字字串被當未給)
+    ['SF01', 'src/domain/verify.mjs', [["        return ok(x) ? x : def\n", "        return x\n"]], ['unit-sideFlowCfg']], //值域不檢
+    ['SF02', 'src/domain/verify.mjs', [["    catch (err) {\n        return def\n    }\n}\nlet sideObjOf", "    catch (err) {\n        return v\n    }\n}\nlet sideObjOf"]], ['unit-sideFlowCfg']], //無效者原樣回傳(不取預設)
+    ['SF03', 'src/domain/verify.mjs', [["let SIDE_FLOW_OK = { hi: (x) => x > 0, lo: (x) => x >= 0, share: (x) => x > 0 && x <= 1 }", "let SIDE_FLOW_OK = { hi: (x) => x > 0, lo: (x) => x >= 0, share: (x) => x > 0 }"]], ['unit-sideFlowCfg']], //基準之上限(≤ 1)不檢
+    ['SF04', 'src/domain/verify.mjs', [["let SIDE_FLOW_OK = { hi: (x) => x > 0, lo: (x) => x >= 0, share: (x) => x > 0 && x <= 1 }", "let SIDE_FLOW_OK = { hi: (x) => x > 0, lo: (x) => x >= 0, share: (x) => x >= 0 && x <= 1 }"]], ['unit-sideFlowCfg']], //基準為 0 視為有效
+    ['SF05', 'src/domain/verify.mjs', [["let SIDE_FLOW_OK = { hi: (x) => x > 0, lo: (x) => x >= 0, share: (x) => x > 0 && x <= 1 }", "let SIDE_FLOW_OK = { hi: (x) => x >= 0, lo: (x) => x >= 0, share: (x) => x > 0 && x <= 1 }"]], ['unit-sideFlowCfg']], //hi 為 0 視為有效
+    ['SF06', 'src/domain/verify.mjs', [["let SIDE_FLOW_OK = { hi: (x) => x > 0, lo: (x) => x >= 0, share: (x) => x > 0 && x <= 1 }", "let SIDE_FLOW_OK = { hi: (x) => x > 0, lo: (x) => x > 0, share: (x) => x > 0 && x <= 1 }"]], ['unit-sideFlowCfg']], //lo 為 0 視為無效
+    ['SF07', 'src/domain/verify.mjs', [["        lo: sideNumOf(c.lo, SIDE_FLOW.lo, SIDE_FLOW_OK.lo),\n", "        lo: sideNumOf(c.hi, SIDE_FLOW.lo, SIDE_FLOW_OK.lo),\n"]], ['unit-sideFlowCfg']], //lo 取成 hi 之值
+    ['SF08', 'src/domain/verify.mjs', [["baseShort: { backtest: sideNumOf(b.backtest, SIDE_FLOW.baseShort.backtest, SIDE_FLOW_OK.share), train: sideNumOf(b.train, SIDE_FLOW.baseShort.train, SIDE_FLOW_OK.share) },", "baseShort: { backtest: sideNumOf(b.train, SIDE_FLOW.baseShort.backtest, SIDE_FLOW_OK.share), train: sideNumOf(b.backtest, SIDE_FLOW.baseShort.train, SIDE_FLOW_OK.share) },"]], ['unit-sideFlowCfg']], //基準之回測期與訓練期對調
+    ['SF10', 'src/domain/verify.mjs', [["        let x = cfgNumOf(v, def, 'sideFlow', 'num')\n", "        let x = typeof v === 'number' ? v : (v === undefined || v === null ? def : Number(v))\n"]], ['unit-sideFlowCfg']], //不經 cfgNumOf(布林、空字串、陣列被轉為數值)
+    ['SF11', 'src/domain/verify.mjs', [["        let x = cfgNumOf(v, def, 'sideFlow', 'num')\n", "        let x = typeof v === 'number' ? v : def\n"]], ['unit-sideFlowCfg']], //數字字串不轉為數值(當未給)
+    ['FB01', 'src/cfg.mjs', [["    if (sc.freqBands[0] > sc.freqBands[1]) {\n", "    if (sc.freqBands[0] >= sc.freqBands[1]) {\n"]], ['unit-sideFlowCfg']], //b1 = b2 亦拒
+    ['FB02', 'src/cfg.mjs', [["    if (sc.freqBands[0] > sc.freqBands[1]) {\n", "    if (sc.freqBands[0] < sc.freqBands[1]) {\n"]], ['unit-sideFlowCfg']], //順序判反
+    ['FB03', 'src/cfg.mjs', [["    freqBandsCheck(st.score)\n", "    void 0\n"]], ['unit-sideFlowCfg']], //讀設定不檢順序
+    ['FB04', 'src/cfg.mjs', [["    try {\n        sc = evalScoreOf(score, 'score')\n    }\n    catch (err) {\n        return\n    }\n", "    sc = evalScoreOf(score, 'score')\n"]], ['unit-sideFlowCfg']], //他種之 score 無效亦於讀設定時拋(改變既有處置)
+    ['FB05', 'src/cfg.mjs', [["    if (sc.freqBands[0] > sc.freqBands[1]) {\n", "    if (score && Array.isArray(score.freqBands) && score.freqBands[0] > score.freqBands[1]) {\n"]], ['unit-sideFlowCfg']], //比較原值(數字字串依字典序)
+    ['FB06', 'src/cfg.mjs', [["|backtest:|score\\.freqBands:)/", "|backtest:)/"]], ['unit-sideFlowCfg']], //入口不認得此訊息(印「無法讀取專案設定」)
+    ['DA01', 'src/domain/domain.mjs', [["let armKey = (a) => (Array.isArray(a) ? [...new Set(a)].sort().join('+') : '')", "let armKey = (a) => (Array.isArray(a) ? a.slice().sort().join('+') : '')"]], ['unit-frontierOps']], //臂之鍵不去重
+    ['DA02', 'src/domain/domain.mjs', [["let armKey = (a) => (Array.isArray(a) ? [...new Set(a)].sort().join('+') : '')", "let armKey = (a) => (Array.isArray(a) ? [...new Set(a)].join('+') : '')"]], ['unit-frontierOps']], //臂之鍵不排序
+    ['RB01', 'src/domain/domain.mjs', [["            if (old && old.status === 'blocked') {\n                rsi.store.markFrontier([old.specHash], 'proposed')\n", "            if (false) {\n                rsi.store.markFrontier([old.specHash], 'proposed')\n"]], ['unit-frontierOps']], //改掛不重開已結案之目的
+    ['RB02', 'src/domain/domain.mjs', [["                rsi.store.markFrontier([old.specHash], 'proposed')\n            }\n            else {\n                return { ok: false, why: old ?", "                void 0\n            }\n            else {\n                return { ok: false, why: old ?"]], ['unit-frontierOps']], //重開而不改狀態(目的仍為 blocked)
+    ['RB03', 'src/domain/domain.mjs', [["return { ok: false, why: old ? `前緣已有同規格之項(該項狀態 ${old.status},不會執行)` : '新提案未能入前緣' }", "return { ok: false, why: '新提案未能入前緣' }"]], ['unit-frontierOps']], //拒絕之訊息不註明該項之狀態
+    ['RB04', 'src/domain/domain.mjs', [["            if (old && old.status === 'blocked') {\n                rsi.store.markFrontier([old.specHash], 'proposed')\n", "            if (old && old.status !== 'proposed') {\n                rsi.store.markFrontier([old.specHash], 'proposed')\n"]], ['unit-frontierOps']], //改掛亦重開非待執行之他種狀態(rejectedByGate 等)
+    ['CB01', 'src/cli/rsi.mjs', [["...(typeof bsc === 'string' && bsc ? { base: bsc } : {}), ", ""]], ['unit-frontierOps']], //結案不傳 --base
+    ['CB02', 'src/cli/rsi.mjs', [["let bsc = argStrOf('base', undefined)", "let bsc = argOf('base', undefined)"]], ['unit-frontierOps']], //--base 經數值轉型(全數字之 id 被丟掉位數)
+    ['CB03', 'src/cli/rsi.mjs', [["        if (k === 0 && typeof bsc === 'string' && bsc) {\n", "        if (false) {\n"]], ['unit-frontierOps']], //--base 未命中不提示須為完整 id
+    ['CB04', 'src/cli/rsi.mjs', [["        let k = P.closeFrontier({ arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof bsc === 'string' && bsc ? { base: bsc } : {}), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) })", "        let k = P.closeFrontier({ arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof bsc === 'string' && bsc && !process.argv.includes('--rearm') ? { base: bsc } : {}), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) })"]], ['unit-frontierOps']], //與 --rearm 並用時 --close 不受 --base 限(原行為)
 ]
 
 let args = process.argv.slice(2)

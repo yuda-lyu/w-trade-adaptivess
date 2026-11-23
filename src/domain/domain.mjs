@@ -775,7 +775,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
 
     //taskFor, 節點任務(迴圈指派): 指定之臂、起點、參考(由專案指定: 起點、最佳節點、最近之做夢文件、臂看板)
     //directionOf, 節點規格所出自之做夢方向(臂之集合與起點皆相同者; 取最近一份做夢文件): { round, arms, base, doc, rationale, expect } 或 null
-    let armKey = (a) => (Array.isArray(a) ? a.slice().sort().join('+') : '')
+    //  armKey: 臂之「集合」之鍵(去重、排序): 方向之 arms 含重複者, 入前緣以去重後之臂(normArms), 節點之規格 arms 為集合 ⇒ 此處同樣去重才對得上(排程第 481 項之核實; R-EV-57: 原不去重 ⇒ 含重複臂之方向對不到來源方向, 驗證類被當作探索)
+    let armKey = (a) => (Array.isArray(a) ? [...new Set(a)].sort().join('+') : '')
     //  主張鍵(規則 R-REC-24): 驗證類方向入前緣時所帶之鍵記於該文件之 harness.applied.proposals(與 guidance.directions 逐條對齊)之 claimKey;
     //  對應 = 臂之集合、起點、主張鍵三者皆相同(規格無 claim ⇔ 該方向入前緣時無鍵: 探索類、與本規則之前之文件)⇒ 同臂同起點而主張不同之驗證各對到自己之方向
     //  回傳另含 index(該方向於文件內之位置)與 claimKey(無則 null)
@@ -974,8 +975,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
     }
 
     //contentPMax, 「有內容」之 p 之門檻 = 階梯 1 之虛無 p(未給為 0.05; 搜尋地圖之「有內容」與看板之「活躍度定義不一致」同一個值)
-    //  取值經 evalScoreOf(與評估器之 scoreOf、設定之預檢、任務書同一函數; 排程第 606 項: 數字字串轉為數值; 組裝時之預檢已確認其有效); 0 仍取 0.05(同改前之 `|| 0.05`; 已知之不一致: scoreOf 之門檻取 0, 列 sgud 已知限制)
-    let contentPMax = () => evalScoreOf(st.score, 'score').ladder1.nullP || 0.05
+    //  取值經 evalScoreOf(與評估器之 scoreOf、設定之預檢、任務書同一函數; 排程第 606 項: 數字字串轉為數值; 組裝時之預檢已確認其有效);
+    //  nullP 為 0 者取 0(排程第 612 項 ①; R-EV-57: 同一個鍵於 scoreOf 與此處之解讀相同; 原: `|| 0.05` 使 0 取 0.05, 搜尋地圖標「有內容」者較 scoreOf 之階梯 1 寬)
+    let contentPMax = () => evalScoreOf(st.score, 'score').ladder1.nullP
     //hasContentNode, 「有內容」(模組層之 hasContentOf; 搜尋地圖、並列、主鍵、補位之底共用; 規則 R-REC-49 ⑤)
     let hasContentNode = (n) => hasContentOf(n, contentPMax())
     //actSplitOf, 「活躍度定義不一致」(規則 R-REC-38): 有近期活躍度版之值、且其條件與內建之組成對照之現行條件一過一不過者回 compSplitOf 之結果, 否則 null;
@@ -3220,7 +3222,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //rearmFrontier, 主控通過新臂(或修訂)後, 把前緣內尚未執行、「暫掛於既有臂」之方向改掛(規則 R-ARM-4):
     //  做夢於同一輪既提新臂、又排了試該機制之方向時, 新臂尚未通過 ⇒ 方向只能先掛在既有之臂上; 通過後若不改掛, 該節點會記在暫掛之臂下,
     //  新臂在看板仍為「未試」而由補位載體再試一次, 暫掛之臂則多一個其實不屬於它的節點
-    //  作法: 舊提案結案、以新之臂推入同理由同優先序之提案; 來源做夢文件之該條方向之 arms 改為新之臂(原臂記於 rearmedFrom, 另加迴圈註記) —— 任務書之來源方向依臂之集合比對
+    //  作法: 舊提案結案、以新之臂推入同理由同優先序之提案(前緣內已有同規格而已結案〔blocked〕者重開之, 沿用該條原有之理由與優先序; 排程第 481 項之核實、R-EV-57); 來源做夢文件之該條方向之 arms 改為新之臂(原臂記於 rearmedFrom, 另加迴圈註記) —— 任務書之來源方向依臂之集合比對
     //  只改臂之歸屬, 不改方向之內容(依據、預期、類型、主張); 起點不變; 輪次進行中不得執行(由呼叫端把關)
     //  claim(選配): 主張鍵(規則 R-REC-24); 同臂同起點有數條驗證時用以指明; 新規格承接原規格之主張鍵
     let rearmFrontier = ({ arms, base, claim, to, why }) => {
@@ -3255,7 +3257,15 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let dir = dd && dd.guidance && Array.isArray(dd.guidance.directions) ? dd.guidance.directions[src.index] || null : null
         let added = rsi.store.pushFrontier([{ spec, specHash: specHash(spec), kind: f.kind || 'arm', reason: f.reason, origin: f.origin, priority: f.priority }])
         if (!(added > 0)) {
-            return { ok: false, why: '新提案未能入前緣' }
+            //前緣內已有同規格而該條已結案(blocked: 曾提出而被結案〔--close〕、先前改掛後之舊項、重試用盡)且樹上無此節點(上方已查)⇒ 重開(同提案 proposeOne 之作法), 不使改掛無從進行(排程第 481 項之核實; R-EV-57; 原: 一律回「新提案未能入前緣」);
+            //  其他非待執行之狀態(例: 規格不過閘而標 rejectedByGate)⇒ 該項不會執行, 拒並註明其狀態(待執行者於上方已回「前緣已有同規格之提案」); 重開者沿用該條原有之理由與優先序
+            let old = rsi.store.listFrontier().find((x) => x.specHash === specHash(spec))
+            if (old && old.status === 'blocked') {
+                rsi.store.markFrontier([old.specHash], 'proposed')
+            }
+            else {
+                return { ok: false, why: old ? `前緣已有同規格之項(該項狀態 ${old.status},不會執行)` : '新提案未能入前緣' }
+            }
         }
         rsi.store.markFrontier([f.specHash], 'blocked')
         if (dir) {

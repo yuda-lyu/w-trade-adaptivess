@@ -9,7 +9,7 @@ let { CLI_FLAGS, CLI_ENUMS, CLI_MODE_FLAGS, CLI_MODE_OWN, CLI_MODE_NEEDS, cliMsg
 
 
 //命令列之「模式 × 旗標」(排程第 595 項之接續; 主控裁定 ③; R-EV-53): g_rsi.mjs 之各模式只讀取其所列之旗標; 命令列給了不屬所選模式之旗標(`--mode status --rounds 3`、`--mode validate --only <id>`、
-//  `--mode reverify --null 4`、`--mode frontier --close A --base X` 等; 原被靜默忽略)⇒ 拒收(離開碼 2、固定單行訊息不帶輸入值、於讀設定與任何寫入之前; 與未列之旗標、重複、等號寫法同一檢查點)
+//  `--mode reverify --null 4`、`--mode frontier --base X`〔無 --close / --rearm〕等; 原被靜默忽略)⇒ 拒收(離開碼 2、固定單行訊息不帶輸入值、於讀設定與任何寫入之前; 與未列之旗標、重複、等號寫法同一檢查點)
 //  另: g_backtest.mjs --seed 給了而不是整數 ⇒ 拒收(原: 說明後忽略而沿用設定之種子; 決定回測期旗標之結果, R-EV-44 ④之二)
 //  規格之句 ⇒ 案: 「不屬該模式之旗標拒收」= 純函數之全格(模式 11 × 旗標 23)、「同一檢查點」= 空之專案根實跑、「模式表 = 各模式實際讀取者」= 原始碼盤點、「frontier 之 --to / --base / --why / --claim 只隨其所屬之動作」= 相依案
 let NODE = process.execPath
@@ -34,8 +34,8 @@ let LEGAL = {
 }
 //--file 之模式相容由進入檔自己檢查(取決於 --dream-only; CLI_MODE_OWN), 通用檢查不判
 let OWN_SKIP = ['file']
-//frontier 內之相依(獨立之預期): --to、--base 須隨 --rearm; --why、--claim 須隨 --close 或 --rearm
-let NEEDS = { to: ['rearm'], base: ['rearm'], why: ['close', 'rearm'], claim: ['close', 'rearm'] }
+//frontier 內之相依(獨立之預期): --to 須隨 --rearm; --base、--why、--claim 須隨 --close 或 --rearm(排程第 481 項之核實: --base 原只隨 --rearm、與 --close 並用被拒; 今 --close 亦收之,與 --rearm 對稱 —— 見 unit-frontierOps)
+let NEEDS = { to: ['rearm'], base: ['close', 'rearm'], why: ['close', 'rearm'], claim: ['close', 'rearm'] }
 let modesOf = (flag) => MODES.filter((m) => LEGAL[m].includes(flag))
 let said = (ms) => (ms.length > 1 ? `${ms.slice(0, -1).join(', ')} or ${ms[ms.length - 1]}` : ms[0])
 //  值之種類屬 CLI_VALUES.rsi 者(規模旗標與 --round; 排程第 607 項)取合格之值('3'), 其餘為任意字串(值之種類之案見 unit-cliValues)
@@ -215,7 +215,7 @@ describe('命令列之「模式 × 旗標」與 g_backtest.mjs --seed 之拒收(
             assert(nOk >= 30 && nBad >= 150, `合格 ${nOk}、拒收 ${nBad}`)
         })
 
-        it('被點名之原靜默寫法: --rounds 於 status(含未給 --mode)、--only 於 validate、--null 於 reverify、--keep-flags 於 extfill、--base 於 --close、--no-member 於 extfill、--force 於 reverify、--par 於 round、--close 於 fill', () => {
+        it('被點名之原靜默寫法: --rounds 於 status(含未給 --mode)、--only 於 validate、--null 於 reverify、--keep-flags 於 extfill、--base 單獨給(無 --close / --rearm)、--no-member 於 extfill、--force 於 reverify、--par 於 round、--close 於 fill', () => {
             let M = (a) => cliMsgOf('rsi', a)
             assert.strictEqual(M(['--rounds', '3']), 'invalid --rounds: must be used with --mode dry or round')
             assert.strictEqual(M(['--mode', 'status', '--rounds', '3']), 'invalid --rounds: must be used with --mode dry or round')
@@ -223,7 +223,8 @@ describe('命令列之「模式 × 旗標」與 g_backtest.mjs --seed 之拒收(
             assert.strictEqual(M(['--mode', 'validate', '--only', 'abcdef']), 'invalid --only: must be used with --mode reverify, extfill or fill')
             assert.strictEqual(M(['--mode', 'reverify', '--why', 'x', '--null', '4']), 'invalid --null: must be used with --mode extfill or fill')
             assert.strictEqual(M(['--mode', 'extfill', '--keep-flags']), 'invalid --keep-flags: must be used with --mode reverify')
-            assert.strictEqual(M(['--mode', 'frontier', '--close', 'A', '--why', 'x', '--base', 'abc']), 'invalid --base: must be used with --rearm')
+            assert.strictEqual(M(['--mode', 'frontier', '--base', 'abc']), 'invalid --base: must be used with --close or --rearm')
+            assert.strictEqual(M(['--mode', 'frontier', '--close', 'A', '--why', 'x', '--base', 'abc']), null, '--base 隨 --close 合格(與 --rearm 對稱)')
             assert.strictEqual(M(['--mode', 'extfill', '--no-member']), 'invalid --no-member: must be used with --mode fill')
             assert.strictEqual(M(['--mode', 'reverify', '--why', 'x', '--force']), 'invalid --force: must be used with --mode round, validate, extfill or fill')
             assert.strictEqual(M(['--mode', 'round', '--par', '2']), 'invalid --par: must be used with --mode fill')
@@ -248,6 +249,7 @@ describe('命令列之「模式 × 旗標」與 g_backtest.mjs --seed 之拒收(
                 ['--mode', 'frontier'],
                 ['--mode', 'frontier', '--close', 'A+B', '--why', 'x'],
                 ['--mode', 'frontier', '--close', 'A', '--why', 'x', '--claim', '0123abcd'],
+                ['--mode', 'frontier', '--close', 'A', '--why', 'x', '--base', 'abcdef01', '--claim', '0123abcd'],
                 ['--mode', 'frontier', '--rearm', 'A', '--to', 'B', '--why', 'x', '--base', 'abcdef01', '--claim', '0123abcd'],
                 ['--mode', 'frontier', '--close', 'A', '--rearm', 'B', '--to', 'C', '--why', 'x'],
                 ['--mode', 'annotate', '--round', '1', '--file', 'x.txt'],
@@ -285,7 +287,7 @@ describe('命令列之「模式 × 旗標」與 g_backtest.mjs --seed 之拒收(
                 ['--mode', 'status', '--rounds', '3'],
                 ['--mode', 'validate', '--only', 'abcdef'],
                 ['--mode', 'reverify', '--why', SECRET, '--null', '4'],
-                ['--mode', 'frontier', '--close', 'A', '--why', SECRET, '--base', 'abcdef01'],
+                ['--mode', 'frontier', '--base', 'abcdef01', '--why', SECRET],
                 ['--mode', 'extfill', '--keep-flags'],
                 ['--mode', 'round', '--par', '2'],
             ]) {
