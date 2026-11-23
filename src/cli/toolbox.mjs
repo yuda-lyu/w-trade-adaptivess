@@ -1,5 +1,5 @@
 import path from 'path'
-import { getSettings, cliMsgOf } from '../cfg.mjs'
+import { getSettings, cliMsgOf, inputMsgOf } from '../cfg.mjs'
 import { createToolbox } from '../arsi/toolbox.mjs'
 import { makeToolboxRules, TB_BASELINE } from '../domain/toolboxRules.mjs'
 import { backtestCfg } from '../domain/backtestCfg.mjs'
@@ -20,7 +20,18 @@ import { setGuardExtra, guardExtraOf } from '../domain/verify.mjs'
     }
 }
 let st = getSettings()
-setGuardExtra(guardExtraOf(st)) //專案另加之禁區字樣(與迴圈之機械檢查同一組)
+//專案另加之禁區字樣(與迴圈之機械檢查同一組); 設定不合(guard.forbidden、source.libraryRoot 給了而無效; R-EV-54 ①)⇒ 印 ERROR、離開碼 2(不寫任何檔、不以失效之禁區繼續); 其餘錯誤照舊拋出
+try {
+    setGuardExtra(guardExtraOf(st))
+}
+catch (err) {
+    let msg = inputMsgOf(err)
+    if (msg === null) {
+        throw err
+    }
+    console.log(`ERROR ${msg}`)
+    process.exit(2)
+}
 let dir = st.records.toolboxDir || path.join(st.rsi.root, 'toolbox')
 let privateRoot
 try {
@@ -28,7 +39,7 @@ try {
 }
 catch (err) {
     //settings.backtest 之數值鍵無效(invalid backtest.<鍵>: …; 排程第 547 項)⇒ 印 ERROR、離開碼 2(不寫任何檔); 其餘錯誤照舊拋出
-    let msg = configMsgOf(err)
+    let msg = configMsgOf(err) || inputMsgOf(err)
     if (msg === null) {
         throw err
     }

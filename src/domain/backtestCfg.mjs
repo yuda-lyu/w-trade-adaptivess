@@ -2,9 +2,10 @@ import path from 'path'
 import { FD_ROOT } from '../cfg.mjs'
 import { cfgNumOf } from '../eval/cfgNum.mjs'
 import { rsiNumOf, RSI_NUM_KINDS } from '../arsi/rsiNums.mjs'
+import { boolOpt, objReq, isPlain, badInput, strReq } from '../arsi/inputs.mjs'
 
-//objOf, 非物件(含陣列、null)視為空物件
-let objOf = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {})
+//objSect, 節(rule、grade): 未給(undefined 或 null)= 空物件; 一般物件原樣; 其餘拋 invalid <where>: must be an object
+let objSect = (v, where) => (v === undefined || v === null ? {} : objReq(v, where))
 
 //omit, 去掉指定之鍵(其餘之鍵與次序不變)
 let omit = (o, ks) => Object.fromEntries(Object.entries(o).filter(([k]) => !ks.includes(k)))
@@ -47,8 +48,18 @@ let reqNumOf = (v, def, where, kind) => {
  * let cfg = backtestCfg({ backtest: { replicas: 5 } })
  */
 let backtestCfg = (st) => {
-    let b = st.backtest || {}
-    let privateRoot = path.resolve(b.privateRoot || `${FD_ROOT}-private`)
+    //settings.backtest 本身(給了而不是一般物件 ⇒ 拋 invalid backtest: must be an object; 原: `|| {}` 使 `false`、`'x'`、0 等靜默視為空物件而回測期旗標照常啟用 —— 與「關閉」之意圖相反;
+    //  未給〔undefined、null〕= 空物件); 路徑欄(privateRoot = 禁區之錨與回測期數字之所在、ledgerDir、resultDir)給了而非非空字串 ⇒ 拋 invalid backtest.<鍵>: must be a non-empty string(原: 空字串、false、0 靜默取預設,
+    //  其餘非字串於 path.resolve 拋原生 TypeError); 未給(undefined、null)= 預設
+    let b = st.backtest === undefined || st.backtest === null ? {} : st.backtest
+    if (!isPlain(b)) {
+        throw badInput('backtest', 'an object')
+    }
+    let pathOf = (v, where) => (v === undefined || v === null ? null : strReq(v, where))
+    let privateRootArg = pathOf(b.privateRoot, 'backtest.privateRoot')
+    let ledgerDirArg = pathOf(b.ledgerDir, 'backtest.ledgerDir')
+    let resultDirArg = pathOf(b.resultDir, 'backtest.resultDir')
+    let privateRoot = path.resolve(privateRootArg || `${FD_ROOT}-private`)
     //每個鍵只讀一次(檢查之值即使用之值)
     let minLadder = cfgNumOf(b.minLadder, 0, 'backtest.minLadder', 'nonNegInt')
     let replicas = cfgNumOf(b.replicas, 3, 'backtest.replicas', 'posInt')
@@ -57,27 +68,33 @@ let backtestCfg = (st) => {
     //旗標判準與分級之數字(rule.meanMin、rule.worstPhaseMin、grade.pAbove、pBelow、pStrong、splits; 排程第 595 項之接續, R-EV-44 ④之二、R-BT-12): 同上之口徑 ——
     //  未給(undefined 或 null)= 預設; 數字原樣、數字字串轉為數值後才使用(K4、K7); 給了而無效 ⇒ 拋 invalid backtest.<鍵>: must be …(不帶輸入值)
     //  原: 展開合併進來, 字串與非數字成 NaN 或隱式轉型之比較而靜默(`mean > '0.5'` 以數值比、`'abc'` 使旗標恆為 fail、`''` 與 false 被當 0、`splits: '2'` 經 Math.round 而可用但 `'abc'` 為 NaN)
-    let rl = objOf(b.rule)
-    let gr = objOf(b.grade)
+    //rule、grade 給了而不是一般物件(如字串、陣列、數字、布林)⇒ 拋 invalid backtest.rule / grade: must be an object(原: objOf 靜默視為空物件 ⇒ `grade: "false"` 之分級照常啟用); 未給(undefined 或 null)= 空物件
+    let rl = objSect(b.rule, 'backtest.rule')
+    let gr = objSect(b.grade, 'backtest.grade')
     let meanMin = reqNumOf(rl.meanMin, 0, 'backtest.rule.meanMin', 'num')
     let worstPhaseMin = reqNumOf(rl.worstPhaseMin, 0, 'backtest.rule.worstPhaseMin', 'num')
     let pAbove = reqNumOf(gr.pAbove, 0.05, 'backtest.grade.pAbove', 'unit')
     let pBelow = reqNumOf(gr.pBelow, 0.95, 'backtest.grade.pBelow', 'unit')
     let pStrong = reqNumOf(gr.pStrong, 0.01, 'backtest.grade.pStrong', 'unit')
     let splits = reqNumOf(gr.splits, 2, 'backtest.grade.splits', 'posInt')
-    //其餘之鍵(含 grade.enabled、matchSides 與未知之鍵)照舊展開(次序同改前: 預設之鍵在前, 展開之鍵覆蓋)
+    //決定回測期旗標之布林(enabled、grade.enabled、grade.matchSides; R-EV-54 ②, K5): 給了而不是 true / false(字串 'false'、'true'、數字、空字串皆非布林)⇒ 拋 invalid backtest.<鍵>: must be a boolean(不帶輸入值); 未給(undefined 或 null)= 預設(true、true、true)
+    //  原: enabled 以 `!== false` 判 ⇒ `enabled: "false"`、`0` 仍啟用; grade.enabled 以 `=== false` 判 ⇒ `"false"` 仍啟用分級、`null` 之展開覆蓋使分級關閉; matchSides 展開之原值覆蓋預設 ⇒ `"true"` 於 `=== true` 判定下關閉
+    let enabled = boolOpt(b.enabled, true, 'backtest.enabled')
+    let gradeEnabled = boolOpt(gr.enabled, true, 'backtest.grade.enabled')
+    let matchSides = boolOpt(gr.matchSides, true, 'backtest.grade.matchSides')
+    //其餘之鍵(含未知之鍵)照舊展開(次序同改前: 預設之鍵在前, 展開之鍵覆蓋)
     let ruleRest = omit(rl, ['meanMin', 'worstPhaseMin'])
-    let gradeRest = omit(gr, ['pAbove', 'pBelow', 'pStrong', 'splits'])
+    let gradeRest = omit(gr, ['pAbove', 'pBelow', 'pStrong', 'splits', 'enabled', 'matchSides'])
     return {
-        enabled: b.enabled !== false,
+        enabled,
         privateRoot,
-        ledgerDir: b.ledgerDir ? path.resolve(b.ledgerDir) : path.join(privateRoot, 'ledger', 'full'),
-        resultDir: b.resultDir ? path.resolve(b.resultDir) : path.join(privateRoot, 'backtest'),
+        ledgerDir: ledgerDirArg ? path.resolve(ledgerDirArg) : path.join(privateRoot, 'ledger', 'full'),
+        resultDir: resultDirArg ? path.resolve(resultDirArg) : path.join(privateRoot, 'backtest'),
         minLadder,
         rule: { meanMin, worstPhaseMin, ...ruleRest },
         replicas,
         nullDraws,
-        grade: { enabled: !(b.grade && b.grade.enabled === false), pAbove, pBelow, pStrong, splits, matchSides: true, ...gradeRest },
+        grade: { enabled: gradeEnabled, pAbove, pBelow, pStrong, splits, matchSides, ...gradeRest },
         timeoutSec,
     }
 }

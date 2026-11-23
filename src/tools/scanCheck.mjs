@@ -1,6 +1,6 @@
 import path from 'path'
 import fs from 'fs'
-import { getSettings, cliGuard } from '../cfg.mjs'
+import { getSettings, cliGuard, inputMsgOf } from '../cfg.mjs'
 import { backtestCfg } from '../domain/backtestCfg.mjs'
 import { configMsgOf } from '../eval/barGrid.mjs'
 import { scanTrace, setGuardExtra, guardExtraOf, allowWorkOf } from '../domain/verify.mjs'
@@ -16,14 +16,25 @@ import { evalHintsOfDocs, isEvalHint } from '../domain/verifyEvalHints.mjs'
 //命令列只認一個位置引數(節點 id 前綴, 逗號分隔; TOOL_FLAGS.scanCheck): 任何旗標、多餘之位置引數一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值; 原: 旗標被當成節點 id 前綴)
 cliGuard('scanCheck')
 let st = getSettings()
-setGuardExtra(guardExtraOf(st)) //專案另加之禁區字樣(與迴圈之掃描同一組)
+//專案另加之禁區字樣(與迴圈之掃描同一組); 設定不合(guard.forbidden、source.libraryRoot 給了而無效; R-EV-54 ①)⇒ 印 ERROR、離開碼 2(唯讀工具; 不以失效之禁區掃描); 其餘錯誤照舊拋出
+try {
+    setGuardExtra(guardExtraOf(st))
+}
+catch (err) {
+    let msg = inputMsgOf(err)
+    if (msg === null) {
+        throw err
+    }
+    console.log(`ERROR ${msg}`)
+    process.exit(2)
+}
 //私有根(settings.backtest.privateRoot): settings.backtest 之數值鍵無效(invalid backtest.<鍵>; 排程第 547 項)⇒ 印 ERROR、離開碼 2(唯讀工具, 不拋堆疊); 其餘錯誤照舊拋出
 let privateRoot
 try {
     privateRoot = backtestCfg(st).privateRoot
 }
 catch (err) {
-    let msg = configMsgOf(err)
+    let msg = configMsgOf(err) || inputMsgOf(err)
     if (msg === null) {
         throw err
     }
@@ -37,6 +48,11 @@ let isScan = (s) => /^(觸及禁區|寫到工作夾外|存取其他節點之工�
 let workRel = path.relative(root, workRoot).replace(/\\/g, '/')
 let nDiff = 0
 let docs = fs.readdirSync(st.records.nodeDir).filter((x) => x.endsWith('.json')).sort().map((f) => JSON.parse(fs.readFileSync(path.join(st.records.nodeDir, f), 'utf8')))
+//節點 id 前綴(位置引數; 格式已於上之 cliGuard 檢查〔TOOL_FLAGS.scanCheck.pos〕): 每個前綴須至少命中一個節點(排程第 607 項; 原: 未命中者靜默略過而印「與節點文件不同者 0 份」, 看似全部相同)
+if (only && only.some((p) => !docs.some((d) => String(d.nodeId).startsWith(p)))) {
+    console.log('invalid node: must be id prefixes that each match a node')
+    process.exit(2)
+}
 let hints = evalHintsOfDocs(docs, workRoot)
 //可讀之他節點工作夾與寫回(領域之 rescanTraces)同一求法(allowWorkOf; 規則 R-BT-9; 方向內只以 id 指名之節點亦可讀); 本工具唯讀、無樹 ⇒ 可被指名之節點以全部節點文件之 id 為全集
 let ids = docs.map((d) => d.nodeId)

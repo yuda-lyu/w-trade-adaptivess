@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { objReq, strReq, strOpt } from './inputs.mjs'
 
 
 //節點文件(node)與做夢文件(dream)之統一規格、檢核、渲染與儲存
@@ -848,7 +849,7 @@ let roundName = (r) => `r${String(r).padStart(3, '0')}`
 /**
  * 建立預設之檔案儲存(每份文件一個 JSON 正本加一個由正本渲染之 Markdown)
  *
- * 未給 nodeDir 或 dreamDir 會拋錯;目錄於寫入時自動建立。
+ * opt 非一般物件、nodeDir 或 dreamDir 非非空字串、trashDir 給了而非非空字串皆同步拋 invalid opt.<鍵>: must be …(固定訊息、不帶輸入值);目錄於寫入時自動建立。
  *
  * @param {Object} opt 輸入設定物件
  * @param {String} opt.nodeDir 輸入節點文件資料夾
@@ -861,10 +862,12 @@ let roundName = (r) => `r${String(r).padStart(3, '0')}`
  * console.log(records.getDreamDoc(2).round)
  * // => 2
  */
-let createFileRecords = ({ nodeDir, dreamDir, trashDir }) => {
-    if (!nodeDir || !dreamDir) {
-        throw new Error('createFileRecords: 須給 nodeDir 與 dreamDir')
-    }
+let createFileRecords = (opt) => {
+    //輸入之檢測(跨套件規格 V4、S4、§5.1; R-EV-54; 工廠 ⇒ 同步拋固定訊息, 先於任何副作用): opt 須為一般物件; nodeDir、dreamDir 須為非空字串; trashDir 給了(undefined、null 以外)須為非空字串(原: opt 為 null ⇒ 原生 TypeError; 非字串之 nodeDir 於寫入時才拋原生 TypeError)
+    let o = objReq(opt, 'opt')
+    let nodeDir = strReq(o.nodeDir, 'opt.nodeDir')
+    let dreamDir = strReq(o.dreamDir, 'opt.dreamDir')
+    let trashDir = strOpt(o.trashDir, undefined, 'opt.trashDir')
     let ensure = () => {
         for (let d of [nodeDir, dreamDir, trashDir].filter(Boolean)) {
             fs.mkdirSync(d, { recursive: true })

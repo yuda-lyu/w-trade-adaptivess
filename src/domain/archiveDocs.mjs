@@ -1,6 +1,9 @@
 import fs from 'fs'
 import path from 'path'
+import { objReq, strReq, numOrDef } from '../arsi/inputs.mjs'
 
+//dateOf, 抽出日期: 有效之 Date(getTime 為有限數)原樣; 其餘(未給、字串、數字、無效之 Date)用現在(K3)
+let dateOf = (v) => (v instanceof Date && Number.isFinite(v.getTime()) ? v : new Date())
 
 //專案指引文件之自動整理(規則 R-REC-17; 無人值守時文件會逐輪變長, 節點與做夢每輪都要讀):
 //  經驗檔、回饋檔逾上限時, 把較舊之內容**原文搬到**同資料夾之 <名>_<年月日>.md(只搬不刪、條號與標題不變), 主檔留索引
@@ -22,6 +25,7 @@ let INDEX_TITLE = '## 已抽出之舊經驗(原文在所列之檔;條號與標�
 
 /**
  * 經驗檔逾上限時,把較舊之節原文搬到同資料夾之 <名>_<年月日>.md,主檔留索引(會寫檔)
+ * 輸入之檢測(R-EV-54):opt 非一般物件、fp 非非空字串 ⇒ 同步拋 invalid opt / opt.fp: must be …(先於任何寫入);maxBytes(正整數)、keepBytes、keepSections(非負整數)無效者(含 null、小數、負數、非數字)用預設(數字字串轉為數值);date 非有效之 Date 者用現在
  *
  * @param {Object} opt 輸入設定物件
  * @param {String} opt.fp 輸入經驗檔路徑
@@ -33,7 +37,16 @@ let INDEX_TITLE = '## 已抽出之舊經驗(原文在所列之檔;條號與標�
  * @example
  * let r = archiveExperience({ fp: './sgud/exp/experience.md' })
  */
-let archiveExperience = ({ fp, maxBytes = 30000, keepBytes = 18000, keepSections = 2, date = new Date() }) => {
+let archiveExperience = (opt) => {
+    //輸入之檢測(跨套件規格 V4、K3、§5.1; R-EV-54; 同步且有副作用者 ⇒ 先於任何副作用拋固定訊息): opt 須為一般物件、fp 須為非空字串;
+    //  maxBytes(正整數)、keepBytes、keepSections(非負整數)給了而無效(含 null、小數、負數、非數字)⇒ 視為未給、用預設(K3; 數字字串轉為數值); date 非有效之 Date ⇒ 用現在
+    //  原: `maxBytes: null` ⇒ `before <= null` 恆假 ⇒ 小檔也搬; keepSections NaN 或負 ⇒ 空搬或全搬; date 無效 ⇒ 檔名 `NaNNaNNaN`
+    let { fp: fp0, maxBytes: maxBytes0, keepBytes: keepBytes0, keepSections: keepSections0, date: date0 } = objReq(opt, 'opt')
+    let fp = strReq(fp0, 'opt.fp')
+    let maxBytes = numOrDef(maxBytes0, 'posInt', 30000)
+    let keepBytes = numOrDef(keepBytes0, 'nonNegInt', 18000)
+    let keepSections = numOrDef(keepSections0, 'nonNegInt', 2)
+    let date = dateOf(date0)
     if (!fs.existsSync(fp)) {
         return null
     }
@@ -91,6 +104,7 @@ let archiveExperience = ({ fp, maxBytes = 30000, keepBytes = 18000, keepSections
 
 /**
  * 回饋檔逾上限時,保留最後若干列,其餘列原文搬到同資料夾之 <名>_<年月日>.md(會寫檔)
+ * 輸入之檢測同 archiveExperience(opt、fp 必給;maxBytes 正整數、keepRows 非負整數、date 有效之 Date,無效者用預設)
  *
  * @param {Object} opt 輸入設定物件
  * @param {String} opt.fp 輸入回饋檔路徑
@@ -101,7 +115,13 @@ let archiveExperience = ({ fp, maxBytes = 30000, keepBytes = 18000, keepSections
  * @example
  * let r = archiveFeedback({ fp: './sgud/feedback/feedback.md' })
  */
-let archiveFeedback = ({ fp, maxBytes = 30000, keepRows = 14, date = new Date() }) => {
+let archiveFeedback = (opt) => {
+    //輸入之檢測: 同 archiveExperience(opt、fp 必給; maxBytes 正整數、keepRows 非負整數、date 有效之 Date, 無效者用預設)
+    let { fp: fp0, maxBytes: maxBytes0, keepRows: keepRows0, date: date0 } = objReq(opt, 'opt')
+    let fp = strReq(fp0, 'opt.fp')
+    let maxBytes = numOrDef(maxBytes0, 'posInt', 30000)
+    let keepRows = numOrDef(keepRows0, 'nonNegInt', 14)
+    let date = dateOf(date0)
     if (!fs.existsSync(fp)) {
         return null
     }

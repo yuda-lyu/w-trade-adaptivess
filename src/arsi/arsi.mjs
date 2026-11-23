@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { checkNodeAgentPart, checkDreamAgentPart, tallyDream, roundName } from './records.mjs'
+import { objReq, objAnyReq, strReq, fnReq, fnOpt, badInput } from './inputs.mjs'
 
 
 //代理式 rsi 之通用流程件(不含領域用語; 一律依賴注入):
@@ -42,6 +43,8 @@ let readJson = (fp) => {
  * 建立代理式 rsi 之通用流程件(節點執行、做夢審計、處置套用);一律依賴注入,不含領域用語
  *
  * 各注入項(verify 之回傳欄位、texts 之函數、hooks 之回調)之詳細形狀見本檔上方之說明。
+ * 輸入之檢測(R-EV-54;工廠 ⇒ 同步拋固定訊息、不帶輸入值):opt、records、texts(含六個任務書函數)、hooks(null、undefined 視為 {})須為一般物件;dispatch、verify 須為函數;workDir 須為非空字串;
+ * gate 給了須為函數、toolbox 給了須為一般物件、artifactFiles 給了須為字串陣列;log 非函數者視為未給。
  *
  * @param {Object} opt 輸入設定物件
  * @param {Object} opt.records 輸入文件儲存物件(如 createFileRecords 之回傳;使用 getNodeDoc、putNodeDoc、getDreamDoc、putDreamDoc)
@@ -59,7 +62,28 @@ let readJson = (fp) => {
  * let arsi = createArsi({ records, dispatch, verify, texts, workDir: './work' })
  * let { doc, raw } = await arsi.runNode({ nodeId, spec, round: 1, task })
  */
-let createArsi = ({ records, dispatch, verify, texts, hooks = {}, workDir, artifactFiles = [], gate = null, toolbox = null, log = () => {} }) => {
+let createArsi = (opt) => {
+    //輸入之檢測(跨套件規格 V4、K3、K5、§5.1; R-EV-54; 工廠 ⇒ 同步拋固定訊息, 先於任何副作用): opt、records、texts(六個任務書函數)、hooks(選配; null、undefined 視為 {})須為一般物件;
+    //  dispatch、verify 須為函數; workDir 須為非空字串; gate(派工前之資源閘)給了須為函數(原: 非函數者靜默不設閘); toolbox 給了須為一般物件; artifactFiles 給了須為字串陣列; log 非函數者視為未給(K3; 觀察用)
+    //  原: opt 為 null、hooks 為 null、缺必給件者為原生 TypeError(`Cannot read properties of null` 等), 於第一次呼叫時才現形
+    let o = objReq(opt, 'opt')
+    //注入之元件(records、texts、hooks、toolbox)可為類別實例(依賴注入): 只核對為非 null 之物件(objAnyReq); opt 本身依 V4 須為一般物件
+    let records = objAnyReq(o.records, 'opt.records')
+    let dispatch = fnReq(o.dispatch, 'opt.dispatch')
+    let verify = fnReq(o.verify, 'opt.verify')
+    let texts = objAnyReq(o.texts, 'opt.texts')
+    for (let k of ['nodeBrief', 'nodePrompt', 'nodeTemplate', 'dreamBrief', 'dreamPrompt', 'dreamTemplate']) {
+        fnReq(texts[k], `opt.texts.${k}`)
+    }
+    let hooks = o.hooks === undefined || o.hooks === null ? {} : objAnyReq(o.hooks, 'opt.hooks')
+    let workDir = strReq(o.workDir, 'opt.workDir')
+    let artifactFiles = o.artifactFiles === undefined || o.artifactFiles === null ? [] : o.artifactFiles
+    if (!Array.isArray(artifactFiles) || !artifactFiles.every((x) => typeof x === 'string')) {
+        throw badInput('opt.artifactFiles', 'an array of strings')
+    }
+    let gate = fnOpt(o.gate, 'opt.gate')
+    let toolbox = o.toolbox === undefined || o.toolbox === null ? null : objAnyReq(o.toolbox, 'opt.toolbox')
+    let log = typeof o.log === 'function' ? o.log : () => {}
 
     //passGate, 派工前之閘(選配); 閘本身出錯不擋派工
     let passGate = async (x) => {

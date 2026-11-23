@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings, argOf, cliMsgOf } from '../cfg.mjs'
+import { getSettings, argOf, cliMsgOf, inputMsgOf } from '../cfg.mjs'
 import { evalRunNumsOf } from '../eval/cfgNum.mjs'
 import { loadLedger, clipLedger } from '../eval/ledger.mjs'
 import { makeEvaluator, ntStaticOf, mulberry32 } from '../eval/evalCore.mjs'
@@ -53,7 +53,7 @@ try {
     bt = backtestCfg(st)
 }
 catch (err) {
-    let msg = configMsgOf(err)
+    let msg = configMsgOf(err) || inputMsgOf(err)
     if (msg === null) {
         throw err
     }

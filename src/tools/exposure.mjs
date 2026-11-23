@@ -1,5 +1,5 @@
 import path from 'path'
-import { getSettings, argOf, argStrOf, cliGuard } from '../cfg.mjs'
+import { getSettings, argStrOf, cliGuard } from '../cfg.mjs'
 import { peekRunLock } from '../arsi/runner.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
@@ -35,7 +35,8 @@ if (typeof key !== 'string' && !undo) {
     }
     process.exit(0)
 }
-let why = argOf('why', null)
+//--why 取命令列之原字串(argStrOf; 排程第 607 項之同類: 原以 argOf 讀 ⇒ `--why 007` 被轉成數值而 typeof 非字串 ⇒ 靜默當成未給)
+let why = argStrOf('why', null)
 if (typeof key !== 'string' || typeof why !== 'string' || !why.trim()) {
     console.error('用法: [--undo] --node <id 或前綴> --why <理由>')
     process.exit(2)

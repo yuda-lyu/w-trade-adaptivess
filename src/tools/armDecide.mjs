@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings, argOf, cliGuard, FD_ROOT } from '../cfg.mjs'
+import { getSettings, argOf, argStrOf, cliGuard, FD_ROOT } from '../cfg.mjs'
 import { peekRunLock } from '../arsi/runner.mjs'
 import { ARM_LABELS, armProposalLine } from '../arsi/records.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
@@ -30,16 +30,17 @@ let st = getSettings()
 let P = makeProjectOrExit(st, { dispatch: async () => ({ ok: false, error: 'tools/armDecide.mjs 不派工' }) })
 let gov = P.rsi.governance
 let fpLedgerMd = P.rsi.paths.govProposalsMd
+//字串旗標一律取命令列之原字串(argStrOf; 排程第 607 項): 原以 argOf 讀 ⇒ 全為數字之 id 被轉成數值而 `typeof id !== 'string'` ⇒ 靜默進入列出模式; 數字樣之文字(--title 007)被轉型而失真(007 → 7)
 let textOf = (key) => {
-    let f = argOf(`${key}-file`, null)
+    let f = argStrOf(`${key}-file`, null)
     if (typeof f === 'string') {
         return fs.readFileSync(path.resolve(f), 'utf8').trim()
     }
-    let v = argOf(key, null)
-    return typeof v === 'string' ? v.trim() : (typeof v === 'number' ? String(v) : null)
+    let v = argStrOf(key, null)
+    return typeof v === 'string' ? v.trim() : null
 }
 
-let id = argOf('id', null)
+let id = argStrOf('id', null)
 let led = null
 try {
     led = gov.ledger()
@@ -79,17 +80,18 @@ if (accept) {
         process.exit(3)
     }
 }
-let selArg = argOf('selectable', null)
+//--selectable: 值只收 true / false(字串; 已於上之 cliGuard 檢查〔CLI_VALUES.armDecide〕; K5: 0、1 與其他字串皆非布林); 原: `!(selArg === false || selArg === 'false')` ⇒ `--selectable 0`、`abc` 皆取 true
+let selArg = argStrOf('selectable', null)
 let o = decideArgsOf(p, {
     accept,
     why,
     by: '主控',
-    name: argOf('name', null),
-    layer: argOf('layer', null),
-    armId: argOf('arm-id', null),
+    name: argStrOf('name', null),
+    layer: argStrOf('layer', null),
+    armId: argStrOf('arm-id', null),
     title: textOf('title'),
     desc: textOf('desc'),
-    selectable: selArg === null ? undefined : !(selArg === false || selArg === 'false'),
+    selectable: selArg === null ? undefined : selArg.trim() === 'true',
     noGrid: argOf('no-grid', false) === true,
     catalog: gov.effectiveCatalog(),
 })

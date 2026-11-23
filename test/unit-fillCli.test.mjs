@@ -317,9 +317,14 @@ describe('附算與補算之命令列:g_rsi.mjs --mode fill(規則 R-REC-34)', f
             assert.equal(rn.status, 2, `--null ${v}: ${rn.out.slice(0, 300)}`)
             assert.equal(rn.out.trim(), 'invalid --null: must be a positive integer', `--null ${v}`)
         }
-        //--par: 數字(含數字字串)才採、上限 8; 無效 ⇒ 改用設定之 fillParallel(此處為 1)
-        for (let [v, want] of [['3', '3'], ['8', '8'], ['99', '8'], ['0', '1'], ['abc', '1'], ['2.5', '1'], ['-1', '1']]) {
+        //--par: 正整數(含數字字串)才採、上限 8; 給了而無效(0、小數、負數、非數字)⇒ 拒收(離開碼 2; 排程第 607 項、R-EV-54; 原: 靜默改用設定之 fillParallel, 此處為 1)
+        for (let [v, want] of [['3', '3'], ['8', '8'], ['99', '8']]) {
             assert.equal(optOf(dry('--par', v)), OPT({ par: want }), `--par ${v}`)
+        }
+        for (let v of ['0', 'abc', '2.5', '-1']) {
+            let rp = dry('--par', v)
+            assert.equal(rp.status, 2, `--par ${v}: ${rp.out.slice(0, 300)}`)
+            assert.equal(rp.out.trim(), 'invalid --par: must be a positive integer', `--par ${v}`)
         }
         //只有旗標無值 ⇒ 拒絕(通用之帶值旗標無值之訊息; 排程第 547 項; 原: 依設定)
         let rpb = dry('--par')
@@ -344,7 +349,10 @@ describe('附算與補算之命令列:g_rsi.mjs --mode fill(規則 R-REC-34)', f
         }
         withPar('2')
         assert.equal(optOf(dry('--par', '6')), OPT({ par: '6' }), '--par 優先')
-        assert.equal(optOf(dry('--par', 'abc')), OPT({ par: '2' }), '--par 無效 ⇒ 改用設定(數字字串 \'2\' 轉為 2)')
+        //--par 給了而無效 ⇒ 拒收(排程第 607 項、R-EV-54; 原: 改用設定之 fillParallel); 設定之 fillParallel 無效者仍依 K3 用預設(上列各案)
+        let rpa = dry('--par', 'abc')
+        assert.equal(rpa.status, 2, rpa.out.slice(0, 300))
+        assert.equal(rpa.out.trim(), 'invalid --par: must be a positive integer', '--par 無效 ⇒ 拒收(不再改用設定)')
         fs.writeFileSync(fpSet, set0, 'utf8')
         //--dry 不寫任何檔
         assert(!fs.existsSync(path.join(root, 'rsi', 'fill_state.json')) && !fs.existsSync(path.join(root, 'rsi', 'fill')))

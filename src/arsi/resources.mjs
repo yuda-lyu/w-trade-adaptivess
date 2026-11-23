@@ -1,5 +1,6 @@
 import os from 'os'
 import getTrace from 'wsemi/src/getTrace.mjs'
+import { optOf } from './inputs.mjs'
 
 
 //資源監看與資源閘(通用; 不含領域用語): 讓使用端依自身設備給定 CPU 與記憶體之上限, 迴圈據以決定何時可再起一項工作
@@ -66,7 +67,10 @@ let osRead = () => {
  * console.log(r.forced)
  * mon.stop()
  */
-let createResourceMonitor = (opt = {}) => {
+let createResourceMonitor = (opt0 = {}) => {
+    //opt 本身(跨套件規格 V4、§5.1; R-EV-54; 工廠 ⇒ 同步拋固定訊息): null、undefined 視為 {}; 非一般物件拋 invalid opt: must be an object(原: null 於讀鍵時拋原生 TypeError)
+    //  各鍵之值(cpuMax、sampleSec、pollSec、maxWaitSec 等)之檢測不在本輪(settings.resources.* 與評估器之進入檔同讀, 留待下次動評估器; 見規則帳本 R-EV-53 ④之「不在本輪」)
+    let opt = optOf(opt0)
     let num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
     let cpuMax = num(opt.cpuMax)
     let ramMax = num(opt.ramUsedMaxGB)

@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { spawn } from 'child_process'
-import { P, cliMsgOf } from '../cfg.mjs'
+import { P, FD_ROOT, cliMsgOf } from '../cfg.mjs'
 import { peekRunLock, appendEvent } from '../arsi/runner.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
@@ -32,6 +32,17 @@ if (k < 1) {
     }
 }
 let name = argv[0]
+//日誌名(S4 之安全檔名; R-EV-54 ①): 用於 rsi/logs 內之 <名>.lock、<名>.pid、<名>.log.path 與 <名>_<時戳>.log ⇒ 須為 1 ~ 64 個英數、底線、連字號(英數起首), 不得為 Windows 之裝置名(con、nul…);
+//  含路徑分隔、`..`、`:` 等者拒收(離開碼 2; 於建日誌夾與任何寫入之前; 訊息固定、不帶輸入值); 原: 不驗 ⇒ `../x` 使鎖檔、pid 檔、日誌落到日誌夾之外(路徑穿越)
+if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(name) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(name)) {
+    console.log('invalid log name: must be 1 to 64 letters, digits, "-" or "_" (starting with a letter or digit; not a reserved device name)')
+    process.exit(2)
+}
+//專案根(環境變數 ARSI_ROOT 或工作目錄)須為既有之資料夾(K7; 原: 指到不存在之資料夾時逕自建出 rsi/logs 於其下, 留下一個只有日誌夾之假專案根)
+if (!(fs.existsSync(FD_ROOT) && fs.statSync(FD_ROOT).isDirectory())) {
+    console.log('invalid ARSI_ROOT: must be an existing directory')
+    process.exit(2)
+}
 let args = argv.slice(k + 1)
 let fdLogs = P('rsi', 'logs')
 fs.mkdirSync(fdLogs, { recursive: true })

@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
-import { getSettings, argOf, argStrOf, cliMsgOf, writeJson } from '../cfg.mjs'
+import { getSettings, argOf, argStrOf, argNumOf, cliMsgOf, writeJson } from '../cfg.mjs'
 import { peekRound } from '../engineApi.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { roundName } from '../arsi/records.mjs'
@@ -105,10 +105,8 @@ if (mode === 'round' && process.argv.includes('--dream-only')) {
     dreamOnly = { why }
 }
 //執行規模之命令列覆寫(未給則用 settings.rsi 之 nodesPerRound / parallelNodes / roundsPerRun; --arms、--workers 為舊名)
-let cliInt = (k) => {
-    let v = argOf(k, null)
-    return Number.isInteger(v) && v >= 1 ? v : null
-}
+//  規模旗標(--nodes、--arms、--parallel、--workers、--rounds)給了而不是正整數(0、小數、非數字、空值)⇒ 已於上之 cliMsgOf(CLI_VALUES.rsi)拒收(離開碼 2; 排程第 607 項; 原: 靜默退回設定之值); 此處之值為檢查合格之轉換值(數字字串轉為數值; K4)
+let cliInt = (k) => argNumOf(k, 'posInt', null)
 //設定(排程第 547 項: 旗標之檢查皆已於此之前, 含只做夢輪次之 --file; 原: 讀設定在最前)
 let st = getSettings()
 //組裝時之設定預檢(規則 R-EV-44; 期間之界線、eval.fitEnd、eval.trainFromStart)不合 ⇒ 印 ERROR invalid …、離開碼 2(同 g_eval.mjs; 不取鎖、不記事件)
@@ -190,7 +188,7 @@ else if (mode === 'round') {
     process.on('exit', () => lock.release())
     let quota = null
     //額度之查詢參數、快照(只留角色、視窗名與百分比)與前後對照之文字(每輪之耗用; 供估「還能跑幾輪」)
-    let quotaArgs = () => ({ agents: st.agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, maxPercent: preNum.quotaMaxPercent })
+    let quotaArgs = () => ({ agents: st.agents || {}, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, maxPercent: preNum.quotaMaxPercent })
     let snapOf = (q) => (q ? q.rows.map((r) => ({ role: r.role, windows: r.windows.map((w) => ({ label: w.label, percent: w.percent })) })) : null)
     let quotaLine = (a, b) => {
         if (!a || !b) {
@@ -504,7 +502,7 @@ else if (mode === 'validate') {
 else if (mode === 'reverify') {
     //評估器改版後, 以現行評估器重跑樹上全部已執行節點之成品(含回測期旗標): node g_rsi.mjs --mode reverify --why "<改了什麼>" [--keep-flags]
     //  --keep-flags: 不重放回測期, 沿用各節點既有之旗標(只在「評估器只改訓練期之輸出、回測期重放之結果不變」時用; 須先抽核重放結果確實不變)
-    let why = String(argOf('why', ''))
+    let why = String(argStrOf('why', ''))
     if (!why || why === 'true') {
         console.log('用法: node g_rsi.mjs --mode reverify --why "<評估器改了什麼>" [--keep-flags]')
         process.exit(2)
@@ -566,7 +564,7 @@ else if (mode === 'fill') {
     let extArg = list('ext')
     let ext = extArg ? (extArg.length === 1 && extArg[0] === 'none' ? false : extArg) : true
     let nullArg = argOf('null', null)
-    let parArg = argOf('par', null)
+    let parArg = argNumOf('par', 'posInt', null)
     let targets = only ? P.rsi.store.listIndex().filter((x) => x.status === 'executed' && only.some((p) => x.id.startsWith(p))).map((x) => x.id) : null
     //par: 原值交 P.fillParOf 檢測(跨套件規格 K3、K4、K7: 無效者用預設、數字字串轉型、上限 8; 檢測之值即使用之值)
     //  --no-member: 不算成員穩健性(規則 R-REC-51; 成員穩健性開啟〔settings.rsi.memberCheck〕時預設算合格之成品; 關閉者此旗標無作用)
@@ -624,7 +622,7 @@ else if (mode === 'frontier') {
     let cl = argOf('close', '')
     if (cl && cl !== true) {
         let ckc = claimArg()
-        let k = P.closeFrontier({ arms: String(cl).split('+'), why: String(argOf('why', '')), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) })
+        let k = P.closeFrontier({ arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) })
         console.log(`結案 ${k} 條`)
     }
     //改掛(規則 R-ARM-4): node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why "<理由>" [--base <起點 id>]
@@ -632,7 +630,7 @@ else if (mode === 'frontier') {
     let ra = argOf('rearm', '')
     if (ra && ra !== true) {
         let to = argOf('to', '')
-        let why = argOf('why', '')
+        let why = argStrOf('why', '')
         if (!to || to === true || !why || why === true) {
             console.log('用法: node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why "<理由>" [--base <起點 id>] [--claim <主張鍵>]')
             process.exit(2)
@@ -657,14 +655,14 @@ else if (mode === 'frontier') {
 }
 else if (mode === 'annotate') {
     //於某輪之做夢文件加迴圈註記: node g_rsi.mjs --mode annotate --round 1 --file <註記文字檔(UTF-8)>
-    let rd = argOf('round', 0)
+    let rd = argNumOf('round', 'posInt', 0)
     let fpTxt = argOf('file', '')
     let ok = rd > 0 && fpTxt && fpTxt !== true && fs.existsSync(String(fpTxt)) && P.annotateDream(rd, fs.readFileSync(String(fpTxt), 'utf8').trim())
     console.log(ok ? `已註記 ${roundName(rd)}` : '未註記(用法: --mode annotate --round N --file <文字檔>;或該輪無做夢文件)')
 }
 else if (mode === 'dirtype') {
     //補記某輪做夢文件之方向之任務類型(/3 以前之做夢文件無此欄): node g_rsi.mjs --mode dirtype --round 6 --file <JSON 檔: [{ index, type, claim }]>
-    let rd = argOf('round', 0)
+    let rd = argNumOf('round', 'posInt', 0)
     let fpJs = argOf('file', '')
     let items = null
     try {

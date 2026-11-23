@@ -1,4 +1,5 @@
 import { nextArmId, nextLayerId } from '../engineApi.mjs'
+import { objReq, isPlain, badInput, boolOpt } from '../arsi/inputs.mjs'
 
 //臂目錄之條目與審定參數(規則 R-ARM-1 ~ R-ARM-3)
 //  三層分工: 節點與做夢「提」(節點文件 conclusion.armProposals、做夢文件 guidance.armProposals), 主控「審」(tools/armDecide.mjs), 通過者下一輪加入目錄
@@ -17,6 +18,7 @@ let ARM_ID = /^[A-Z]\d{2,3}_[A-Za-z][A-Za-z0-9]*$/
 //mkArm, 目錄內一個臂之標準形(與基底相同之欄位; 落成名依 id 而定: 可選者 = 算子 add:<id> + 載體 <id>)
 /**
  * 建立目錄內一個臂之標準形(狀態恆為 proposed;可選者落成為算子 add:<id> 加載體 <id>,不可選者為 manual)
+ * opt 非一般物件、id 不合臂 id 之格式、selectable 給了而不是 true / false ⇒ 同步拋 invalid opt…: must be …(固定訊息、不帶輸入值);selectable 未給(undefined、null)= 不可選。
  *
  * @param {Object} opt 輸入設定物件
  * @param {String} opt.id 輸入臂 id,首字為層代號
@@ -29,21 +31,31 @@ let ARM_ID = /^[A-Z]\d{2,3}_[A-Za-z][A-Za-z0-9]*$/
  * @example
  * let arm = mkArm({ id: 'A12_Demo', title: '示範臂', selectable: true })
  */
-let mkArm = ({ id, n, title, desc, selectable, grid }) => {
+let mkArm = (opt) => {
+    //輸入之檢測(跨套件規格 V4、K5、§5.1; R-EV-54; 純函數 ⇒ 同步拋固定訊息): opt 須為一般物件; id 須為臂 id 之格式(ARM_ID); selectable 給了須為 true / false(原: 僅 `=== true` 為可選 ⇒ `'true'`、`1` 靜默成不可選; id 為 undefined 時於 `id[0]` 拋原生 TypeError)
+    let o = objReq(opt, 'opt')
+    if (typeof o.id !== 'string' || !ARM_ID.test(o.id)) {
+        throw badInput('opt.id', 'an arm id such as A12_Name')
+    }
+    let { id, n, title, desc, grid } = o
+    let selectable = boolOpt(o.selectable, false, 'opt.selectable')
     let a = { id, n, layer: id[0], title }
     if (desc) {
         a.desc = desc
     }
     a.status = 'proposed'
     a.selectable = selectable === true
-    a.realize = a.selectable
-        ? [{ kind: 'operator', op: `add:${id}` }, { kind: 'carrier', name: id }]
-        : [{ kind: 'manual', how: '不派給節點(量尺 / 迴圈自身 / 須改評估器)' }]
+    a.realize = realizeOf(id, a.selectable)
     if (grid) {
         a.grid = grid
     }
     return a
 }
+
+//realizeOf, 臂之落成名: 可選者 = 算子 add:<id> + 載體 <id>; 不可選者為 manual(mkArm 與 decideArgsOf 之修訂共用; 修訂之 id 取自現行目錄之既有臂, 不再核對 ARM_ID 之格式)
+let realizeOf = (id, selectable) => (selectable
+    ? [{ kind: 'operator', op: `add:${id}` }, { kind: 'carrier', name: id }]
+    : [{ kind: 'manual', how: '不派給節點(量尺 / 迴圈自身 / 須改評估器)' }])
 
 //proposalOf, 節點或做夢之一筆提案 → 引擎之提案形 { kind, arm, layer, title, mechanism, boundary, evidence, sources }(純函數)
 //  非字串之選配欄當成未給、sources 只留字串(引擎之 checkProposals 對型別不合者整筆不收); 必填欄(類別、機制、名稱、所指之臂)由引擎核對, 不合者列於 propose 之 invalid
@@ -74,6 +86,7 @@ let proposalOf = (p) => {
  * 將主控之審定命令列參數轉為引擎 rsi.governance.decide(id, args) 之參數(純函數)
  *
  * 未通過(accept 非 true)或無提案時只回基本參數;依提案 kind(new、layer、revise)組出新臂、新層或修訂之內容。
+ * 輸入之檢測:opt 非一般物件、accept / selectable / noGrid 給了而非 true / false(字串 'true'、'false'、數字皆非布林)⇒ 回 { error: 'invalid opt.<鍵>: must be …' }(未呼叫引擎;固定訊息、不帶輸入值)。
  *
  * @param {Object} p 輸入提案帳之該筆提案
  * @param {Object} [o={}] 輸入審定設定物件,預設{}
@@ -92,7 +105,17 @@ let proposalOf = (p) => {
  * @example
  * let r = decideArgsOf({ kind: 'new', title: '示範', mechanism: '說明', layer: 'A' }, { accept: true, name: 'Demo', catalog })
  */
-let decideArgsOf = (p, o = {}) => {
+let decideArgsOf = (p, opt = {}) => {
+    //輸入之檢測(跨套件規格 V4、K5; R-EV-54 ①; 回 { error } 者通知): opt 須為一般物件(null、undefined 視為 {}); accept(通過與否)、selectable(可選與否)、noGrid 給了須為 true / false(原: `accept: 'true'` ⇒ 引擎「不採」、`selectable: 'false'` ⇒ 可選; 與意圖相反); 未給(undefined 或 null)= accept false、selectable 預設可選、noGrid false
+    let o = opt === undefined || opt === null ? {} : opt
+    if (!isPlain(o)) {
+        return { error: 'invalid opt: must be an object' }
+    }
+    for (let k of ['accept', 'selectable', 'noGrid']) {
+        if (o[k] !== undefined && o[k] !== null && o[k] !== true && o[k] !== false) {
+            return { error: `invalid opt.${k}: must be a boolean` }
+        }
+    }
     let args = { accept: o.accept === true, why: o.why, by: o.by || '主控' }
     if (!args.accept || !p) {
         return { args }
@@ -128,9 +151,8 @@ let decideArgsOf = (p, o = {}) => {
         }
         let patch = { ...(o.title ? { title: o.title } : {}), desc: o.desc || p.mechanism }
         if (typeof o.selectable === 'boolean' && o.selectable !== (cur.selectable === true)) {
-            let m = mkArm({ id: cur.id, title: cur.title, selectable: o.selectable })
-            patch.selectable = m.selectable
-            patch.realize = m.realize
+            patch.selectable = o.selectable
+            patch.realize = realizeOf(cur.id, o.selectable)
         }
         if (o.noGrid === true) {
             patch.grid = {}

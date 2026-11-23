@@ -5,6 +5,7 @@ import { createRequire } from 'module'
 import maskDiagText from 'wsemi/src/maskDiagText.mjs'
 import { agentEnvOf } from './agentRole.mjs'
 import { rsiNumOf } from './rsiNums.mjs'
+import { isPlain, objReq, strReq, strOpt, boolOpt, agentsCheck } from './inputs.mjs'
 
 //numOr: 設定之數值之取值(排程第 595 項; K3、K4、K7): 數字或其數字字串轉為數值後使用, 無效或未給取 def(原: Number.isFinite 使數字字串被當成未給;
 //  `cfg.timeoutMin || 120` 使 'abc' 成 NaN 而 0 取預設、負數照用)
@@ -177,6 +178,8 @@ let pickAt = (list, later) => {
  * 金鑰自 envFile 讀取,只傳給該次子程序。回傳之函數依序嘗試 agents[role] 與其 fallback,首個成功者即回傳。
  * 因額度而未完成(主模型之用量達門檻而不派、或派工套件回報 errorType 為 quota)者記為額度之失敗;鏈上每一家皆如此時結果帶 quota: true。
  * 全部 opencode 條目之錯誤輸出(stderr)經共用遮罩後附寫到派工紀錄檔同夾之「主檔名.stderr.log」。
+ * 輸入之檢測(R-EV-54):opt、agents 非一般物件、skillsRoot 非非空字串(給 inject.wda 者除外)、agents.<role> 之 kind 非 opencode / claude、fallback 非物件之陣列 ⇒ 同步拋 invalid opt.…: must be …(固定訊息、不帶輸入值);
+ * 回傳之派工函數於 o 非一般物件或 prompt、logFile 非字串時回 ok 為 false 之結果(不派工)。
  *
  * @param {Object} opt 輸入設定物件
  * @param {Object} opt.agents 輸入各角色設定,agents.<role> 為 { kind: 'opencode', id, variant, timeoutMin, quotaMaxPercent, fallback } 或 { kind: 'claude', model, effort, timeoutMin };quotaMaxPercent 為該角色之用量守門百分比(優先於 maxPercent;大於 100 表示不以用量守門,被限流者仍不派)
@@ -190,7 +193,18 @@ let pickAt = (list, later) => {
  * let dispatch = makeDispatch({ agents, skillsRoot: './skills', envFile: './.env', cwd: './work' })
  * let r = await dispatch('node', { prompt, tag: 'r001_node', logFile: './work/agent.log' })
  */
-let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject = {} }) => {
+let makeDispatch = (opt) => {
+    //輸入之檢測(跨套件規格 V4、K3、§5.1; R-EV-54; 工廠 ⇒ 同步拋固定訊息, 先於任何副作用): opt、agents 須為一般物件; skillsRoot 須為非空字串(給 inject.wda 者除外);
+    //  agents.<role> 之 kind 給了須為 opencode 或 claude、fallback 給了須為物件之陣列(各項之 kind 同); maxPercent 無效者用預設(K3)
+    //  原: opt 為 null 或缺 skillsRoot ⇒ 原生 TypeError; kind 為其他值 ⇒ 靜默走 opencode 分支; fallback 非陣列 ⇒ 展開時拋原生 TypeError
+    let ov = objReq(opt, 'opt')
+    let agents = objReq(ov.agents, 'opt.agents')
+    let inject = ov.inject === undefined || ov.inject === null ? {} : objReq(ov.inject, 'opt.inject')
+    let skillsRoot = inject.wda ? ov.skillsRoot : strReq(ov.skillsRoot, 'opt.skillsRoot')
+    agentsCheck(agents)
+    //cwd(agent 之工作根: 其下 edit / write / bash 皆放行)給了而非非空字串 ⇒ 拋(安全相關; 不靜默取行程之工作目錄)
+    let cwd = strOpt(ov.cwd, undefined, 'opt.cwd')
+    let { envFile, maxPercent = 95 } = ov
     let wda = inject.wda || createRequire(import.meta.url)(path.join(skillsRoot, 'node_modules', 'w-dispatch-ai'))
     let env = envFile && fs.existsSync(envFile) ? wda.readEnvFile(envFile) : {}
     let keysOf = (name) => String(env[name] || '').split(/[,;]/).map((s) => s.trim()).filter(Boolean)
@@ -288,6 +302,10 @@ let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject 
     }
 
     return async (role, o) => {
+        //呼叫之輸入(結果物件通道): o 須為一般物件且 prompt、logFile 為字串, 否則回 ok: false(不派工、不寫檔; 原: 取 o.logFile 之原生 TypeError 被當成「派工例外」)
+        if (!isPlain(o) || typeof o.prompt !== 'string' || typeof o.logFile !== 'string' || o.logFile === '') {
+            return { ok: false, error: 'invalid opt: must be an object with a string prompt and a non-empty string logFile', agent: {} }
+        }
         let cfg = agents[role]
         if (!cfg) {
             return { ok: false, error: `settings.agents.${role} 未設定`, agent: {} }
@@ -336,6 +354,8 @@ let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject 
  * 起跑前查詢各角色所用訂閱之額度(唯讀;查詢本身失敗不擋,僅記 note)
  *
  * 回傳內容不含金鑰、帳號與電子郵件。
+ * 輸入之檢測(R-EV-54;回傳 Promise 者 ⇒ reject 固定訊息、先於任何查詢或探測):opt、agents 非一般物件、skillsRoot 非非空字串(給 inject.wda 者除外)、agents 之 kind 與 fallback 不合(同 makeDispatch)、probe 給了而不是 true / false;
+ * probeTimeoutMs 為計時值(§3.7):正數且不超過 2147483647,缺或無效者用預設 60000。
  * probe 為 true 時,主模型之全部金鑰皆達門檻而設有 fallback 者,會實際試一次備援(免費池之備援用盡即擋下);未給 probe 者不探測。
  *
  * @param {Object} opt 輸入設定物件
@@ -351,7 +371,18 @@ let makeDispatch = ({ agents, skillsRoot, envFile, cwd, maxPercent = 95, inject 
  * let q = await checkQuota({ agents, skillsRoot: './skills', envFile: './.env' })
  * console.log(q.ok)
  */
-let checkQuota = async ({ agents, skillsRoot, envFile, maxPercent = 95, probe = false, probeTimeoutMs = 60000, inject = {} }) => {
+let checkQuota = async (opt) => {
+    //輸入之檢測(§5.1、K3、K5、§3.7; R-EV-54; 回傳 Promise 者 ⇒ reject 固定訊息, 先於任何查詢或探測): opt、agents 須為一般物件、skillsRoot 須為非空字串(給 inject.wda 者除外)、
+    //  probe(是否實際派一次備援 = 耗用額度)給了須為 true / false(原: 以 `probe === true` 判 ⇒ 字串 'true'、數字 1 靜默被當成不探測, 與意圖相反); agents 之 kind 與 fallback 同 makeDispatch; maxPercent 無效者用預設(K3);
+    //  probeTimeoutMs 為計時值(§3.7): 正數且不超過 2147483647, 無效者用預設 60000(原: 不驗 ⇒ NaN、負數使探測之計時器立即觸發)
+    let o = objReq(opt, 'opt')
+    let agents = objReq(o.agents, 'opt.agents')
+    let inject = o.inject === undefined || o.inject === null ? {} : objReq(o.inject, 'opt.inject')
+    let skillsRoot = inject.wda ? o.skillsRoot : strReq(o.skillsRoot, 'opt.skillsRoot')
+    agentsCheck(agents)
+    let probe = boolOpt(o.probe, false, 'opt.probe')
+    let probeTimeoutMs = numOr(o.probeTimeoutMs, 'timerMs', 60000)
+    let { envFile, maxPercent = 95 } = o
     let wda = inject.wda || createRequire(import.meta.url)(path.join(skillsRoot, 'node_modules', 'w-dispatch-ai'))
     let env = envFile && fs.existsSync(envFile) ? wda.readEnvFile(envFile) : {}
     let keysOf = (name) => String(env[name] || '').split(/[,;]/).map((s) => s.trim()).filter(Boolean)

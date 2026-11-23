@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { getSettings, cliGuard } from '../cfg.mjs'
+import { rsiNumOf } from '../arsi/rsiNums.mjs'
 
 //命令列只認一個位置引數(輪次; TOOL_FLAGS.dreamProfile): 任何旗標、多餘之位置引數一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值)
 cliGuard('dreamProfile')
@@ -11,8 +12,14 @@ cliGuard('dreamProfile')
 let st = getSettings()
 let work = st.records.workDir
 let rounds = fs.readdirSync(work).filter((f) => /^dream_r\d+$/.test(f)).map((f) => Number(f.slice(7))).sort((a, b) => a - b)
-let arg = process.argv.slice(2).find((a) => /^\d+$/.test(a))
-let round = arg ? Number(arg) : rounds[rounds.length - 1]
+//輪次(位置引數; 已於上之 cliGuard 檢查為正整數〔TOOL_FLAGS.dreamProfile.pos〕, 此處取轉換值 —— K4): 給了而無該輪之做夢工作夾 ⇒ 拒收(離開碼 2; 訊息固定、不帶輸入值; 排程第 607 項)
+//  原: 值不驗 —— 非數字者被忽略而靜默改為最近一輪; 不存在之輪次於讀紀錄檔時拋原生 ENOENT
+let arg = process.argv.slice(2).find((a) => !a.startsWith('--'))
+let round = arg !== undefined ? rsiNumOf(arg, 'posInt') : rounds[rounds.length - 1]
+if (arg !== undefined && !rounds.includes(round)) {
+    console.log('invalid round: must be a round that has a dream work folder')
+    process.exit(2)
+}
 let fp = path.join(work, `dream_r${String(round).padStart(3, '0')}`, 'agent.log')
 let evs = []
 let walk = (o, ts, outArr) => {

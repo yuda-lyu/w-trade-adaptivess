@@ -10,7 +10,7 @@ import { makeTmp } from './tools/synthLedger.mjs'
 
 //量尺之並列與選配之主鍵(規則 R-REC-49)
 //  規格: ①看板之表前一段與輪末摘要之一列:「挑選內容最高且可信」與「排序鍵最高且可信」不同、或後者為側別曝險時才列;summary.best 不動
-//    ②做夢更新 state 之一句改為並列 ③settings.rsi.rankBy = 'content' ⇒ 看板與搜尋地圖之「最高」與補位之底以挑選內容為主鍵(無其值者在後)、排序鍵為次鍵;其餘之值(含未給)= 現行
+//    ②做夢更新 state 之一句改為並列 ③settings.rsi.rankBy = 'content' ⇒ 看板與搜尋地圖之「最高」與補位之底以挑選內容為主鍵(無其值者在後)、排序鍵為次鍵;'key' 與未給 = 現行、其餘之值拒絕(R-EV-54 ②)
 //    ④對名次之影響之估法(rankCompareOf):兩種次序之第一名、Spearman ρ、Kendall τ-b、前 k 名之交集、曝險者之個數
 //  合成資料: 各節點之臂、S、重放之 S、組成對照之超額、選集指紋逐筆相異
 describe('量尺之並列與選配之主鍵(規則 R-REC-49)', function () {
@@ -109,7 +109,7 @@ describe('量尺之並列與選配之主鍵(規則 R-REC-49)', function () {
         assert(!read(z.st, 'ARMS_BOARD.md').includes('**量尺(並列)**'))
     })
 
-    it('rsi.rankBy = content:補位之底、看板之次序與各臂之最佳、搜尋地圖之量尺依挑選內容(無其值者在後;同值依排序鍵);其他之值 = 現行(看板與搜尋地圖逐字相同)', () => {
+    it('rsi.rankBy = content:補位之底、看板之次序與各臂之最佳、搜尋地圖之量尺依挑選內容(無其值者在後;同值依排序鍵);key 與未給 = 現行(看板與搜尋地圖逐字相同);其餘之值拒絕(R-EV-54)', () => {
         let build = (rsiExtra) => {
             let p = mk(rsiExtra)
             let ids = {
@@ -138,9 +138,12 @@ describe('量尺之並列與選配之主鍵(規則 R-REC-49)', function () {
         let map = read(c.st, 'SEARCH_MAP.md')
         assert(map.includes(`〔依挑選內容 ${f1(contentOf(c.P.rsi.store.getNode(c.ids.hiC)).v)}〕`), '搜尋地圖之標記')
         assert(map.includes('標「〔依挑選內容 …〕」者:該處之「最高」以**主鍵 = 挑選內容**選取'))
-        //其他之值 = 現行: 看板與搜尋地圖與未設定者逐字相同
+        //'key' 與未給(null)= 現行: 看板與搜尋地圖與未設定者逐字相同; 其餘之值(S、1、true…)給了而無效 ⇒ 組裝時拒絕(R-EV-54 ②: rankBy 決定「最高」與補位之底; 原: 靜默視為排序鍵)
         let k0 = build({})
-        for (let v of ['S', 'key', 1, true, null]) {
+        for (let v of ['S', 1, true, 'Content', '', {}]) {
+            assert.throws(() => build({ rankBy: v }), /^Error: invalid rsi\.rankBy: must be one of content, key$/, String(v))
+        }
+        for (let v of ['key', null]) {
             let k1 = build({ rankBy: v })
             assert.equal(k1.P.rankBy, 'key', String(v))
             assert.equal(read(k1.st, 'ARMS_BOARD.md'), read(k0.st, 'ARMS_BOARD.md'), String(v))

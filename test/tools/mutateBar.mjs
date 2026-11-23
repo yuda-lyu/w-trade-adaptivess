@@ -918,7 +918,7 @@ let M = [
     ['GD06', 'src/domain/domain.mjs', [["return (ca === null ? 0 : cb - ca) || (kv(b) - kv(a))", "return (ca === null ? 0 : ca - cb) || (kv(b) - kv(a))"]], ['unit-gaugeDual']], //主鍵取內容最低者
     ['GD07', 'src/domain/domain.mjs', [["return ca === null ? 1 : -1", "return ca === null ? -1 : 1"]], ['unit-gaugeDual']], //無內容之值者排在前
     ['GD08', 'src/domain/domain.mjs', [["cands.sort((a, b) => byContent(rankKeyOf)(a, b) || (a.id < b.id ? -1 : 1))", "void 0"]], ['unit-gaugeDual']], //補位之底不依主鍵
-    ['GD09', 'src/domain/domain.mjs', [["let rankBy = st.rsi && st.rsi.rankBy === 'content' ? 'content' : 'key'", "let rankBy = st.rsi && st.rsi.rankBy ? 'content' : 'key'"]], ['unit-gaugeDual']], //不認之值亦改主鍵
+    ['GD09', 'src/domain/domain.mjs', [["let rankBy = rankByRaw === 'content' ? 'content' : 'key'", "let rankBy = rankByRaw ? 'content' : 'key'"]], ['unit-gaugeDual']], //key 亦改主鍵(R-EV-54: 不認之值已於上拒絕)
     ['GD10', 'src/domain/domain.mjs', [["contentValOf(n) === null ? 1 : 0, -(contentValOf(n) === null ? 0 : contentValOf(n)), -kvOf(n)]", "-kvOf(n)]"]], ['unit-gaugeDual']], //看板之次序不依主鍵
     ['GD11', 'src/domain/domain.mjs', [["return ra.reduce((d, x, i) => d || (x - rb[i]), 0)", "return (ra[0] - rb[0]) || (ra[1] - rb[1])"]], ['unit-gaugeDual']], //次序只比前兩項(主鍵之值與次鍵不比)
     ['GD12', 'src/domain/domain.mjs', [["reduce((b, n) => (b === null || byContent(kvOf)(n, b) < 0 ? n : b), null)", "reduce((b, n) => (b === null || kvOf(n) > kvOf(b) ? n : b), null)"]], ['unit-gaugeDual']], //各臂之最佳不依主鍵
@@ -1204,7 +1204,7 @@ let M = [
     ['FS34', 'src/cli/eval.mjs', [["let memberArg = argOf('member', null)", "let memberArg = (getSettings(), argOf('member', null))"]], ['unit-cliStrictFlags']], //--member 之檢查晚於讀設定
     ['FS35', 'src/cli/eval.mjs', [["let nullArg = argOf('null', null)", "let nullArg = (getSettings(), argOf('null', null))"]], ['unit-cliStrictFlags']], //--null 之檢查晚於讀設定
     ['FS36', 'src/cli/eval.mjs', [["let subsetArg = argStrOf('subset', null)", "let subsetArg = (getSettings(), argStrOf('subset', null))"]], ['unit-cliStrictFlags']], //--subset 之檢查晚於讀設定
-    ['BC13', 'src/tools/scanCheck.mjs', [["    console.log(`ERROR ${msg}`)\n    process.exit(2)\n}", "    console.log(`ERROR ${msg}`)\n    process.exit(1)\n}"]], ['unit-backtestCfg']], //scanCheck.mjs 設定無效之離開碼
+    ['BC13', 'src/tools/scanCheck.mjs', [["    console.log(`ERROR ${msg}`)\n    process.exit(2)\n}\nlet root = st.FD_ROOT", "    console.log(`ERROR ${msg}`)\n    process.exit(1)\n}\nlet root = st.FD_ROOT"]], ['unit-backtestCfg']], //scanCheck.mjs 設定無效之離開碼(backtestCfg 之 try 之後; 另有禁區字樣之 try 在前)
     //── 第 510 項①④⑤: 挑選函數回傳值之收窄與 V19 訊息、api 之訊息、保留期 asOf ──
     ['NP01', 'src/eval/evalCore.mjs', [["        if (arr === null) {\n            throw new ErrorCtor(viaObj ?", "        if (false) {\n            throw new ErrorCtor(viaObj ?"]], ['unit-extApiInput']], //ids 之種類不合不拒
     ['NP02', 'src/eval/evalCore.mjs', [["        if (group !== null && garr === null) {", "        if (false) {"]], ['unit-extApiInput']], //group 之種類不合不拒
@@ -1253,7 +1253,7 @@ let M = [
     ['TM14', 'src/cfg.mjs', [["base: ['rearm'],", "base: ['rearm', 'close'],"]], ['unit-cliModeFlags']], //--base 於 --close 通過
     ['TM15', 'src/cfg.mjs', [["            'selectable': '<true|false>',\n", ""]], ['unit-toolFlags']], //armDecide 之表缺 --selectable
     ['TM16', 'src/cfg.mjs', [["'since': '<ISO-time>', 'poll-sec': '<N>' }", "'since': '<ISO-time>' }"]], ['unit-toolFlags']], //waitEvent 之表缺 --poll-sec
-    ['TM17', 'src/cfg.mjs', [["roundDigest: { flags: { out: null }, positional: 1 }", "roundDigest: { flags: { out: null }, positional: 0 }"]], ['unit-toolFlags']], //roundDigest 不收輪次
+    ['TM17', 'src/cfg.mjs', [["roundDigest: { flags: { out: null }, positional: 1, pos:", "roundDigest: { flags: { out: null }, positional: 0, pos:"]], ['unit-toolFlags']], //roundDigest 不收輪次
     ['TM18', 'src/cfg.mjs', [["replayCheck: { flags: {}, positional: Infinity }", "replayCheck: { flags: {}, positional: 1 }"]], ['unit-toolFlags']], //replayCheck 只收一個節點前綴
     ['TM19', 'src/cfg.mjs', [["positional: 0, own: ['dir-hi', 'dir-lo'] }", "positional: 0 }"]], ['unit-toolFlags']], //libCheck 之 own 缺
     ['TM20', 'src/tools/exposure.mjs', [["cliGuard('exposure')\n", "void 0\n"]], ['unit-toolFlags']], //放行工具不檢旗標
@@ -1289,7 +1289,7 @@ let M = [
     ['TM49', 'src/domain/backtestCfg.mjs', [["let splits = reqNumOf(gr.splits, 2, 'backtest.grade.splits', 'posInt')", "let splits = reqNumOf(gr.splits, 2, 'backtest.grade.splits', 'num')"]], ['unit-rsiNums']], //splits 收小數
     ['TM50', 'src/domain/backtestCfg.mjs', [["let meanMin = reqNumOf(rl.meanMin, 0, 'backtest.rule.meanMin', 'num')", "let meanMin = rl.meanMin === undefined ? 0 : rl.meanMin"]], ['unit-rsiNums']], //meanMin 不檢
     ['TM51', 'src/domain/backtestCfg.mjs', [["rule: { meanMin, worstPhaseMin, ...ruleRest },", "rule: { ...rl, meanMin, worstPhaseMin },"]], ['unit-rsiNums']], //rule 之鍵序隨輸入
-    ['TM52', 'src/domain/backtestCfg.mjs', [["grade: { enabled: !(b.grade && b.grade.enabled === false), pAbove, pBelow, pStrong, splits, matchSides: true, ...gradeRest },", "grade: { enabled: !(b.grade && b.grade.enabled === false), pAbove, pBelow, pStrong, splits, matchSides: true },"]], ['unit-rsiNums']], //grade 丟掉其餘之鍵(enabled、matchSides、未知之鍵)
+    ['TM52', 'src/domain/backtestCfg.mjs', [["grade: { enabled: gradeEnabled, pAbove, pBelow, pStrong, splits, matchSides, ...gradeRest },", "grade: { enabled: gradeEnabled, pAbove, pBelow, pStrong, splits, matchSides },"]], ['unit-rsiNums']], //grade 丟掉其餘之鍵(未知之鍵)
     ['TM53', 'src/domain/domain.mjs', [["let maxArms = maxArmsOf(st.rsi)", "let maxArms = st.rsi.maxArmsPerNode || 4"]], ['unit-rsiNums']], //閘門取原值
     //── 節點任務書之大小與整併後必要之規則(BZ 系列; 規則 R-REC-52; 排程第 588 項 ①; 優先測試 unit-briefSize)──
     ['BZ01', 'src/domain/texts.mjs', [["不是挑中了誰。不同持倉上限或選集大小之 S 不能直接比", "不是挑中了誰。輸出另有損益依多空 / tag 之歸因與評估期間三等分(含兩種對照於各段之均)。不同持倉上限或選集大小之 S 不能直接比"], ["以策略庫之一半重跑同一個模組(模組不必改寫),檢驗內容", "以策略庫之一半重跑同一個模組(`0` = 甲半、`1` = 乙半;換鹽 = 換一種切法;模組不必改寫),檢驗內容"], ["一次只執行一個評估指令(不用 shell 迴圈或 `&&` 串接)。要寫進", "一次只執行一個評估指令(不用 shell 迴圈或 `&&` 串接)。(迴圈會檢查每個已完整評估之版本是否仍有檔可重現。)要寫進"]], ['unit-briefSize']], //把整併掉之三句加回 ⇒ 最長之情境逾 15,000
@@ -1400,6 +1400,186 @@ let M = [
     //── 588 項 ②: 做夢更新專案 state.md 之說明之量尺並列(優先測試 unit-fakeRound 之整輪)──
     ['FR01', 'src/domain/domain.mjs', [["        lines.push(...unproposedNoteOf(a.proposals))\n", ""]], ['unit-fakeRound']], //輪末鉤子內「方向未入前緣」一行之呼叫站點被刪(排程第 477 項 ③)
     ['DS01', 'src/domain/domain.mjs', [["**目前「挑選內容(組成對照之超額)最高且可信」之成品與「回測期 S 最高且可信」之成品(並列;同一個者寫一次並註明)**", "**目前回測期 S 最高且可信之成品**"]], ['unit-fakeRound']], //回到只列 S 最高者
+    //── 輸入之值與必給件之檢測(IN 系列; 排程第 607 項、第 477 項 ④之餘項; R-EV-54; 優先測試 unit-cliValues、unit-inputGates、unit-inputOpt)──
+    //  命令列之值之種類表(CLI_VALUES)與其檢查(cliMsgOf)
+    ['IN01', 'src/cfg.mjs', [["rsi: { nodes: 'posInt', arms:", "rsi: { arms:"]], ['unit-cliValues']], //--nodes 之值不驗
+    ['IN02', 'src/cfg.mjs', [["arms: 'posInt', parallel:", "parallel:"]], ['unit-cliValues']],
+    ['IN03', 'src/cfg.mjs', [["parallel: 'posInt', workers:", "workers:"]], ['unit-cliValues']],
+    ['IN04', 'src/cfg.mjs', [["workers: 'posInt', rounds:", "rounds:"]], ['unit-cliValues']],
+    ['IN05', 'src/cfg.mjs', [["rounds: 'posInt', par:", "par:"]], ['unit-cliValues']],
+    ['IN06', 'src/cfg.mjs', [["par: 'posInt', round: 'posInt' },", "round: 'posInt' },"]], ['unit-cliValues']],
+    ['IN07', 'src/cfg.mjs', [["par: 'posInt', round: 'posInt' },", "par: 'posInt' },"]], ['unit-cliValues']],
+    ['IN08', 'src/cfg.mjs', [["rankCompare: { k: 'posInt' },", "rankCompare: {},"]], ['unit-cliValues']],
+    ['IN09', 'src/cfg.mjs', [["quota: { max: 'num' },", "quota: { max: 'posNum' },"]], ['unit-cliValues']], //--max 不收 0 與負數
+    ['IN10', 'src/cfg.mjs', [["'timeout-min': 'timerMin', 'poll-sec'", "'timeout-min': 'posNum', 'poll-sec'"]], ['unit-cliValues']], //逾時分鐘不設上限
+    ['IN11', 'src/cfg.mjs', [["'poll-sec': 'timerSec', 'since': 'time' },", "'poll-sec': 'posNum', 'since': 'time' },"]], ['unit-cliValues']],
+    ['IN12', 'src/cfg.mjs', [["'poll-sec': 'timerSec', 'since': 'time' },", "'poll-sec': 'timerSec' },"]], ['unit-cliValues']], //--since 之值不驗
+    ['IN13', 'src/cfg.mjs', [["armDecide: { selectable: { enum: ['true', 'false'] } },", "armDecide: {},"]], ['unit-cliValues']],
+    ['IN14', 'src/cfg.mjs', [["return kind.enum.includes(v.trim()) ?", "return kind.enum.includes(v) ?"]], ['unit-cliValues']], //列舉不去頭尾空白
+    ['IN15', 'src/cfg.mjs', [["return timeMsOf(v) === null ?", "return timeMsOf(v) === undefined ?"]], ['unit-cliValues']], //時間字串恆合格
+    ['IN16', 'src/cfg.mjs', [["return rsiNumOf(v, kind) === null ? `invalid --${nm}", "return rsiNumOf(v, kind) === undefined ? `invalid --${nm}"]], ['unit-cliValues']], //數字恆合格
+    ['IN17', 'src/cfg.mjs', [["return rsiNumOf(token, 'posInt') === null ?", "return rsiNumOf(token, 'posInt') === undefined ?"]], ['unit-cliValues']], //輪次恆合格
+    ['IN18', 'src/cfg.mjs', [["return token.split(',').every((x) =>", "return token.split(',').some((x) =>"]], ['unit-cliValues']], //前綴清單任一合格即可
+    ['IN19', 'src/cfg.mjs', [["[A-Za-z0-9_-]{1,64}$/.test(x)", "[A-Za-z0-9_-]{1,65}$/.test(x)"]], ['unit-cliValues']], //前綴長度上限 65
+    ['IN20', 'src/cfg.mjs', [["return s.enum.includes(token) ? null :", "return true ? null :"]], ['unit-cliValues']], //位置引數之列舉恆合格
+    ['IN21', 'src/cfg.mjs', [["    return valMsg\n}", "    return null\n}"]], ['unit-cliValues']], //值之種類之訊息不回
+    ['IN22', 'src/cfg.mjs', [["if (Object.prototype.hasOwnProperty.call(vals, nm) && valMsg === null) {", "if (Object.prototype.hasOwnProperty.call(vals, nm)) {"]], ['unit-cliValues']], //後者覆蓋前者(合格者覆蓋不合者)
+    ['IN23', 'src/cfg.mjs', [["let pm = isTool ? posMsgOf(entry, nSeen, a) : null\n                if (pm !== null && valMsg === null) {", "let pm = isTool ? posMsgOf(entry, nSeen, a) : null\n                if (false) {"]], ['unit-cliValues']], //位置引數之值不驗
+    ['IN24', 'src/cfg.mjs', [["let pm = isTool ? posMsgOf(entry, nSeen, v) : null\n                    if (pm !== null && valMsg === null) {", "let pm = isTool ? posMsgOf(entry, nSeen, v) : null\n                    if (false) {"]], ['unit-cliValues']], //布林旗標之後之位置引數之值不驗
+    ['IN25', 'src/cfg.mjs', [["    let x = rsiNumOf(v, kind)\n    return x === null ? def : x\n}\n\n//CLI_FLAGS", "    let x = Number(v)\n    return x === null ? def : x\n}\n\n//CLI_FLAGS"]], ['unit-cliValues']], //argNumOf 取 Number(原字串)
+    ['IN26', 'src/cfg.mjs', [["if (m === null || !calendarOk(m)) {", "if (m === null) {"]], ['unit-cliValues']], //T2 不核對日曆
+    ['IN27', 'src/cfg.mjs', [["d <= dim[mo - 1] &&", "d <= 31 &&"]], ['unit-cliValues']], //日不依月
+    ['IN28', 'src/cfg.mjs', [["&& h <= 23 &&", "&& h <= 24 &&"]], ['unit-cliValues']], //24 時
+    //IN29、IN30 為等價變異(第 5 欄 'equiv'): 分或秒為 60 者 `Date.parse` 本身回 NaN(V8 只滾動「日」, 不收分與秒之 60), 其後之 `Number.isFinite` 之核對仍拒 ⇒ `calendarOk` 之 `mi <= 59`、`s <= 59` 為重複之防線(保留以不依賴引擎之寬嚴); 等價之前提(Date.parse 對分、秒之 60 回 NaN)由 test/unit-cliValues 之時間字串案以斷言守住
+    ['IN29', 'src/cfg.mjs', [["mi <= 59 && s <= 59", "mi <= 60 && s <= 59"]], ['unit-cliValues'], 'equiv'], //60 分
+    ['IN30', 'src/cfg.mjs', [["mi <= 59 && s <= 59", "mi <= 59 && s <= 60"]], ['unit-cliValues'], 'equiv'], //60 秒
+    ['IN31', 'src/cfg.mjs', [["(y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28", "y % 4 === 0 ? 29 : 28"]], ['unit-cliValues']], //閏年不排除世紀年
+    ['IN32', 'src/cfg.mjs', [["return m !== null && calendarOk(m) && Number.isFinite(Date.parse(`${v}Z`))", "return m !== null && Number.isFinite(Date.parse(`${v}Z`))"]], ['unit-cliValues']], //無時區之時間不核對日曆
+    //  設定檔之必給節與路徑欄、派工設定、辨識器
+    ['IN34', 'src/cfg.mjs', [["if (o === null || typeof o !== 'object' || Array.isArray(o)) {", "if (o === null) {"]], ['unit-inputGates']],
+    ['IN35', 'src/cfg.mjs', [["if (typeof v !== 'string' || v === '') {\n            throw new Error(`invalid ${where}: must be a non-empty string`)", "if (typeof v !== 'string') {\n            throw new Error(`invalid ${where}: must be a non-empty string`)"]], ['unit-inputGates']],
+    ['IN36', 'src/cfg.mjs', [["if (typeof st.dispatch.skillsRoot !== 'string') {", "if (false) {"]], ['unit-inputGates']],
+    ['IN37', 'src/cfg.mjs', [["        agentsCheck(st.agents, 'settings.agents')", "        void 0"]], ['unit-inputGates']],
+    ['IN38', 'src/cfg.mjs', [["source\\.libraryRoot|rsi\\.rankBy|settings[.:]|backtest:", "source\\.libraryRoot|settings[.:]|backtest:"]], ['unit-inputGates']],
+    ['IN39', 'src/cfg.mjs', [["rsi\\.rankBy|settings[.:]|backtest:", "rsi\\.rankBy|settings\\.|backtest:"]], ['unit-inputGates']],
+    ['IN40', 'src/cfg.mjs', [["rsi\\.rankBy|settings[.:]|backtest:)", "rsi\\.rankBy|settings[.:])"]], ['unit-inputGates']],
+    //  進入檔與工具之讀取處(取檢查合格之轉換值; 字串旗標取原字串)
+    ['IN41', 'src/cli/rsi.mjs', [["let cliInt = (k) => argNumOf(k, 'posInt', null)", "let cliInt = (k) => {\n    let v = argOf(k, null)\n    return Number.isInteger(v) && v >= 1 ? v : null\n}"]], ['unit-cliValues']],
+    ['IN42', 'src/cli/rsi.mjs', [["let parArg = argNumOf('par', 'posInt', null)", "let parArg = argOf('par', null)"]], ['unit-cliValues']],
+    ['IN43', 'src/cli/rsi.mjs', [["let rd = argNumOf('round', 'posInt', 0)\n    let fpTxt", "let rd = argOf('round', 0)\n    let fpTxt"]], ['unit-cliValues']],
+    ['IN44', 'src/cli/rsi.mjs', [["let rd = argNumOf('round', 'posInt', 0)\n    let fpJs", "let rd = argOf('round', 0)\n    let fpJs"]], ['unit-cliValues']],
+    ['IN45', 'src/cli/rsi.mjs', [["let why = String(argStrOf('why', ''))", "let why = String(argOf('why', ''))"]], ['unit-cliValues']],
+    ['IN46', 'src/cli/rsi.mjs', [["why: String(argStrOf('why', ''))", "why: String(argOf('why', ''))"]], ['unit-cliValues']],
+    ['IN47', 'src/cli/rsi.mjs', [["let why = argStrOf('why', '')\n        if (!to", "let why = argOf('why', '')\n        if (!to"]], ['unit-cliValues']],
+    ['IN48', 'src/tools/waitEvent.mjs', [["let since = i0 >= 0 ? timeMsOf(process.argv[i0 + 1]) : Date.now()", "let since = Date.now()"]], ['unit-cliValues']], //--since 不採
+    ['IN49', 'src/tools/waitEvent.mjs', [["argNumOf('timeout-min', 'timerMin', 110) * 60000", "argNumOf('timeout-min', 'timerMin', 110) * 1000"]], ['unit-cliValues']],
+    ['IN50', 'src/tools/waitEvent.mjs', [["Math.max(2, argNumOf('poll-sec', 'timerSec', 20)) * 1000", "Math.max(1, argNumOf('poll-sec', 'timerSec', 20)) * 1000"]], ['unit-cliValues']],
+    ['IN51', 'src/tools/quota.mjs', [["let max = argNumOf('max', 'num', preNum.quotaMaxPercent)", "let max = preNum.quotaMaxPercent"]], ['unit-cliValues']],
+    ['IN52', 'src/tools/rankCompare.mjs', [["let k = argNumOf('k', 'posInt', 10)", "let k = 10"]], ['unit-cliValues']],
+    ['IN53', 'src/tools/roundDigest.mjs', [["if (argRound !== undefined && !R && !dream && !docs.some((d) => d.round === round)) {", "if (false) {"]], ['unit-cliValues']], //不存在之輪次印空摘要
+    ['IN54', 'src/tools/roundDigest.mjs', [["let round = argRound !== undefined ? rsiNumOf(argRound, 'posInt') :", "let round = argRound !== undefined ? 1 :"]], ['unit-cliValues']],
+    ['IN55', 'src/tools/dreamProfile.mjs', [["if (arg !== undefined && !rounds.includes(round)) {", "if (false) {"]], ['unit-cliValues']],
+    ['IN56', 'src/tools/scanCheck.mjs', [["if (only && only.some((p) => !docs.some((d) => String(d.nodeId).startsWith(p)))) {", "if (only && only.every((p) => !docs.some((d) => String(d.nodeId).startsWith(p)))) {"]], ['unit-cliValues']], //只有全部未命中才拒
+    ['IN57', 'src/tools/scanCheck.mjs', [["if (only && only.some((p) => !docs.some((d) => String(d.nodeId).startsWith(p)))) {", "if (false) {"]], ['unit-cliValues']],
+    ['IN58', 'src/tools/armInactive.mjs', [["let key = argStrOf('node', null)", "let key = argOf('node', null)"]], ['unit-cliValues']],
+    ['IN59', 'src/tools/armInactive.mjs', [["let why = argStrOf('why', null)", "let why = argOf('why', null)"]], ['unit-cliValues']],
+    ['IN60', 'src/tools/armDecide.mjs', [["let id = argStrOf('id', null)", "let id = argOf('id', null)"]], ['unit-cliValues']],
+    ['IN61', 'src/tools/armDecide.mjs', [["selectable: selArg === null ? undefined : selArg.trim() === 'true',", "selectable: selArg === null ? undefined : !(selArg === false || selArg === 'false'),"]], ['unit-cliValues']], //原式
+    ['IN62', 'src/tools/exposure.mjs', [["let why = argStrOf('why', null)", "let why = argOf('why', null)"]], ['unit-cliValues']],
+    //  保留期之門、日誌名、ARSI_ROOT
+    ['IN63', 'src/cli/build.mjs', [["(ho !== undefined && ho !== null && !isLocalTimeStr(ho) ? 'periods.holdoutFrom' : null)", "(false ? 'periods.holdoutFrom' : null)"]], ['unit-inputGates']],
+    ['IN64', 'src/cli/build.mjs', [["let bad = !isLocalTimeStr(endTime) ?", "let bad = false ?"]], ['unit-inputGates']],
+    ['IN65', 'src/cli/build.mjs', [["ho !== undefined && ho !== null && !isLocalTimeStr(ho)", "ho !== undefined && ho !== null && typeof ho !== 'string'"]], ['unit-inputGates']], //只核對型別
+    ['IN66', 'src/cli/launch.mjs', [["/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(name)", "/^[A-Za-z0-9._-]{1,64}$/.test(name)"]], ['unit-inputGates']],
+    ['IN67', 'src/cli/launch.mjs', [[" || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(name)", ""]], ['unit-inputGates']],
+    ['IN68', 'src/cli/launch.mjs', [["if (!(fs.existsSync(FD_ROOT) && fs.statSync(FD_ROOT).isDirectory())) {", "if (false) {"]], ['unit-inputGates']],
+    //  禁區字樣之來源(verify.mjs)、rankBy、backtest 之布林與節
+    ['IN70', 'src/domain/verify.mjs', [["    if (!Array.isArray(items)) {\n        throw badInput(where, 'an array of { pattern, label }')", "    if (false) {\n        throw badInput(where, 'an array of { pattern, label }')"]], ['unit-inputGates']],
+    ['IN71', 'src/domain/verify.mjs', [["typeof x.label === 'string' && x.label.trim() !== '' &&", "typeof x.label === 'string' &&"]], ['unit-inputGates']],
+    ['IN72', 'src/domain/verify.mjs', [["(x.pattern instanceof RegExp || (typeof x.pattern === 'string' && x.pattern !== ''))", "true"]], ['unit-inputGates']],
+    ['IN73', 'src/domain/verify.mjs', [["            catch (err) {\n                ok = false\n            }", "            catch (err) {\n                ok = true\n            }"]], ['unit-inputGates']],
+    ['IN74', 'src/domain/verify.mjs', [["let ok = isPlain(x) && typeof x.label", "let ok = typeof x.label"]], ['unit-inputGates']],
+    ['IN75', 'src/domain/verify.mjs', [["if (srcLib !== undefined && srcLib !== null && (typeof srcLib !== 'string' || srcLib === '')) {", "if (false) {"]], ['unit-inputGates']],
+    ['IN76', 'src/domain/verify.mjs', [["if (gd !== undefined && gd !== null && !isPlain(gd)) {", "if (false) {"]], ['unit-inputGates']],
+    ['IN77', 'src/domain/verify.mjs', [["    let next = extraItemsOf(items, 'items')", "    GUARD_EXTRA = []\n    let next = extraItemsOf(items, 'items')"]], ['unit-inputGates']], //無效時先清空
+    ['IN78', 'src/domain/verify.mjs', [["else if (!Number.isSafeInteger(attempt) || attempt < 1) {", "else if (false) {"]], ['unit-inputGates']],
+    ['IN79', 'src/domain/verify.mjs', [["    strReq(privateRoot, 'opt.privateRoot')\n", ""]], ['unit-inputGates']],
+    ['IN80', 'src/domain/verify.mjs', [["    strReq(workDir, 'opt.workDir')\n", ""]], ['unit-inputGates']],
+    ['IN81', 'src/domain/verify.mjs', [["let o = objReq(opt, 'opt')\n    let { workDir, attempt,", "let o = opt || {}\n    let { workDir, attempt,"]], ['unit-inputGates']],
+    ['IN82', 'src/domain/domain.mjs', [["if (rankByRaw !== undefined && rankByRaw !== null && rankByRaw !== 'content' && rankByRaw !== 'key') {", "if (false) {"]], ['unit-inputGates']],
+    ['IN83', 'src/domain/domain.mjs', [["let msg = configMsgOf(err) || inputMsgOf(err)", "let msg = configMsgOf(err)"]], ['unit-inputGates']],
+    ['IN84', 'src/domain/backtestCfg.mjs', [["let enabled = boolOpt(b.enabled, true, 'backtest.enabled')", "let enabled = b.enabled !== false"]], ['unit-inputGates']],
+    ['IN85', 'src/domain/backtestCfg.mjs', [["let gradeEnabled = boolOpt(gr.enabled, true, 'backtest.grade.enabled')", "let gradeEnabled = !(gr.enabled === false)"]], ['unit-inputGates']],
+    ['IN86', 'src/domain/backtestCfg.mjs', [["let matchSides = boolOpt(gr.matchSides, true, 'backtest.grade.matchSides')", "let matchSides = gr.matchSides === undefined ? true : gr.matchSides"]], ['unit-inputGates']],
+    ['IN87', 'src/domain/backtestCfg.mjs', [["let rl = objSect(b.rule, 'backtest.rule')", "let rl = b.rule || {}"]], ['unit-inputGates']],
+    ['IN88', 'src/domain/backtestCfg.mjs', [["let gr = objSect(b.grade, 'backtest.grade')", "let gr = b.grade || {}"]], ['unit-inputGates']],
+    ['IN89', 'src/domain/backtestCfg.mjs', [["    if (!isPlain(b)) {\n        throw badInput('backtest', 'an object')", "    if (false) {\n        throw badInput('backtest', 'an object')"]], ['unit-inputGates']],
+    ['IN90', 'src/domain/backtestCfg.mjs', [["let privateRootArg = pathOf(b.privateRoot, 'backtest.privateRoot')", "let privateRootArg = b.privateRoot"]], ['unit-inputGates']],
+    ['IN91', 'src/domain/backtestCfg.mjs', [["let ledgerDirArg = pathOf(b.ledgerDir, 'backtest.ledgerDir')", "let ledgerDirArg = b.ledgerDir"]], ['unit-inputGates']],
+    ['IN92', 'src/domain/backtestCfg.mjs', [["let resultDirArg = pathOf(b.resultDir, 'backtest.resultDir')", "let resultDirArg = b.resultDir"]], ['unit-inputGates']],
+    //  共用工具區、初始化、臂目錄
+    ['IN93', 'src/arsi/toolbox.mjs', [["let maxFileBytes = numReq(o.maxFileBytes, 200 * 1024, 'opt.maxFileBytes', 'posInt')", "let maxFileBytes = o.maxFileBytes === undefined || o.maxFileBytes === null ? 200 * 1024 : o.maxFileBytes"]], ['unit-inputGates']],
+    ['IN94', 'src/arsi/toolbox.mjs', [["let maxFiles = numReq(o.maxFiles, 200, 'opt.maxFiles', 'posInt')", "let maxFiles = o.maxFiles === undefined || o.maxFiles === null ? 200 : o.maxFiles"]], ['unit-inputGates']],
+    ['IN95', 'src/arsi/toolbox.mjs', [["let checkFile = fnOpt(o.checkFile, 'opt.checkFile')", "let checkFile = typeof o.checkFile === 'function' ? o.checkFile : null"]], ['unit-inputGates']],
+    ['IN96', 'src/arsi/toolbox.mjs', [["let checkIndex = fnOpt(o.checkIndex, 'opt.checkIndex')", "let checkIndex = typeof o.checkIndex === 'function' ? o.checkIndex : null"]], ['unit-inputGates']],
+    ['IN97', 'src/arsi/toolbox.mjs', [["let codeOf = fnOpt(o.codeOf, 'opt.codeOf')", "let codeOf = typeof o.codeOf === 'function' ? o.codeOf : null"]], ['unit-inputGates']],
+    ['IN98', 'src/arsi/toolbox.mjs', [["if (!Array.isArray(exts) || !exts.every((x) => typeof x === 'string')) {", "if (!Array.isArray(exts)) {"]], ['unit-inputGates']],
+    ['IN99', 'src/arsi/toolbox.mjs', [["if (/[\\\\/]/.test(indexFile) || indexFile === '.' || indexFile === '..') {", "if (false) {"]], ['unit-inputGates']],
+    ['IN100', 'src/arsi/toolbox.mjs', [["let dir = strReq(o.dir, 'opt.dir')", "let dir = o.dir"]], ['unit-inputGates']],
+    ['IN101', 'src/arsi/toolbox.mjs', [["let o = objReq(opt, 'opt')", "let o = opt || {}"]], ['unit-inputGates']],
+    ['IN102', 'src/arsi/toolbox.mjs', [["let baselineFile = strOpt(o.baselineFile, null, 'opt.baselineFile')", "let baselineFile = o.baselineFile || null"]], ['unit-inputGates']],
+    ['IN103', 'src/tools/initProject.mjs', [["let dry = boolOpt(o.dry, false, 'opt.dry')", "let dry = o.dry === true"]], ['unit-inputGates']],
+    ['IN104', 'src/tools/initProject.mjs', [["let force = boolOpt(o.force, false, 'opt.force')", "let force = o.force === true"]], ['unit-inputGates']],
+    ['IN105', 'src/tools/initProject.mjs', [["let root = strOpt(o.root, null, 'opt.root')", "let root = o.root || null"]], ['unit-inputGates']],
+    ['IN106', 'src/tools/initProject.mjs', [["let o = optOf(opt)\n    let root", "let o = opt || {}\n    let root"]], ['unit-inputGates']],
+    ['IN107', 'src/domain/armCatalog.mjs', [["if (o[k] !== undefined && o[k] !== null && o[k] !== true && o[k] !== false) {", "if (false) {"]], ['unit-inputGates']],
+    ['IN108', 'src/domain/armCatalog.mjs', [["    if (!isPlain(o)) {\n        return { error: 'invalid opt: must be an object' }", "    if (false) {\n        return { error: 'invalid opt: must be an object' }"]], ['unit-inputGates']],
+    ['IN109', 'src/domain/armCatalog.mjs', [["if (typeof o.id !== 'string' || !ARM_ID.test(o.id)) {", "if (false) {"]], ['unit-inputGates']],
+    ['IN110', 'src/domain/armCatalog.mjs', [["let selectable = boolOpt(o.selectable, false, 'opt.selectable')", "let selectable = o.selectable"]], ['unit-inputGates']],
+    ['IN111', 'src/domain/armCatalog.mjs', [["patch.realize = realizeOf(cur.id, o.selectable)", "patch.realize = realizeOf(cur.id, !o.selectable)"]], ['unit-inputGates']],
+    ['IN112', 'src/domain/armCatalog.mjs', [["let o = objReq(opt, 'opt')\n    if (typeof o.id", "let o = opt || {}\n    if (typeof o.id"]], ['unit-inputGates']],
+    //  聚合入口之 opt 與必給件(runner、proc、archiveDocs、dispatchers、resources、records、arsi)
+    ['IN113', 'src/arsi/runner.mjs', [["let rounds = numReq(o.rounds, 1, 'opt.rounds', 'nonNegInt')", "let rounds = numReq(o.rounds, 1, 'opt.rounds', 'posInt')"]], ['unit-inputOpt']],
+    ['IN114', 'src/arsi/runner.mjs', [["let rounds = numReq(o.rounds, 1, 'opt.rounds', 'nonNegInt')", "let rounds = numReq(o.rounds, 0, 'opt.rounds', 'nonNegInt')"]], ['unit-inputOpt']],
+    ['IN115', 'src/arsi/runner.mjs', [["let shouldStop = fnOpt(o.shouldStop, 'opt.shouldStop') || (() => null)", "let shouldStop = typeof o.shouldStop === 'function' ? o.shouldStop : () => null"]], ['unit-inputOpt']],
+    ['IN116', 'src/arsi/runner.mjs', [["let runRound = fnReq(o.runRound, 'opt.runRound')", "let runRound = o.runRound"]], ['unit-inputOpt']],
+    ['IN117', 'src/arsi/runner.mjs', [["    let o = optOf(opt)\n    let runRound", "    let o = opt || {}\n    let runRound"]], ['unit-inputOpt']],
+    ['IN118', 'src/arsi/runner.mjs', [["let cfgO = cfg !== null && typeof cfg === 'object' ? cfg : {}", "let cfgO = cfg"]], ['unit-inputOpt']],
+    ['IN119', 'src/arsi/runner.mjs', [["let cliO = cli !== null && typeof cli === 'object' ? cli : {}", "let cliO = cli"]], ['unit-inputOpt']],
+    ['IN120', 'src/arsi/runner.mjs', [["    strReq(fpLock, 'fpLock')\n    let o = optOf(opt)\n    let staleMs = Number.isFinite(o.staleMs) && o.staleMs > 0 ? o.staleMs : 6 * 3600000\n    let isSame = typeof o.isSameProgram === 'function' ? o.isSameProgram : (name) => name === null || /^node/.test(name)\n    let me", "    let o = optOf(opt)\n    let staleMs = Number.isFinite(o.staleMs) && o.staleMs > 0 ? o.staleMs : 6 * 3600000\n    let isSame = typeof o.isSameProgram === 'function' ? o.isSameProgram : (name) => name === null || /^node/.test(name)\n    let me"]], ['unit-inputOpt']], //acquireRunLock 不核對 fpLock
+    ['IN121', 'src/arsi/runner.mjs', [["    strReq(fpLock, 'fpLock')\n    let o = optOf(opt)\n    let staleMs = Number.isFinite(o.staleMs) && o.staleMs > 0 ? o.staleMs : 6 * 3600000\n    let isSame = typeof o.isSameProgram === 'function' ? o.isSameProgram : (name) => name === null || /^node/.test(name)\n    let j = null", "    let o = optOf(opt)\n    let staleMs = Number.isFinite(o.staleMs) && o.staleMs > 0 ? o.staleMs : 6 * 3600000\n    let isSame = typeof o.isSameProgram === 'function' ? o.isSameProgram : (name) => name === null || /^node/.test(name)\n    let j = null"]], ['unit-inputOpt']], //peekRunLock 不核對 fpLock
+    ['IN122', 'src/arsi/runner.mjs', [["    let o = optOf(opt)\n    let staleMs = Number.isFinite(o.staleMs) && o.staleMs > 0 ? o.staleMs : 6 * 3600000\n    let isSame = typeof o.isSameProgram === 'function' ? o.isSameProgram : (name) => name === null || /^node/.test(name)\n    let me", "    let o = opt || {}\n    let staleMs = Number.isFinite(o.staleMs) && o.staleMs > 0 ? o.staleMs : 6 * 3600000\n    let isSame = typeof o.isSameProgram === 'function' ? o.isSameProgram : (name) => name === null || /^node/.test(name)\n    let me"]], ['unit-inputOpt']], //acquireRunLock 之 opt 不核對
+    ['IN123', 'src/arsi/runner.mjs', [["if (typeof fpEvents !== 'string' || fpEvents === '' || !isPlain(obj)) {", "if (typeof fpEvents !== 'string' || fpEvents === '') {"]], ['unit-inputOpt']],
+    //IN124 為等價變異: 無效之 fpEvents(非字串、空字串)於其後 try 內之 `path.dirname` / `fs.appendFileSync` 即拋而被 catch 吞掉 ⇒ 同回 false、同不寫檔; 前置之檢查只是把「不嘗試」寫明(測試之斷言不分辨)
+    ['IN124', 'src/arsi/runner.mjs', [["if (typeof fpEvents !== 'string' || fpEvents === '' || !isPlain(obj)) {", "if (!isPlain(obj)) {"]], ['unit-inputOpt'], 'equiv'],
+    ['IN125', 'src/arsi/runner.mjs', [["    strReq(fpEvents, 'fpEvents')\n", ""]], ['unit-inputOpt']],
+    ['IN126', 'src/arsi/runner.mjs', [["                if (isPlain(e)) {\n                    out.push(e)\n                }", "                out.push(e)"]], ['unit-inputOpt']],
+    ['IN127', 'src/arsi/runner.mjs', [["    if (!Array.isArray(events)) {\n        throw new Error('invalid events", "    if (false) {\n        throw new Error('invalid events"]], ['unit-inputOpt']],
+    ['IN128', 'src/arsi/runner.mjs', [["        if (!isPlain(e)) {\n            continue\n        }\n", ""]], ['unit-inputOpt']],
+    ['IN129', 'src/domain/proc.mjs', [["Array.isArray(args) && args.length > 0 && args.every((a) => typeof a === 'string')", "Array.isArray(args) && args.length > 0"]], ['unit-inputOpt']],
+    ['IN130', 'src/domain/proc.mjs', [["let RUN_NODE_PROC_TIMEOUT_MS = 900000", "let RUN_NODE_PROC_TIMEOUT_MS = 600000"]], ['unit-inputOpt']],
+    ['IN131', 'src/domain/proc.mjs', [["numOrDef(o.timeoutMs, 'timerMs', RUN_NODE_PROC_TIMEOUT_MS)", "numOrDef(o.timeoutMs, 'posNum', RUN_NODE_PROC_TIMEOUT_MS)"]], ['unit-inputOpt']],
+    ['IN132', 'src/domain/proc.mjs', [["if (o.cwd !== undefined && o.cwd !== null && (typeof o.cwd !== 'string' || o.cwd === '')) {", "if (false) {"]], ['unit-inputOpt']],
+    ['IN133', 'src/domain/proc.mjs', [["if (o.env !== undefined && o.env !== null && !isPlain(o.env)) {", "if (false) {"]], ['unit-inputOpt']],
+    ['IN134', 'src/domain/proc.mjs', [["if (opt !== undefined && opt !== null && !isPlain(opt)) {", "if (false) {"]], ['unit-inputOpt']],
+    ['IN135', 'src/domain/proc.mjs', [["        if (trace) {\n            trace('error', { message: error })\n        }\n        resolve({ code: null, out: '', timeout: false, error })", "        resolve({ code: null, out: '', timeout: false, error })"]], ['unit-inputOpt']],
+    ['IN136', 'src/domain/archiveDocs.mjs', [["let maxBytes = numOrDef(maxBytes0, 'posInt', 30000)\n    let keepBytes", "let maxBytes = maxBytes0 === undefined ? 30000 : maxBytes0\n    let keepBytes"]], ['unit-inputOpt']],
+    ['IN137', 'src/domain/archiveDocs.mjs', [["let maxBytes = numOrDef(maxBytes0, 'posInt', 30000)\n    let keepRows", "let maxBytes = maxBytes0 === undefined ? 30000 : maxBytes0\n    let keepRows"]], ['unit-inputOpt']],
+    ['IN138', 'src/domain/archiveDocs.mjs', [["numOrDef(keepSections0, 'nonNegInt', 2)", "numOrDef(keepSections0, 'nonNegInt', 1)"]], ['unit-inputOpt']],
+    ['IN139', 'src/domain/archiveDocs.mjs', [["numOrDef(keepRows0, 'nonNegInt', 14)", "numOrDef(keepRows0, 'nonNegInt', 13)"]], ['unit-inputOpt']],
+    ['IN140', 'src/domain/archiveDocs.mjs', [["let dateOf = (v) => (v instanceof Date && Number.isFinite(v.getTime()) ? v : new Date())", "let dateOf = (v) => (v instanceof Date ? v : new Date())"]], ['unit-inputOpt']],
+    ['IN141', 'src/domain/archiveDocs.mjs', [["let fp = strReq(fp0, 'opt.fp')\n    let maxBytes = numOrDef(maxBytes0, 'posInt', 30000)\n    let keepBytes", "let fp = fp0\n    let maxBytes = numOrDef(maxBytes0, 'posInt', 30000)\n    let keepBytes"]], ['unit-inputOpt']],
+    ['IN142', 'src/domain/archiveDocs.mjs', [["numOrDef(keepBytes0, 'nonNegInt', 18000)", "numOrDef(keepBytes0, 'nonNegInt', 17000)"]], ['unit-inputOpt']],
+    ['IN143', 'src/arsi/inputs.mjs', [["let kindOk = (k) => k === undefined || k === null || k === 'opencode' || k === 'claude'", "let kindOk = () => true"]], ['unit-inputOpt']],
+    ['IN144', 'src/arsi/inputs.mjs', [["if (!Array.isArray(cfg.fallback) || !cfg.fallback.every((x) => isPlain(x))) {", "if (false) {"]], ['unit-inputOpt']],
+    ['IN145', 'src/arsi/inputs.mjs', [[" && cfg.fallback !== null && cfg.fallback !== false) {", " && cfg.fallback !== null) {"]], ['unit-inputOpt']], //fallback: false 亦檢
+    ['IN146', 'src/arsi/inputs.mjs', [["        if (!cfg) {\n            continue\n        }", "        if (cfg === undefined) {\n            continue\n        }"]], ['unit-inputOpt']], //假值之角色亦檢
+    ['IN147', 'src/arsi/dispatchers.mjs', [["let probe = boolOpt(o.probe, false, 'opt.probe')", "let probe = o.probe"]], ['unit-inputOpt']],
+    ['IN148', 'src/arsi/dispatchers.mjs', [["numOr(o.probeTimeoutMs, 'timerMs', 60000)", "numOr(o.probeTimeoutMs, 'timerMs', 60001)"]], ['unit-inputOpt']],
+    ['IN149', 'src/arsi/dispatchers.mjs', [["if (!isPlain(o) || typeof o.prompt !== 'string' || typeof o.logFile !== 'string' || o.logFile === '') {", "if (false) {"]], ['unit-inputOpt']],
+    ['IN150', 'src/arsi/dispatchers.mjs', [["let cwd = strOpt(ov.cwd, undefined, 'opt.cwd')", "let cwd = ov.cwd"]], ['unit-inputOpt']],
+    ['IN151', 'src/arsi/dispatchers.mjs', [["let skillsRoot = inject.wda ? ov.skillsRoot : strReq(ov.skillsRoot, 'opt.skillsRoot')", "let skillsRoot = ov.skillsRoot"]], ['unit-inputOpt']],
+    //IN152 為等價變異: 其後之 `agentsCheck(agents)` 之首行即 `objReq(agents, 'opt.agents')`(同一訊息); 兩處重複之核對 —— makeDispatch 之 opt.agents 之訊息由 agentsCheck 產生(checkQuota 亦同)
+    ['IN152', 'src/arsi/dispatchers.mjs', [["let agents = objReq(ov.agents, 'opt.agents')", "let agents = ov.agents"]], ['unit-inputOpt'], 'equiv'],
+    ['IN153', 'src/arsi/dispatchers.mjs', [["    let o = objReq(opt, 'opt')\n    let agents = objReq(o.agents, 'opt.agents')\n    let inject = o.inject === undefined || o.inject === null ? {} : objReq(o.inject, 'opt.inject')\n    let skillsRoot = inject.wda ? o.skillsRoot", "    let o = opt || {}\n    let agents = objReq(o.agents, 'opt.agents')\n    let inject = o.inject === undefined || o.inject === null ? {} : objReq(o.inject, 'opt.inject')\n    let skillsRoot = inject.wda ? o.skillsRoot"]], ['unit-inputOpt']], //checkQuota 之 opt 不核對
+    ['IN154', 'src/arsi/resources.mjs', [["let opt = optOf(opt0)", "let opt = opt0 || {}"]], ['unit-inputOpt']],
+    ['IN155', 'src/arsi/records.mjs', [["let nodeDir = strReq(o.nodeDir, 'opt.nodeDir')", "let nodeDir = o.nodeDir"]], ['unit-inputOpt']],
+    ['IN156', 'src/arsi/records.mjs', [["let dreamDir = strReq(o.dreamDir, 'opt.dreamDir')", "let dreamDir = o.dreamDir"]], ['unit-inputOpt']],
+    ['IN157', 'src/arsi/records.mjs', [["let trashDir = strOpt(o.trashDir, undefined, 'opt.trashDir')", "let trashDir = o.trashDir"]], ['unit-inputOpt']],
+    ['IN158', 'src/arsi/records.mjs', [["let o = objReq(opt, 'opt')\n    let nodeDir", "let o = opt || {}\n    let nodeDir"]], ['unit-inputOpt']],
+    ['IN159', 'src/arsi/arsi.mjs', [["let gate = fnOpt(o.gate, 'opt.gate')", "let gate = typeof o.gate === 'function' ? o.gate : null"]], ['unit-inputOpt']],
+    ['IN160', 'src/arsi/arsi.mjs', [["        fnReq(texts[k], `opt.texts.${k}`)\n", ""]], ['unit-inputOpt']],
+    ['IN161', 'src/arsi/arsi.mjs', [["let dispatch = fnReq(o.dispatch, 'opt.dispatch')", "let dispatch = o.dispatch"]], ['unit-inputOpt']],
+    ['IN162', 'src/arsi/arsi.mjs', [["let workDir = strReq(o.workDir, 'opt.workDir')", "let workDir = o.workDir"]], ['unit-inputOpt']],
+    ['IN163', 'src/arsi/arsi.mjs', [["let records = objAnyReq(o.records, 'opt.records')", "let records = o.records"]], ['unit-inputOpt']],
+    ['IN164', 'src/arsi/arsi.mjs', [["let records = objAnyReq(o.records, 'opt.records')", "let records = objReq(o.records, 'opt.records')"]], ['unit-inputOpt']], //注入之元件不收類別實例
+    ['IN165', 'src/arsi/arsi.mjs', [["    let o = objReq(opt, 'opt')\n    //注入", "    let o = opt || {}\n    //注入"]], ['unit-inputOpt']],
+    ['IN166', 'src/arsi/arsi.mjs', [[": objAnyReq(o.hooks, 'opt.hooks')", ": o.hooks"]], ['unit-inputOpt']],
+    //  settings.agents 未給 ⇒ {}; 給了而不合 ⇒ 組裝時以 settings.agents 命名之固定訊息
+    ['IN167', 'src/domain/domain.mjs', [["makeDispatch({ agents: st.agents || {}, skillsRoot:", "makeDispatch({ agents: st.agents, skillsRoot:"]], ['unit-inputGates']],
+    ['IN168', 'src/domain/domain.mjs', [["        agentsCheck(st.agents, 'settings.agents')\n    }\n    let dispatch", "        void 0\n    }\n    let dispatch"]], ['unit-inputGates']],
+    ['IN169', 'src/cli/rsi.mjs', [["let quotaArgs = () => ({ agents: st.agents || {}, skillsRoot:", "let quotaArgs = () => ({ agents: st.agents, skillsRoot:"]], ['unit-cliValues']],
+    ['IN170', 'src/tools/quota.mjs', [["checkQuota({ agents: st.agents || {}, skillsRoot:", "checkQuota({ agents: st.agents, skillsRoot:"]], ['unit-cliValues']],
 ]
 
 let args = process.argv.slice(2)

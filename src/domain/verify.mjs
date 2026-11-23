@@ -5,6 +5,7 @@ import { scoreOf } from '../eval/score.mjs'
 import { evalRunNumsOf, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll } from '../eval/cfgNum.mjs'
 import { stripComments } from '../eval/pickLoader.mjs'
 import { runNodeProc } from './proc.mjs'
+import { isPlain, badInput, objReq, strReq } from '../arsi/inputs.mjs'
 import { PKG_NAME } from './pkgRoot.mjs'
 import { makeBacktest } from './backtest.mjs'
 import { gradeLabel } from './backtestGrade.mjs'
@@ -114,8 +115,33 @@ let ZONE_LABEL = '回測期重放 / 迴圈驗證之程式'
 //    另加 settings.guard.forbidden = [{ pattern(正則之原始字串; 不分大小寫), label }]
 let GUARD_EXTRA = []
 let escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+//extraItemsOf, 專案另加之禁區字樣(陣列; 各項 { pattern, label })之檢測與轉換: 回 [[RegExp, 標籤]]; 未給(undefined 或 null)回 []; 非陣列、非一般物件之項、pattern 非 RegExp 或非空字串(字串者須為合法之正規式)、label 非空字串(去頭尾空白後)⇒ 拋 invalid <where>[i]: must be …(不帶輸入值)
+let extraItemsOf = (items, where) => {
+    if (items === undefined || items === null) {
+        return []
+    }
+    if (!Array.isArray(items)) {
+        throw badInput(where, 'an array of { pattern, label }')
+    }
+    return items.map((x, i) => {
+        let ok = isPlain(x) && typeof x.label === 'string' && x.label.trim() !== '' && (x.pattern instanceof RegExp || (typeof x.pattern === 'string' && x.pattern !== ''))
+        let re = null
+        if (ok) {
+            try {
+                re = x.pattern instanceof RegExp ? x.pattern : new RegExp(x.pattern, 'i')
+            }
+            catch (err) {
+                ok = false
+            }
+        }
+        if (!ok) {
+            throw badInput(`${where}[${i}]`, 'an object { pattern, label } with a non-empty string label and a pattern that is a valid regular expression (non-empty string or RegExp)')
+        }
+        return [re, x.label.trim()]
+    })
+}
 /**
- * 設定專案另加之禁區字樣(模組層狀態,供 forbiddenPats 使用);不合格之項(無 pattern 或無非空 label)會被略過
+ * 設定專案另加之禁區字樣(模組層狀態,供 forbiddenPats 使用);未給(undefined 或 null)= 清空;給了而無效(非陣列、項非一般物件、無非空 label、pattern 非 RegExp 或非空字串、非法之正規式)⇒ 拋 invalid items[i]: must be …(固定訊息、不帶輸入值;模組層狀態不變)
  *
  * @param {Array<Object>} items 輸入禁區項陣列,每項 { pattern, label },pattern 為 RegExp(沿用其本身之旗標)或正則之原始字串(以旗標 i 建立,不分大小寫)
  * @returns {Number} 回傳生效之禁區項數
@@ -123,11 +149,16 @@ let escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
  * let n = setGuardExtra([{ pattern: 'secret', label: '機密字樣' }])
  */
 let setGuardExtra = (items) => {
-    GUARD_EXTRA = (Array.isArray(items) ? items : []).filter((x) => x && x.pattern && typeof x.label === 'string' && x.label.trim()).map((x) => [x.pattern instanceof RegExp ? x.pattern : new RegExp(String(x.pattern), 'i'), x.label.trim()])
+    //禁區字樣為安全閘(R-EV-54 ①): 給了而無效 ⇒ 拒絕(先於任何改變; 固定訊息、不帶輸入值); 未給(undefined 或 null)= 清空
+    //  原: 非陣列視為空、缺 pattern 或 label 之項靜默略過 ⇒ 該禁區字樣失效而不報錯; 非法正則於 `new RegExp` 拋原生 SyntaxError
+    let next = extraItemsOf(items, 'items')
+    GUARD_EXTRA = next
     return GUARD_EXTRA.length
 }
 /**
  * 由設定導出專案另加之禁區項:策略庫位於專案夾之外時,其所在之資料夾名列為「策略庫專案」;另加 settings.guard.forbidden
+ *
+ * source.libraryRoot 給了而不是非空字串、guard 給了而不是一般物件、guard.forbidden 給了而無效(同 setGuardExtra 之項)者拋 invalid …(固定訊息、不帶輸入值)
  *
  * @param {Object} st 輸入設定物件,讀取 st.source.libraryRoot、st.FD_ROOT、st.guard.forbidden
  * @returns {Array<Object>} 回傳禁區項陣列,每項 { pattern(正則字串), label },可交給 setGuardExtra
@@ -136,7 +167,22 @@ let setGuardExtra = (items) => {
  */
 let guardExtraOf = (st) => {
     let out = []
-    let lib = st && st.source && typeof st.source.libraryRoot === 'string' ? st.source.libraryRoot : ''
+    //禁區字樣之來源為安全閘(R-EV-54 ①): source.libraryRoot 給了而不是非空字串、guard 給了而不是一般物件、guard.forbidden 給了而不是 [{ pattern(合法之正規式字串), label(非空字串) }] ⇒ 拋 invalid …(固定訊息、不帶輸入值; 入口以 inputMsgOf 辨識而印 ERROR、離開碼 2)
+    //  原: 靜默略過 ⇒ 該禁區失效而不報錯(缺 label、非陣列、非字串之 pattern 略過; 非法正則於其後之 `new RegExp` 拋原生 SyntaxError); 未給(undefined 或 null)= 無
+    let srcLib = st && st.source !== undefined && st.source !== null ? st.source.libraryRoot : undefined
+    if (srcLib !== undefined && srcLib !== null && (typeof srcLib !== 'string' || srcLib === '')) {
+        throw badInput('source.libraryRoot', 'a non-empty string')
+    }
+    let lib = typeof srcLib === 'string' ? srcLib : ''
+    let gd = st ? st.guard : undefined
+    if (gd !== undefined && gd !== null && !isPlain(gd)) {
+        throw badInput('guard', 'an object')
+    }
+    let more = []
+    if (gd !== undefined && gd !== null && gd.forbidden !== undefined && gd.forbidden !== null) {
+        extraItemsOf(gd.forbidden, 'guard.forbidden') //檢測(不合者拋); 輸出仍為原項之 { pattern, label }(setGuardExtra 再轉為正規式)
+        more = gd.forbidden
+    }
     let root = st && typeof st.FD_ROOT === 'string' ? st.FD_ROOT : null
     if (lib) {
         let abs = path.resolve(root || '.', lib)
@@ -150,11 +196,8 @@ let guardExtraOf = (st) => {
             }
         }
     }
-    let more = st && st.guard && Array.isArray(st.guard.forbidden) ? st.guard.forbidden : []
     for (let x of more) {
-        if (x && typeof x.pattern === 'string' && x.pattern && typeof x.label === 'string' && x.label.trim()) {
-            out.push({ pattern: x.pattern, label: x.label.trim() })
-        }
+        out.push({ pattern: x.pattern, label: x.label.trim() })
     }
     return out
 }
@@ -317,7 +360,7 @@ let stripInlinePatterns = (cmd) => inlinePartsOf(cmd).text
  *
  * @param {Object} opt 輸入設定物件
  * @param {String} opt.workDir 輸入節點工作夾路徑
- * @param {Number} [opt.attempt] 輸入嘗試序號,未給 logFile 時必給(取 workDir/agent_a{attempt}.log);給了 logFile 者可省
+ * @param {Number} [opt.attempt] 輸入嘗試序號(正整數),未給 logFile 時必給(取 workDir/agent_a{attempt}.log);給了 logFile 者可省;必給件缺或無效(opt 非一般物件、workDir 或 privateRoot 非非空字串、logFile 給了而非非空字串、未給 logFile 而 attempt 非正整數)⇒ 同步拋 invalid opt…: must be …(固定訊息;原: 缺 attempt 者讀不存在之紀錄檔而視為乾淨)
  * @param {String|null} [opt.logFile=null] 輸入操作紀錄路徑,預設null
  * @param {String} opt.privateRoot 輸入私有根路徑
  * @param {String|null} [opt.root=null] 輸入專案根路徑,與 writeRoots 並用時查寫出範圍
@@ -332,7 +375,19 @@ let stripInlinePatterns = (cmd) => inlinePartsOf(cmd).text
  * @example
  * let r = scanTrace({ workDir: './rsi/work/node1', attempt: 1, privateRoot: './private', nodeRules: true })
  */
-let scanTrace = ({ workDir, attempt, logFile = null, privateRoot, root = null, writeRoots = null, workRoot = null, allowWork = [], fileHits = 'issue', nodeRules = false, planRule = null, stateRoot = null }) => {
+let scanTrace = (opt) => {
+    //輸入之檢測(跨套件規格 V4、§5.1; R-EV-54 ①; 掃描為安全閘 ⇒ 必給件缺或無效即同步拋固定訊息, 不以「無紀錄 = 乾淨」放行): opt 須為一般物件; workDir、privateRoot 須為非空字串;
+    //  logFile(給了者)須為非空字串; 未給 logFile 者 attempt 須為正整數(取 workDir/agent_a{attempt}.log); 原: 缺 attempt ⇒ 讀不存在之 agent_aundefined.log ⇒ 無紀錄 ⇒ issues 為空而被視為乾淨; opt 為 null、缺 privateRoot ⇒ 原生 TypeError
+    let o = objReq(opt, 'opt')
+    let { workDir, attempt, logFile = null, privateRoot, root = null, writeRoots = null, workRoot = null, allowWork = [], fileHits = 'issue', nodeRules = false, planRule = null, stateRoot = null } = o
+    strReq(workDir, 'opt.workDir')
+    strReq(privateRoot, 'opt.privateRoot')
+    if (logFile !== null) {
+        strReq(logFile, 'opt.logFile')
+    }
+    else if (!Number.isSafeInteger(attempt) || attempt < 1) {
+        throw badInput('opt.attempt', 'a positive integer (required unless opt.logFile is given)')
+    }
     let planOn = planRule === null ? nodeRules : planRule === true
     //遞迴列出狀態根(規則 R-BT-7; 節點且給了 stateRoot 才查): rlRoot = 專案根(相對路徑之解析); rlDir = 此前之指令切換後之工作目錄(null = 不確定)
     let rlOn = nodeRules && typeof stateRoot === 'string' && stateRoot !== ''

@@ -109,7 +109,7 @@ describe('工具(src/tools/*.mjs)之命令列旗標之嚴格檢查(排程第 595
             for (let n of toolNames()) {
                 let src = fs.readFileSync(path.join(TOOLS_DIR, `${n}.mjs`), 'utf8').split(/\r?\n/).filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n')
                 let read = new Set()
-                for (let m of src.matchAll(/(?:argOf|argStrOf|rateArg|\barg)\('([a-z][\w-]*)'/g)) {
+                for (let m of src.matchAll(/(?:argOf|argStrOf|argNumOf|rateArg|\barg)\('([a-z][\w-]*)'/g)) {
                     read.add(m[1])
                 }
                 for (let m of src.matchAll(/process\.argv\.(?:includes|indexOf)\('--([a-z][\w-]*)'\)/g)) {
@@ -230,7 +230,12 @@ describe('工具(src/tools/*.mjs)之命令列旗標之嚴格檢查(排程第 595
                     }
                 }
                 //全旗標各一次(帶值者給值)合格
-                let all = fl.flatMap((f) => [`--${f}`, ...(isBool(n, f) ? [] : ['v'])])
+                //  帶值旗標之合格樣本: 值之種類屬 CLI_VALUES 者(排程第 607 項)取其種類之合格值(其值之種類之案見 unit-cliValues), 其餘為任意字串
+                let sample = (f) => {
+                    let k = Object.prototype.hasOwnProperty.call(CFG.CLI_VALUES || {}, n) ? CFG.CLI_VALUES[n][f] : undefined
+                    return k === undefined ? 'v' : (typeof k === 'object' ? k.enum[0] : { posInt: '3', num: '90', timerMin: '10', timerSec: '10', time: '2026-11-23T10:00:00Z' }[k])
+                }
+                let all = fl.flatMap((f) => [`--${f}`, ...(isBool(n, f) ? [] : [sample(f)])])
                 assert.strictEqual(M(all), null, `${n}: 全旗標各一次`)
                 assert.strictEqual(M([]), null, `${n}: 無引數`)
                 //位置引數
@@ -239,7 +244,7 @@ describe('工具(src/tools/*.mjs)之命令列旗標之嚴格檢查(排程第 595
                     assert(typeof M(['pos']) === 'string', `${n}: 不收位置引數`)
                 }
                 else {
-                    assert.strictEqual(M(['1']), null, `${n}: 一個位置引數`)
+                    assert.strictEqual(M([n === 'smokeDispatch' ? 'node' : '1']), null, `${n}: 一個位置引數`)
                     if (Number.isFinite(p)) {
                         assert(typeof M(['1', '2']) === 'string', `${n}: 第二個位置引數拒收`)
                     }

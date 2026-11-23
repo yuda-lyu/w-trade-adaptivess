@@ -38,7 +38,8 @@ let OWN_SKIP = ['file']
 let NEEDS = { to: ['rearm'], base: ['rearm'], why: ['close', 'rearm'], claim: ['close', 'rearm'] }
 let modesOf = (flag) => MODES.filter((m) => LEGAL[m].includes(flag))
 let said = (ms) => (ms.length > 1 ? `${ms.slice(0, -1).join(', ')} or ${ms[ms.length - 1]}` : ms[0])
-let valOf = (flag) => (CLI_FLAGS.rsi[flag] === null ? [] : [SECRET])
+//  值之種類屬 CLI_VALUES.rsi 者(規模旗標與 --round; 排程第 607 項)取合格之值('3'), 其餘為任意字串(值之種類之案見 unit-cliValues)
+let valOf = (flag) => (CLI_FLAGS.rsi[flag] === null ? [] : [Object.prototype.hasOwnProperty.call((CFG.CLI_VALUES || {}).rsi || {}, flag) ? '3' : SECRET])
 
 describe('命令列之「模式 × 旗標」與 g_backtest.mjs --seed 之拒收(排程第 595 項之接續)', function () {
     this.timeout(300000)
@@ -82,7 +83,7 @@ describe('命令列之「模式 × 旗標」與 g_backtest.mjs --seed 之拒收(
             })
             let flagsIn = (txt) => {
                 let out = new Set()
-                for (let m of txt.matchAll(/(?:argOf|argStrOf|list)\('([a-z][\w-]*)'/g)) {
+                for (let m of txt.matchAll(/(?:argOf|argStrOf|argNumOf|list)\('([a-z][\w-]*)'/g)) {
                     out.add(m[1])
                 }
                 for (let m of txt.matchAll(/process\.argv\.(?:includes|indexOf)\('--([a-z][\w-]*)'\)/g)) {

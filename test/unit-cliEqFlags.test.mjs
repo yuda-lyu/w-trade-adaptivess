@@ -67,7 +67,7 @@ describe('命令列旗標之等號寫法(排程第 590 項)', function () {
         let flagsRead = (src0) => {
             let src = src0.split('\n').filter((l) => !l.includes('FP_DIGEST')).join('\n')
             let s = new Set()
-            for (let re of [/argOf\('([a-z][\w-]*)'/g, /argStrOf\('([a-z][\w-]*)'/g, /cliInt\('([a-z][\w-]*)'\)/g, /\blist\('([a-z][\w-]*)'\)/g, /'--([a-z][\w-]*)'/g]) {
+            for (let re of [/argOf\('([a-z][\w-]*)'/g, /argStrOf\('([a-z][\w-]*)'/g, /argNumOf\('([a-z][\w-]*)'/g, /cliInt\('([a-z][\w-]*)'\)/g, /\blist\('([a-z][\w-]*)'\)/g, /'--([a-z][\w-]*)'/g]) {
                 for (let m of src.matchAll(re)) {
                     s.add(m[1])
                 }

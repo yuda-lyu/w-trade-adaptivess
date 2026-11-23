@@ -1,5 +1,5 @@
 import path from 'path'
-import { getSettings, argOf, cliGuard } from '../cfg.mjs'
+import { getSettings, argStrOf, cliGuard } from '../cfg.mjs'
 import { peekRunLock } from '../arsi/runner.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
@@ -22,7 +22,8 @@ let P = makeProjectOrExit(st, {})
 P.rsi.init()
 let executed = () => P.rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => P.rsi.store.getNode(r.id)).filter(Boolean)
 
-let key = argOf('node', null)
+//字串旗標(--node、--arms、--why、--offdef)取命令列之原字串(argStrOf; 排程第 607 項): 原以 argOf 讀 ⇒ 全為數字之 id 前綴(如 --node 20261122)被轉成數值而 `typeof key !== 'string'` ⇒ 靜默進入列出模式(未補記)
+let key = argStrOf('node', null)
 if (typeof key !== 'string') {
     let rows = executed().map((n) => ({ n, off: P.inactiveArmsOf(n) })).filter((x) => x.off.length)
     console.log(`樹上有未作用之臂之節點 ${rows.length} 個`)
@@ -32,8 +33,8 @@ if (typeof key !== 'string') {
     }
     process.exit(0)
 }
-let armsArg = argOf('arms', null)
-let why = argOf('why', null)
+let armsArg = argStrOf('arms', null)
+let why = argStrOf('why', null)
 if (typeof armsArg !== 'string' || typeof why !== 'string' || !why.trim()) {
     console.error('用法: --node <id 或前綴> --arms <a,b | none> --why <理由>')
     process.exit(2)
@@ -57,7 +58,7 @@ if (bad.length) {
 }
 //--offdef <a,b>(選配; --arms 之子集): 其中「依修訂後之定義不屬該臂」者 —— 與試過後關閉不同, 該臂依現行定義未被此節點試過 ⇒ 不計入「已試之臂」(補位載體會再出該臂)
 //  未給 = 無(並清除先前所記者)
-let offArg = argOf('offdef', null)
+let offArg = argStrOf('offdef', null)
 let offDef = typeof offArg === 'string' ? offArg.split(',').map((s) => s.trim()).filter(Boolean) : []
 let badOff = offDef.filter((a) => !arms.includes(a))
 if (badOff.length) {

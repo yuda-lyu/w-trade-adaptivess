@@ -3,6 +3,7 @@ import path from 'path'
 import { getSettings, readJson, cliGuard } from '../cfg.mjs'
 import { phaseCountOfMetrics, phaseCountOfAll, phaseText } from '../eval/cfgNum.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
+import { rsiNumOf } from '../arsi/rsiNums.mjs'
 
 //agent(ARSI_AGENT_ROLE = node / dream)⇒ 帶 --out(寫出 DIGEST.md)者拒跑(離開碼 2; 規則 R-RUN-11); 只印出者照常
 guardEntry('roundDigest')
@@ -17,12 +18,18 @@ let rel = (p) => path.relative(st.FD_ROOT, p).replace(/\\/g, '/')
 let nd = st.records.nodeDir
 let dd = st.records.dreamDir || path.join(path.dirname(nd), 'dreams')
 let docs = fs.readdirSync(nd).filter((f) => f.endsWith('.json')).map((f) => readJson(path.join(nd, f))).filter(Boolean)
-let argRound = process.argv.slice(2).find((a) => /^\d+$/.test(a))
-let round = argRound ? Number(argRound) : Math.max(...docs.map((d) => d.round || 0))
+//輪次(位置引數; 已於上之 cliGuard 檢查為正整數〔TOOL_FLAGS.roundDigest.pos〕, 此處取轉換值 —— K4): 給了而該輪不存在(無輪次結果檔、無做夢文件、無該輪之節點文件)⇒ 拒收(離開碼 2; 訊息固定、不帶輸入值; 排程第 607 項)
+//  原: 值不驗 —— `r003`、`abc` 等不是數字者被忽略而靜默改為最近一輪; 不存在之輪次印一份空摘要
+let argRound = process.argv.slice(2).find((a) => !a.startsWith('--'))
+let round = argRound !== undefined ? rsiNumOf(argRound, 'posInt') : Math.max(...docs.map((d) => d.round || 0))
 let rn = `r${String(round).padStart(3, '0')}`
 let fdRound = path.join(st.rsi.root, 'rounds', rn)
 let R = readJson(path.join(fdRound, 'ROUND.json'), null)
 let dream = readJson(path.join(dd, `${rn}.json`), null)
+if (argRound !== undefined && !R && !dream && !docs.some((d) => d.round === round)) {
+    console.log('invalid round: must be a round that exists (a round result, a dream document or a node document of that round)')
+    process.exit(2)
+}
 let out = []
 let P = (s = '') => out.push(s)
 P(`# ${rn} 摘要${R ? `(${R.at};${R.wallMin} 分)` : '(輪次尚未結束或無 ROUND.json)'}`)

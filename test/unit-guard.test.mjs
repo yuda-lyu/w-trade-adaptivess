@@ -262,7 +262,9 @@ describe('守門:節點 agent 之操作紀錄掃描', function () {
         assert.deepEqual(guardExtraOf({ FD_ROOT, source: { libraryRoot: 'D:/demo-strategy-lib/data' } }), [{ pattern: 'demo-strategy-lib', label: '策略庫專案' }])
         assert.deepEqual(guardExtraOf({ FD_ROOT, source: { libraryRoot: path.resolve(FD_ROOT, '..', 'someLib') } }), [{ pattern: 'someLib', label: '策略庫專案' }])
         assert.deepEqual(guardExtraOf({ FD_ROOT, source: { libraryRoot: './data/library' } }), [], '策略庫在專案夾內')
-        assert.deepEqual(guardExtraOf({ FD_ROOT, guard: { forbidden: [{ pattern: 'secret[-_]zone', label: '另加之禁區' }, { pattern: '', label: 'x' }, { label: '缺樣式' }] } }), [{ pattern: 'secret[-_]zone', label: '另加之禁區' }])
+        assert.deepEqual(guardExtraOf({ FD_ROOT, guard: { forbidden: [{ pattern: 'secret[-_]zone', label: '另加之禁區' }] } }), [{ pattern: 'secret[-_]zone', label: '另加之禁區' }])
+        //R-EV-54 ①: 給了而無效(缺樣式、空樣式、缺 label、非法正則)⇒ 拋(原: 靜默略過而該禁區失效); 逐項之案見 unit-inputGates
+        assert.throws(() => guardExtraOf({ FD_ROOT, guard: { forbidden: [{ pattern: 'secret[-_]zone', label: '另加之禁區' }, { pattern: '', label: 'x' }, { label: '缺樣式' }] } }), /^Error: invalid guard\.forbidden\[1\]: must be/)
         assert.deepEqual(guardExtraOf({}), [])
         //未設定時不含「策略庫專案」; 設定後才有
         setGuardExtra([])

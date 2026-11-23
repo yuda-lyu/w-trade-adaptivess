@@ -21,6 +21,10 @@ let RSI_NUM_KINDS = {
     unit: ['a number from 0 to 1', (x) => x >= 0 && x <= 1],
     //逾時之分鐘數: 正數, 且換成毫秒不超過 2147483647(Node 計時器之上限; 超過者計時器溢位而立即觸發)
     timerMin: ['a positive number of minutes that is at most 35791', (x) => x > 0 && x * 60000 <= 2147483647],
+    //逾時之毫秒數(src/domain/proc.mjs 之 runNodeProc): 正數, 且不超過 2147483647(Node 計時器之上限)
+    timerMs: ['a positive number of milliseconds that is at most 2147483647', (x) => x > 0 && x <= 2147483647],
+    //等待之間隔之秒數(tools/waitEvent.mjs 之 --poll-sec): 正數, 且換成毫秒不超過 2147483647(同上之理由)
+    timerSec: ['a positive number of seconds that is at most 2147483', (x) => x > 0 && x * 1000 <= 2147483647],
 }
 
 //RSI_NUMS, 各鍵之種類(單一定義): 設定之路徑 → 種類; 無效或未給 ⇒ 預設(呼叫端所給); unit-rsiNums 以原始碼之盤點核對「各鍵之讀取皆經 rsiNumOf」

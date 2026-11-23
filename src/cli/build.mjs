@@ -1,5 +1,5 @@
 import path from 'path'
-import { getSettings, argOf, P, cliMsgOf } from '../cfg.mjs'
+import { getSettings, argOf, P, cliMsgOf, isLocalTimeStr } from '../cfg.mjs'
 import buildLedger from '../eval/ledgerBuild.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
@@ -48,7 +48,18 @@ if (train && limitArg !== null) {
 let st = getSettings()
 let outDir = train ? path.join(path.dirname(path.resolve(st.eval.ledgerDir)), 'train') : (limit > 0 ? `${st.eval.ledgerDir}_limit${limit}` : st.eval.ledgerDir)
 let endTime = train ? st.periods.train.end : st.periods.backtest.end
-if (Date.parse(`${endTime}Z`) >= Date.parse(`${st.periods.holdoutFrom}Z`)) {
+//保留期之門(R-EV-54 ①; 安全閘): 帳本終點與保留期起點給了而不是時間字串(非字串或不可解析)⇒ 不建(離開碼 2; 於任何寫入之前; 訊息固定、不帶輸入值)
+//  原: 無效 ⇒ Date.parse 為 NaN ⇒ `NaN >= x` 恆假 ⇒ 保留期之門失效而照建(把保留期數據建入評估帳本); 未給保留期起點(undefined 或 null)⇒ 無保留期之門(同改前)
+//  時間字串 = 設定檔 periods.* 所用之無時區寫法(YYYY-MM-DDTHH:mm:ss, 可帶 .SSS; 真實存在之時刻; isLocalTimeStr): 2026-02-30 之類不存在之日期與 T24:00:00 亦拒(Date.parse 會滾動而通過)
+{
+    let ho = st.periods.holdoutFrom
+    let bad = !isLocalTimeStr(endTime) ? (train ? 'periods.train.end' : 'periods.backtest.end') : (ho !== undefined && ho !== null && !isLocalTimeStr(ho) ? 'periods.holdoutFrom' : null)
+    if (bad !== null) {
+        console.log(`ERROR invalid ${bad}: must be a time string such as 2024-01-01T00:00:00`)
+        process.exit(2)
+    }
+}
+if (st.periods.holdoutFrom !== undefined && st.periods.holdoutFrom !== null && Date.parse(`${endTime}Z`) >= Date.parse(`${st.periods.holdoutFrom}Z`)) {
     console.log(`ERROR 帳本終點 ${endTime} 已進入保留期(${st.periods.holdoutFrom} 起);不建`)
     process.exit(2)
 }

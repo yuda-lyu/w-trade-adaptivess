@@ -1,6 +1,8 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { rsiNumOf, RSI_NUM_KINDS } from './arsi/rsiNums.mjs'
+import { agentsCheck } from './arsi/inputs.mjs'
 
 
 //專案根(唯一之路徑錨點)與設定載入; 設定內之相對路徑一律以專案根解析
@@ -52,6 +54,7 @@ let isoOf = (ms) => new Date(ms).toISOString().slice(0, 19)
 /**
  * 讀取專案根之 settings.json, 並把路徑欄(eval.ledgerDir、rsi.root、records.*)轉為絕對路徑
  * dispatch.skillsRoot 未給時取使用者家目錄下之 .claude/skills; 回傳物件另帶 FD_ROOT 欄
+ * 必給之節(eval、rsi、records、dispatch)非一般物件、或路徑欄(eval.ledgerDir、rsi.root、records.*)非字串或空字串者拋 invalid settings.<節或欄>: must be …(固定訊息, 不帶輸入值)
  *
  * @returns {Object} 回傳設定物件
  * @example
@@ -59,14 +62,39 @@ let isoOf = (ms) => new Date(ms).toISOString().slice(0, 19)
  */
 let getSettings = () => {
     let st = JSON.parse(fs.readFileSync(P('settings.json'), 'utf8'))
-    let rel = (p) => P(p)
-    st.eval.ledgerDir = rel(st.eval.ledgerDir)
-    st.rsi.root = rel(st.rsi.root)
+    //必給之節與路徑欄(跨套件規格 §5.1、S4; R-EV-54): 缺節、非一般物件、路徑欄非字串或空字串 ⇒ 拋固定訊息 invalid settings.<節>: must be …(不帶輸入值)
+    //  原: 缺節為原生 TypeError(Cannot read properties of undefined)、路徑欄為空字串者靜默取專案根(P('') 即專案根)而把帳本、狀態根等指到專案根本身
+    let sect = (o, where) => {
+        if (o === null || typeof o !== 'object' || Array.isArray(o)) {
+            throw new Error(`invalid ${where}: must be an object`)
+        }
+        return o
+    }
+    let relReq = (v, where) => {
+        if (typeof v !== 'string' || v === '') {
+            throw new Error(`invalid ${where}: must be a non-empty string`)
+        }
+        return P(v)
+    }
+    sect(st, 'settings')
+    sect(st.eval, 'settings.eval')
+    sect(st.rsi, 'settings.rsi')
+    sect(st.records, 'settings.records')
+    sect(st.dispatch, 'settings.dispatch')
+    st.eval.ledgerDir = relReq(st.eval.ledgerDir, 'settings.eval.ledgerDir')
+    st.rsi.root = relReq(st.rsi.root, 'settings.rsi.root')
     for (let k of Object.keys(st.records)) {
-        st.records[k] = rel(st.records[k])
+        st.records[k] = relReq(st.records[k], `settings.records.${/^\w{1,40}$/.test(k) ? k : '<key>'}`)
     }
     if (!st.dispatch.skillsRoot) {
         st.dispatch.skillsRoot = path.join(os.homedir(), '.claude', 'skills')
+    }
+    //派工之根與各角色之設定(R-EV-54): skillsRoot 給了而非字串、agents 給了而不是一般物件或其角色之 kind、fallback 不合 ⇒ 拋固定訊息(原: 其後於派工器內為原生 TypeError 或靜默走 opencode 分支)
+    if (typeof st.dispatch.skillsRoot !== 'string') {
+        throw new Error('invalid settings.dispatch.skillsRoot: must be a non-empty string')
+    }
+    if (st.agents !== undefined && st.agents !== null) {
+        agentsCheck(st.agents, 'settings.agents')
     }
     st.FD_ROOT = FD_ROOT
     return st
@@ -114,6 +142,26 @@ let argStrOf = (key, def = undefined) => {
         return true
     }
     return v
+}
+
+//argNumOf, 命令列 --key value 之數值(經 cliGuard / cliMsgOf 檢查合格後取; 數字字串轉為數值 —— 檢測之值即使用之值, K4): 未給回 def; 值不合種類(未經檢查而直接呼叫者)亦回 def(不當 0、不回 NaN)
+/**
+ * 讀取命令列 --key value 之數值: 以 rsiNumOf 轉換(數字或去頭尾空白之十進位數字字串), 須合種類(RSI_NUM_KINDS); 未給或不合者回傳 def
+ *
+ * @param {String} key 輸入參數名稱(不含 --)
+ * @param {String} kind 輸入種類(RSI_NUM_KINDS 之鍵)
+ * @param {*} [def=null] 輸入未給或不合時之回傳值,預設null
+ * @returns {Number|*} 回傳轉換後之數值, 或 def
+ * @example
+ * let k = argNumOf('k', 'posInt', 10)
+ */
+let argNumOf = (key, kind, def = null) => {
+    let v = argStrOf(key, undefined)
+    if (typeof v !== 'string') {
+        return def
+    }
+    let x = rsiNumOf(v, kind)
+    return x === null ? def : x
 }
 
 //CLI_FLAGS, 各進入檔(src/cli/*.mjs)認得之全部旗標(單一定義): 進入檔名 → { 旗標名(不含 --): 值之格式說明; 布林旗標為 null }
@@ -211,6 +259,96 @@ let CLI_ENUMS = {
     rsi: { mode: ['status', 'init', 'dry', 'round', 'board', 'validate', 'reverify', 'extfill', 'fill', 'frontier', 'annotate', 'dirtype'] },
 }
 
+//CLI_VALUES, 帶值旗標之「值」之種類(單一定義; 進入檔名或工具名 → 旗標名 → 種類; 排程第 607 項、R-EV-54): 值給了而無效 ⇒ 拒收(同 cliMsgOf 之檢查點、離開碼 2、固定訊息 `invalid --<旗標>: must be <描述>`、不帶輸入值)
+//  數字之種類 = RSI_NUM_KINDS 之鍵(rsiNumOf: 數字字串〔去頭尾空白之十進位寫法〕轉為數值, 其後一律用轉換值 —— 讀取處以 argNumOf; K4、K7); 'time' = 時間字串(T2: YYYY-MM-DDTHH:mm:ss, 可帶 .SSS、可帶 Z 或 ±hh:mm; timeMsOf)
+//  分類: 規模旗標(--nodes、--arms、--parallel、--workers、--rounds、--par)給了而無效即拒收(與 --null、--limit 一致; 原: 靜默退回設定之值); 計時值(waitEvent 之 --timeout-min、--poll-sec)依 §3.7(原: 無效 ⇒ NaN ⇒ 永不結束);
+//  其餘(--k、--max、--since、--round)為輸入之值(原: 靜默用預設或視為未給)
+//  eval 與 backtest 之數值旗標(--null、--phases、--seed、--tie-salt)不在本表: 評估器之進入檔另有固定訊息(本輪不動評估器)
+let CLI_VALUES = {
+    rsi: { nodes: 'posInt', arms: 'posInt', parallel: 'posInt', workers: 'posInt', rounds: 'posInt', par: 'posInt', round: 'posInt' },
+    rankCompare: { k: 'posInt' },
+    quota: { max: 'num' },
+    waitEvent: { 'timeout-min': 'timerMin', 'poll-sec': 'timerSec', 'since': 'time' },
+    //--selectable: 布林(B2 之字串寫法; K5: 0、1 與其他字串皆非布林 ⇒ 原: `--selectable 0` 取 true、`abc` 取 true)
+    armDecide: { selectable: { enum: ['true', 'false'] } },
+}
+
+//timeMsOf, 時間字串(T2)之毫秒數: 原字串(不去空白)須為 YYYY-MM-DDTHH:mm:ss(可帶 .SSS、可帶 Z 或 ±hh:mm)且為真實存在之時刻; 無效回 null(單一定義: cliMsgOf 之檢查與 tools/waitEvent.mjs 之取值共用)
+/**
+ * 時間字串(T2: YYYY-MM-DDTHH:mm:ss, 可帶 .SSS、可帶 Z 或 ±hh:mm)轉毫秒; 非字串、其他寫法(空格分隔、尾空白、日期不存在)回傳 null
+ *
+ * @param {*} v 輸入時間字串
+ * @returns {Number|null} 回傳毫秒數或 null
+ * @example
+ * timeMsOf('2026-11-23T10:00:00Z') // => 1795428000000
+ */
+let timeMsOf = (v) => {
+    let m = typeof v === 'string' ? /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-](\d{2}):(\d{2}))?$/.exec(v) : null
+    if (m === null || !calendarOk(m)) {
+        return null
+    }
+    //帶時差者之時差須為 00:00 ~ 23:59(以下之 Date.parse 對 +99:99 之類回 NaN, 一併擋)
+    let ms = Date.parse(v)
+    return Number.isFinite(ms) ? ms : null
+}
+
+//calendarOk, 年月日時分秒之範圍(正規式之前六組; 月 1 ~ 12、日 1 ~ 該月之日數〔含閏年〕、時 0 ~ 23、分 0 ~ 59、秒 0 ~ 59): V8 之 Date.parse 會把 2026-02-30 滾成 3 月 2 日、T24:00:00 接受 ⇒ 另以此核對「真實存在之時刻」
+let calendarOk = (m) => {
+    let [y, mo, d, h, mi, s] = [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6])]
+    let dim = [31, (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    return mo >= 1 && mo <= 12 && d >= 1 && d <= dim[mo - 1] && h <= 23 && mi <= 59 && s <= 59
+}
+
+//isLocalTimeStr, 無時區之時間字串(YYYY-MM-DDTHH:mm:ss, 可帶 .SSS; 設定檔 periods 所用之寫法, 評估器以 `${v}Z` 解析)是否有效: 真實存在之時刻(同 timeMsOf 之範圍核對); 帶 Z 或時差者無效(附加 Z 後不可解析)
+/**
+ * 無時區之時間字串(YYYY-MM-DDTHH:mm:ss, 可帶 .SSS)是否為真實存在之時刻(設定檔 periods.* 所用之寫法; g_build 之保留期之門用)
+ *
+ * @param {*} v 輸入時間字串
+ * @returns {Boolean} 回傳是否有效
+ * @example
+ * isLocalTimeStr('2026-08-01T00:00:00') // => true
+ * isLocalTimeStr('2026-02-30T00:00:00') // => false
+ */
+let isLocalTimeStr = (v) => {
+    let m = typeof v === 'string' ? /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?$/.exec(v) : null
+    return m !== null && calendarOk(m) && Number.isFinite(Date.parse(`${v}Z`))
+}
+
+//CLI_VALUE_DESC, 'time' 之描述(其餘數字種類之描述取 RSI_NUM_KINDS)
+let CLI_TIME_DESC = 'a time string YYYY-MM-DDTHH:mm:ss (optionally with .SSS and Z or ±hh:mm)'
+
+//valueMsgOf, 帶值旗標之值之檢查(CLI_VALUES): 合格回 null
+let valueMsgOf = (nm, kind, v) => {
+    if (kind !== null && typeof kind === 'object') {
+        //列舉(布林之 'true' / 'false' 等; B2: 去頭尾空白後比對, 讀取處同; 大小寫須相符)
+        return kind.enum.includes(v.trim()) ? null : `invalid --${nm}: must be one of ${kind.enum.join(', ')}`
+    }
+    if (kind === 'time') {
+        return timeMsOf(v) === null ? `invalid --${nm}: must be ${CLI_TIME_DESC}` : null
+    }
+    return rsiNumOf(v, kind) === null ? `invalid --${nm}: must be ${RSI_NUM_KINDS[kind][0]}` : null
+}
+
+//posMsgOf, 位置引數之值之檢查(TOOL_FLAGS.<工具>.pos: 依位置之次序, 不限個數者以最後一項涵蓋其後各個): 合格回 null
+//  { name, kind: 'posInt' } = 正整數(輪次); { name, kind: 'idList' } = 逗號分隔之節點 id 前綴(各為 1 ~ 64 個英數、底線、連字號); { name, enum: [...] } = 列舉
+let posMsgOf = (entry, idx, token) => {
+    let spec = Object.prototype.hasOwnProperty.call(TOOL_FLAGS, entry) ? TOOL_FLAGS[entry].pos : null
+    if (!Array.isArray(spec) || spec.length === 0) {
+        return null
+    }
+    let s = spec[Math.min(idx, spec.length - 1)]
+    if (s.enum) {
+        return s.enum.includes(token) ? null : `invalid ${s.name}: must be one of ${s.enum.join(', ')}`
+    }
+    if (s.kind === 'posInt') {
+        return rsiNumOf(token, 'posInt') === null ? `invalid ${s.name}: must be ${RSI_NUM_KINDS.posInt[0]}` : null
+    }
+    if (s.kind === 'idList') {
+        return token.split(',').every((x) => /^[A-Za-z0-9_-]{1,64}$/.test(x)) ? null : `invalid ${s.name}: must be a comma-separated list of node id prefixes`
+    }
+    return null
+}
+
 //CLI_OWN, 旗標之無值或重複由進入檔自己之解析處理(其訊息沿用既有之固定訊息, 且於本檢查之後): 進入檔名 → { noValue: [旗標名], dup: [旗標名] }
 //  eval: --null 之值(含無值)不合 ⇒ invalid --null: must be a non-negative integer; --member、--subset 之無值、重複與格式不合 ⇒ 各自之固定訊息(1.0.42 起)
 //  rsi: --file 於只做夢輪次(--dream-only)之無值 ⇒ invalid --file: must be the path of a readable, non-empty UTF-8 text file
@@ -255,6 +393,8 @@ let CLI_MODE_NEEDS = {
 //TOOL_FLAGS, 工具(src/tools/*.mjs)認得之旗標(單一定義; 每工具一張表; 排程第 595 項之接續): 工具名 → { flags: { 旗標名(不含 --): 值之格式說明; 布林旗標為 null }, positional: 位置引數之個數上限(Infinity = 不限), own?: [旗標名] }
 //  與 CLI_FLAGS 同一組規則(cliMsgOf / cliGuard): 等號寫法、未列之旗標、單值旗標重複、帶值旗標無值、多餘之值與位置引數一律於工具之開頭(讀設定、組裝專案與任何寫入之前)拒收(離開碼 2、固定訊息、不帶輸入值)
 //  own = 該旗標之無值由工具自己之解析處理(沿用既有之固定訊息; 同 CLI_OWN.noValue)
+//  pos = 位置引數之值之種類(依位置之次序; R-EV-54; 原: 值不驗 —— `roundDigest r003` 靜默改為最近一輪、`dreamProfile abc` 讀不到檔、`scanCheck zzz` 無節點而印「與節點文件不同者 0 份」、`smokeDispatch abc` 派一個不存在之角色): { name(訊息用), kind: 'posInt' | 'idList' } 或 { name, enum: [值] }
+//  帶值旗標之值之種類見 CLI_VALUES
 //  新增旗標須同時加於本表(unit-toolFlags 以原始碼之盤點核對: 工具讀取之旗標 = 本表之鍵)
 let TOOL_FLAGS = {
     archiveDocs: { flags: {}, positional: 0 },
@@ -280,7 +420,7 @@ let TOOL_FLAGS = {
     armInactive: { flags: { node: '<id-prefix>', arms: '<arm>[,<arm>…]|none', why: '<text>', offdef: '<arm>[,<arm>…]' }, positional: 0 },
     briefPreview: { flags: { out: '<dir>' }, positional: 0 },
     buildCatalog: { flags: { out: '<file>' }, positional: 0 },
-    dreamProfile: { flags: {}, positional: 1 },
+    dreamProfile: { flags: {}, positional: 1, pos: [{ name: 'round', kind: 'posInt' }] },
     exposure: { flags: { node: '<id-prefix>', why: '<text>', undo: null }, positional: 0 },
     fakeRound: { flags: { two: null, redream: null }, positional: 0 },
     improveTrend: { flags: { json: null }, positional: 0 },
@@ -291,10 +431,10 @@ let TOOL_FLAGS = {
     quota: { flags: { max: '<N>', all: null, probe: null }, positional: 0 },
     rankCompare: { flags: { k: '<N>' }, positional: 0 },
     replayCheck: { flags: {}, positional: Infinity },
-    roundDigest: { flags: { out: null }, positional: 1 },
-    scanCheck: { flags: {}, positional: 1 },
+    roundDigest: { flags: { out: null }, positional: 1, pos: [{ name: 'round', kind: 'posInt' }] },
+    scanCheck: { flags: {}, positional: 1, pos: [{ name: 'node', kind: 'idList' }] },
     searchMap: { flags: { quiet: null }, positional: 0 },
-    smokeDispatch: { flags: {}, positional: 1 },
+    smokeDispatch: { flags: {}, positional: 1, pos: [{ name: 'target', enum: ['node', 'dream', 'both', 'deny'] }] },
     waitEvent: { flags: { 'timeout-min': '<N>', 'since': '<ISO-time>', 'poll-sec': '<N>' }, positional: 0 },
 }
 
@@ -302,8 +442,10 @@ let TOOL_FLAGS = {
 //  檢查之次序: ① 帶等號之 --key=value(eqFlagMsgOf) ② 自左至右掃描: 未列之旗標(含拼錯、--period:postfit 之冒號寫法、單獨之 --)、單值旗標重複、帶值旗標無值、列舉旗標之值不在集合、
 //  多餘之值(布林旗標之後接非旗標之值、帶值旗標之值之後再接一個值,如 --phases 0 3)、多餘之位置引數; 帶值旗標之值為空字串或只有空白者視同無值(own 所列者除外)
 //  原: argOf 不識以上各種寫法而視為旗標未給或只取第一個 —— 靜默退回預設或誤跑(--perod、--mode ful、--phases 0 3、--ref a.mjs b.mjs、重複之 --pick)
+//  ③ 結構之錯皆合格後, 另查「值之種類」(排程第 607 項; R-EV-54): 帶值旗標之值屬 CLI_VALUES 者(規模旗標、--k、--max、waitEvent 之三個旗標、--selectable)、位置引數屬 TOOL_FLAGS.<工具>.pos 者(輪次、節點 id 前綴、smokeDispatch 之目標)給了而無效 ⇒ 回 `invalid --<旗標>: must be …` / `invalid <名>: must be …`
+//    (結構之錯優先: 模式 × 旗標、重複等先於值之種類; 多個值皆無效者報命令列次序之第一個)
 /**
- * 命令列之嚴格檢查: 帶等號之寫法、未列之旗標、單值旗標重複、帶值旗標無值、列舉旗標之值不在集合內、多餘之值或位置引數皆回固定之訊息(不帶輸入值); 全部合格回傳 null
+ * 命令列之嚴格檢查: 帶等號之寫法、未列之旗標、單值旗標重複、帶值旗標無值、列舉旗標之值不在集合內、多餘之值或位置引數、模式 × 旗標、帶值旗標或位置引數之值之種類(CLI_VALUES、TOOL_FLAGS.pos)不合者皆回固定之訊息(不帶輸入值); 全部合格回傳 null
  *
  * @param {String} entry 輸入進入檔名(CLI_FLAGS 之鍵: eval、backtest、build、rsi、toolbox、launch)或工具名(TOOL_FLAGS 之鍵: src/tools/ 內之各工具; 其旗標與位置引數之個數取自該表)
  * @param {Array<String>} [argv=process.argv.slice(2)] 輸入命令列引數,預設 process.argv.slice(2)
@@ -326,16 +468,23 @@ let cliMsgOf = (entry, argv = process.argv.slice(2), opt = {}) => {
         return eq
     }
     let enums = CLI_ENUMS[entry] || {}
+    let vals = Object.prototype.hasOwnProperty.call(CLI_VALUES, entry) ? CLI_VALUES[entry] : {}
     let own = isTool ? { noValue: TOOL_FLAGS[entry].own || [], dup: [] } : (CLI_OWN[entry] || { noValue: [], dup: [] })
     let names = Object.keys(flags)
     let known = (nm) => Object.prototype.hasOwnProperty.call(flags, nm)
     let seen = new Set()
     let nSeen = 0
+    //valMsg, 值之種類(CLI_VALUES、TOOL_FLAGS.pos)不合之第一個訊息(命令列次序): 結構之錯(等號、未列、重複、無值、多餘之值、列舉、模式 × 旗標與相依)優先, 本項最後才回(R-EV-54; 使既有之訊息與次序不變)
+    let valMsg = null
     for (let i = 0; i < argv.length; i++) {
         let a = argv[i]
         if (typeof a !== 'string' || !a.startsWith('--')) {
             //位置引數(不屬任何旗標之值): 只在允許之個數內
             if (nSeen < nPos && typeof a === 'string') {
+                let pm = isTool ? posMsgOf(entry, nSeen, a) : null
+                if (pm !== null && valMsg === null) {
+                    valMsg = pm
+                }
                 nSeen++
                 continue
             }
@@ -355,6 +504,10 @@ let cliMsgOf = (entry, argv = process.argv.slice(2), opt = {}) => {
             //布林旗標: 其後不得接值(允許位置引數者〔工具之 `[輪次] [--out]` 等〕: 其後之值算位置引數, 限其個數)
             if (hasVal) {
                 if (nSeen < nPos) {
+                    let pm = isTool ? posMsgOf(entry, nSeen, v) : null
+                    if (pm !== null && valMsg === null) {
+                        valMsg = pm
+                    }
                     nSeen++
                     i++
                     continue
@@ -379,6 +532,10 @@ let cliMsgOf = (entry, argv = process.argv.slice(2), opt = {}) => {
                 continue
             }
             return `invalid --${nm}: must be written as --${nm} ${flags[nm]} (a value is required)`
+        }
+        //值之種類(CLI_VALUES; 排程第 607 項): 值給了而無效 ⇒ 拒收(訊息最後才回, 見 valMsg)
+        if (Object.prototype.hasOwnProperty.call(vals, nm) && valMsg === null) {
+            valMsg = valueMsgOf(nm, vals[nm], v)
         }
         i++
     }
@@ -405,7 +562,7 @@ let cliMsgOf = (entry, argv = process.argv.slice(2), opt = {}) => {
             }
         }
     }
-    return null
+    return valMsg
 }
 
 /**
@@ -425,6 +582,21 @@ let cliGuard = (entry, opt = {}) => {
         console.log(msg)
         process.exit(2)
     }
+}
+
+//inputMsgOf, 設定之輸入不合之錯誤之訊息(R-EV-54): 屬 settings.guard / source.libraryRoot / rsi.rankBy / 設定檔之節、路徑欄與派工設定(getSettings)/ settings.backtest 本身(invalid backtest: must be an object; 其下之鍵為 invalid backtest.<鍵>, 由 configMsgOf 認得)者回其固定訊息(invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy、invalid settings.…、invalid backtest:), 其餘回 null(照舊拋出)
+//  與 eval/barGrid.mjs 之 configMsgOf(評估器; 認得 invalid eval. / periods. / backtest. 等)分開: 評估器之檔本輪不動 ⇒ 新增之前綴於此另設辨識器; 入口以 `configMsgOf(err) || inputMsgOf(err)` 判定
+/**
+ * 設定之輸入不合之錯誤之訊息: invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy、invalid settings.… 回其訊息(單行), 其餘回傳 null
+ *
+ * @param {*} err 輸入錯誤
+ * @returns {String|null} 回傳訊息或 null
+ * @example
+ * inputMsgOf(new Error('invalid guard.forbidden: must be an array')) // => 'invalid guard.forbidden: must be an array'
+ */
+let inputMsgOf = (err) => {
+    let msg = String((err && err.message) || err).split('\n')[0]
+    return /^invalid (guard[.:]|source\.libraryRoot|rsi\.rankBy|settings[.:]|backtest:)/.test(msg) ? msg : null
 }
 
 /**
@@ -460,4 +632,4 @@ let writeJson = (fp, obj) => {
 }
 
 
-export { FD_ROOT, P, tms, isoOf, getSettings, argOf, argStrOf, CLI_FLAGS, CLI_ENUMS, CLI_OWN, CLI_MODE_FLAGS, CLI_MODE_OWN, CLI_MODE_NEEDS, TOOL_FLAGS, eqFlagMsgOf, cliMsgOf, cliGuard, readJson, writeJson }
+export { FD_ROOT, P, tms, isoOf, getSettings, argOf, argStrOf, argNumOf, CLI_FLAGS, CLI_ENUMS, CLI_VALUES, CLI_OWN, CLI_MODE_FLAGS, CLI_MODE_OWN, CLI_MODE_NEEDS, TOOL_FLAGS, timeMsOf, isLocalTimeStr, valueMsgOf, posMsgOf, eqFlagMsgOf, cliMsgOf, cliGuard, inputMsgOf, readJson, writeJson }

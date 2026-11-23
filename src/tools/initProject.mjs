@@ -7,6 +7,7 @@ import { phaseCountOf, phaseText, horizonsOf, periodLenText, dateOf } from '../d
 import { guardEntry } from '../domain/agentEntries.mjs'
 import { pkgRootOf } from '../domain/pkgRoot.mjs'
 import { cliGuard } from '../cfg.mjs'
+import { optOf, strOpt, boolOpt } from '../arsi/inputs.mjs'
 
 
 //把本套件接到一個專案根: 建立或更新進入檔與參考檔(安裝或升版後執行一次)
@@ -227,16 +228,26 @@ let refSettingsOf = (text, h) => {
  * 每根之時長 = opt.barHours > 專案既有之 settings.json 之 source.barHours > 4;兩處皆給而不同、或不合者拋錯(未寫任何檔)
  * 全新專案根(無 settings.json)之參考設定之 source.barHours = 每根之時長(4 小時者原樣複製);合約之參考版依每根之時長與專案之設定(既有者,否則為所寫之參考設定)產出(renderContract)
  *
+ * 輸入之檢測:opt 非一般物件、root 給了而非非空字串、dry 或 force 給了而非 true / false(字串 'false'、數字皆非布林)皆同步拋 invalid opt.<鍵>: must be …(固定訊息、不帶輸入值;未寫任何檔)
+ *
  * @param {Object} [opt={}] 輸入設定物件,預設{}
- * @param {String} [opt.root] 輸入專案根路徑,未給時取環境變數 ARSI_ROOT,再無則取行程工作目錄
- * @param {Boolean} [opt.dry=false] 輸入是否只列出將寫入之檔而不實際寫入,預設false
- * @param {Boolean} [opt.force=false] 輸入是否覆寫已存在而非本工具所產生之進入檔,預設false
+ * @param {String} [opt.root] 輸入專案根路徑(非空字串),未給時取環境變數 ARSI_ROOT,再無則取行程工作目錄
+ * @param {Boolean} [opt.dry=false] 輸入是否只列出將寫入之檔而不實際寫入(只收 true / false),預設false
+ * @param {Boolean} [opt.force=false] 輸入是否覆寫已存在而非本工具所產生之進入檔(只收 true / false),預設false
  * @param {Number|String} [opt.barHours] 輸入每根 K 棒之小時數(須整除 24),預設未給(取專案既有之設定,再無為 4)
  * @returns {Object} 回傳 { root(專案根絕對路徑), written(已寫入或將寫入之相對路徑陣列), kept(未變之相對路徑陣列), skipped(因非本工具所產生而未覆寫者), differs(合約與參考版不同者) }
  * @example
  * let r = initProject({ root: './myproj', dry: true })
  */
-let initProject = ({ root, dry = false, force = false, barHours } = {}) => {
+let initProject = (opt = {}) => {
+    //輸入之檢測(跨套件規格 V4、K5、§5.1; R-EV-54 ①; 同步且有副作用者 ⇒ 先於任何寫入拋固定訊息): opt 須為一般物件(null、undefined 視為未給);
+    //  root(寫入之專案根)給了而不是非空字串、dry(只列出不寫入)與 force(覆寫非本工具所產生之檔)給了而不是 true / false ⇒ 拋 invalid opt.<鍵>: must be …(安全相關: 不改用預設)
+    //  原: `dry: 'false'` ⇒ 為真 ⇒ 不寫(與意圖相反)、`force: 'false'` ⇒ 為真 ⇒ 覆寫非本工具之檔、`root: ''` 或 0 ⇒ 靜默取環境變數或工作目錄; opt 為 null ⇒ 原生 TypeError; 未給(undefined 或 null)取預設
+    let o = optOf(opt)
+    let root = strOpt(o.root, null, 'opt.root')
+    let dry = boolOpt(o.dry, false, 'opt.dry')
+    let force = boolOpt(o.force, false, 'opt.force')
+    let barHours = o.barHours
     let fdRoot = path.resolve(root || process.env.ARSI_ROOT || process.cwd())
     if (path.resolve(fdRoot) === FD_PKG) {
         throw new Error('專案根不可為套件夾本身(套件夾已自帶進入檔與參考檔)')

@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
 import { rsiNumOf } from './rsiNums.mjs'
+import { isPlain, optOf, fnReq, fnOpt, strReq, numReq } from './inputs.mjs'
 
 
 //多輪執行之通用驅動(不含領域用語): 一次執行(run)連跑數輪, 每輪後回報並依條件決定是否續跑
@@ -21,7 +22,7 @@ import { rsiNumOf } from './rsiNums.mjs'
 let posInt = (v) => rsiNumOf(v, 'posInt')
 
 /**
- * 解析每輪節點數、同時節點數與每次執行輪數(命令列優先於設定檔,皆須為正整數,否則用預設)
+ * 解析每輪節點數、同時節點數與每次執行輪數(命令列優先於設定檔,皆須為正整數〔數字字串轉為數值〕,否則用預設;cfg、cli 為 null 或非物件者視為未給)
  *
  * @param {Object} [cfg={}] 輸入設定檔之值,預設{}
  * @param {Object} [cli={}] 輸入命令列覆寫值,預設{}
@@ -32,7 +33,10 @@ let posInt = (v) => rsiNumOf(v, 'posInt')
  * // => { nodesPerRound: 4, parallelNodes: 2, roundsPerRun: 1 }
  */
 let resolveRunConfig = (cfg = {}, cli = {}) => {
-    let pick = (k, def) => posInt(cli[k]) || posInt(cfg[k]) || def
+    //cfg、cli 為選填之物件(跨套件規格 V4、K3): null、非物件視為未給(原: null 於讀鍵時拋原生 TypeError)
+    let cfgO = cfg !== null && typeof cfg === 'object' ? cfg : {}
+    let cliO = cli !== null && typeof cli === 'object' ? cli : {}
+    let pick = (k, def) => posInt(cliO[k]) || posInt(cfgO[k]) || def
     let nodesPerRound = pick('nodesPerRound', 3)
     let parallelNodes = Math.min(nodesPerRound, pick('parallelNodes', nodesPerRound))
     let roundsPerRun = pick('roundsPerRun', 1)
@@ -43,18 +47,28 @@ let resolveRunConfig = (cfg = {}, cli = {}) => {
  * 多輪執行之通用驅動:連跑數輪,每輪前詢問是否停止、每輪後回調,結果 halt 非空即於該輪後停止
  *
  * @param {Object} opt 輸入設定物件
- * @param {Number} [opt.rounds=1] 輸入最多跑幾輪,預設1
- * @param {Function} opt.runRound 輸入跑一輪之函數,形式 async ({ index }) → 該輪結果物件,結果之 halt 非空則於該輪後停止
- * @param {Function} [opt.shouldStop=()=>null] 輸入每輪開始前之詢問函數,形式 async ({ index, done }),回傳非空字串即不再起新輪,預設回傳null
- * @param {Function} [opt.onRoundDone=()=>{}] 輸入每輪結束後之回調,形式 async (result, { index, rounds }),預設空函數
- * @param {Function} [opt.log=()=>{}] 輸入記錄函數,預設空函數
- * @returns {Promise<Object>} 回傳 Promise,resolve 為 { done(各輪結果陣列), stopped(提前停止之原因字串,未提前停止為null) }
+ * @param {Number|String} [opt.rounds=1] 輸入最多跑幾輪(非負整數或其數字字串),預設1;給了而無效(小數、負數、布林、非數字字串)reject
+ * @param {Function} opt.runRound 輸入跑一輪之函數,形式 async ({ index }) → 該輪結果物件,結果之 halt 非空則於該輪後停止;非函數 reject
+ * @param {Function} [opt.shouldStop=()=>null] 輸入每輪開始前之詢問函數,形式 async ({ index, done }),回傳非空字串即不再起新輪,預設回傳null;給了而非函數 reject(停止之閘不靜默失效)
+ * @param {Function} [opt.onRoundDone=()=>{}] 輸入每輪結束後之回調,形式 async (result, { index, rounds }),預設空函數;非函數視為未給
+ * @param {Function} [opt.log=()=>{}] 輸入記錄函數,預設空函數;非函數視為未給
+ * @returns {Promise<Object>} 回傳 Promise,resolve 為 { done(各輪結果陣列), stopped(提前停止之原因字串,未提前停止為null) };輸入無效時 reject Error(invalid opt…: must be …,固定訊息、不帶輸入值),先於任何一輪
  * @example
  * let r = await runRounds({ rounds: 3, runRound: async ({ index }) => ({ index, halt: index === 1 ? '停' : null }) })
  * console.log(r)
  * // => { done: [ { index: 0, halt: null }, { index: 1, halt: '停' } ], stopped: '停' }
  */
-let runRounds = async ({ rounds = 1, runRound, shouldStop = () => null, onRoundDone = () => {}, log = () => {} }) => {
+let runRounds = async (opt) => {
+    //輸入之檢測(跨套件規格 V4、§5.1、K3、K5; R-EV-54; 回傳 Promise 者以 reject 通知, 先於任何一輪):
+    //  opt 非一般物件、runRound 非函數 ⇒ reject invalid opt / opt.runRound: must be …(原: 原生 TypeError); rounds 為規模(與 --rounds 同一量)⇒ 未給(undefined 或 null)= 1, 給了須為非負整數(數字字串轉為數值),
+    //  否則 reject invalid opt.rounds: must be a non-negative integer(原: true ⇒ 1 輪、2.5 ⇒ 3 輪、'abc' ⇒ 0 輪仍成功); shouldStop 為停止之閘(額度不足、資源持續超限)⇒ 給了而非函數即 reject(原: 靜默無閘, null 則 TypeError);
+    //  onRoundDone、log 為觀察用 ⇒ 非函數視為未給(K3)
+    let o = optOf(opt)
+    let runRound = fnReq(o.runRound, 'opt.runRound')
+    let rounds = numReq(o.rounds, 1, 'opt.rounds', 'nonNegInt')
+    let shouldStop = fnOpt(o.shouldStop, 'opt.shouldStop') || (() => null)
+    let onRoundDone = typeof o.onRoundDone === 'function' ? o.onRoundDone : () => {}
+    let log = typeof o.log === 'function' ? o.log : () => {}
     let done = []
     for (let i = 0; i < rounds; i++) {
         let why = await shouldStop({ index: i, done })
@@ -110,6 +124,7 @@ let procNameOf = (pid) => {
  * 取得單一執行之鎖(以獨占建立鎖檔,同一狀態根同時只允許一次執行)
  *
  * 鎖檔之行程已不在或其 pid 已被別的程式重用時視為殘留,刪除後接手;其餘情形見回傳說明。
+ * fpLock 非非空字串、opt 非一般物件(null、undefined 視為未給)⇒ 同步拋 invalid fpLock / opt: must be …(固定訊息;先於任何副作用)。
  *
  * @param {String} fpLock 輸入鎖檔路徑
  * @param {Object} [opt={}] 輸入設定物件,預設{}
@@ -125,9 +140,13 @@ let procNameOf = (pid) => {
  * }
  */
 let acquireRunLock = (fpLock, opt = {}) => {
-    let staleMs = Number.isFinite(opt.staleMs) && opt.staleMs > 0 ? opt.staleMs : 6 * 3600000
-    let isSame = typeof opt.isSameProgram === 'function' ? opt.isSameProgram : (name) => name === null || /^node/.test(name)
-    let me = Number.isInteger(opt.pid) ? opt.pid : process.pid
+    //輸入之檢測(§5.1、V4; 同步且有副作用者 ⇒ 先於任何副作用拋固定訊息): fpLock 須為非空字串(原: 非字串於 mkdirSync 前之 path.dirname 拋原生 TypeError)、opt 本身須為一般物件(null、undefined 視為未給)
+    //  opt.staleMs(只與時間差比較, 不是計時器)、opt.pid 無效者用預設(K3); opt.isSameProgram 非函數者用預設
+    strReq(fpLock, 'fpLock')
+    let o = optOf(opt)
+    let staleMs = Number.isFinite(o.staleMs) && o.staleMs > 0 ? o.staleMs : 6 * 3600000
+    let isSame = typeof o.isSameProgram === 'function' ? o.isSameProgram : (name) => name === null || /^node/.test(name)
+    let me = Number.isInteger(o.pid) ? o.pid : process.pid
     fs.mkdirSync(path.dirname(fpLock), { recursive: true })
     let read = () => {
         try {
@@ -192,6 +211,7 @@ let acquireRunLock = (fpLock, opt = {}) => {
 //  回 { running, stale, pid, startedAt, beatAt }; 無鎖檔、行程已不在、或 pid 已被別的程式重用 ⇒ running = false
 /**
  * 只看不動:鎖檔所記之執行是否仍在進行
+ * fpLock 非非空字串、opt 非一般物件(null、undefined 視為未給)⇒ 同步拋 invalid fpLock / opt: must be …(原: 無效之路徑回 running 為 false, 使守門靜默放行)。
  *
  * @param {String} fpLock 輸入鎖檔路徑
  * @param {Object} [opt={}] 輸入設定物件,預設{}
@@ -203,8 +223,11 @@ let acquireRunLock = (fpLock, opt = {}) => {
  * console.log(s.running)
  */
 let peekRunLock = (fpLock, opt = {}) => {
-    let staleMs = Number.isFinite(opt.staleMs) && opt.staleMs > 0 ? opt.staleMs : 6 * 3600000
-    let isSame = typeof opt.isSameProgram === 'function' ? opt.isSameProgram : (name) => name === null || /^node/.test(name)
+    //輸入之檢測(§5.1、V4): fpLock 須為非空字串、opt 須為一般物件(null、undefined 視為未給); 原: 非字串者於讀檔時拋錯而被吞 ⇒ 回 running = false(「輪次進行中不得執行」之守門於無效之路徑下靜默放行)
+    strReq(fpLock, 'fpLock')
+    let o = optOf(opt)
+    let staleMs = Number.isFinite(o.staleMs) && o.staleMs > 0 ? o.staleMs : 6 * 3600000
+    let isSame = typeof o.isSameProgram === 'function' ? o.isSameProgram : (name) => name === null || /^node/.test(name)
     let j = null
     try {
         j = JSON.parse(fs.readFileSync(fpLock, 'utf8'))
@@ -219,7 +242,7 @@ let peekRunLock = (fpLock, opt = {}) => {
 
 //appendEvent, 於事件檔追加一列(自動帶 at); 寫入失敗不拋(事件檔不得影響執行本身)
 /**
- * 於事件檔追加一列 JSON(自動帶 at 時間戳;寫入失敗不拋錯)
+ * 於事件檔追加一列 JSON(自動帶 at 時間戳;寫入失敗不拋錯;fpEvents 非非空字串或 obj 非一般物件者回 false、不寫任何檔)
  *
  * @param {String} fpEvents 輸入事件檔路徑,資料夾不存在時自動建立
  * @param {Object} obj 輸入事件物件(其欄位置於 at 之後,同名欄位會覆蓋 at)
@@ -229,6 +252,10 @@ let peekRunLock = (fpLock, opt = {}) => {
  * // => true
  */
 let appendEvent = (fpEvents, obj) => {
+    //輸入之檢測(§5.1: 回傳結果者回失敗之結果; 本函數之結果為 Boolean): fpEvents 非非空字串、obj 非一般物件 ⇒ 回 false、不寫任何檔(原: `appendEvent(path, 'abc')` 把字串展開成 { 0: 'a', 1: 'b', 2: 'c' } 寫入並回 true)
+    if (typeof fpEvents !== 'string' || fpEvents === '' || !isPlain(obj)) {
+        return false
+    }
     try {
         fs.mkdirSync(path.dirname(fpEvents), { recursive: true })
         fs.appendFileSync(fpEvents, `${JSON.stringify({ at: new Date().toISOString(), ...obj })}\n`, 'utf8')
@@ -241,7 +268,7 @@ let appendEvent = (fpEvents, obj) => {
 
 //readEvents, 讀事件檔(無檔或壞列略過)
 /**
- * 讀事件檔(無檔或壞列略過)
+ * 讀事件檔(無檔、壞列與非一般物件之列〔null、數字、字串、陣列〕略過;fpEvents 非非空字串者同步拋 invalid fpEvents: must be a non-empty string)
  *
  * @param {String} fpEvents 輸入事件檔路徑
  * @returns {Array} 回傳事件物件陣列
@@ -249,6 +276,8 @@ let appendEvent = (fpEvents, obj) => {
  * let events = readEvents('./state/events.jsonl')
  */
 let readEvents = (fpEvents) => {
+    //輸入之檢測(§5.1): fpEvents 須為非空字串(原: 非字串者於讀檔時拋錯而被吞 ⇒ 回 [] ⇒ trailingFailures 為 0 ⇒ 「連續失敗達上限不再自動起跑」之守門靜默放行)
+    strReq(fpEvents, 'fpEvents')
     let out = []
     try {
         for (let l of fs.readFileSync(fpEvents, 'utf8').split('\n')) {
@@ -256,7 +285,11 @@ let readEvents = (fpEvents) => {
                 continue
             }
             try {
-                out.push(JSON.parse(l))
+                let e = JSON.parse(l)
+                //非一般物件之列(`null`、數字、字串、陣列)視為壞列略過(原: 照收 ⇒ trailingFailures 讀 `e.event` 時 null 拋原生 TypeError)
+                if (isPlain(e)) {
+                    out.push(e)
+                }
             }
             catch (err) {}
         }
@@ -270,7 +303,7 @@ let readEvents = (fpEvents) => {
 /**
  * 計算事件檔末尾連續失敗之輪數
  *
- * 自末尾往前數 event 為 'round-done' 且 ok 為 false(或 event 為 'run-failed')者,遇成功之一輪即止。
+ * 自末尾往前數 event 為 'round-done' 且 ok 為 false(或 event 為 'run-failed')者,遇成功之一輪即止。events 非陣列者拋 invalid events: must be an array of event objects;非一般物件之元素略過。
  *
  * @param {Array} events 輸入事件物件陣列(如 readEvents 之回傳)
  * @returns {Number} 回傳連續失敗數
@@ -280,9 +313,16 @@ let readEvents = (fpEvents) => {
  * // => 2
  */
 let trailingFailures = (events) => {
+    //輸入之檢測(§5.1): events 須為陣列(原: 非陣列者 `events.length` 為 undefined ⇒ 迴圈不進入 ⇒ 回 0 ⇒ 「連續失敗達上限即不再自動起跑」之守門靜默放行; null 則原生 TypeError); 非一般物件之元素視為壞列略過
+    if (!Array.isArray(events)) {
+        throw new Error('invalid events: must be an array of event objects')
+    }
     let n = 0
     for (let i = events.length - 1; i >= 0; i--) {
         let e = events[i]
+        if (!isPlain(e)) {
+            continue
+        }
         if (e.event === 'round-done') {
             if (e.ok === false) {
                 n++

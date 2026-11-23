@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
+import { objReq, strReq, strOpt, numReq, fnOpt, badInput } from './inputs.mjs'
 
 
 //共用工具區(toolbox): 節點與做夢共用之工具集 = 一個資料夾 + 一份索引; **由做夢 agent 統籌擴建**(收集節點自報之可共用輔助、整併、驗證、寫入、維護索引)
@@ -26,7 +27,8 @@ import crypto from 'crypto'
 /**
  * 建立共用工具區(一個資料夾加一份索引;做夢前留快照、做夢後機械檢查並逐檔還原不合者)
  *
- * 未給 dir 會拋錯。規則(副檔名、單檔大小、總檔數、已發布之檔不得刪除、索引須列出每個檔)見檔頭說明。
+ * 規則(副檔名、單檔大小、總檔數、已發布之檔不得刪除、索引須列出每個檔)見檔頭說明。
+ * opt 非一般物件、dir 非非空字串、其餘各項給了而無效(maxFileBytes、maxFiles 非正整數或其數字字串;checkFile、checkIndex、codeOf 非函數;exts 非字串陣列;indexFile 含路徑分隔;indexSeed、baselineFile 非字串)皆同步拋 invalid opt.<鍵>: must be …(固定訊息、不帶輸入值);未給(undefined 或 null)取預設。
  *
  * @param {Object} opt 輸入設定物件
  * @param {String} opt.dir 輸入共用工具區資料夾路徑
@@ -46,10 +48,30 @@ import crypto from 'crypto'
  * // ...做夢 agent 擴建...
  * let res = tb.check(snap)
  */
-let createToolbox = ({ dir, indexFile = 'README.md', indexSeed = null, exts = ['.mjs', '.md', '.json', '.txt'], maxFileBytes = 200 * 1024, maxFiles = 200, checkFile = null, checkIndex = null, codeOf = null, baselineFile = null }) => {
-    if (!dir) {
-        throw new Error('createToolbox: 須給 dir')
+let createToolbox = (opt) => {
+    //輸入之檢測(跨套件規格 V4、K3、K5、§5.1; R-EV-54; 工廠 ⇒ 同步拋固定訊息、先於任何副作用): 共用工具區之各項皆是「哪些檔被還原」之規則(副檔名白名單、單檔與總檔數上限、內容檢查、索引檢查、已發布之檔不得改寫之比對、比對基準檔)
+    //  ⇒ 安全閘, 給了而無效即拒絕, 不改用預設(原: maxFileBytes: 'abc' ⇒ `buf.length > 'abc'` 恆假 ⇒ 大小限制失效、null ⇒ `> null`(0)⇒ 全檔被還原、maxFiles 同; checkFile / checkIndex / codeOf 給了而非函數 ⇒ 靜默不檢查; opt 為 null ⇒ 原生 TypeError);
+    //  未給(undefined 或 null)取預設; 數字字串轉為數值後使用(K4、K7)
+    let o = objReq(opt, 'opt')
+    let dir = strReq(o.dir, 'opt.dir')
+    let indexFile = strOpt(o.indexFile, 'README.md', 'opt.indexFile')
+    if (/[\\/]/.test(indexFile) || indexFile === '.' || indexFile === '..') {
+        throw badInput('opt.indexFile', 'a file name without path separators')
     }
+    let indexSeed = o.indexSeed === undefined || o.indexSeed === null ? null : o.indexSeed
+    if (indexSeed !== null && typeof indexSeed !== 'string') {
+        throw badInput('opt.indexSeed', 'a string')
+    }
+    let exts = o.exts === undefined || o.exts === null ? ['.mjs', '.md', '.json', '.txt'] : o.exts
+    if (!Array.isArray(exts) || !exts.every((x) => typeof x === 'string')) {
+        throw badInput('opt.exts', 'an array of strings')
+    }
+    let maxFileBytes = numReq(o.maxFileBytes, 200 * 1024, 'opt.maxFileBytes', 'posInt')
+    let maxFiles = numReq(o.maxFiles, 200, 'opt.maxFiles', 'posInt')
+    let checkFile = fnOpt(o.checkFile, 'opt.checkFile')
+    let checkIndex = fnOpt(o.checkIndex, 'opt.checkIndex')
+    let codeOf = fnOpt(o.codeOf, 'opt.codeOf')
+    let baselineFile = strOpt(o.baselineFile, null, 'opt.baselineFile')
     let hashOf = (buf) => crypto.createHash('sha1').update(buf).digest('hex').slice(0, 12)
     let REWRITE_WHY = '已發布之檔於檔頭註解以外之內容不得改寫(要改行為請另存新檔名,如 _v2;檔頭註解可改);索引內對該檔之說明請一併復原'
 

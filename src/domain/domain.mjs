@@ -3,7 +3,7 @@ import path from 'path'
 import iseint from 'wsemi/src/iseint.mjs'
 import { createRsi, nodeIdOf, specHash, makeNode, peekRound, makePaths, effectiveCatalogOf } from '../engineApi.mjs'
 import { writeFileAtomic, sha } from '../engineProtocol.mjs'
-import { getSettings, readJson, writeJson, FD_ROOT } from '../cfg.mjs'
+import { getSettings, readJson, writeJson, FD_ROOT, inputMsgOf } from '../cfg.mjs'
 import { scoreOf } from '../eval/score.mjs'
 import { normUnit } from '../eval/unit.mjs'
 import { checkEvalSettings, configMsgOf } from '../eval/barGrid.mjs'
@@ -17,6 +17,7 @@ import { pickHashOf, evaluatorFpOf, diagsOf, readFill, fillFileOf, postfitFileOf
 import { EVAL_VERSION } from './evalVersion.mjs'
 import { createArsi } from '../arsi/arsi.mjs'
 import { createToolbox } from '../arsi/toolbox.mjs'
+import { agentsCheck } from '../arsi/inputs.mjs'
 import { makeDispatch } from '../arsi/dispatchers.mjs'
 import { createResourceMonitor } from '../arsi/resources.mjs'
 import { resolveRunConfig } from '../arsi/runner.mjs'
@@ -500,10 +501,15 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //  memberHintOfNode(n): 樹上之現行之讀數(raw.member 所記之選集指紋 = 正本)命中者回「提示(成員依賴)」, 其餘 null
     let mcfg = memberCfgOfSt(st)
     let memberHintOfNode = (n) => memberHintOf(memberRowOfTree(n), mcfg)
-    //選配之主鍵(規則 R-REC-49): settings.rsi.rankBy === 'content' ⇒ 看板與搜尋地圖之「最高」與補位之底改以挑選內容(contentOf)為主鍵、排序鍵為次鍵; 其餘之值(含未給)= 排序鍵(行為與改前逐位相同)
+    //選配之主鍵(規則 R-REC-49): settings.rsi.rankBy === 'content' ⇒ 看板與搜尋地圖之「最高」與補位之底改以挑選內容(contentOf)為主鍵、排序鍵為次鍵; 未給或 'key' = 排序鍵(行為與改前逐位相同; 其餘之值拒絕, 見下)
     //  byContent(kv)(a, b): 有挑選內容之值者在前、其值高者在前; 同值或皆無其值者依 kv 由高至低; 仍同者回 0(由呼叫端續判)
     //  contentValOf(n): 主鍵與並列所用之值 = 「有內容」(hasContentNode; 搜尋地圖之量尺之同一定義)者之挑選內容, 不符「有內容」者視同無其值(規則 R-REC-49 ⑤)
-    let rankBy = st.rsi && st.rsi.rankBy === 'content' ? 'content' : 'key'
+    //  rankBy 決定「最高」與補位之底(結果之口徑; R-EV-54 ②): 給了而不是 'content' 或 'key' ⇒ 拋 invalid rsi.rankBy: must be one of content, key(組裝時; 不帶輸入值; 原: 其餘之值靜默視為排序鍵 —— `'Content'`、`'contents'` 使主鍵不是使用者所要者而不報錯); 未給(undefined 或 null)= 排序鍵
+    let rankByRaw = st.rsi ? st.rsi.rankBy : undefined
+    if (rankByRaw !== undefined && rankByRaw !== null && rankByRaw !== 'content' && rankByRaw !== 'key') {
+        throw new Error('invalid rsi.rankBy: must be one of content, key')
+    }
+    let rankBy = rankByRaw === 'content' ? 'content' : 'key'
     let contentValOf = (n) => {
         let c = contentOf(n); return c && hasContentNode(n) ? c.v : null
     }
@@ -694,7 +700,11 @@ let makeProject = (st = getSettings(), inject = {}) => {
         }
     })
     //maxPercent: 訂閱之用量守門之門檻, 與起跑前之額度檢查同一個設定(settings.rsi.preflight.quotaMaxPercent; 未設取 95; 規則 R-RUN-8); 各角色另可設 agents.<role>.quotaMaxPercent(優先)
-    let dispatch = typeof inject.dispatch === 'function' ? inject.dispatch : makeDispatch({ agents: st.agents, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, cwd: FD_ROOT, maxPercent: preflightOf(st.rsi).quotaMaxPercent })
+    //settings.agents 未給(undefined、null)⇒ 視為無任何角色(`{}`; 派工時回「settings.agents.<role> 未設定」之失敗結果, 唯讀之工具與模式照常; makeDispatch 之 opt.agents 為必給件, 見 R-EV-54); 給了而不合者已於 getSettings 拒絕
+    if (typeof inject.dispatch !== 'function' && st.agents !== undefined && st.agents !== null) {
+        agentsCheck(st.agents, 'settings.agents')
+    }
+    let dispatch = typeof inject.dispatch === 'function' ? inject.dispatch : makeDispatch({ agents: st.agents || {}, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, cwd: FD_ROOT, maxPercent: preflightOf(st.rsi).quotaMaxPercent })
     let rsi = null
 
     let domain = {
@@ -3297,7 +3307,8 @@ let makeProjectOrExit = (st, inject = {}) => {
         return makeProject(st, inject)
     }
     catch (err) {
-        let msg = configMsgOf(err)
+        //configMsgOf: 評估與期間之設定(評估器之檔); inputMsgOf: 禁區字樣之來源(guard.forbidden、source.libraryRoot)與 rsi.rankBy 與設定檔之節(R-EV-54)
+        let msg = configMsgOf(err) || inputMsgOf(err)
         if (msg !== null) {
             console.log(`ERROR ${msg}`)
             process.exit(2)
