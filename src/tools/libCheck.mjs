@@ -1,5 +1,5 @@
 import { guardEntry } from '../domain/agentEntries.mjs'
-import { getSettings, argStrOf, P, cliGuard } from '../cfg.mjs'
+import { settingsOrExit, argStrOf, cliGuard } from '../cfg.mjs'
 import { loadLedger } from '../eval/ledger.mjs'
 import { trainFromBarOf, checkEvalSettings, periodAt, configMsgOf } from '../eval/barGrid.mjs'
 import { libReportOf, libTextOf, LIB_DIR_HI, LIB_DIR_LO } from '../domain/libStats.mjs'
@@ -33,14 +33,8 @@ let dirHi = rateArg('dir-hi', LIB_DIR_HI)
 let dirLo = rateArg('dir-lo', LIB_DIR_LO)
 
 //設定讀不到(settings.json 不存在、不可讀、不是合法之 JSON、缺必要欄位)⇒ 離開碼 2, 訊息一句固定(只帶 settings.json 之路徑, 不帶原錯誤之內容: JSON 之解析錯誤會回顯檔案之內容; 依跨套件規格〈診斷輸出與遮罩〉D2)
-let st = null
-try {
-    st = getSettings()
-}
-catch (err) {
-    console.log(`ERROR 無法讀取專案設定(settings.json 不存在、不可讀或內容不合; ${P('settings.json')});請於專案根執行, 或設定 ARSI_ROOT`)
-    process.exit(2)
-}
+//  經 settingsOrExit(排程第 611 項 ①; 與各進入檔、工具同一入口): 設定之節或路徑欄不合者印 `ERROR invalid settings.<節或欄>: must be …`(原: 同為上列之固定訊息); 其餘讀不到者之字樣不變
+let st = settingsOrExit()
 let L = null
 try {
     L = loadLedger(st.eval.ledgerDir)

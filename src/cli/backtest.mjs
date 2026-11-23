@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings, argOf, cliMsgOf, inputMsgOf } from '../cfg.mjs'
+import { settingsOrExit, argOf, cliMsgOf, inputMsgOf } from '../cfg.mjs'
 import { evalRunNumsOf } from '../eval/cfgNum.mjs'
 import { loadLedger, clipLedger } from '../eval/ledger.mjs'
 import { makeEvaluator, ntStaticOf, mulberry32 } from '../eval/evalCore.mjs'
@@ -46,7 +46,7 @@ if (process.env.ARSI_HARNESS !== '1') {
         process.exit(2)
     }
 }
-let st = getSettings()
+let st = settingsOrExit()
 //settings.backtest 之數值鍵(minLadder、replicas、nullDraws、timeoutSec)給了而無效 ⇒ ERROR invalid backtest.<鍵>、離開碼 2(未寫任何檔; 排程第 547 項; 原: 不合者被靜默改用預設)
 let bt
 try {

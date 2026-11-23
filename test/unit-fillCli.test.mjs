@@ -105,6 +105,33 @@ describe('附算與補算之命令列:g_rsi.mjs --mode fill(規則 R-REC-34)', f
         return { st, P: makeProject(st, { dispatch: async () => ({ ok: false, error: 'stub' }), gate: null, catalogFile: path.join(root, 'seed_catalog2.json') }) }
     }
 
+    //補算之停止檔(排程第 545 項; R-RUN-12): 命令列之入口 —— 狀態根之 STOP 存在 ⇒ 本次不補算(離開碼 3, 同輪次之 stop-file 慣例); 補算進行中才建立者之行為見 unit-fillStop
+    it('--mode fill: 狀態根有停止檔 STOP ⇒ 不補算(離開碼 3、訊息固定、未取鎖、不建補算檔與狀態檔); --dry(只列計畫)不受影響; --mode round 對同一檔仍以「本次不啟動: 停止檔 … 存在」離開碼 3(同一個檔)', () => {
+        let { root } = mkProject('stopCli', { diags: ['dA'] })
+        let stop = path.join(root, 'rsi', 'STOP')
+        fs.writeFileSync(stop, '', 'utf8')
+        let r = rsiCli(root, ['--mode', 'fill'])
+        assert.equal(r.status, 3, r.out.slice(0, 600))
+        assert.equal(r.out.trim(), '未執行: 停止檔 rsi/STOP 存在;刪除後再補算')
+        assert(!fs.existsSync(path.join(root, 'rsi', 'logs', 'round.lock')) && !fs.existsSync(path.join(root, 'rsi', 'fill_state.json')) && !fs.existsSync(path.join(root, 'rsi', 'fill')), '未取鎖、未寫任何檔')
+        //--mode extfill(經 fill 執行而同承停止檔): 同一訊息與離開碼、未取鎖、未寫任何檔
+        let ex = rsiCli(root, ['--mode', 'extfill'])
+        assert.equal(ex.status, 3, ex.out.slice(0, 600))
+        assert.equal(ex.out.trim(), '未執行: 停止檔 rsi/STOP 存在;刪除後再補算')
+        assert(!fs.existsSync(path.join(root, 'rsi', 'logs', 'round.lock')) && !fs.existsSync(path.join(root, 'rsi', 'fill_state.json')) && !fs.existsSync(path.join(root, 'rsi', 'fill')), 'extfill: 未取鎖、未寫任何檔')
+        let d = rsiCli(root, ['--mode', 'fill', '--dry'])
+        assert.equal(d.status, 0, d.out.slice(0, 600))
+        assert(d.out.includes('附算之計畫(--dry;未評估、未寫檔)'), d.out.slice(0, 600))
+        let rd = rsiCli(root, ['--mode', 'round'])
+        assert.equal(rd.status, 3, rd.out.slice(0, 600))
+        assert(rd.out.includes('本次不啟動: 停止檔 rsi/STOP 存在'), rd.out.slice(0, 600))
+        //刪除後 --dry 與取鎖之路徑照常(不再被擋): 以 --dry 核對計畫仍可列、且訊息不再為「未執行: 停止檔」
+        fs.rmSync(stop)
+        let d2 = rsiCli(root, ['--mode', 'fill', '--dry'])
+        assert.equal(d2.status, 0, d2.out.slice(0, 600))
+        assert(!d2.out.includes('停止檔'), d2.out.slice(0, 600))
+    })
+
     //補算之虛無抽數(排程第 547 項①): 給了而不是正整數 ⇒ 拒絕(原: 靜默當成未給而依設定之抽數評估, 與使用者所要之縮減不同)
     //  規格之句: 命令列 --null 於 --mode fill / extfill 須為正整數(離開碼 2、固定訊息、於讀設定與任何寫入之前); API 之 fill / extFill / fillPlanOf 之 nullDraws 同(未給或 null = 設定之值、正整數與其數字字串採用、其餘拋 invalid opt.nullDraws)
     it('--mode fill / extfill 之 --null: 0、非數字、小數、負數 ⇒ 離開碼 2 與固定訊息、不建補算檔與狀態檔; 無值 ⇒ 通用之無值訊息; 正整數照常(選項列顯示所採之抽數)', () => {
@@ -211,7 +238,9 @@ describe('附算與補算之命令列:g_rsi.mjs --mode fill(規則 R-REC-34)', f
         for (let mode of ['fill', 'extfill', 'reverify']) {
             let rn = rsiCli(root, ['--mode', mode, '--only', '00000000', ...(mode === 'reverify' ? ['--why', 'x'] : [])])
             assert.equal(rn.status, 2, `${mode}: ${rn.out.slice(0, 800)}`)
-            assert(rn.out.includes('--only 未命中任何已執行之節點(00000000);未執行'), rn.out.slice(0, 800))
+            //排程第 611 項 ②: 訊息不帶輸入之前綴(K9; 原: `--only 未命中任何已執行之節點(00000000);未執行`)
+            assert(rn.out.includes('--only 未命中任何已執行之節點;未執行'), rn.out.slice(0, 800))
+            assert(!rn.out.includes('00000000'), `${mode}: 不回顯輸入之前綴`)
         }
         let rh = rsiCli(root, ['--mode', 'fill', '--dry', '--only', id.slice(0, 8)])
         assert.equal(rh.status, 0, rh.out.slice(0, 800))

@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings, cliGuard } from '../cfg.mjs'
+import { settingsOrExit, cliGuard } from '../cfg.mjs'
 
 //命令列之旗標只認 --nodes、--shape(TOOL_FLAGS.nodeAudit): 等號、未列、重複、多餘之值一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值)
 cliGuard('nodeAudit')
@@ -9,7 +9,7 @@ cliGuard('nodeAudit')
 //  node tools/nodeAudit.mjs            逐輪彙總
 //  node tools/nodeAudit.mjs --nodes    另列逐節點
 //  node tools/nodeAudit.mjs --shape    印一份節點文件之欄位結構(看有哪些欄可盤點)
-let st = getSettings()
+let st = settingsOrExit()
 let rel = (p) => path.relative(st.FD_ROOT, p).replace(/\\/g, '/')
 let nd = st.records.nodeDir
 let docs = fs.readdirSync(nd).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(fs.readFileSync(path.join(nd, f), 'utf8')))

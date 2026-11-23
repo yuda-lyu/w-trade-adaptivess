@@ -79,7 +79,9 @@ describe('安全閘與會使操作與意圖相反者之輸入之檢測(R-EV-54 �
             let a = mkRoot('okho1', (s) => ({ ...s, periods: { ...s.periods, holdoutFrom: s.periods.backtest.end } }))
             let r = run('src/cli/build.mjs', [], a)
             assert.strictEqual(r.code, 2)
-            assert(/^ERROR 帳本終點 .* 已進入保留期\(.* 起\);不建$/.test(r.out), r.out)
+            //排程第 611 項 ②: 訊息不帶時間(K9; 原: `ERROR 帳本終點 <時間> 已進入保留期(<時間> 起);不建`)
+            assert.equal(r.out, 'ERROR 帳本終點已進入保留期;不建', r.out)
+            assert(!/\d{4}-\d{2}-\d{2}/.test(r.out), '不帶設定檔之時間')
             for (let v of [undefined, null]) {
                 let b = mkRoot(`okho2${v === null ? 'n' : 'u'}`, (s) => {
                     let p = { ...s.periods, holdoutFrom: v }

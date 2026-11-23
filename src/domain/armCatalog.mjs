@@ -126,7 +126,8 @@ let decideArgsOf = (p, opt = {}) => {
     if (p.kind === 'new') {
         let armId = typeof o.armId === 'string' ? o.armId : null
         if (armId && (!ARM_ID.test(armId) || layers[armId[0]] === undefined)) {
-            return { error: `--arm-id 須為 <既有之層代號><流水號>_<英數名>(收到 ${armId};現有層: ${Object.keys(layers).join(' ')})` }
+            //訊息不帶輸入之臂代號(K9; 排程第 611 項 ②; 原: 「收到 <值>」); 現有層為目錄之內容(程式常數之外之資料, 非輸入值)
+            return { error: `--arm-id 須為 <既有之層代號><流水號>_<英數名>(現有層: ${Object.keys(layers).join(' ')})` }
         }
         if (!armId) {
             let layer = typeof o.layer === 'string' ? o.layer : (p.layer && /^[A-Z]/.test(p.layer) ? p.layer[0] : null)

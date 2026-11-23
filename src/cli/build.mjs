@@ -1,5 +1,5 @@
 import path from 'path'
-import { getSettings, argOf, P, cliMsgOf, isLocalTimeStr } from '../cfg.mjs'
+import { settingsOrExit, argOf, P, cliMsgOf, isLocalTimeStr } from '../cfg.mjs'
 import buildLedger from '../eval/ledgerBuild.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
@@ -45,7 +45,7 @@ if (train && limitArg !== null) {
     console.log('invalid --limit: must not be used with --train')
     process.exit(2)
 }
-let st = getSettings()
+let st = settingsOrExit()
 let outDir = train ? path.join(path.dirname(path.resolve(st.eval.ledgerDir)), 'train') : (limit > 0 ? `${st.eval.ledgerDir}_limit${limit}` : st.eval.ledgerDir)
 let endTime = train ? st.periods.train.end : st.periods.backtest.end
 //保留期之門(R-EV-54 ①; 安全閘): 帳本終點與保留期起點給了而不是時間字串(非字串或不可解析)⇒ 不建(離開碼 2; 於任何寫入之前; 訊息固定、不帶輸入值)
@@ -60,7 +60,8 @@ let endTime = train ? st.periods.train.end : st.periods.backtest.end
     }
 }
 if (st.periods.holdoutFrom !== undefined && st.periods.holdoutFrom !== null && Date.parse(`${endTime}Z`) >= Date.parse(`${st.periods.holdoutFrom}Z`)) {
-    console.log(`ERROR 帳本終點 ${endTime} 已進入保留期(${st.periods.holdoutFrom} 起);不建`)
+    //訊息不帶時間(K9; 排程第 611 項 ②; 原: `ERROR 帳本終點 <時間> 已進入保留期(<時間> 起);不建`)
+    console.log('ERROR 帳本終點已進入保留期;不建')
     process.exit(2)
 }
 console.log(`建帳本: ${train ? '訓練期' : '評估(訓練期 + 回測期)'} 終點 ${endTime} → ${path.resolve(outDir)}`)

@@ -17,10 +17,11 @@ let wdRoot = path.join(FD_ROOT, 'rsi', 'work')
 let fdTmp = path.join(FD_ROOT, 'tmp', 'replay')
 fs.mkdirSync(fdTmp, { recursive: true })
 let bad = 0
-for (let pre of process.argv.slice(2)) {
+for (let [ip, pre] of process.argv.slice(2).entries()) {
     let id = fs.readdirSync(wdRoot).find((d) => d.startsWith(pre) && !d.includes('_deleted'))
     if (!id) {
-        console.log(`${pre}: 找不到此節點之工作夾`)
+        //訊息不帶輸入之前綴, 以其於命令列之序號(自 1 起)定位(K9; 排程第 611 項 ②; 原: `<前綴>: 找不到此節點之工作夾`)
+        console.log(`第 ${ip + 1} 個前綴: 找不到此節點之工作夾`)
         bad++
         continue
     }

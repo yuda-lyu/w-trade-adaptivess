@@ -144,7 +144,7 @@ describe('進入檔之拒跑:角色之環境變數與判定表', function () {
             let calls = s.match(/guardEntry\('([A-Za-z]+)'\)/g) || []
             assert.deepEqual(calls, [`guardEntry('${k}')`], k)
             let at = s.indexOf(`guardEntry('${k}')`)
-            for (let late of ['getSettings()', 'makeProjectOrExit(', 'initProject({', 'writeFileSync(']) {
+            for (let late of ['settingsOrExit(', 'makeProjectOrExit(', 'initProject({', 'writeFileSync(']) {
                 let j = s.indexOf(late)
                 //initProject.mjs: 函數本身之定義在前, 直接執行之區塊內先呼叫 guardEntry 再呼叫 initProject
                 let from = k === 'initProject' ? s.indexOf('if (process.argv[1]') : 0

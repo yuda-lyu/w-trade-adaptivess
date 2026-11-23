@@ -261,7 +261,7 @@ let M = [
     ['M11', 'src/domain/domain.mjs', [['        if (spRows.length) {', '        if (true) {']], ['unit-searchMapRecent']],
     ['M12', 'src/domain/domain.mjs', [["${actSplitOf(n) ? ' 活躍度定義不一致' : ''}", '']], ['unit-searchMapRecent']],
     ['M13', 'src/domain/domain.mjs', [['            let sp = actSplitOf(n)', '            let sp = null']], ['unit-searchMapRecent']],
-    ['M14', 'src/domain/domain.mjs', [['let contentPMax = () => (st.score && st.score.ladder1 && st.score.ladder1.nullP) || 0.05', 'let contentPMax = () => 0.05']], ['unit-searchMapRecent']],
+    ['M14', 'src/domain/domain.mjs', [["let contentPMax = () => evalScoreOf(st.score, 'score').ladder1.nullP || 0.05", 'let contentPMax = () => 0.05']], ['unit-searchMapRecent']],
     ['M15', 'src/domain/domain.mjs', [["c.excess > 0 && typeof c.p === 'number' && c.p <= pMax", "c.excess >= 0 && typeof c.p === 'number' && c.p <= pMax"]], ['unit-searchMapRecent']],
     ['M16', 'src/domain/domain.mjs', [["c.excess > 0 && typeof c.p === 'number' && c.p <= pMax", "c.excess > 0 && typeof c.p === 'number' && c.p < pMax"]], ['unit-searchMapRecent']],
     ['M17', 'src/domain/domain.mjs', [['c.share >= 0.8)', 'c.share > 0.8)']], ['unit-searchMapRecent']],
@@ -866,11 +866,12 @@ let M = [
     ['SB49', 'src/cli/eval.mjs', [["    if (subset.n === 0) {", "    if (subset.n === 1) {"]], ['unit-subsetLedger']], //空子庫不警示而留 1 隻者警示
     ['SB50', 'src/cli/eval.mjs', [["    if (subset.n === 0) {", "    if (subset.n >= 0) {"]], ['unit-subsetLedger']], //留 ≥ 1 隻者亦警示
     ['SB51', 'src/cli/eval.mjs', [["    if (subset.n === 0) {", "    if (false) {"]], ['unit-subsetLedger']], //空子庫不警示
-    ['SB52', 'src/tools/libCheck.mjs', [["或設定 ARSI_ROOT`)\n    process.exit(2)", "或設定 ARSI_ROOT`)\n    process.exit(1)"]], ['unit-libCheck']], //設定讀不到之離開碼不為 2
-    ['SB53', 'src/tools/libCheck.mjs', [["catch (err) {\n    console.log(`ERROR 無法讀取專案設定", "catch (err) {\n    throw err\n    console.log(`ERROR 無法讀取專案設定"]], ['unit-libCheck']], //設定讀不到不捕捉(未捕捉之例外,離開碼 1)
-    ['SB54', 'src/tools/libCheck.mjs', [["catch (err) {\n    console.log(`ERROR 無法讀取專案設定", "catch (err) {\n    if (!(err && err.code === 'ENOENT')) {\n        throw err\n    }\n    console.log(`ERROR 無法讀取專案設定"]], ['unit-libCheck']], //只捕捉檔案不存在(資料夾、不合法之 JSON、缺欄位仍為未捕捉之例外)
-    ['SB55', 'src/tools/libCheck.mjs', [["${P('settings.json')});請於", "${String((err && err.message) || err).split('\\n')[0]});請於"]], ['unit-libCheck']], //訊息改帶原錯誤之內容(JSON 之解析錯誤會回顯檔案之內容)
-    ['SB56', 'src/tools/libCheck.mjs', [["${P('settings.json')});請於", "settings.json);請於"]], ['unit-libCheck']], //訊息不帶 settings.json 之路徑
+    //  設定讀不到之處理已移至 src/cfg.mjs 之 settingsOrExit(排程第 611 項 ①; 各進入檔與工具同一入口); libCheck 之案(unit-libCheck)與 unit-settingsOrExit 皆須抓到
+    ['SB52', 'src/cfg.mjs', [["或設定 ARSI_ROOT`)\n        process.exit(2)", "或設定 ARSI_ROOT`)\n        process.exit(1)"]], ['unit-libCheck', 'unit-settingsOrExit']], //設定讀不到之離開碼不為 2
+    ['SB53', 'src/cfg.mjs', [["    catch (err) {\n        let msg = inputMsgOf(err)\n        console.log(msg !== null ?", "    catch (err) {\n        throw err\n        let msg = inputMsgOf(err)\n        console.log(msg !== null ?"]], ['unit-libCheck', 'unit-settingsOrExit']], //設定讀不到不捕捉(未捕捉之例外,離開碼 1)
+    ['SB54', 'src/cfg.mjs', [["    catch (err) {\n        let msg = inputMsgOf(err)\n        console.log(msg !== null ?", "    catch (err) {\n        if (!(err && err.code === 'ENOENT')) {\n            throw err\n        }\n        let msg = inputMsgOf(err)\n        console.log(msg !== null ?"]], ['unit-libCheck', 'unit-settingsOrExit']], //只捕捉檔案不存在(資料夾、不合法之 JSON、缺欄位仍為未捕捉之例外)
+    ['SB55', 'src/cfg.mjs', [["${P('settings.json')});請於", "${String((err && err.message) || err).split('\\n')[0]});請於"]], ['unit-libCheck', 'unit-settingsOrExit']], //訊息改帶原錯誤之內容(JSON 之解析錯誤會回顯檔案之內容)
+    ['SB56', 'src/cfg.mjs', [["${P('settings.json')});請於", "settings.json);請於"]], ['unit-libCheck', 'unit-settingsOrExit']], //訊息不帶 settings.json 之路徑
     ['EX01', 'src/domain/verifyExposure.mjs', [["let hit = fs || (shift && (sf || fl.length > 0))", "let hit = fs || shift || sf || fl.length > 0"]], ['unit-exposure']], //三條任一即曝險(不以席次之側別隨期改變為前提)
     ['EX02', 'src/domain/verifyExposure.mjs', [["let hit = fs || (shift && (sf || fl.length > 0))", "let hit = fs || (shift && sf && fl.length > 0)"]], ['unit-exposure']], //須三者並存
     ['EX03', 'src/domain/verifyExposure.mjs', [["Math.round(Math.abs(a - b) * 1e9) / 1e9 >= cfg.minShift", "Math.abs(a - b) >= cfg.minShift"]], ['unit-exposure']], //差不取整(恰為門檻者因浮點之尾差不成立)
@@ -1055,7 +1056,7 @@ let M = [
     ['VN08', 'src/eval/cfgNum.mjs', [["    replicaSeeds: [0, 'nonNegInt'],", "    replicaSeeds: [0, 'posInt'],"]], ['unit-evalRunNums']], //重放次數不收 0
     ['VN09', 'src/eval/cfgNum.mjs', [["    if (!Array.isArray(spec)) {", "    if (false) {"]], ['unit-evalRunNums']], //單一鍵之取值不核對鍵名(原型之名稱)
     ['VN10', 'src/eval/cfgNum.mjs', [["let EVAL_LIMITS = { monthlyOrders: 400, peakHold: 50 }", "let EVAL_LIMITS = { monthlyOrders: 400, peakHold: 60 }"]], ['unit-evalRunNums']], //硬上限之預設
-    ['VN11', 'src/eval/cfgNum.mjs', [["typeof l !== 'object' || Array.isArray(l)", "typeof l !== 'object'"]], ['unit-evalRunNums']], //eval.limits 收陣列
+    ['VN11', 'src/eval/cfgNum.mjs', [["typeof l !== 'object' || Array.isArray(l)) {\n        throw new Error(`invalid ${who}.limits", "typeof l !== 'object') {\n        throw new Error(`invalid ${who}.limits"]], ['unit-evalRunNums']], //eval.limits 收陣列
     ['VN12', 'src/eval/cfgNum.mjs', [["`${who}.limits.${k}`, 'nonNegNum')", "`${who}.limits.${k}`, 'posNum')"]], ['unit-evalRunNums']], //硬上限不收 0
     ['VN13', 'src/eval/cfgNum.mjs', [["(v.length === 0 && allowEmpty !== true)", "(v.length === 0 && false)"]], ['unit-evalRunNums']], //相位之清單收空陣列
     ['VN14', 'src/eval/cfgNum.mjs', [["        if (x === undefined || x === null) {\n            throw new Error(`invalid ${where}[${i}]", "        if (x === undefined) {\n            throw new Error(`invalid ${where}[${i}]"]], ['unit-evalRunNums']], //清單之元素為 null 者當作 0
@@ -1087,8 +1088,9 @@ let M = [
     ['VN41', 'src/eval/cfgNum.mjs', [["(x) => x > 0 && x * 1000 <= 2147483647]", "(x) => x >= 0 && x * 1000 <= 2147483647]"]], ['unit-evalRunNums']], //逾時收 0(0 毫秒 ⇒ 立即逾時)
     ['VN42', 'src/cli/backtest.mjs', [["typeof seedArg0 === 'number' && Number.isSafeInteger(seedArg0)", "typeof seedArg0 === 'number' && Number.isFinite(seedArg0)"]], ['unit-cliModeFlags']], //g_backtest.mjs 之 --seed 收小數(排程第 595 項之接續: 不合者改為拒收, 檢查移至檔首)
     ['VN43', 'src/cli/backtest.mjs', [["console.log('invalid --seed: must be an integer')\n        process.exit(2)", "console.log('invalid --seed: must be an integer')\n        process.exit(0)"]], ['unit-cliModeFlags']], //g_backtest.mjs 之 --seed 不合者印訊息而離開碼 0(原: 說明後忽略)
-    ['VN44', 'src/cli/eval.mjs', [["    else if (process.env.ARSI_HARNESS === '1') {\n        //迴圈之重放: 給了而不是整數", "    else if (false) {\n        //迴圈之重放: 給了而不是整數"]], ['unit-cliEqFlags']], //迴圈之重放而 --seed 不合者仍稱「只供迴圈之重放使用」
-    ['VN45', 'src/cli/eval.mjs', [["    else if (process.env.ARSI_HARNESS === '1') {\n        console.log('--tie-salt 須為整數", "    else if (false) {\n        console.log('--tie-salt 須為整數"]], ['unit-cliEqFlags']], //迴圈之重放而 --tie-salt 不合者仍稱「只供迴圈之重放使用」
+    //  VN44、VN45(排程第 606 項改寫: 不合之 --seed / --tie-salt 改為拒收, 原「已忽略」之分支已移除): 檢查不作用 ⇒ 不合者不拒收
+    ['VN44', 'src/cli/eval.mjs', [["if (seedArg !== null && !(typeof seedArg === 'number' && Number.isSafeInteger(seedArg))) {", 'if (false) {']], ['unit-cliEqFlags']], //--seed 不合者不拒收
+    ['VN45', 'src/cli/eval.mjs', [["if (tieArg !== null && !(typeof tieArg === 'number' && Number.isSafeInteger(tieArg))) {", 'if (false) {']], ['unit-cliEqFlags']], //--tie-salt 不合者不拒收
     ['VN38', 'src/domain/verify.mjs', [["timeoutMs: evRun.timeoutSec * 1000, env: { ...process.env, ARSI_HARNESS: '1' } })\n        let out = readJson(fpOut)", "timeoutMs: evRun.timeoutSec * 100000, env: { ...process.env, ARSI_HARNESS: '1' } })\n        let out = readJson(fpOut)"]], ['unit-evalRunNums']], //重跑之逾時之單位錯
     //── 擴充診斷 api.replaceNull 之 actDays、draws、half(排程第 574 項; 與 fillRandom 同一口徑) ──
     ['AR01', 'src/eval/evalCore.mjs', [["actUse = iseint(oAct) ? NumberCtor(oAct) : NaN", "actUse = Number.isFinite(oAct) ? oAct : 0"]], ['unit-evalRunNums']], //actDays 回到 isFinite 之篩(數字字串被當 0、不合者不拋)
@@ -1146,7 +1148,7 @@ let M = [
     ['BC07', 'src/domain/backtestCfg.mjs', [["cfgNumOf(b.timeoutSec, 1200, 'backtest.timeoutSec', 'timerSec')", "cfgNumOf(b.timeoutSec, 1200, 'backtest.timeoutSec', 'posNum')"]], ['unit-backtestCfg']], //timeoutSec 無上限
     ['BC08', 'src/domain/backtestCfg.mjs', [["cfgNumOf(b.minLadder, 0, 'backtest.minLadder', 'nonNegInt')", "cfgNumOf(b.minLadder, 0, 'backtest.minLadder', 'nonNegNum')"]], ['unit-backtestCfg']], //minLadder 收小數
     ['BC10', 'src/cli/backtest.mjs', [["    console.log(`ERROR ${msg}`)\n    process.exit(2)\n}\nlet fpPick = argOf('pick', '')", "    console.log(`ERROR ${msg}`)\n    process.exit(1)\n}\nlet fpPick = argOf('pick', '')"]], ['unit-backtestCfg']], //設定無效之離開碼
-    ['BC11', 'src/eval/barGrid.mjs', [["|periods\\.|backtest\\.|ARSI_EVAL_FROM|", "|periods\\.|ARSI_EVAL_FROM|"]], ['unit-backtestCfg', 'unit-fillCli']], //configMsgOf 不認 invalid backtest.…
+    ['BC11', 'src/eval/barGrid.mjs', [["|periods\\.|backtest\\.|score[.:]|ARSI_EVAL_FROM|", "|periods\\.|score[.:]|ARSI_EVAL_FROM|"]], ['unit-backtestCfg', 'unit-fillCli']], //configMsgOf 不認 invalid backtest.…
     ['BC12', 'src/cli/toolbox.mjs', [["    console.log(`ERROR ${msg}`)\n    process.exit(2)\n}\nlet rules", "    console.log(`ERROR ${msg}`)\n    process.exit(1)\n}\nlet rules"]], ['unit-backtestCfg']], //g_toolbox.mjs 設定無效之離開碼
     //── 相位數之寫法(排程第 547 項②; unit-phaseText、unit-fillCli、unit-pickStore): phaseCountOf / phaseText 之各輸出處 ──
     ['PT01', 'src/domain/domain.mjs', [["let phT = (tail, ns) => phaseText(ns ? nPhOf(ns) : phaseCountOf(st.eval), tail)", "let phT = (tail, ns) => phaseText(7, tail)"]], ['unit-fillCli']], //看板與搜尋地圖寫死七相位
@@ -1200,10 +1202,10 @@ let M = [
     ['FS30', 'src/cfg.mjs', [["        validate: ['force'],", "        validate: ['force', 'dream-only'],"]], ['unit-cliStrictFlags']], //--dream-only 於他模式(validate)不拒(原由進入檔自己判; 排程第 595 項之接續改由模式表一併判定)
     ['FS31', 'src/cli/rsi.mjs', [["(md === 'annotate' || md === 'dirtype' || (md === 'round' && hasDream))", "(md === 'annotate' || md === 'dirtype' || md === 'round')"]], ['unit-cliStrictFlags']], //round 不帶 --dream-only 而給 --file 不拒
     ['FS32', 'src/cli/rsi.mjs', [["    if (process.argv.includes('--file') && !(", "    if (false && !("]], ['unit-cliStrictFlags']], //--file 之模式相容不檢
-    ['FS33', 'src/cli/rsi.mjs', [["let dreamOnly = null\n", "let dreamOnly = (getSettings(), null)\n"]], ['unit-cliStrictFlags']], //只做夢輪次之 --file 之檢查晚於讀設定
-    ['FS34', 'src/cli/eval.mjs', [["let memberArg = argOf('member', null)", "let memberArg = (getSettings(), argOf('member', null))"]], ['unit-cliStrictFlags']], //--member 之檢查晚於讀設定
-    ['FS35', 'src/cli/eval.mjs', [["let nullArg = argOf('null', null)", "let nullArg = (getSettings(), argOf('null', null))"]], ['unit-cliStrictFlags']], //--null 之檢查晚於讀設定
-    ['FS36', 'src/cli/eval.mjs', [["let subsetArg = argStrOf('subset', null)", "let subsetArg = (getSettings(), argStrOf('subset', null))"]], ['unit-cliStrictFlags']], //--subset 之檢查晚於讀設定
+    ['FS33', 'src/cli/rsi.mjs', [["let dreamOnly = null\n", "let dreamOnly = (settingsOrExit(), null)\n"]], ['unit-cliStrictFlags']], //只做夢輪次之 --file 之檢查晚於讀設定
+    ['FS34', 'src/cli/eval.mjs', [["let memberArg = argOf('member', null)", "let memberArg = (settingsOrExit(), argOf('member', null))"]], ['unit-cliStrictFlags']], //--member 之檢查晚於讀設定
+    ['FS35', 'src/cli/eval.mjs', [["let nullArg = argOf('null', null)", "let nullArg = (settingsOrExit(), argOf('null', null))"]], ['unit-cliStrictFlags']], //--null 之檢查晚於讀設定
+    ['FS36', 'src/cli/eval.mjs', [["let subsetArg = argStrOf('subset', null)", "let subsetArg = (settingsOrExit(), argStrOf('subset', null))"]], ['unit-cliStrictFlags']], //--subset 之檢查晚於讀設定
     ['BC13', 'src/tools/scanCheck.mjs', [["    console.log(`ERROR ${msg}`)\n    process.exit(2)\n}\nlet root = st.FD_ROOT", "    console.log(`ERROR ${msg}`)\n    process.exit(1)\n}\nlet root = st.FD_ROOT"]], ['unit-backtestCfg']], //scanCheck.mjs 設定無效之離開碼(backtestCfg 之 try 之後; 另有禁區字樣之 try 在前)
     //── 第 510 項①④⑤: 挑選函數回傳值之收窄與 V19 訊息、api 之訊息、保留期 asOf ──
     ['NP01', 'src/eval/evalCore.mjs', [["        if (arr === null) {\n            throw new ErrorCtor(viaObj ?", "        if (false) {\n            throw new ErrorCtor(viaObj ?"]], ['unit-extApiInput']], //ids 之種類不合不拒
@@ -1580,6 +1582,72 @@ let M = [
     ['IN168', 'src/domain/domain.mjs', [["        agentsCheck(st.agents, 'settings.agents')\n    }\n    let dispatch", "        void 0\n    }\n    let dispatch"]], ['unit-inputGates']],
     ['IN169', 'src/cli/rsi.mjs', [["let quotaArgs = () => ({ agents: st.agents || {}, skillsRoot:", "let quotaArgs = () => ({ agents: st.agents, skillsRoot:"]], ['unit-cliValues']],
     ['IN170', 'src/tools/quota.mjs', [["checkQuota({ agents: st.agents || {}, skillsRoot:", "checkQuota({ agents: st.agents, skillsRoot:"]], ['unit-cliValues']],
+    //── 排程第 606、611、545、564 項(tadm5; 1.0.48): settingsOrExit(SO)、範圍外輸入值回顯之改寫(EC)、settings.resources(RC)、settings.score(SG)、--seed / --tie-salt(SZ)、補算之停止檔(FQ)、一致性核對之進場數之來源(NT) ──
+    ['SO01', 'src/cfg.mjs', [["console.log(msg !== null ? `ERROR ${msg}` :", 'console.log(false ? `ERROR ${msg}` :']], ['unit-settingsOrExit']], //設定之節 / 路徑欄不合者亦印「無法讀取專案設定」(不指出何者不合)
+    ['SO02', 'src/cfg.mjs', [["console.log(msg !== null ? `ERROR ${msg}` :", 'console.log(msg !== null ? msg :']], ['unit-settingsOrExit']], //不合之訊息無 ERROR 起首
+    ['SO03', 'src/cfg.mjs', [['|settings[.:]|backtest:)/.test(msg)', '|backtest:)/.test(msg)']], ['unit-settingsOrExit']], //inputMsgOf 不認 invalid settings.…
+    ['EC01', 'src/domain/armCatalog.mjs', [['<流水號>_<英數名>(現有層:', '<流水號>_<英數名>(收到 ${armId};現有層:']], ['unit-inputEcho']], //--arm-id 之訊息帶輸入之臂代號
+    ['EC02', 'src/tools/armInactive.mjs', [['console.error(`節點前綴符合 ${hits.length} 個(須恰為 1 個)`)', 'console.error(`節點 ${key}: 符合 ${hits.length} 個(須恰為 1 個)`)']], ['unit-inputEcho']], //armInactive 之訊息帶輸入之前綴
+    ['EC03', 'src/tools/exposure.mjs', [['console.error(`節點前綴符合 ${hits.length} 個(須恰為 1 個)`)', 'console.error(`節點 ${key}: 符合 ${hits.length} 個(須恰為 1 個)`)']], ['unit-inputEcho']], //exposure 之訊息帶輸入之前綴
+    ['EC04', 'src/tools/replayCheck.mjs', [['console.log(`第 ${ip + 1} 個前綴: 找不到此節點之工作夾`)', 'console.log(`${pre}: 找不到此節點之工作夾`)']], ['unit-inputEcho']], //replayCheck 之訊息帶輸入之前綴
+    ['EC05', 'src/tools/replayCheck.mjs', [['console.log(`第 ${ip + 1} 個前綴:', 'console.log(`第 ${ip} 個前綴:']], ['unit-inputEcho']], //序號自 0 起
+    ['EC06', 'src/cli/build.mjs', [["console.log('ERROR 帳本終點已進入保留期;不建')", 'console.log(`ERROR 帳本終點 ${endTime} 已進入保留期;不建`)']], ['unit-inputGates']], //g_build 之訊息帶時間
+    ['EC07', 'src/cli/rsi.mjs', [["console.log('--only 未命中任何已執行之節點;未執行')", "console.log(`--only 未命中任何已執行之節點(${list.join(', ')});未執行`)"]], ['unit-fillCli']], //--only 之訊息帶輸入之前綴
+    ['RC01', 'src/arsi/rsiNums.mjs', [['waitSec: [\'a non-negative number of seconds that is at most 2147483\', (x) => x >= 0 &&', 'waitSec: [\'a non-negative number of seconds that is at most 2147483\', (x) => x > 0 &&']], ['unit-resourceCfg']], //evalMaxWaitSec 之 0 無效
+    ['RC02', 'src/arsi/rsiNums.mjs', [['(x) => x >= 0 && x * 60000 <= 2147483647]', '(x) => x > 0 && x * 60000 <= 2147483647]']], ['unit-resourceCfg']], //maxWaitMin 之 0 無效
+    ['RC03', 'src/arsi/rsiNums.mjs', [['waitSec: [\'a non-negative number of seconds that is at most 2147483\', (x) => x >= 0 && x * 1000 <= 2147483647]', 'waitSec: [\'a non-negative number of seconds that is at most 2147483\', (x) => x >= 0 && x * 1000 < 2147483647]']], ['unit-resourceCfg']], //秒之上限 < 取代 ≤(2147483.647 無效)
+    ['RC04', 'src/arsi/rsiNums.mjs', [['let EVAL_GATE_CPU_MARGIN = 5', 'let EVAL_GATE_CPU_MARGIN = 15']], ['unit-resourceCfg']], //評估層之 cpuStart 預設 = cpuMax − 15
+    ['RC05', 'src/arsi/rsiNums.mjs', [['let EVAL_GATE_WAIT_SEC = 90', 'let EVAL_GATE_WAIT_SEC = 60']], ['unit-resourceCfg']], //評估層之最長等待預設 60
+    ['RC06', 'src/arsi/rsiNums.mjs', [['out.maxWaitMin === null ? null : out.maxWaitMin * 60', 'out.maxWaitMin === null ? null : out.maxWaitMin * 6']], ['unit-resourceCfg']], //maxWaitMin 換成秒之因子
+    ['RC07', 'src/arsi/rsiNums.mjs', [['maxWaitSec: out.evalMaxWaitSec !== null ? out.evalMaxWaitSec : EVAL_GATE_WAIT_SEC', 'maxWaitSec: EVAL_GATE_WAIT_SEC']], ['unit-resourceCfg']], //evalMaxWaitSec 不採
+    ['RC08', 'src/arsi/rsiNums.mjs', [['cpuStart: out.evalCpuStart !== null ? out.evalCpuStart : (', 'cpuStart: false ? out.evalCpuStart : (']], ['unit-resourceCfg']], //evalCpuStart 不採
+    ['RC09', 'src/arsi/rsiNums.mjs', [['Math.max(1, out.cpuMax - EVAL_GATE_CPU_MARGIN)', 'Math.max(0, out.cpuMax - EVAL_GATE_CPU_MARGIN)']], ['unit-resourceCfg']], //cpuMax − 5 之下限 0
+    ['RC10', 'src/domain/domain.mjs', [['createResourceMonitor({ ...resourceCfgOf(st.resources).loopGate, log })', 'createResourceMonitor({ ...resourceCfgOf(st.resources).evalGate, log })']], ['unit-resourceCfg']], //迴圈取評估層之閘
+    ['RC11', 'src/tools/initProject.mjs', [['wait: resourceCfgOf(rs).evalGate.maxWaitSec,', 'wait: 90,']], ['unit-resourceCfg']], //合約之等待不採設定
+    ['RC12', 'src/arsi/resources.mjs', [["let cpuMax = rsiNumOf(opt.cpuMax, 'num')", "let cpuMax = typeof opt.cpuMax === 'number' && Number.isFinite(opt.cpuMax) ? opt.cpuMax : null"]], ['unit-resourceCfg']], //資源閘之 opt 不收數字字串
+    ['RC13', 'src/arsi/resources.mjs', [["let maxWaitSec0 = rsiNumOf(opt.maxWaitSec, 'waitSec')", "let maxWaitSec0 = rsiNumOf(opt.maxWaitSec, 'timerSec')"]], ['unit-resourceCfg']], //maxWaitSec 之 0 無效(不等待之寫法失效)
+    ['RC14', 'src/cli/eval.mjs', [['let gateCfg = resourceCfgOf(st.resources).evalGate', 'let gateCfg = resourceCfgOf(st.resources).loopGate']], ['unit-resourceCfg']], //評估層取迴圈之閘(無 evalMaxWaitSec ⇒ 等 1800 秒; 實跑逾時失敗)
+    ['SG01', 'src/eval/cfgNum.mjs', [["ladder1: { S: [15, 'num'], nullP: [0.05, 'prob'] }", "ladder1: { S: [12, 'num'], nullP: [0.05, 'prob'] }"]], ['unit-scoreCfg']], //S 之預設
+    ['SG02', 'src/eval/cfgNum.mjs', [["nullP: [0.05, 'prob']", "nullP: [0.05, 'num']"]], ['unit-scoreCfg']], //nullP 不限 0 ~ 1
+    ['SG03', 'src/eval/cfgNum.mjs', [["monthlyOrders: [300, 'nonNegNum']", "monthlyOrders: [300, 'num']"]], ['unit-scoreCfg']], //monthlyOrders 收負數
+    ['SG04', 'src/eval/cfgNum.mjs', [['!Array.isArray(fb) || fb.length !== 2', '!Array.isArray(fb) || fb.length < 2']], ['unit-scoreCfg']], //freqBands 收超過兩個
+    ['SG05', 'src/eval/cfgNum.mjs', [["            if (x === undefined || x === null) {\n                throw new Error(`invalid ${who}.freqBands[${i}]", "            if (false) {\n                throw new Error(`invalid ${who}.freqBands[${i}]"]], ['unit-scoreCfg']], //freqBands 之 null 元素當 0
+    ['SG06', 'src/eval/score.mjs', [['let l1 = S >= sc.ladder1.S &&', 'let l1 = S > sc.ladder1.S &&']], ['unit-scoreCfg']], //S = 門檻不過
+    ['SG07', 'src/eval/score.mjs', [['m.null && m.null.p <= sc.ladder1.nullP', 'm.null && m.null.p < sc.ladder1.nullP']], ['unit-scoreCfg']], //p = 門檻不過
+    ['SG08', 'src/eval/barGrid.mjs', [["    evalScoreOf(st && st.score, 'score')\n}", '    void 0\n}']], ['unit-scoreCfg']], //預檢不查 score
+    ['SG09', 'src/domain/texts.mjs', [["let sc = evalScoreOf(st.score, 'score')", "let sc = st.score || { ladder1: {}, ladder2: {}, ladder3: {} }"]], ['unit-scoreCfg']], //任務書取原值
+    ['SG10', 'src/eval/score.mjs', [["let sc = evalScoreOf(score, 'score')", 'let sc = score']], ['unit-scoreCfg']], //判讀取原值(修前)
+    ['SG11', 'src/tools/initProject.mjs', [["let sc = evalScoreOf(s.score, 'score')", "let sc = { ladder1: { S: 15, nullP: 0.05 }, ladder2: { freshMin: 10, worstPhaseMin: 5 }, ladder3: { monthlyOrders: 300, peakHold: 30 } }"]], ['unit-scoreCfg']], //合約之參考版不採設定
+    ['SZ01', 'src/cli/eval.mjs', [["if (seedArg !== null && !(typeof seedArg === 'number' && Number.isSafeInteger(seedArg))) {", "if (seedArg !== null && !(typeof seedArg === 'number' && Number.isInteger(seedArg))) {"]], ['unit-cliEqFlags']], //--seed 之安全整數之界不檢
+    ['SZ02', 'src/cli/eval.mjs', [["console.log('invalid --seed: must be an integer')", "console.log('invalid --seed')"]], ['unit-cliEqFlags']], //--seed 之訊息不全
+    ['SZ03', 'src/cli/eval.mjs', [["let seedArg = argOf('seed', null)\n", "let seedArg = (settingsOrExit(), argOf('seed', null))\n"]], ['unit-cliEqFlags']], //--seed 之檢查晚於讀設定
+    ['SZ04', 'src/cli/eval.mjs', [["let tieArg = argOf('tie-salt', null)\n", "let tieArg = (settingsOrExit(), argOf('tie-salt', null))\n"]], ['unit-cliEqFlags']], //--tie-salt 之檢查晚於讀設定
+    ['SZ05', 'src/cli/eval.mjs', [["    if (process.env.ARSI_HARNESS === '1') {\n        seedOverride = seedArg", "    if (true) {\n        seedOverride = seedArg"]], ['unit-cliEqFlags']], //非迴圈亦採用 --seed
+    ['SZ06', 'src/cli/eval.mjs', [["    if (process.env.ARSI_HARNESS === '1') {\n        tieSalt = tieArg", "    if (true) {\n        tieSalt = tieArg"]], ['unit-cliEqFlags']], //非迴圈亦採用 --tie-salt
+    ['FQ01', 'src/domain/domain.mjs', [['if (stopCheck && stopFileExists(st.rsi.root)) {', 'if (false) {', true]], ['unit-fillStop']], //補算不檢停止檔(等待之前與之後兩處皆不檢)
+    ['FQ02', 'src/domain/domain.mjs', [["let stopCheck = src === 'cli'", 'let stopCheck = true']], ['unit-fillStop']], //輪末之附算亦檢停止檔
+    ['FQ03', 'src/domain/domain.mjs', [["let stopCheck = src === 'cli'", 'let stopCheck = false']], ['unit-fillStop']], //命令列之補算不檢
+    ['FQ04', 'src/domain/domain.mjs', [["                //取下一個成品之前再檢查(資源閘之等待之後、取用之前: 等待期間才建立之停止檔亦擋得住)\n                if (stopCheck && stopFileExists(st.rsi.root)) {\n                    stopHit = true\n                    break\n                }\n", '']], ['unit-fillStop']], //只於資源閘之等待之前檢查(等待期間建立之停止檔擋不住)
+    ['FQ13', 'src/domain/domain.mjs', [['            ...(r.stopped ? { stopped: r.stopped, lines: [stopLineOf(r.stopped)] } : {}),\n', '']], ['unit-fillStop']], //extFill 不帶 stopped 與摘要句
+    ['FQ14', 'src/domain/domain.mjs', [["                //資源閘之等待之前先檢查(停止檔已存在者不必再等閘)\n                if (stopCheck && stopFileExists(st.rsi.root)) {\n                    stopHit = true\n                    break\n                }\n", '']], ['unit-fillStop']], //只於資源閘之等待之後檢查(停止檔已存在者仍等閘)
+    ['FQ15', 'src/cli/rsi.mjs', [["而同承): 開始前已有 ⇒ 本次不補算(stopAtStart); 進行中才建立者 ⇒ 已取者做完、輸出之末列寫「因停止檔提前結束」與已完成 / 未完成數\n    stopAtStart()\n", "而同承): 開始前已有 ⇒ 本次不補算(stopAtStart); 進行中才建立者 ⇒ 已取者做完、輸出之末列寫「因停止檔提前結束」與已完成 / 未完成數\n"]], ['unit-fillStop']], //extfill 開始前不檢停止檔
+    ['FQ16', 'src/cli/rsi.mjs', [["    for (let l of (r.lines || [])) {\n        console.log(l)\n    }\n", '']], ['unit-fillStop']], //extfill 不印提前結束之摘要句
+    ['FQ17', 'src/domain/domain.mjs', [['本次待算 ${stp.done + stp.rest} 個成品', '本次待算 ${stp.done} 個成品']], ['unit-fillStop']], //摘要句之待算數
+    ['EC08', 'src/tools/armDecide.mjs', [["console.error('提案帳無此筆')", 'console.error(`提案帳無此筆: ${id}`)']], ['unit-inputEcho']], //armDecide 之訊息帶提案 id
+    ['EC09', 'src/tools/armInactive.mjs', [["console.error(`所給之臂有 ${bad.length} 個不是節點", "console.error(`${bad.join('、')} 不是節點"]], ['unit-inputEcho']], //armInactive 之訊息帶臂名
+    ['FQ05', 'src/domain/domain.mjs', [['stopped: { file: rel(stopFileOf(st.rsi.root)), done: next, rest: tasks.length - next }', 'stopped: { file: rel(stopFileOf(st.rsi.root)), done: tasks.length - next, rest: tasks.length - next }']], ['unit-fillStop']], //已完成數取錯
+    ['FQ06', 'src/domain/domain.mjs', [['done: next, rest: tasks.length - next }', 'done: next, rest: tasks.length }']], ['unit-fillStop']], //未完成數取錯
+    ['FQ07', 'src/domain/domain.mjs', [["        if (stopHit) {\n            out.lines.push(", "        if (false) {\n            out.lines.push("]], ['unit-fillStop']], //摘要不寫「因停止檔提前結束」
+    ['FQ08', 'src/domain/domain.mjs', [['...(stopHit ? { stopped:', '...(false ? { stopped:']], ['unit-fillStop']], //回傳不帶 stopped
+    ['FQ09', 'src/arsi/runner.mjs', [["let STOP_FILE = 'STOP'", "let STOP_FILE = 'STOP.txt'"]], ['unit-fillStop']], //停止檔之檔名
+    ['FQ10', 'src/cli/rsi.mjs', [["    if (stopFileExists(st.rsi.root)) {\n        console.log(`未執行: 停止檔", "    if (false) {\n        console.log(`未執行: 停止檔"]], ['unit-fillCli']], //命令列之補算開始前不檢停止檔
+    ['FQ11', 'src/cli/rsi.mjs', [["存在;刪除後再補算`)\n        process.exit(3)", "存在;刪除後再補算`)\n        process.exit(1)"]], ['unit-fillCli']], //開始前有停止檔之離開碼不為 3
+    ['FQ12', 'src/cli/rsi.mjs', [["        if (stopFileExists(st.rsi.root)) {\n            why = ['stop-file'", "        if (false) {\n            why = ['stop-file'"]], ['unit-fillCli']], //輪次起跑前不檢停止檔
+    ['NT01', 'src/eval/ledgerBuild.mjs', [['let ntFile = s.numTrade === undefined || s.numTrade === null ?', 'let ntFile = s.numTrade === undefined ?']], ['unit-ledgerNumTrade']], //頂層為 null 者不後備
+    ['NT02', 'src/eval/ledgerBuild.mjs', [["(s.summary && typeof s.summary.numTrade === 'number' ? s.summary.numTrade : undefined)", '(s.summary && s.summary.numTrade !== undefined ? s.summary.numTrade : undefined)']], ['unit-ledgerNumTrade']], //後備不核對型別
+    ['NT03', 'src/eval/ledgerBuild.mjs', [[": (typeof s.numTrade === 'number' ? s.numTrade : undefined)", ': (typeof s.numTrade === \'number\' ? s.numTrade : (s.summary && typeof s.summary.numTrade === \'number\' ? s.summary.numTrade : undefined))']], ['unit-ledgerNumTrade']], //頂層已帶而非數字者亦後備
+    ['NT04', 'src/eval/ledgerBuild.mjs', [["let ntFile = s.numTrade === undefined || s.numTrade === null ? (s.summary && typeof s.summary.numTrade === 'number' ? s.summary.numTrade : undefined) : (typeof s.numTrade === 'number' ? s.numTrade : undefined)", "let ntFile = s.summary && typeof s.summary.numTrade === 'number' ? s.summary.numTrade : (typeof s.numTrade === 'number' ? s.numTrade : undefined)"]], ['unit-ledgerNumTrade']], //summary 為先(頂層為後備)
+    ['NT05', 'src/eval/ledgerBuild.mjs', [['diffs.push({ f: files[si], ledger: cnt, file: ntFile })', 'diffs.push({ f: files[si], ledger: cnt, file: s.numTrade })']], ['unit-ledgerNumTrade']], //diffs 之 file 仍取頂層
 ]
 
 let args = process.argv.slice(2)

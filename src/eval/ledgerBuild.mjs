@@ -29,7 +29,7 @@ import { normBarHours } from './barGrid.mjs'
 //    (不給 ⇒ 自 K 線檔之第一根起, 帳本與未加入本功能時逐位相同); 須為 K 線檔內某一根之開盤時間(與 K 線同一字串格式)且早於 endTime, 不合者於寫出之前拋錯; 起點之後之 K 線不滿 100 根者拋 invalid startTime: must leave at least 100 bars before endTime;
 //    給了起點之帳本 ≡ 未給者「只留進場棒 ≥ 起點所對應之棒、棒序平移」: 進場棒、出場棒(未結者仍為 -1)、損益逐單相同, 逐棒之欄(因子、外部序列、K 線、基礎單位名義)為原欄之切片(first-touch 只依該棒之後之 K 線, 名義只依該棒之收盤價);
 //    帳本鍵之雜湊輸入含 time0 與棒數與逐單之進場棒 ⇒ 起點不同之帳本其鍵必不同, 不須另加輸入(未給者之雜湊輸入不變); meta.startTime 只在給了起點時才有
-//  一致性核對(meta.check): 策略檔之 numTrade 為求解窗 [summary.timeOhlcStart, summary.timeOhlcEnd] 內之進場數 ⇒ 帳本只計同窗(起點棒 ≤ 進場棒 ≤ 終點棒)者與之比; 未帶起點欄者自第 0 根;
+//  一致性核對(meta.check): 策略檔之 numTrade(頂層之數字為先; 頂層未帶者取 summary.numTrade 之數字為後備; 兩者皆無者不核對)為求解窗 [summary.timeOhlcStart, summary.timeOhlcEnd] 內之進場數 ⇒ 帳本只計同窗(起點棒 ≤ 進場棒 ≤ 終點棒)者與之比; 未帶起點欄者自第 0 根;
 //    起點不在本帳本之棒上(早於帳本起點, 即帳本未涵蓋完整之求解窗; 或不在棒之開盤時間; 含空字串與非字串)者不納入核對(不計入 compared; 隻數記於 meta.check.skipped 並於記錄註明
 //    〔附第一個被略過者之檔名與其起點欄; 全數略過者以 WARN 起首〕; 無此情形時 meta.check 不含該鍵, 讀者以「缺 = 0」處理)
 /**
@@ -521,9 +521,12 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, startTime = null, outD
         //  下界(規則 R-EV-45): 起點棒 = timeOhlcStart 於本帳本之棒序; 未帶起點欄(undefined / null)者自第 0 根; 起點不在本帳本之棒上(早於帳本起點 ⇒ 帳本未涵蓋完整之求解窗; 或不在棒之開盤時間)
         //  者不納入核對(不計入 chk.n)、只計隻數(chk.skipped)—— 起點 = 帳本起點時結果與只計終點者逐位相同
         //  「未帶」= undefined 或 null; 其餘(含空字串、0、false 等非字串)而不在本帳本之棒上者一律不納入核對; 起點晚於終點者照核對(計數為 0, 與 numTrade 不同即計為不符)
+        //  進場數之來源(排程第 564 項; Gitea #194 §6 第 2 點): 頂層之 numTrade(數字)為先; 頂層未帶(undefined 或 null)者以 summary.numTrade(數字)為後備(策略檔之形有兩種: 頂層、summary 內);
+        //  兩者皆無(或頂層已帶而不是數字)者不納入核對(同改前; 不計入 compared、不計入 skipped); 後備使 meta.check.compared 增加(原: 無頂層 numTrade 者整隻不核對)
         let tEnd = s.summary && s.summary.timeOhlcEnd
         let iEnd = tEnd ? kpTimeInd.get(tEnd) : undefined
-        if (iEnd !== undefined && typeof s.numTrade === 'number') {
+        let ntFile = s.numTrade === undefined || s.numTrade === null ? (s.summary && typeof s.summary.numTrade === 'number' ? s.summary.numTrade : undefined) : (typeof s.numTrade === 'number' ? s.numTrade : undefined)
+        if (iEnd !== undefined && ntFile !== undefined) {
             let tStart = s.summary.timeOhlcStart
             let iStart = tStart === undefined || tStart === null ? 0 : kpTimeInd.get(tStart)
             if (iStart === undefined) {
@@ -541,11 +544,11 @@ let buildLedger = async ({ libraryRoot, keyOhlc, endTime, startTime = null, outD
                     }
                 }
                 chk.n++
-                if (cnt === s.numTrade) {
+                if (cnt === ntFile) {
                     chk.same++
                 }
                 else if (chk.diffs.length < 10) {
-                    chk.diffs.push({ f: files[si], ledger: cnt, file: s.numTrade })
+                    chk.diffs.push({ f: files[si], ledger: cnt, file: ntFile })
                 }
             }
         }

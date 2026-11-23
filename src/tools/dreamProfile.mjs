@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings, cliGuard } from '../cfg.mjs'
+import { settingsOrExit, cliGuard } from '../cfg.mjs'
 import { rsiNumOf } from '../arsi/rsiNums.mjs'
 
 //命令列只認一個位置引數(輪次; TOOL_FLAGS.dreamProfile): 任何旗標、多餘之位置引數一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值)
@@ -9,7 +9,7 @@ cliGuard('dreamProfile')
 //唯讀(主代理): 做夢 agent 把時間花在哪 —— 解析其逐步事件紀錄(rsi/work/dream_rNNN/agent.log), 依工具呼叫之時間戳分類彙總
 //  node tools/dreamProfile.mjs [輪次(預設最近)]
 //  分類: 評估(g_eval quick / full)、其他指令、讀檔、寫檔 / 改檔、搜尋; 相鄰兩個事件之時間差記在前一個呼叫上(含模型思考與工具執行)
-let st = getSettings()
+let st = settingsOrExit()
 let work = st.records.workDir
 let rounds = fs.readdirSync(work).filter((f) => /^dream_r\d+$/.test(f)).map((f) => Number(f.slice(7))).sort((a, b) => a - b)
 //輪次(位置引數; 已於上之 cliGuard 檢查為正整數〔TOOL_FLAGS.dreamProfile.pos〕, 此處取轉換值 —— K4): 給了而無該輪之做夢工作夾 ⇒ 拒收(離開碼 2; 訊息固定、不帶輸入值; 排程第 607 項)

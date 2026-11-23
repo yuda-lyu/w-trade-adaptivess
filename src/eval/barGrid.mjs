@@ -1,5 +1,5 @@
 import isenum from 'wsemi/src/isenum.mjs'
-import { evalCfgNumsOf, evalRunNumsOf, evalLimitsOf, cfgListOf } from './cfgNum.mjs'
+import { evalCfgNumsOf, evalRunNumsOf, evalLimitsOf, evalScoreOf, cfgListOf } from './cfgNum.mjs'
 
 
 //每根 K 棒之時長與時刻格線(規則 R-EV-44): 每根時長須整除 24 小時(每日棒數為整數), 設定之時刻須落在帳本之棒格線上
@@ -106,7 +106,7 @@ let gridCheck = (t, meta, where) => {
 
 /**
  * 評估之設定之預檢(規則 R-EV-44;迴圈組裝專案時用, 與 g_eval.mjs、g_backtest.mjs 之檢查同一組):期間之界線(periods.train.end、periods.backtest.start;缺 periods 或其下之段亦為 invalid periods.…, 不是 TypeError)與求解窗(eval.fitEnd 各側)須落在帳本之棒格線上、eval.trainFromStart 須合法、
- * 影響評估之數字(eval.warmupDays、cadenceDays、nullDraws、actBins、sideActHalf)給了而無效即拒絕(evalNumsOf);
+ * 影響評估之數字(eval.warmupDays、cadenceDays、nullDraws、actBins、sideActHalf)給了而無效即拒絕(evalNumsOf)、判讀之門檻(score.ladder1 ~ 3、freqBands)給了而無效即拒絕(evalScoreOf);
  * 不合者拋 invalid …(訊息同 g_eval.mjs);帳本之 time0 或每棒小時數本身無效者不檢
  *
  * @param {Object} st 輸入設定物件
@@ -146,6 +146,8 @@ let checkEvalSettings = (st, meta) => {
     evalRunNumsOf(st && st.eval, 'eval')
     evalLimitsOf(st && st.eval, 'eval')
     evalListsOf(st && st.eval, bpd, 'eval')
+    //判讀之門檻(settings.score; 排程第 606 項; R-EV-55): 給了而無效 ⇒ 拒絕(與 scoreOf 同一函數 evalScoreOf; 於評估之前即檢查, 不待 scoreOf 於評估之後才拋)
+    evalScoreOf(st && st.score, 'score')
 }
 
 
@@ -248,7 +250,7 @@ let periodAt = (st, seg, end) => objOf(periodsOf(st)[seg])[end]
 
 /**
  * 設定不合之錯誤之訊息(命令列與工具之入口用):invalid cfg.<鍵> 改為 invalid eval.<鍵>(makeEvaluator 以 cfg 稱設定,使用者看到之位置為 settings.eval);
- * 屬設定不合者(invalid eval.…、invalid periods.…、invalid backtest.…〔settings.backtest 之數值鍵; backtestCfg〕、invalid ARSI_EVAL_FROM、invalid opt.nullDraws、invalid --null)回改寫後之訊息,其餘回 null(照舊拋出)
+ * 屬設定不合者(invalid eval.…、invalid periods.…、invalid backtest.…〔settings.backtest 之數值鍵; backtestCfg〕、invalid score.…〔settings.score 之判讀之門檻; evalScoreOf〕、invalid ARSI_EVAL_FROM、invalid opt.nullDraws、invalid --null)回改寫後之訊息,其餘回 null(照舊拋出)
  *
  * @param {*} err 輸入錯誤
  * @returns {String|null} 回傳訊息或 null
@@ -258,7 +260,7 @@ let periodAt = (st, seg, end) => objOf(periodsOf(st)[seg])[end]
  */
 let configMsgOf = (err) => {
     let msg = String((err && err.message) || err).replace(/^invalid cfg\./, 'invalid eval.')
-    return /^invalid (eval\.|periods\.|backtest\.|ARSI_EVAL_FROM|opt\.nullDraws|--null)/.test(msg) ? msg : null
+    return /^invalid (eval\.|periods\.|backtest\.|score[.:]|ARSI_EVAL_FROM|opt\.nullDraws|--null)/.test(msg) ? msg : null
 }
 
 

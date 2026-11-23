@@ -8,7 +8,7 @@
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
-import { getSettings, FD_ROOT, P, cliGuard } from '../cfg.mjs'
+import { settingsOrExit, FD_ROOT, P, cliGuard } from '../cfg.mjs'
 import { peekRound, nextLayerId, makePaths, readArmExtensions } from '../engineApi.mjs'
 import { writeJson } from '../engineProtocol.mjs'
 import { makeProjectOrExit, rankKeyOf, contentOf } from '../domain/domain.mjs'
@@ -20,7 +20,7 @@ guardEntry('fakeRound')
 //命令列之旗標只認 --two、--redream(TOOL_FLAGS.fakeRound): 等號、未列、重複、多餘之值一律拒收(離開碼 2; 於任何寫入之前; 訊息固定、不帶輸入值)
 cliGuard('fakeRound')
 
-let st = getSettings()
+let st = settingsOrExit()
 let root = P('tmp', 'fake')
 fs.rmSync(root, { recursive: true, force: true })
 let realRoot = st.rsi.root

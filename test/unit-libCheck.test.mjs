@@ -269,14 +269,15 @@ describe('庫況體檢(libStats 與 tools/libCheck.mjs)', function () {
             ['不存在', mkRoot('setNone', () => {})],
             ['為資料夾(不可讀)', mkRoot('setDir', (fp) => fs.mkdirSync(fp))],
             ['不是合法之 JSON(內含不應回顯之字樣)', mkRoot('setBadJson', (fp) => fs.writeFileSync(fp, '{ "secret-token-xyz": ', 'utf8'))],
-            ['缺 eval 欄位', mkRoot('setNoEval', (fp) => fs.writeFileSync(fp, JSON.stringify({ rsi: { root: './rsi' }, records: {}, dispatch: {} }), 'utf8'))],
-            ['缺 records 欄位', mkRoot('setNoRec', (fp) => fs.writeFileSync(fp, JSON.stringify({ ...settingsOf(), records: undefined }), 'utf8'))],
+            //節或路徑欄不合者(排程第 611 項 ①: 經 settingsOrExit, 與各進入檔、工具同一入口): 印 `ERROR invalid settings.<節或欄>: must be …`(原: 同為上列之固定訊息)
+            ['缺 eval 欄位', mkRoot('setNoEval', (fp) => fs.writeFileSync(fp, JSON.stringify({ rsi: { root: './rsi' }, records: {}, dispatch: {} }), 'utf8')), 'ERROR invalid settings.eval: must be an object\n'],
+            ['缺 records 欄位', mkRoot('setNoRec', (fp) => fs.writeFileSync(fp, JSON.stringify({ ...settingsOf(), records: undefined }), 'utf8')), 'ERROR invalid settings.records: must be an object\n'],
         ]
-        for (let [what, r] of cases) {
+        for (let [what, r, want] of cases) {
             for (let args of [[], ['--json']]) {
                 let x = run(r, args)
                 assert.equal(x.status, 2, `${what} ${args.join(' ')}: ${x.stdout}${x.stderr}`)
-                assert.equal(x.stdout, msgOf(r), what)
+                assert.equal(x.stdout, want === undefined ? msgOf(r) : want, what)
                 assert.equal(x.stderr, '', `${what}: 無例外堆疊`)
                 assert(!x.stdout.includes('secret-token-xyz'), `${what}: 不回顯設定之內容`)
             }

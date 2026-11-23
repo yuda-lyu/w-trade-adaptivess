@@ -155,7 +155,8 @@ export let readCol = (dir, name, Ctor) => {
 
 //ledgerDigestOf, 帳本資料夾之指紋(sha1 前 16 字): 除 meta.json 外每個檔之名稱與位元組, 另加 meta 去除 builtAt、buildSec、libraryRoot 後之 JSON 全文(含鍵之次序)
 //  用於「未給新選項者之輸出與發布版逐位相同」之釘死值(該值以發布版之 buildLedger 於同一份合成資料取得)
-export let ledgerDigestOf = (dir) => {
+//  editMeta(選配; 函數): 於雜湊前改 meta 之副本(去除 builtAt 等之後; 例: 把 check.compared 改回改前之值, 以證明「只有該欄不同」)
+export let ledgerDigestOf = (dir, editMeta = null) => {
     let h = crypto.createHash('sha1')
     for (let f of fs.readdirSync(dir).sort()) {
         if (f === 'meta.json') {
@@ -168,6 +169,9 @@ export let ledgerDigestOf = (dir) => {
     delete m.builtAt
     delete m.buildSec
     delete m.libraryRoot
+    if (typeof editMeta === 'function') {
+        editMeta(m)
+    }
     h.update(`|meta|${JSON.stringify(m)}`)
     return h.digest('hex').slice(0, 16)
 }

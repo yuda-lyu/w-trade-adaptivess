@@ -1,5 +1,5 @@
 import path from 'path'
-import { getSettings, argStrOf, cliGuard } from '../cfg.mjs'
+import { settingsOrExit, argStrOf, cliGuard } from '../cfg.mjs'
 import { peekRunLock } from '../arsi/runner.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
@@ -17,7 +17,7 @@ cliGuard('armInactive')
 //    --offdef: --arms 之中「依修訂後之定義不屬該臂」者(主控審定臂之修訂後用); 該臂不再計入「已試」, 無其他節點時由補位載體再試
 //  只寫樹上該節點之 evidence.inactiveArms(附出處與理由)並重產看板與搜尋地圖; S、階梯、選集指紋不變(變了即報錯)
 //  輪次進行中不得執行(看板與載體於輪中由迴圈讀寫)
-let st = getSettings()
+let st = settingsOrExit()
 let P = makeProjectOrExit(st, {})
 P.rsi.init()
 let executed = () => P.rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => P.rsi.store.getNode(r.id)).filter(Boolean)
@@ -46,14 +46,16 @@ if (lock.running) {
 }
 let hits = executed().filter((n) => n.id.startsWith(key))
 if (hits.length !== 1) {
-    console.error(`節點 ${key}: 符合 ${hits.length} 個(須恰為 1 個)`)
+    //訊息不帶輸入之前綴(K9; 排程第 611 項 ②; 原: `節點 <前綴>: 符合 N 個`)
+    console.error(`節點前綴符合 ${hits.length} 個(須恰為 1 個)`)
     process.exit(2)
 }
 let n = hits[0]
 let arms = armsArg === 'none' ? [] : armsArg.split(',').map((s) => s.trim()).filter(Boolean)
 let bad = arms.filter((a) => !n.spec.arms.includes(a))
 if (bad.length) {
-    console.error(`${bad.join('、')} 不是節點 ${n.id.slice(0, 8)} 之臂(${n.spec.arms.join(' + ')})`)
+    //訊息不帶輸入之臂名(K9; 排程第 611 項 ② 之同檔鄰近者; 原: `<臂名> 不是節點 … 之臂`); 節點 id(取自樹)與其臂照列
+    console.error(`所給之臂有 ${bad.length} 個不是節點 ${n.id.slice(0, 8)} 之臂(${n.spec.arms.join(' + ')})`)
     process.exit(2)
 }
 //--offdef <a,b>(選配; --arms 之子集): 其中「依修訂後之定義不屬該臂」者 —— 與試過後關閉不同, 該臂依現行定義未被此節點試過 ⇒ 不計入「已試之臂」(補位載體會再出該臂)

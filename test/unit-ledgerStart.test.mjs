@@ -25,7 +25,8 @@ let UNIT = { rule: { stepSize: 0.001, minQty: 0.001, minNotional: 20 }, buffer: 
 //    ② 與本套件現行碼於同一份資料之輸出相同 ⇒ 差異來自相依(相依之行為變更;更新本檔之值並於 sgud/state 記錄);不同 ⇒ 本套件之回歸(修碼,不改值);新值取 ① 之輸出,不得未經 ① 之比對而直接取現行碼之輸出(那使守門恆綠)
 let PIN = { digest: 'e9721e0fa5a6b9f3', key: 'e79912cf6379c884' }
 //擴充輸入之釘死值(同上之取得與重取程序):含基礎單位(unit)、只有 summary.numTrade 而無頂層 numTrade 之策略檔、_vbs_ 類因子名、非 > / < 之比較符號、外部序列
-let PIN_Q = { digest: '60bf5e1ea06af719', key: 'c07df2dac28348be' }
+//  digest = 發布版(1.0.30)所得之值(其 meta.check 為 compared 8 / same 8); digest2 = 1.0.48 起之值(頂層 numTrade 缺者以 summary.numTrade 為後備核對 ⇒ meta.check 為 compared 12 / same 12; 其餘逐位相同, 以 ledgerDigestOf 之 editMeta 證明)
+let PIN_Q = { digest: '60bf5e1ea06af719', digest2: 'd46b2bad13ef1ba5', key: 'c07df2dac28348be' }
 
 describe('帳本之起點(opt.startTime)與求解窗核對之下界(規則 R-EV-45)', function () {
     this.timeout(180000)
@@ -110,7 +111,7 @@ describe('帳本之起點(opt.startTime)與求解窗核對之下界(規則 R-EV-
         })
 
         it('擴充輸入(① 之二):基礎單位、只有 summary.numTrade 而無頂層 numTrade 之策略檔、_vbs_ 類因子名、非 > / < 之比較符號、外部序列 ⇒ 指紋與帳本鍵 = 發布版所得之釘死值;undefined / null 與不給逐位相同', async () => {
-            //R-EV-45 ①(擴充): 釘死案之輸入涵蓋 unit(meta.unit / meta.unitStat / unit.f64)、頂層 numTrade 缺而只有 summary.numTrade(現行核對略過,compared 只計有頂層者)、
+            //R-EV-45 ①(擴充): 釘死案之輸入涵蓋 unit(meta.unit / meta.unitStat / unit.f64)、頂層 numTrade 缺而只有 summary.numTrade(發布版之核對略過、compared 只計有頂層者 = 8; 1.0.48 起以 summary.numTrade 為後備核對 = 12; 見下 digest2)、
             //  因子名含 _vbs_(cls 之第 3 類)、比較符號 '>='(帳本當作 '<'、meta.rule.nSymOther = 1); 值取自發布版(1.0.30)於同一份合成資料之輸出
             let libQ = path.join(t.dir, 'libQ')
             let Q = writeSynthLib(libQ, {
@@ -139,11 +140,18 @@ describe('帳本之起點(opt.startTime)與求解窗核對之下界(規則 R-EV-
             assert.equal(ledgerDigestOf(d[1]), ledgerDigestOf(d[0]))
             assert.equal(ledgerDigestOf(d[2]), ledgerDigestOf(d[0]))
             //鑑別前提: 輸入確含上列各形
-            assert.equal(m0.check.compared, 8, '頂層 numTrade 缺者 4 隻不核對')
+            //排程第 564 項(1.0.48): 頂層 numTrade 缺而有 summary.numTrade 者(4 隻)改以 summary.numTrade 為後備核對 ⇒ compared 由 8 增為 12、same 同(原: 整隻不核對)
+            assert.deepEqual(m0.check, { compared: 12, same: 12, diffs: [] }, '頂層 numTrade 缺者 4 隻以 summary.numTrade 核對(原: 不核對 ⇒ compared 8)')
             assert.equal(m0.rule.nSymOther, 1)
             assert(m0.keyNames.some((k) => k.includes('_vbs_')) && m0.unit && m0.unitStat)
             assert.equal(m0.key, PIN_Q.key)
-            assert.equal(ledgerDigestOf(d[0]), PIN_Q.digest, `指紋 ${ledgerDigestOf(d[0])}`)
+            //帳本之各檔與 meta 之其餘各鍵不變: 把 meta.check 改回改前之值(compared 8、same 8)後之指紋 = 發布版(1.0.30)所得之釘死值(PIN_Q.digest); 現行之指紋 = PIN_Q.digest2(只多 check.compared / same 之改變)
+            let revertCheck = (m) => {
+                m.check.compared = 8
+                m.check.same = 8
+            }
+            assert.equal(ledgerDigestOf(d[0], revertCheck), PIN_Q.digest, '改回 compared 8 / same 8 後 ⇒ 與發布版逐位相同(只有 meta.check 變)')
+            assert.equal(ledgerDigestOf(d[0]), PIN_Q.digest2, `指紋 ${ledgerDigestOf(d[0])}`)
         })
     })
 

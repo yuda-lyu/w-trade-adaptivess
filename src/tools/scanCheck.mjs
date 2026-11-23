@@ -1,6 +1,6 @@
 import path from 'path'
 import fs from 'fs'
-import { getSettings, cliGuard, inputMsgOf } from '../cfg.mjs'
+import { settingsOrExit, cliGuard, inputMsgOf } from '../cfg.mjs'
 import { backtestCfg } from '../domain/backtestCfg.mjs'
 import { configMsgOf } from '../eval/barGrid.mjs'
 import { scanTrace, setGuardExtra, guardExtraOf, allowWorkOf } from '../domain/verify.mjs'
@@ -15,7 +15,7 @@ import { evalHintsOfDocs, isEvalHint } from '../domain/verifyEvalHints.mjs'
 //  成員依賴之提示(規則 R-REC-51)同(判定讀樹上之 raw.member): 不在此對照之內 —— 節點文件內之該條不列入「節點文件內」之項、不使該份判為不同; --mode validate 之重掃以樹上之值重產(現行者照留一條, 不重複)
 //命令列只認一個位置引數(節點 id 前綴, 逗號分隔; TOOL_FLAGS.scanCheck): 任何旗標、多餘之位置引數一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值; 原: 旗標被當成節點 id 前綴)
 cliGuard('scanCheck')
-let st = getSettings()
+let st = settingsOrExit()
 //專案另加之禁區字樣(與迴圈之掃描同一組); 設定不合(guard.forbidden、source.libraryRoot 給了而無效; R-EV-54 ①)⇒ 印 ERROR、離開碼 2(唯讀工具; 不以失效之禁區掃描); 其餘錯誤照舊拋出
 try {
     setGuardExtra(guardExtraOf(st))

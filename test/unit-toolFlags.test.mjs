@@ -340,7 +340,7 @@ describe('工具(src/tools/*.mjs)之命令列旗標之嚴格檢查(排程第 595
             assert(!fs.existsSync(rootDir))
         })
 
-        it('對照: 合格之寫法通過檢查(唯讀之工具於空之專案根其後於讀設定時離開碼 1, 不是 2; 無 invalid 之行)', () => {
+        it('對照: 合格之寫法通過檢查(唯讀之工具於空之專案根其後於讀設定時以「ERROR 無法讀取專案設定」離開; 無 invalid 之行)', () => {
             for (let [n, args] of [
                 ['archiveDocs', []],
                 ['pickStore', []],
@@ -362,13 +362,8 @@ describe('工具(src/tools/*.mjs)之命令列旗標之嚴格檢查(排程第 595
                 ['briefPreview', []],
             ]) {
                 let r = runTool(n, args)
-                //libCheck 於設定讀不到時自己以離開碼 2 結束(訊息 ERROR 無法讀取專案設定; 在其引數檢查之後)
-                if (n === 'libCheck') {
-                    assert(r.out[0] && r.out[0].startsWith('ERROR 無法讀取專案設定'), `${n} ${args.join(' ')}: ${r.out.join(' | ').slice(0, 200)}`)
-                }
-                else {
-                    assert.notStrictEqual(r.status, 2, `${n} ${args.join(' ')}: ${r.out.join(' | ').slice(0, 200)}`)
-                }
+                //各工具於設定讀不到時皆經 settingsOrExit 以離開碼 2 結束(訊息 ERROR 無法讀取專案設定; 在其引數檢查之後; 排程第 611 項 ①; 原: libCheck 以外為未捕捉之例外、離開碼 1)
+                assert(r.out[0] && r.out[0].startsWith('ERROR 無法讀取專案設定'), `${n} ${args.join(' ')}: ${r.out.join(' | ').slice(0, 200)}`)
                 assert(!r.out.some((l) => l.startsWith('invalid ')), `${n} ${args.join(' ')}: ${r.out.join(' | ').slice(0, 200)}`)
             }
             assert.deepEqual(fs.readdirSync(emptyRoot), [], '不寫任何檔')

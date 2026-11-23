@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings, argOf, argStrOf, cliGuard, FD_ROOT } from '../cfg.mjs'
+import { settingsOrExit, argOf, argStrOf, cliGuard, FD_ROOT } from '../cfg.mjs'
 import { peekRunLock } from '../arsi/runner.mjs'
 import { ARM_LABELS, armProposalLine } from '../arsi/records.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
@@ -25,7 +25,7 @@ cliGuard('armDecide')
 //  機制說明(desc)預設取提案之 mechanism; 主控應先改成「機制之中性描述」(不含結論與數字)再通過
 //  輪次進行中不得通過(輪次行程已載入舊目錄, 做夢卻會讀到新目錄 ⇒ 所提之新臂被迴圈擋下); 不採不受此限
 //  不合(參數不足、審定後之目錄不合等)⇒ 提案帳與擴充檔皆不變(引擎於寫入前試建目錄)
-let st = getSettings()
+let st = settingsOrExit()
 //本工具不派工 ⇒ 換上不派工之派工器(不讀派工用之金鑰)
 let P = makeProjectOrExit(st, { dispatch: async () => ({ ok: false, error: 'tools/armDecide.mjs 不派工' }) })
 let gov = P.rsi.governance
@@ -59,7 +59,8 @@ if (typeof id !== 'string') {
 }
 let p = led.items.find((x) => x.id === id)
 if (!p) {
-    console.error(`提案帳無此筆: ${id}`)
+    //訊息不帶輸入之提案 id(K9; 排程第 611 項 ② 之同檔鄰近者; 原: `提案帳無此筆: <id>`)
+    console.error('提案帳無此筆')
     process.exit(2)
 }
 if (p.status !== 'pending') {

@@ -1,4 +1,4 @@
-import { getSettings, argNumOf, cliGuard } from '../cfg.mjs'
+import { settingsOrExit, argNumOf, cliGuard } from '../cfg.mjs'
 import { makeProjectOrExit, rankKeyOf, contentOf } from '../domain/domain.mjs'
 import { rankCompareOf } from '../domain/rankCompare.mjs'
 
@@ -10,7 +10,7 @@ cliGuard('rankCompare')
 //  候選 = 樹上已執行、可信(trusted)、未被否決、「有內容」(搜尋地圖之量尺與主鍵之同一定義; P.hasContent)且有挑選內容之值之成品; 量見 src/domain/rankCompare.mjs
 //    另列「有挑選內容之值而不符有內容」者之個數(不計入候選; 主鍵視同無其值; 規則 R-REC-49 ⑤)
 //  另列補位之底: 以「現行之排序鍵」與「挑選內容為主鍵」各組一次領域(只讀樹), 比較各可選臂之載體之起點(皆排除別名與側別曝險且未放行者)
-let st = getSettings()
+let st = settingsOrExit()
 //--k 給了而不是正整數 ⇒ 已於上之 cliGuard 拒收(CLI_VALUES.rankCompare; 排程第 607 項; 原: 小數、0、非數字靜默取 10); 此處取檢查合格之轉換值(K4); 未給 = 10
 let k = argNumOf('k', 'posInt', 10)
 let mk = (rankBy) => {

@@ -21,6 +21,30 @@ import { isPlain, optOf, fnReq, fnOpt, strReq, numReq } from './inputs.mjs'
 //posInt: 正整數(數字或其數字字串, 轉為數值後使用; 排程第 595 項, K4、K7: 原 Number.isInteger 使 '4' 被當成未給); 無效回 null(用預設)
 let posInt = (v) => rsiNumOf(v, 'posInt')
 
+//停止檔(排程第 545 項; R-RUN-12): 狀態根之直下之空檔 STOP —— g_rsi.mjs 之輪次於每輪開始前(與起跑前自檢)檢查, 補算(domain.mjs 之 fill; --mode fill)之工作者於取下一個成品前檢查; 同一個檔、同一個檢查函數
+//  存在 ⇒ 不再取新的(輪 / 成品); 已開始者做完; 下次執行前請刪除(本套件不代刪)
+let STOP_FILE = 'STOP'
+
+/**
+ * 停止檔之路徑(狀態根之直下之 STOP; 輪次與補算共用)
+ *
+ * @param {String} stateRoot 輸入狀態根(settings.rsi.root)
+ * @returns {String} 回傳停止檔之路徑
+ * @example
+ * stopFileOf('rsi') // => 'rsi/STOP'(依平台之分隔字元)
+ */
+let stopFileOf = (stateRoot) => path.join(stateRoot, STOP_FILE)
+
+/**
+ * 停止檔是否存在(輪次與補算共用之唯一檢查函數)
+ *
+ * @param {String} stateRoot 輸入狀態根(settings.rsi.root)
+ * @returns {Boolean} 回傳停止檔是否存在
+ * @example
+ * stopFileExists('rsi') // => false
+ */
+let stopFileExists = (stateRoot) => fs.existsSync(stopFileOf(stateRoot))
+
 /**
  * 解析每輪節點數、同時節點數與每次執行輪數(命令列優先於設定檔,皆須為正整數〔數字字串轉為數值〕,否則用預設;cfg、cli 為 null 或非物件者視為未給)
  *
@@ -411,5 +435,5 @@ let roundOkOf = (opt = {}) => {
 }
 
 
-export { runRounds, resolveRunConfig, acquireRunLock, peekRunLock, appendEvent, readEvents, trailingFailures, pidAlive, planGateOf, roundOkOf }
+export { runRounds, resolveRunConfig, acquireRunLock, peekRunLock, appendEvent, readEvents, trailingFailures, pidAlive, planGateOf, roundOkOf, STOP_FILE, stopFileOf, stopFileExists }
 export default runRounds

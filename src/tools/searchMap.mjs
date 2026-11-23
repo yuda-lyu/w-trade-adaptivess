@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings, cliGuard } from '../cfg.mjs'
+import { settingsOrExit, cliGuard } from '../cfg.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
@@ -13,7 +13,7 @@ cliGuard('searchMap')
 //  node tools/searchMap.mjs            重產並印出
 //  node tools/searchMap.mjs --quiet    只重產, 印一行摘要
 //  唯讀樹與紀錄; 只寫 rsi/SEARCH_MAP.md(迴圈於每輪做夢前與輪末亦會隨看板重產)
-let st = getSettings()
+let st = settingsOrExit()
 let P = makeProjectOrExit(st, {})
 P.rsi.init()
 let r = P.writeSearchMap()

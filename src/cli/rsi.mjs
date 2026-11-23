@@ -1,14 +1,14 @@
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
-import { getSettings, argOf, argStrOf, argNumOf, cliMsgOf, writeJson } from '../cfg.mjs'
+import { settingsOrExit, argOf, argStrOf, argNumOf, cliMsgOf, writeJson } from '../cfg.mjs'
 import { peekRound } from '../engineApi.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { roundName } from '../arsi/records.mjs'
-import { runRounds, acquireRunLock, appendEvent, readEvents, trailingFailures, planGateOf, roundOkOf } from '../arsi/runner.mjs'
+import { runRounds, acquireRunLock, appendEvent, readEvents, trailingFailures, planGateOf, roundOkOf, stopFileOf, stopFileExists } from '../arsi/runner.mjs'
 import { checkQuota } from '../arsi/dispatchers.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
-import { preflightOf } from '../arsi/rsiNums.mjs'
+import { preflightOf, resourceCfgOf } from '../arsi/rsiNums.mjs'
 import { phaseCountOfMetrics, phaseCountOfAll, phaseText } from '../domain/factsText.mjs'
 import { fileURLToPath } from 'url'
 
@@ -108,7 +108,7 @@ if (mode === 'round' && process.argv.includes('--dream-only')) {
 //  規模旗標(--nodes、--arms、--parallel、--workers、--rounds)給了而不是正整數(0、小數、非數字、空值)⇒ 已於上之 cliMsgOf(CLI_VALUES.rsi)拒收(離開碼 2; 排程第 607 項; 原: 靜默退回設定之值); 此處之值為檢查合格之轉換值(數字字串轉為數值; K4)
 let cliInt = (k) => argNumOf(k, 'posInt', null)
 //設定(排程第 547 項: 旗標之檢查皆已於此之前, 含只做夢輪次之 --file; 原: 讀設定在最前)
-let st = getSettings()
+let st = settingsOrExit()
 //組裝時之設定預檢(規則 R-EV-44; 期間之界線、eval.fitEnd、eval.trainFromStart)不合 ⇒ 印 ERROR invalid …、離開碼 2(同 g_eval.mjs; 不取鎖、不記事件)
 let P = makeProjectOrExit(st, { run: { nodesPerRound: cliInt('nodes') || cliInt('arms'), parallelNodes: cliInt('parallel') || cliInt('workers'), roundsPerRun: cliInt('rounds') } })
 //onlyOf, --only <id 前綴,…> 之解析(reverify / extfill / fill 共用): 取原字串(argStrOf; 全數字之前綴經數值轉型會使清單為空、範圍靜默擴為全樹);
@@ -125,11 +125,19 @@ let onlyOf = () => {
     }
     let hit = P.rsi.store.listIndex().filter((x) => x.status === 'executed' && list.some((p) => x.id.startsWith(p)))
     if (!hit.length) {
-        console.log(`--only 未命中任何已執行之節點(${list.join(', ')});未執行`)
+        //訊息不帶輸入之前綴(K9; 排程第 611 項 ②; 原: 列出所給之各前綴)
+        console.log('--only 未命中任何已執行之節點;未執行')
         process.exit(2)
     }
     console.log(`--only 命中已執行之節點 ${hit.length} 個`)
     return list
+}
+//stopAtStart, 補算(--mode fill、--mode extfill)開始前之停止檔檢查(排程第 545 項; R-RUN-12): 狀態根之 STOP(與輪次同一個檔、同一個檢查函數 stopFileExists)存在 ⇒ 本次不補算(離開碼 3 = 未啟動, 同本檔輪次之 stop-file 慣例; 未取鎖、未寫任何檔)
+let stopAtStart = () => {
+    if (stopFileExists(st.rsi.root)) {
+        console.log(`未執行: 停止檔 ${path.relative(st.FD_ROOT, stopFileOf(st.rsi.root)).replace(/\\/g, '/')} 存在;刪除後再補算`)
+        process.exit(3)
+    }
 }
 let { rsi } = P
 rsi.init()
@@ -165,7 +173,8 @@ else if (mode === 'round') {
     if (dreamOnly) {
         roundsPerRun = 1
     }
-    let fpStop = path.join(st.rsi.root, 'STOP')
+    //停止檔: 檔名與檢查函數與補算(--mode fill; domain.mjs 之 fill)共用(runner.mjs 之 stopFileOf、stopFileExists; 排程第 545 項)
+    let fpStop = stopFileOf(st.rsi.root)
     //無人值守之三件事(排程器定時觸發同一道指令即可; 規則 R-RUN-4): 單一執行之鎖、起跑前自檢、事件檔
     //  未啟動(已有執行中 / 鎖逾時 / 停止檔 / 連續失敗達上限)⇒ 事件 skipped、離開碼 3; 其餘事件: run-start、round-done(每輪)、run-done、run-failed
     //  監看端只須等事件檔 rsi/logs/events.jsonl 出現新的結束類事件(run-done / run-failed / skipped); 可用 node tools/waitEvent.mjs
@@ -208,7 +217,7 @@ else if (mode === 'round') {
     }
     {
         let why = null
-        if (fs.existsSync(fpStop)) {
+        if (stopFileExists(st.rsi.root)) {
             why = ['stop-file', `停止檔 ${relOf(fpStop)} 存在`]
         }
         else if (argOf('force', false) !== true) {
@@ -424,7 +433,7 @@ else if (mode === 'round') {
         for (let l of (out.hook && out.hook.lines) || []) {
             P.log(l)
         }
-        P.log(`資源(全機;每 ${st.resources && st.resources.sampleSec ? st.resources.sampleSec : 5} 秒取樣 ${resources.samples} 次): CPU 平均 ${resources.cpuMean}%、最高 ${resources.cpuPeak}%(上限 ${resources.limits.cpuMax === null ? '未設' : resources.limits.cpuMax});已用記憶體最高 ${resources.ramPeakGB} GB(上限 ${resources.limits.ramUsedMaxGB === null ? '未設' : resources.limits.ramUsedMaxGB});超過上限之取樣 CPU ${resources.overCpu} / 記憶體 ${resources.overRam};資源閘等待 ${resources.waits} 次共 ${resources.waitedSec} 秒;節點評估之等待 ${resources.evalWaits.n} 次共 ${resources.evalWaits.sec} 秒`)
+        P.log(`資源(全機;每 ${resourceCfgOf(st.resources).sampleSec || 5} 秒取樣 ${resources.samples} 次): CPU 平均 ${resources.cpuMean}%、最高 ${resources.cpuPeak}%(上限 ${resources.limits.cpuMax === null ? '未設' : resources.limits.cpuMax});已用記憶體最高 ${resources.ramPeakGB} GB(上限 ${resources.limits.ramUsedMaxGB === null ? '未設' : resources.limits.ramUsedMaxGB});超過上限之取樣 CPU ${resources.overCpu} / 記憶體 ${resources.overRam};資源閘等待 ${resources.waits} 次共 ${resources.waitedSec} 秒;節點評估之等待 ${resources.evalWaits.n} 次共 ${resources.evalWaits.sec} 秒`)
         return { ...out, halt: out.hook && out.hook.failed ? `輪末回調失敗(${(out.hook.errors || []).join(';').slice(0, 200)})` : null }
     }
     //stopReason, 不再起新輪之機器可讀原因(目前只有起跑前之計畫判斷給值: 'frontier-empty' / 'dream-only-busy'); 併入事件 run-done 之 reason
@@ -433,7 +442,7 @@ else if (mode === 'round') {
         rounds: roundsPerRun,
         runRound: runOne,
         shouldStop: async ({ index }) => {
-            if (fs.existsSync(fpStop)) {
+            if (stopFileExists(st.rsi.root)) {
                 return `停止檔 ${path.relative(st.FD_ROOT, fpStop).replace(/\\/g, '/')} 存在`
             }
             //起跑前之計畫判斷(規則 R-RUN-9; 每輪開始前): 一般輪次於前緣為空時不起空輪; 只做夢輪次只在計畫為 0 個節點且無待重審之節點時起
@@ -529,6 +538,8 @@ else if (mode === 'extfill') {
     let list = (k) => {
         let v = argStrOf(k, null); return typeof v === 'string' && v ? v.split(',').map((s) => s.trim()).filter((s) => s.length > 0) : null
     }
+    //停止檔(排程第 545 項; R-RUN-12; extFill 經 fill 執行而同承): 開始前已有 ⇒ 本次不補算(stopAtStart); 進行中才建立者 ⇒ 已取者做完、輸出之末列寫「因停止檔提前結束」與已完成 / 未完成數
+    stopAtStart()
     //與輪次共用同一把鎖(R-RUN-4): 補算會改寫樹與節點文件, 不得與輪次並行
     let lockV = acquireRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
     if (!lockV.ok) {
@@ -548,6 +559,10 @@ else if (mode === 'extfill') {
     let okN = r.results.filter((x) => x.ok)
     let bad = r.results.filter((x) => !x.ok)
     console.log(`補算擴充診斷(${r.names.join('、')}):已執行節點 ${r.nNodes} 個;補入 ${okN.length} 個、失敗 ${bad.length} 個、其餘已有值${bad.length ? `;失敗: ${bad.map((x) => `${x.nodeId.slice(0, 8)} ${x.error}`).join(';').slice(0, 1200)}` : ''}${r.stateError ? `;**附算之狀態檔未寫成**(${r.stateError})` : ''}`)
+    //因停止檔提前結束者: 末列寫明(已取者皆做完; 未完成者留為待補算, 否則「其餘已有值」會把未處理者說成已有值)
+    for (let l of (r.lines || [])) {
+        console.log(l)
+    }
     process.exit(bad.length || r.stateError ? 5 : 0)
 }
 else if (mode === 'fill') {
@@ -555,7 +570,8 @@ else if (mode === 'fill') {
     //  已算者不重算(快取之鍵 = 成品之內容雜湊 + 評估器之指紋 + 診斷之內容雜湊); 每個成品算完即寫入 ⇒ 中斷後再跑即續; 結束後重產看板與共同儲存區
     //  --only <id 前綴,…>、--force(本次範圍內者 —— 給 --only 者為所指者、未給者為全樹 —— 不論是否現行皆重算)、--no-postfit(只補擴充診斷)、--ext <診斷名,…> | none(預設 = metrics/ 之全部)、--null N(只作用於擴充診斷, 同 extfill)、--par N(併行數; 預設 settings.rsi.fillParallel 或 3)、
     //  --no-member(不算成員穩健性; 規則 R-REC-51: 開啟者預設算範圍內之合格之成品 —— 每個 K 次半庫之完整評估)
-    //  --dry: 只列待算之計畫(不評估、不寫任何檔); 離開碼 0 = 全部成功、5 = 有失敗(失敗者記為待重試)、2 = 參數不合、3 = 有輪次或另一次重算執行中
+    //  --dry: 只列待算之計畫(不評估、不寫任何檔); 離開碼 0 = 全部成功、5 = 有失敗(失敗者記為待重試)、2 = 參數不合、3 = 有輪次或另一次重算執行中、或狀態根有停止檔 STOP(本次不補算)
+    //  停止檔 STOP(狀態根之直下; 同輪次): 補算進行中建立者 ⇒ 工作者於取下一個成品之前檢查、不再取新成品(已取者做完; 每個成品算完即寫入)、正常結束(離開碼依有無失敗為 0 或 5), 摘要寫明「因停止檔提前結束」與已完成 / 未完成之成品數
     let list = (k) => {
         let v = argStrOf(k, null); return typeof v === 'string' && v ? v.split(',').map((s) => s.trim()).filter((s) => s.length > 0) : null
     }
@@ -588,6 +604,8 @@ else if (mode === 'fill') {
         }
         process.exit(0)
     }
+    //停止檔(排程第 545 項; R-RUN-12): 開始前已有 ⇒ 本次不補算(stopAtStart); 補算進行中才建立者由 fill 之工作者於取下一個成品之前檢查(已取者做完、正常結束、摘要寫明「因停止檔提前結束」與已完成 / 未完成之成品數)
+    stopAtStart()
     //與輪次共用同一把鎖(R-RUN-4): 附算會改寫樹與節點文件, 不得與輪次並行
     let lockV = acquireRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
     if (!lockV.ok) {

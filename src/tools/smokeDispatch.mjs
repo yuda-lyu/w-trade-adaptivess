@@ -1,7 +1,7 @@
 // 派工器之最小探測(讀 + 寫 + 跑指令): 節點角色(Go 版 deepseek)與做夢角色(opus5.5)各一次; 用法: node tools/smokeDispatch.mjs [node|dream|both|deny]
 import fs from 'fs'
 import path from 'path'
-import { getSettings, FD_ROOT, P, cliGuard } from '../cfg.mjs'
+import { settingsOrExit, FD_ROOT, P, cliGuard } from '../cfg.mjs'
 import { makeDispatch } from '../arsi/dispatchers.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 import { preflightOf } from '../arsi/rsiNums.mjs'
@@ -11,7 +11,7 @@ guardEntry('smokeDispatch')
 //命令列只認一個位置引數(node、dream、both、deny; TOOL_FLAGS.smokeDispatch): 任何旗標、多餘之位置引數一律拒收(離開碼 2; 於讀設定與任何派工之前; 訊息固定、不帶輸入值)
 cliGuard('smokeDispatch')
 
-let st = getSettings()
+let st = settingsOrExit()
 let which = process.argv[2] || 'both'
 let agents = JSON.parse(JSON.stringify(st.agents))
 agents.node.timeoutMin = 4

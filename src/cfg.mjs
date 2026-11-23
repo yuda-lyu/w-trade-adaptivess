@@ -263,7 +263,7 @@ let CLI_ENUMS = {
 //  數字之種類 = RSI_NUM_KINDS 之鍵(rsiNumOf: 數字字串〔去頭尾空白之十進位寫法〕轉為數值, 其後一律用轉換值 —— 讀取處以 argNumOf; K4、K7); 'time' = 時間字串(T2: YYYY-MM-DDTHH:mm:ss, 可帶 .SSS、可帶 Z 或 ±hh:mm; timeMsOf)
 //  分類: 規模旗標(--nodes、--arms、--parallel、--workers、--rounds、--par)給了而無效即拒收(與 --null、--limit 一致; 原: 靜默退回設定之值); 計時值(waitEvent 之 --timeout-min、--poll-sec)依 §3.7(原: 無效 ⇒ NaN ⇒ 永不結束);
 //  其餘(--k、--max、--since、--round)為輸入之值(原: 靜默用預設或視為未給)
-//  eval 與 backtest 之數值旗標(--null、--phases、--seed、--tie-salt)不在本表: 評估器之進入檔另有固定訊息(本輪不動評估器)
+//  eval 與 backtest 之數值旗標(--null、--phases、--seed、--tie-salt)不在本表: 評估器之進入檔另有固定訊息(`invalid --seed: must be an integer` 等; 1.0.48 起 --seed、--tie-salt 不合者亦拒收)
 let CLI_VALUES = {
     rsi: { nodes: 'posInt', arms: 'posInt', parallel: 'posInt', workers: 'posInt', rounds: 'posInt', par: 'posInt', round: 'posInt' },
     rankCompare: { k: 'posInt' },
@@ -585,7 +585,7 @@ let cliGuard = (entry, opt = {}) => {
 }
 
 //inputMsgOf, 設定之輸入不合之錯誤之訊息(R-EV-54): 屬 settings.guard / source.libraryRoot / rsi.rankBy / 設定檔之節、路徑欄與派工設定(getSettings)/ settings.backtest 本身(invalid backtest: must be an object; 其下之鍵為 invalid backtest.<鍵>, 由 configMsgOf 認得)者回其固定訊息(invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy、invalid settings.…、invalid backtest:), 其餘回 null(照舊拋出)
-//  與 eval/barGrid.mjs 之 configMsgOf(評估器; 認得 invalid eval. / periods. / backtest. 等)分開: 評估器之檔本輪不動 ⇒ 新增之前綴於此另設辨識器; 入口以 `configMsgOf(err) || inputMsgOf(err)` 判定
+//  與 eval/barGrid.mjs 之 configMsgOf(評估器; 認得 invalid eval. / periods. / backtest. 等)分開(configMsgOf 亦認 invalid score.): 本檔之前綴屬設定檔之節與路徑欄、禁區字樣之來源、rsi.rankBy、派工設定等, 不屬評估器之預檢; 入口以 `configMsgOf(err) || inputMsgOf(err)` 判定
 /**
  * 設定之輸入不合之錯誤之訊息: invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy、invalid settings.… 回其訊息(單行), 其餘回傳 null
  *
@@ -597,6 +597,28 @@ let cliGuard = (entry, opt = {}) => {
 let inputMsgOf = (err) => {
     let msg = String((err && err.message) || err).split('\n')[0]
     return /^invalid (guard[.:]|source\.libraryRoot|rsi\.rankBy|settings[.:]|backtest:)/.test(msg) ? msg : null
+}
+
+//settingsOrExit, 命令列與工具之入口讀設定之唯一入口(排程第 611 項 ①; R-EV-54): 各進入檔(src/cli/*.mjs)與工具(src/tools/*.mjs)一律以它取設定, 不直接呼叫 getSettings(unit-settingsOrExit 以原始碼之盤點守門)
+//  設定不合(inputMsgOf 認得者: invalid settings.<節或欄>: must be …)⇒ 印 `ERROR <固定訊息>`、離開碼 2(不印堆疊; 訊息不帶輸入值);
+//  設定讀不到(settings.json 不存在、不可讀、不是合法之 JSON)⇒ 印 `ERROR 無法讀取專案設定(…)` 一句固定之訊息(只帶 settings.json 之路徑, 不帶原錯誤之內容: JSON 之解析錯誤會回顯檔案之內容)、離開碼 2
+//  原: 不合者以未捕捉之例外結束(堆疊、離開碼 1; libCheck 為唯一例外, 其「讀不到」之字樣沿用於此)
+/**
+ * 讀取專案根之 settings.json(同 getSettings), 不合時印固定之單行訊息並以離開碼 2 結束(命令列與工具之入口用)
+ *
+ * @returns {Object} 回傳設定物件(同 getSettings)
+ * @example
+ * let st = settingsOrExit()
+ */
+let settingsOrExit = () => {
+    try {
+        return getSettings()
+    }
+    catch (err) {
+        let msg = inputMsgOf(err)
+        console.log(msg !== null ? `ERROR ${msg}` : `ERROR 無法讀取專案設定(settings.json 不存在、不可讀或內容不合; ${P('settings.json')});請於專案根執行, 或設定 ARSI_ROOT`)
+        process.exit(2)
+    }
 }
 
 /**
@@ -632,4 +654,4 @@ let writeJson = (fp, obj) => {
 }
 
 
-export { FD_ROOT, P, tms, isoOf, getSettings, argOf, argStrOf, argNumOf, CLI_FLAGS, CLI_ENUMS, CLI_VALUES, CLI_OWN, CLI_MODE_FLAGS, CLI_MODE_OWN, CLI_MODE_NEEDS, TOOL_FLAGS, timeMsOf, isLocalTimeStr, valueMsgOf, posMsgOf, eqFlagMsgOf, cliMsgOf, cliGuard, inputMsgOf, readJson, writeJson }
+export { FD_ROOT, P, tms, isoOf, getSettings, argOf, argStrOf, argNumOf, CLI_FLAGS, CLI_ENUMS, CLI_VALUES, CLI_OWN, CLI_MODE_FLAGS, CLI_MODE_OWN, CLI_MODE_NEEDS, TOOL_FLAGS, timeMsOf, isLocalTimeStr, valueMsgOf, posMsgOf, eqFlagMsgOf, cliMsgOf, cliGuard, inputMsgOf, settingsOrExit, readJson, writeJson }

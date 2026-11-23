@@ -486,7 +486,9 @@ describe('守門:節點 agent 之操作紀錄掃描', function () {
         assert(scanTrace({ workDir: t.dir, logFile: fp, privateRoot, fileHits: 'note' }).issues.some((x) => x.includes('舊制之備份')), '做夢亦不得讀')
         //g_eval.mjs 檔頭: --seed 只在 ARSI_HARNESS=1 時生效(節點不得藉換種子挑結果); 預設評估回測期
         let src = read(path.join(FD_ROOT, 'src', 'cli', 'eval.mjs'))
-        assert(/process\.env\.ARSI_HARNESS === '1' && typeof seedArg === 'number'/.test(src))
+        //(排程第 606 項: 值之檢查〔須為整數〕已移至檔首、不合者拒收; 此處 seedOverride 只在迴圈之重放時取旗標之值)
+        assert(/if \(process\.env\.ARSI_HARNESS === '1'\) \{\s*seedOverride = seedArg/.test(src))
+        assert(/typeof seedArg === 'number' && Number\.isSafeInteger\(seedArg\)/.test(src), '值須為(安全)整數')
         assert(/periodArg === 'train' \? \{ toBar: trainEndBar \} : \{ fromBar: btStartBar \}/.test(src), '預設之評估期間 = 回測期')
         //合約 §2「不得把回測期之答案寫進模組」之粗篩
         let bt = { start: '2025-10-06T00:00:00', end: '2026-07-31T00:00:00' }
@@ -853,7 +855,9 @@ describe('守門:節點 agent 之操作紀錄掃描', function () {
 
     it('g_eval.mjs:--tie-salt 與 --seed 同樣只在迴圈之重放(ARSI_HARNESS=1)時生效;迴圈之重放同時帶兩者', () => {
         let src = fs.readFileSync(path.join(FD_ROOT, 'src', 'cli', 'eval.mjs'), 'utf8')
-        assert(/tie-salt/.test(src) && /process\.env\.ARSI_HARNESS === '1' && Number\.isInteger\(tieArg\)/.test(src))
+        //(排程第 606 項: 值之檢查〔須為整數〕已移至檔首、不合者拒收; 此處 tieSalt 只在迴圈之重放時取旗標之值)
+        assert(/tie-salt/.test(src) && /if \(process\.env\.ARSI_HARNESS === '1'\) \{\s*tieSalt = tieArg/.test(src))
+        assert(/typeof tieArg === 'number' && Number\.isSafeInteger\(tieArg\)/.test(src), '值須為(安全)整數')
         let vsrc = fs.readFileSync(path.join(FD_ROOT, 'src', 'domain', 'verify.mjs'), 'utf8')
         assert(/'--seed', String\(seed0 \+ i\), '--tie-salt', String\(i\)/.test(vsrc))
         assert(/分數不穩/.test(vsrc))

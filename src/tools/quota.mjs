@@ -1,6 +1,6 @@
 import path from 'path'
 import { createRequire } from 'module'
-import { getSettings, cliGuard, argNumOf } from '../cfg.mjs'
+import { settingsOrExit, cliGuard, argNumOf } from '../cfg.mjs'
 import { checkQuota } from '../arsi/dispatchers.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 import { preflightOf } from '../arsi/rsiNums.mjs'
@@ -13,7 +13,7 @@ cliGuard('quota')
 //查各角色(節點 agent、做夢 agent)所用訂閱之用量, 與起跑前之額度守門同一查詢(規則 R-RUN-5); 只印角色、視窗名、百分比與重置時刻, 不印金鑰與帳號
 //  node tools/quota.mjs [--max 95] [--all] [--probe]     --all: 另列 Claude 訂閱之全部視窗;  --max: 以此上限試算「此刻起跑會不會被擋」(預設取 settings.rsi.preflight.quotaMaxPercent, 無則 95; 各角色之 agents.<role>.quotaMaxPercent 優先)
 //    --probe: 與起跑前之守門相同 —— 主模型達門檻而有備援時實際試一次備援(免費池用盡即算擋下; 規則 R-RUN-8); 未給則只看用量(不探測)
-let st = getSettings()
+let st = settingsOrExit()
 //門檻之取值同起跑前之額度守門(preflightOf: 數字字串轉數值, 無效者用預設 95; 排程第 595 項); --max 之值為十進位寫法之有限數(同 preflightOf 之 quotaMaxPercent)
 //  --max 給了而不是有限數 ⇒ 已於上之 cliGuard 拒收(CLI_VALUES.quota; 排程第 607 項; 原: 靜默取設定之值 —— `--max abc` 以為在試算 abc 卻是 95); 此處取檢查合格之轉換值(K4)
 let preNum = preflightOf(st.rsi)

@@ -20,6 +20,9 @@ let CFG_KINDS = {
     int: ['an integer', (x) => Number.isSafeInteger(x)],
     //逾時之秒數: 正數, 且換成毫秒不超過 2147483647(Node 計時器之上限; 超過者計時器溢位而立即觸發 ⇒ 每次皆「逾時」; 跨套件規格 §3.7)
     timerSec: ['a positive number of seconds that is at most 2147483', (x) => x > 0 && x * 1000 <= 2147483647],
+    //判讀之門檻(settings.score.*)用: 有限數(S、新鮮度、最差相位之等效年化之門檻; 可為負)與機率(0 ~ 1; 虛無之 p 之門檻)
+    num: ['a finite number', () => true],
+    prob: ['a number from 0 to 1', (x) => x >= 0 && x <= 1],
 }
 
 /**
@@ -50,21 +53,6 @@ let cfgNumOf = (v, def, where, kind) => {
         throw new Error(`invalid ${where}: must be ${k[0]}`)
     }
     return x
-}
-
-
-/**
- * 寬鬆之數值取值(只供合約之參考版寫出硬上限與判讀之門檻之數字;不屬影響評估之數字,評估器不經它):有限數字、數字字串取其數值,其餘回 null(呼叫端用參考版所寫之值)
- *
- * @param {*} v 輸入設定之值
- * @returns {Number|null} 回傳數值或 null
- * @example
- * cfgNumLoose('12')
- * // => 12
- */
-let cfgNumLoose = (v) => {
-    let x = typeof v === 'number' ? v : (typeof v === 'string' && isenum(v) ? Number(v) : NaN)
-    return Number.isFinite(x) ? x : null
 }
 
 //EVAL_NUMS, 影響評估之數字: 鍵 → [未給之預設, 種類]; 評估器、設定之預檢、命令列、任務書與合約之參考版共用(單一定義)
@@ -181,6 +169,69 @@ let evalLimitsOf = (ev, who = 'eval') => {
     return out
 }
 
+//EVAL_SCORE, 判讀之門檻(settings.score)之各鍵: 路徑 → [未給之預設, 種類](單一定義; 排程第 606 項; R-EV-44 ④之二、R-EV-55): 預設 = 參考設定(settings.json)與合約之參考版所寫之值
+//  判讀之門檻決定階梯與否決(評估之結果)⇒ 給了而無效即拒絕(同 eval.limits; 原: scoreOf 以原值比較 —— null、空字串被當 0、true 被當 1、陣列與數字字串以隱式轉型比較、非數字者使比較恆假而階梯恆不過);
+//  未給(undefined 或 null)取預設(原: 缺鍵於讀取時為 TypeError); 數字字串收受並轉為數值(K7、K4); scoreOf、設定之預檢(checkEvalSettings)、任務書(texts.mjs)與合約之參考版(initProject.mjs)共用 ⇒ 檢測之值即使用之值
+let EVAL_SCORE = {
+    ladder1: { S: [15, 'num'], nullP: [0.05, 'prob'] },
+    ladder2: { freshMin: [10, 'num'], worstPhaseMin: [5, 'num'] },
+    ladder3: { monthlyOrders: [300, 'nonNegNum'], peakHold: [30, 'nonNegNum'] },
+}
+//freqBands, 月均單之分段界線 [低 | 中 | 高]: 兩個非負數(預設 [100, 250])
+let EVAL_FREQ_BANDS = [100, 250]
+
+/**
+ * 判讀之門檻(settings.score)之取值與檢測:ladder1(S、nullP)、ladder2(freshMin、worstPhaseMin)、ladder3(monthlyOrders、peakHold)、freqBands(兩個非負數)依 EVAL_SCORE 逐一以 cfgNumOf 取值;
+ * score 或各 ladder 未給(undefined 或 null)為預設;非物件(含陣列)拋 invalid <who>: must be an object / invalid <who>.ladderN: must be an object;給了而無效者拋 invalid <who>.<鍵>: must be …(不帶輸入值);回傳新物件(不改呼叫端之物件)
+ *
+ * @param {Object} score 輸入判讀之門檻(settings.score;可為 null 或 undefined)
+ * @param {String} [who='score'] 輸入錯誤訊息所用之物件名稱,預設'score'
+ * @returns {Object} 回傳 { ladder1: { S, nullP }, ladder2: { freshMin, worstPhaseMin }, ladder3: { monthlyOrders, peakHold }, freqBands: [b1, b2] }(皆為數值)
+ * @example
+ * evalScoreOf({ ladder1: { S: '12' } }).ladder1
+ * // => { S: 12, nullP: 0.05 }
+ */
+let evalScoreOf = (score, who = 'score') => {
+    let s = score
+    if (s === undefined || s === null) {
+        s = {}
+    }
+    else if (typeof s !== 'object' || Array.isArray(s)) {
+        throw new Error(`invalid ${who}: must be an object`)
+    }
+    let out = {}
+    for (let [lad, keys] of Object.entries(EVAL_SCORE)) {
+        let l = s[lad]
+        if (l === undefined || l === null) {
+            l = {}
+        }
+        else if (typeof l !== 'object' || Array.isArray(l)) {
+            throw new Error(`invalid ${who}.${lad}: must be an object`)
+        }
+        out[lad] = {}
+        for (let [k, [def, kind]] of Object.entries(keys)) {
+            //每個鍵只讀一次(檢查之值即使用之值)
+            out[lad][k] = cfgNumOf(l[k], def, `${who}.${lad}.${k}`, kind)
+        }
+    }
+    let fb = s.freqBands
+    if (fb === undefined || fb === null) {
+        out.freqBands = EVAL_FREQ_BANDS.slice()
+    }
+    else {
+        if (!Array.isArray(fb) || fb.length !== 2) {
+            throw new Error(`invalid ${who}.freqBands: must be an array of two non-negative numbers`)
+        }
+        out.freqBands = fb.map((x, i) => {
+            if (x === undefined || x === null) {
+                throw new Error(`invalid ${who}.freqBands[${i}]: must be ${CFG_KINDS.nonNegNum[0]}`)
+            }
+            return cfgNumOf(x, 0, `${who}.freqBands[${i}]`, 'nonNegNum')
+        })
+    }
+    return out
+}
+
 /**
  * 相位數(設定之口徑):settings.eval.phases 為非空陣列者為其長度,否則為評估器之預設 7(0 ~ 6 日各一個起始相位)(只取長度, 不用元素之值; 元素之檢測在評估器與組裝時之預檢);
  * 用於說明**正本評估之設定**者(任務書、合約之參考版、回測期旗標之判讀文字)與 phaseCountOfAll 之後備;說明某一次評估之結果者取 phaseCountOfMetrics
@@ -279,4 +330,4 @@ let cfgListOf = (v, def, where, kind, allowEmpty = false) => {
 }
 
 
-export { cfgNumOf, cfgNumLoose, CFG_KINDS, EVAL_NUMS, evalCfgNumsOf, EVAL_RUN_NUMS, evalRunNumsOf, evalRunNumOf, EVAL_LIMITS, evalLimitsOf, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll, cfgListOf }
+export { cfgNumOf, CFG_KINDS, EVAL_NUMS, evalCfgNumsOf, EVAL_RUN_NUMS, evalRunNumsOf, evalRunNumOf, EVAL_LIMITS, evalLimitsOf, EVAL_SCORE, evalScoreOf, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll, cfgListOf }

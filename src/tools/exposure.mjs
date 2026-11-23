@@ -1,5 +1,5 @@
 import path from 'path'
-import { getSettings, argStrOf, cliGuard } from '../cfg.mjs'
+import { settingsOrExit, argStrOf, cliGuard } from '../cfg.mjs'
 import { peekRunLock } from '../arsi/runner.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
@@ -16,7 +16,7 @@ cliGuard('exposure')
 //  放行綁選集指紋: 重做或 reverify 使選集指紋改變者放行自動失效(須重新放行); 只對判為側別曝險之節點放行; 撤銷只對已放行者
 //  寫入後: S、階梯不變(變了即報錯, 離開碼 1); 節點文件之 control.exposureRelease 同步; 該節點之「提示(側別曝險)」即時改寫; 重產看板與搜尋地圖
 //  輪次進行中不得執行(看板、載體與迴圈檢查於輪中由迴圈讀寫); 判定關閉(settings.rsi.exposure = false)者只列出此事
-let st = getSettings()
+let st = settingsOrExit()
 let P = makeProjectOrExit(st, {})
 P.rsi.init()
 let executed = () => P.rsi.store.listIndex().filter((r) => r.status === 'executed').map((r) => P.rsi.store.getNode(r.id)).filter(Boolean)
@@ -52,7 +52,8 @@ if (lock.running) {
 }
 let hits = executed().filter((n) => n.id.startsWith(key))
 if (hits.length !== 1) {
-    console.error(`節點 ${key}: 符合 ${hits.length} 個(須恰為 1 個)`)
+    //訊息不帶輸入之前綴(K9; 排程第 611 項 ②; 原: `節點 <前綴>: 符合 N 個`)
+    console.error(`節點前綴符合 ${hits.length} 個(須恰為 1 個)`)
     process.exit(2)
 }
 let n = hits[0]

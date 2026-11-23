@@ -1,5 +1,5 @@
 import path from 'path'
-import { getSettings, cliGuard, argNumOf, timeMsOf } from '../cfg.mjs'
+import { settingsOrExit, cliGuard, argNumOf, timeMsOf } from '../cfg.mjs'
 import { waitRunEnd } from '../arsi/waitEnd.mjs'
 
 //命令列之旗標只認 --timeout-min、--since、--poll-sec(TOOL_FLAGS.waitEvent; 空白分隔): 等號、未列、重複、無值、多餘之值一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值; 原: 靜默忽略而等到預設之時限)
@@ -13,7 +13,7 @@ cliGuard('waitEvent')
 //    --poll-sec   取樣間隔(預設 20 秒; 至少 2 秒); 正數且換成毫秒不超過 2147483647, 無效 ⇒ 拒收
 //  輸出(最後一行為機器可讀之一列 JSON): 事件本身; 其間之 round-done 事件逐列印出
 //  離開碼: 0 = run-done; 1 = run-failed; 3 = skipped; 4 = 逾時(執行仍在進行); 5 = 鎖檔之行程已不在而無結束事件(異常結束)
-let st = getSettings()
+let st = settingsOrExit()
 //旗標之值(排程第 607 項; 已於上之 cliGuard 檢查〔CLI_VALUES.waitEvent〕: --timeout-min 為正數且換成毫秒不超過 2147483647、--poll-sec 同(秒)、--since 為時間字串〔T2〕; 檢測之值即使用之值 —— 取轉換值, K4):
 //  原: `Number(abc)` 為 NaN ⇒ 逾時之計時器與取樣間隔皆為 NaN ⇒ 永不結束 / 永看不到結束事件; --since 無效 ⇒ NaN ⇒ 比較恆假
 let fdLogs = path.join(st.rsi.root, 'logs')

@@ -1,4 +1,4 @@
-import { evalLimitsOf, phaseText } from './cfgNum.mjs'
+import { evalLimitsOf, evalScoreOf, phaseText } from './cfgNum.mjs'
 
 
 //判讀: 評估器之原料 raw → 分數 S、階梯 ladder、旗標 flags、格 cell(品質多樣性用)
@@ -31,7 +31,7 @@ let OOS_WHY = {
  * @param {Object} raw 輸入評估器之評估結果(可為帶 metrics 欄之物件, 或 metrics 本身)
  * @param {Object} opt 輸入設定物件
  * @param {Object} opt.limits 輸入硬上限物件{ monthlyOrders, peakHold }
- * @param {Object} opt.score 輸入評分門檻物件{ ladder1: { S, nullP }, ladder2: { freshMin, worstPhaseMin }, ladder3: { monthlyOrders, peakHold }, freqBands: [b1, b2] }
+ * @param {Object} opt.score 輸入評分門檻物件{ ladder1: { S, nullP }, ladder2: { freshMin, worstPhaseMin }, ladder3: { monthlyOrders, peakHold }, freqBands: [b1, b2] }(經 evalScoreOf 取值與檢測: 未給之鍵取預設 15 / 0.05 / 10 / 5 / 300 / 30 / [100, 250]、數字字串轉為數值、給了而無效者拋 invalid score.<鍵>: must be …)
  * @param {String} [opt.layer=null] 輸入層名稱, 用於 cell 字串前綴, 預設null(以 ? 表示)
  * @param {Object} [opt.evidence=null] 輸入證據物件(可含 trust、backtest、backtestOK), 預設null
  * @param {Integer} [opt.nPh=7] 輸入相位數(settings.eval.phases 之長度; phaseCountOf),只用於 flags.why 內「七相位皆為正」之寫法(排程第 547 項; 預設 7 者逐字不變),預設7
@@ -52,6 +52,9 @@ let scoreOf = (raw, { limits, score, layer = null, evidence = null, nPh = 7 } = 
     let pk = m.op.peakHold.max
     //硬上限之取值與檢測(evalLimitsOf; 與合約、任務書之參考版同一函數與同一預設 400 / 50; 規則 R-EV-44 ④之二): 未給 = 預設; 數字字串轉為數值後才比較; 給了而無效 ⇒ 拒絕(原: 無檢測, 缺鍵或非數字者永不否決, null 或空字串被當 0 而一律否決)
     let lim = evalLimitsOf({ limits }, 'eval')
+    //判讀之門檻之取值與檢測(evalScoreOf; 排程第 606 項; R-EV-44 ④之二、R-EV-55; 與設定之預檢、任務書、合約之參考版同一函數): 未給 = 預設(15 / 0.05 / 10 / 5 / 300 / 30 / [100, 250]); 數字字串轉為數值後才比較; 給了而無效 ⇒ 拒絕
+    //  (原: 以原值比較 —— null、空字串、陣列被當 0、true 被當 1、數字字串以隱式轉型比較、非數字者使比較恆假; 缺鍵於讀取時為 TypeError)
+    let sc = evalScoreOf(score, 'score')
     //hard: 使階梯歸零之否決(成品本身不可用)
     let hard = false
     if (mo > lim.monthlyOrders) {
@@ -72,30 +75,30 @@ let scoreOf = (raw, { limits, score, layer = null, evidence = null, nPh = 7 } = 
     }
     let backtest = evidence && typeof evidence.backtest === 'string' && (evidence.backtest in OOS_WHY) ? evidence.backtest : (evidence && typeof evidence.backtestOK === 'boolean' ? (evidence.backtestOK ? 'pass' : 'fail') : null)
     let trainLadder = 0
-    let volOk = !m.nullVol || m.nullVol.p <= score.ladder1.nullP
+    let volOk = !m.nullVol || m.nullVol.p <= sc.ladder1.nullP
     //同活躍度虛無(有算時): 選集只是較安靜 / 較活躍而無其他內容者, 不算過階梯 1
-    let actOk = !m.nullAct || m.nullAct.p <= score.ladder1.nullP
+    let actOk = !m.nullAct || m.nullAct.p <= sc.ladder1.nullP
     //同側同活躍度虛無(有算時 = 選集之方向或活躍度偏離全體隨機): 績效可由「方向 × 活躍度」之組成重現者(同組成之隨機替換一樣好), 不算過階梯 1
     //  此虛無一律計算; 只在 triggered(選集之每隻訊號數或做多比例偏離全體隨機逾 10%)時列入階梯 1 —— 舊結果無 triggered 欄者(當時只在偏離時才算)視為 triggered
     let sideReq = !!m.nullSideAct && m.nullSideAct.triggered !== false
-    let sideOk = !sideReq || m.nullSideAct.p <= score.ladder1.nullP
-    let l1 = S >= score.ladder1.S && m.null && m.null.p <= score.ladder1.nullP && volOk && actOk && sideOk
+    let sideOk = !sideReq || m.nullSideAct.p <= sc.ladder1.nullP
+    let l1 = S >= sc.ladder1.S && m.null && m.null.p <= sc.ladder1.nullP && volOk && actOk && sideOk
     if (!l1) {
-        why.push(`階梯 1 未過: S ${S}(門檻 ${score.ladder1.S}), 虛無 p ${m.null ? m.null.p : '未算'}(門檻 ${score.ladder1.nullP})${m.nullVol ? `, 同訊號量虛無 p ${m.nullVol.p}` : ''}${m.nullAct ? `, 同活躍度虛無 p ${m.nullAct.p}` : ''}${sideReq ? `, 同側同活躍度虛無 p ${m.nullSideAct.p}(組成可重現 ${m.nullSideAct.share === null ? '—' : `${Math.round(m.nullSideAct.share * 100)}%`})` : ''}`)
+        why.push(`階梯 1 未過: S ${S}(門檻 ${sc.ladder1.S}), 虛無 p ${m.null ? m.null.p : '未算'}(門檻 ${sc.ladder1.nullP})${m.nullVol ? `, 同訊號量虛無 p ${m.nullVol.p}` : ''}${m.nullAct ? `, 同活躍度虛無 p ${m.nullAct.p}` : ''}${sideReq ? `, 同側同活躍度虛無 p ${m.nullSideAct.p}(組成可重現 ${m.nullSideAct.share === null ? '—' : `${Math.round(m.nullSideAct.share * 100)}%`})` : ''}`)
     }
     if (l1 && !hard) {
         trainLadder = 1
         let hs = Object.keys(m.fresh || {})
-        let freshOk = hs.length > 0 && hs.every((H) => m.fresh[H].eqYr.mean >= score.ladder2.freshMin)
-        let l2 = freshOk && min >= score.ladder2.worstPhaseMin
+        let freshOk = hs.length > 0 && hs.every((H) => m.fresh[H].eqYr.mean >= sc.ladder2.freshMin)
+        let l2 = freshOk && min >= sc.ladder2.worstPhaseMin
         if (!l2) {
-            why.push(`階梯 2 未過: 新鮮度 ${hs.map((H) => `${H}d ${m.fresh[H].eqYr.mean.toFixed(1)}`).join(' / ')}(皆須 ≥ ${score.ladder2.freshMin}), 最差相位 ${min.toFixed(1)}(須 ≥ ${score.ladder2.worstPhaseMin})`)
+            why.push(`階梯 2 未過: 新鮮度 ${hs.map((H) => `${H}d ${m.fresh[H].eqYr.mean.toFixed(1)}`).join(' / ')}(皆須 ≥ ${sc.ladder2.freshMin}), 最差相位 ${min.toFixed(1)}(須 ≥ ${sc.ladder2.worstPhaseMin})`)
         }
         if (l2) {
             trainLadder = 2
-            let l3 = mo <= score.ladder3.monthlyOrders && pk <= score.ladder3.peakHold
+            let l3 = mo <= sc.ladder3.monthlyOrders && pk <= sc.ladder3.peakHold
             if (!l3) {
-                why.push(`階梯 3 未過: 月均單 ${mo.toFixed(0)}(須 ≤ ${score.ladder3.monthlyOrders}), 最大持倉 ${pk}(須 ≤ ${score.ladder3.peakHold})`)
+                why.push(`階梯 3 未過: 月均單 ${mo.toFixed(0)}(須 ≤ ${sc.ladder3.monthlyOrders}), 最大持倉 ${pk}(須 ≤ ${sc.ladder3.peakHold})`)
             }
             if (l3) {
                 trainLadder = 3
@@ -110,7 +113,7 @@ let scoreOf = (raw, { limits, score, layer = null, evidence = null, nPh = 7 } = 
         }
     }
     let oosVeto = backtest === 'level' || backtest === 'below' || backtest === 'fail'
-    let [b1, b2] = score.freqBands
+    let [b1, b2] = sc.freqBands
     let band = mo < b1 ? 'low' : (mo < b2 ? 'mid' : 'high')
     return { S, ladder, flags: { vetoed: hard || oosVeto, why, backtest, trainLadder }, cell: `${layer || '?'}|${band}`, evaluator: 1 }
 }

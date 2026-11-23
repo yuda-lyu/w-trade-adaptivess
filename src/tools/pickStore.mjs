@@ -1,4 +1,4 @@
-import { getSettings, cliGuard } from '../cfg.mjs'
+import { settingsOrExit, cliGuard } from '../cfg.mjs'
 import { buildPickStore } from '../domain/pickStore.mjs'
 import { P as PI, isIntegrityError } from '../eval/intrinsics.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
@@ -17,7 +17,7 @@ cliGuard('pickStore')
 let crossNote = (c) => (!c ? '' : (c.invalid ? ';其他標的之正負號檔之形狀不合(未列)' : `;已有其他標的正負號者 ${c.signed} 個${c.ignored ? `(檔內不是正負號而忽略之值 ${c.ignored} 個)` : ''}`))
 let r
 try {
-    r = await buildPickStore(getSettings())
+    r = await buildPickStore(settingsOrExit())
 }
 catch (err) {
     if (isIntegrityError(err)) {

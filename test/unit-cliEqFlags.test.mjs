@@ -158,11 +158,25 @@ describe('命令列旗標之等號寫法(排程第 590 項)', function () {
             assert(!fs.existsSync(path.join(emptyRoot, 'rsi')), 'launch 未建日誌夾')
         })
 
-        it('合格之寫法(空白分隔; 值內含 =)不被拒: 以 eval 之 --pick 為例, 通過旗標之檢查後依其餘之處理(此處因專案根無設定而於讀設定時離開, 離開碼不是 2 之固定訊息)', () => {
+        it('合格之寫法(空白分隔; 值內含 =)不被拒: 以 eval 之 --pick 為例, 通過旗標之檢查後依其餘之處理(此處因專案根無設定而於讀設定時以「ERROR 無法讀取專案設定」離開, 非旗標之 invalid 訊息)', () => {
             //對照: 若旗標之檢查誤拒空白分隔者, 離開碼 2 與固定訊息會出現
             let r = runIn(emptyRoot, 'eval', ['--pick', 'a=b.mjs', '--mode', 'full', '--no-log'])
             assert(!r.out.some((l) => l.startsWith('invalid')), r.out.join('|'))
-            assert.notStrictEqual(r.status, 2)
+            //排程第 611 項 ①: 讀設定改經 settingsOrExit(讀不到者印 `ERROR 無法讀取專案設定(…)`、離開碼 2; 原: 未捕捉之例外、離開碼 1)⇒ 「通過旗標之檢查而到達讀設定」以該固定訊息為證(旗標之拒收訊息為 invalid 起首)
+            assert(r.out.some((l) => l.startsWith('ERROR 無法讀取專案設定')), r.out.join('|'))
+        })
+
+        it('--seed、--tie-salt 給了而不是整數者於讀設定之前拒收(排程第 606 項; 空之專案根仍為旗標之固定訊息、離開碼 2, 不是「無法讀取專案設定」; 不寫任何檔); 合格之整數通過此檢查(到達讀設定)', () => {
+            for (let [fl, v] of [['--seed', '1.5'], ['--seed', 'abc'], ['--seed', '1000000000000000000000'], ['--tie-salt', '0.5'], ['--tie-salt', 'x']]) {
+                let r = runIn(emptyRoot, 'eval', ['--pick', 'p.mjs', fl, v])
+                assert.strictEqual(r.status, 2, `${fl} ${v}: ${r.out.join('|')}`)
+                assert.deepEqual(r.out, [`invalid ${fl}: must be an integer`], `${fl} ${v}`)
+            }
+            for (let [fl, v] of [['--seed', '5'], ['--seed', '-3'], ['--tie-salt', '0'], ['--tie-salt', '7']]) {
+                let r = runIn(emptyRoot, 'eval', ['--pick', 'p.mjs', fl, v])
+                assert(r.out.some((l) => l.startsWith('ERROR 無法讀取專案設定')), `${fl} ${v}: ${r.out.join('|')}`)
+            }
+            assert.deepEqual(fs.readdirSync(emptyRoot), [], '不寫任何檔')
         })
     })
 
@@ -362,7 +376,7 @@ describe('命令列旗標之等號寫法(排程第 590 項)', function () {
             assert.strictEqual(b.o.seed, 20261110)
         })
 
-        it('--seed、--tie-salt 只在迴圈之重放(ARSI_HARNESS=1)時生效且須為(安全)整數: 小數、非數字者忽略並印說明(沿用設定之值); 整數者採用', () => {
+        it('--seed、--tie-salt 只在迴圈之重放(ARSI_HARNESS=1)時生效且須為(安全)整數: 小數、非數字、超出安全整數者拒收(離開碼 2、固定訊息、不評估; 排程第 606 項; 原: 忽略並印說明、照常評估); 合格之整數者於非迴圈忽略並說明、於迴圈之重放採用', () => {
             mkSettings({ seed: 77 })
             let plain = run(['--mode', 'quick', '--seed', '5'])
             assert.strictEqual(plain.status, 0)
@@ -373,15 +387,27 @@ describe('命令列旗標之等號寫法(排程第 590 項)', function () {
             assert.strictEqual(ok.status, 0, ok.out.join('|').slice(0, 200))
             assert.strictEqual(ok.o.seed, 5)
             assert.strictEqual(ok.o.tieSalt, 2)
-            //迴圈之重放而旗標之值不合(小數、非數字、超出安全整數之整數): 說明原因(須為整數)、沿用設定之值; 非迴圈者一律說「只供迴圈之重放使用」(上)
+            //旗標之值不合(小數、非數字、超出安全整數之整數): 不評估 —— 離開碼 2、固定訊息(不帶輸入值)、不寫結果檔、不記評估紀錄; 迴圈之重放與非迴圈者皆同(值之檢查先於「是否迴圈之重放」)
+            //  原(1.0.47): 迴圈之重放者印「須為整數, 已忽略」、非迴圈者印「只供迴圈之重放使用, 已忽略」, 皆沿用設定之值而照常評估(離開碼 0)
             for (let sd of ['1.5', 'abc', '1000000000000000000000']) {
-                let r = run(['--mode', 'quick', '--seed', sd, '--tie-salt', sd, '--no-log'], H)
+                for (let [env, tag] of [[H, '迴圈之重放'], [{}, '非迴圈']]) {
+                    let r1 = run(['--mode', 'quick', '--seed', sd, '--no-log'], env)
+                    assert.strictEqual(r1.status, 2, `${tag} --seed ${sd}: ${r1.out.join('|').slice(0, 200)}`)
+                    assert.deepEqual(r1.out, ['invalid --seed: must be an integer'], `${tag} --seed ${sd}`)
+                    assert.strictEqual(r1.o, null, `${tag} --seed ${sd}: 不寫結果檔`)
+                    let r2 = run(['--mode', 'quick', '--tie-salt', sd, '--no-log'], env)
+                    assert.strictEqual(r2.status, 2, `${tag} --tie-salt ${sd}: ${r2.out.join('|').slice(0, 200)}`)
+                    assert.deepEqual(r2.out, ['invalid --tie-salt: must be an integer'], `${tag} --tie-salt ${sd}`)
+                    assert.strictEqual(r2.o, null, `${tag} --tie-salt ${sd}: 不寫結果檔`)
+                    assert(!r1.out.join('').includes(sd) && !r2.out.join('').includes(sd), '不回顯輸入值')
+                }
+            }
+            //合格之整數(含 0、負數、1.0)於非迴圈者仍「只供迴圈之重放使用, 已忽略」(設計: 節點不得藉換種子挑結果)、離開碼 0
+            for (let sd of ['0', '-3', '1.0']) {
+                let r = run(['--mode', 'quick', '--seed', sd, '--tie-salt', sd, '--no-log'])
                 assert.strictEqual(r.status, 0, `${sd}: ${r.out.join('|').slice(0, 200)}`)
-                assert(r.out.includes('--seed 須為整數(安全整數之範圍內),已忽略(沿用設定之亂數種子)'), `${sd}: 不合之種子不採用(評估器之種子須為整數)`)
-                assert(r.out.includes('--tie-salt 須為整數(安全整數之範圍內),已忽略(沿用正本之同分次序)'), `${sd}: 不合之鹽不採用`)
-                assert(!r.out.some((l) => l.includes('只供迴圈之重放使用')), `${sd}: 迴圈之重放不再誤稱「只供迴圈之重放使用」`)
+                assert(r.out.includes('--seed 只供迴圈之重放使用,已忽略(沿用設定之亂數種子)') && r.out.includes('--tie-salt 只供迴圈之重放使用,已忽略(沿用正本之同分次序)'), `${sd}`)
                 assert.strictEqual(r.o.seed, 77)
-                assert.strictEqual(r.o.tieSalt, undefined)
             }
         })
     })

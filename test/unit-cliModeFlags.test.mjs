@@ -299,7 +299,7 @@ describe('命令列之「模式 × 旗標」與 g_backtest.mjs --seed 之拒收(
             }
         })
 
-        it('rsi: 對照 —— 合格之組合通過此檢查(空之專案根無 settings.json ⇒ 其後於讀設定時離開碼 1, 不是 2; 原靜默之寫法若被忽略亦同, 故以上案之離開碼 2 為證)', () => {
+        it('rsi: 對照 —— 合格之組合通過此檢查(空之專案根無 settings.json ⇒ 其後於讀設定時以 settingsOrExit 之固定訊息「ERROR 無法讀取專案設定」離開; 原靜默之寫法若被忽略亦同, 故以上案之旗標之固定訊息為證)', () => {
             for (let args of [
                 ['--mode', 'status'],
                 ['--mode', 'dry', '--nodes', '2'],
@@ -312,7 +312,8 @@ describe('命令列之「模式 × 旗標」與 g_backtest.mjs --seed 之拒收(
                 ['--mode', 'annotate', '--round', '1', '--file', 'x.txt'],
             ]) {
                 let r = runIn('rsi', args)
-                assert.notStrictEqual(r.status, 2, `${args.join(' ')}: ${r.out.join(' | ').slice(0, 200)}`)
+                //通過旗標之檢查而到達讀設定: 空之專案根 ⇒ settingsOrExit 之固定訊息(排程第 611 項 ①; 原: 未捕捉之例外、離開碼 1, 故以「離開碼不是 2」為證)
+                assert(r.out.some((l) => l.startsWith('ERROR 無法讀取專案設定')), `${args.join(' ')}: ${r.out.join(' | ').slice(0, 200)}`)
                 assert(!r.out.some((l) => l.startsWith('invalid ')), `${args.join(' ')}: ${r.out.join(' | ').slice(0, 200)}`)
             }
         })
@@ -338,10 +339,11 @@ describe('命令列之「模式 × 旗標」與 g_backtest.mjs --seed 之拒收(
             }
         })
 
-        it('整數(含負數、帶小數點但值為整數者 1.0、安全整數之上限)通過此檢查(其後於讀設定時離開碼 1); 無值仍由通用檢查拒收(離開碼 2)', () => {
+        it('整數(含負數、帶小數點但值為整數者 1.0、安全整數之上限)通過此檢查(其後於讀設定時以「ERROR 無法讀取專案設定」離開); 無值仍由通用檢查拒收(離開碼 2)', () => {
             for (let v of ['7', '0', '-5', '1.0', '9007199254740991']) {
                 let r = runBt(['--pick', 'p.mjs', '--name', 'n', '--seed', v])
-                assert.notStrictEqual(r.status, 2, `--seed ${v}: ${r.out.join(' | ').slice(0, 200)}`)
+                //到達讀設定 ⇒ settingsOrExit 之固定訊息(排程第 611 項 ①; 原以離開碼不是 2 為證)
+                assert(r.out.some((l) => l.startsWith('ERROR 無法讀取專案設定')), `--seed ${v}: ${r.out.join(' | ').slice(0, 200)}`)
                 assert(!r.out.some((l) => l.includes('invalid --seed')), `--seed ${v}`)
             }
             let r = runBt(['--pick', 'p.mjs', '--name', 'n', '--seed'])
@@ -352,7 +354,7 @@ describe('命令列之「模式 × 旗標」與 g_backtest.mjs --seed 之拒收(
         it('原始碼: 檔首之檢查在讀設定之前; 其後之取值不再有「忽略並沿用設定」之分支', () => {
             let src = fs.readFileSync(path.join(FD_ROOT, 'src', 'cli', 'backtest.mjs'), 'utf8')
             let i = src.indexOf('invalid --seed: must be an integer')
-            let j = src.search(/=\s*getSettings\(\)/)
+            let j = src.search(/=\s*settingsOrExit\(\)/)
             assert(i > 0 && j > i, '檢查在讀設定之前')
             assert(!src.includes('已忽略(沿用設定之亂數種子)'), '無忽略之分支')
         })

@@ -247,7 +247,8 @@ describe('命令列旗標之嚴格檢查(未列之旗標、重複、無值、列
                 for (let v of ['3', '03']) {
                     let r = runIn('rsi', ['--mode', mode, '--null', v])
                     assert(!r.out.some((l) => l.includes('invalid --null')), `${mode} --null ${v}: 通過檢查`)
-                    assert.notStrictEqual(r.status, 2, `${mode} --null ${v}`)
+                    //到達讀設定 ⇒ settingsOrExit 之固定訊息(排程第 611 項 ①; 原以離開碼不是 2 為證)
+                    assert(r.out.some((l) => l.startsWith('ERROR 無法讀取專案設定')), `${mode} --null ${v}`)
                 }
             }
             //其他模式: --null 不屬該模式(排程第 595 項之接續「模式 × 旗標」; 原: 靜默忽略)⇒ 以模式表之固定訊息拒收(值之檢查只在 fill / extfill)
@@ -316,7 +317,7 @@ describe('命令列旗標之嚴格檢查(未列之旗標、重複、無值、列
             assert.deepEqual(bare.out, ['invalid --limit: must be written as --limit <N> (a value is required)'])
             let ok = runIn('build', ['--limit', '5'])
             assert(!ok.out.some((l) => l.startsWith('invalid ')), '合格者通過檢查(其後於讀設定時離開)')
-            assert.notStrictEqual(ok.status, 2)
+            assert(ok.out.some((l) => l.startsWith('ERROR 無法讀取專案設定')), '到達讀設定 ⇒ settingsOrExit 之固定訊息(排程第 611 項 ①; 原以離開碼不是 2 為證)')
             //--limit 與 --train 不併用(原: --train 時 --limit 靜默被丟掉而建成完整之訓練期帳本)
             let both = runIn('build', ['--limit', '5', '--train'])
             assert.strictEqual(both.status, 2)

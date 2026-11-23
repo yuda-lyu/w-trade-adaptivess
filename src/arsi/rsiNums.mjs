@@ -25,6 +25,9 @@ let RSI_NUM_KINDS = {
     timerMs: ['a positive number of milliseconds that is at most 2147483647', (x) => x > 0 && x <= 2147483647],
     //等待之間隔之秒數(tools/waitEvent.mjs 之 --poll-sec): 正數, 且換成毫秒不超過 2147483647(同上之理由)
     timerSec: ['a positive number of seconds that is at most 2147483', (x) => x > 0 && x * 1000 <= 2147483647],
+    //最長等待之秒數 / 分鐘數(settings.resources.evalMaxWaitSec、maxWaitMin; 資源閘之等待上限): 非負數(0 = 不等待、逾時立即放行; 同改前之行為), 且換成毫秒不超過 2147483647(同上之理由; 跨套件規格 §3.7)
+    waitSec: ['a non-negative number of seconds that is at most 2147483', (x) => x >= 0 && x * 1000 <= 2147483647],
+    waitMin: ['a non-negative number of minutes that is at most 35791', (x) => x >= 0 && x * 60000 <= 2147483647],
 }
 
 //RSI_NUMS, 各鍵之種類(單一定義): 設定之路徑 → 種類; 無效或未給 ⇒ 預設(呼叫端所給); unit-rsiNums 以原始碼之盤點核對「各鍵之讀取皆經 rsiNumOf」
@@ -147,6 +150,41 @@ let preflightOf = (rsiCfg) => {
     return { lockStaleHours: orOf(p.lockStaleHours, 'posNum', 6), quotaMaxPercent: orOf(p.quotaMaxPercent, 'num', 95), maxConsecutiveFailures: orOf(p.maxConsecutiveFailures, 'int', 2) }
 }
 
-//settings.resources(cpuMax、ramUsedMaxGB、cpuStart、ramStartGB、sampleSec、pollSec、maxWaitMin)不在本檔: 評估器之進入檔(src/cli/eval.mjs)之資源閘另讀同一組鍵(typeof number), 本輪不動評估器 ⇒ 為免同一鍵有兩種解讀, 整組留待下次動評估器時一併
+//RESOURCE_NUMS, settings.resources 之各鍵之種類(單一定義; 排程第 606 項; R-EV-55): 資源上限屬執行面之設定(不決定評估或回測之數字)⇒ K3(給了而無效 ⇒ 視為未給、改用預設; 數字字串轉為數值: K7、K4);
+//  計時值(sampleSec、pollSec、evalMaxWaitSec、maxWaitMin)依 §3.7(正數 / 非負數且換成毫秒不超過 2147483647); 門檻與上限(cpuMax、ramUsedMaxGB、cpuStart、ramStartGB、evalCpuStart)為有限數(同改前: 數字原樣、不另設值域)
+//  讀取者三處皆經 resourceCfgOf(同一鍵單一解讀): 迴圈(domain.mjs; loopGate)、評估器之資源閘(src/cli/eval.mjs; evalGate)、合約之參考版(tools/initProject.mjs; evalMaxWaitSec)
+let RESOURCE_NUMS = { cpuMax: 'num', ramUsedMaxGB: 'num', cpuStart: 'num', ramStartGB: 'num', sampleSec: 'timerSec', pollSec: 'timerSec', maxWaitMin: 'waitMin', evalCpuStart: 'num', evalMaxWaitSec: 'waitSec' }
 
-export { RSI_NUM_KINDS, RSI_NUMS, rsiNumOf, maxArmsOf, refCountsOf, reverifyParOf, docLimitsOf, preflightOf }
+//EVAL_GATE_WAIT_SEC, 評估層之資源閘之最長等待(秒)之預設(evalMaxWaitSec 未給或無效時); EVAL_GATE_CPU_MARGIN, evalCpuStart 未給時之預設 = cpuMax − 此值(最低 1)
+let EVAL_GATE_WAIT_SEC = 90
+let EVAL_GATE_CPU_MARGIN = 5
+
+/**
+ * 資源上限之設定(settings.resources)之取值(K3): 各鍵依 RESOURCE_NUMS 以 rsiNumOf 取值(數字與數字字串轉為數值; 其餘、無效與超出值域者為 null = 未給 ⇒ 由資源閘用其預設); 每個鍵只讀一次
+ * 迴圈、評估層之資源閘與合約之參考版共用此函數(同一鍵單一解讀); 回傳 { 各鍵(數值或 null), loopGate, evalGate }:
+ * loopGate = createResourceMonitor 給迴圈用之選項(maxWaitMin 換成秒); evalGate = 評估層之資源閘之選項(cpuStart 取 evalCpuStart, 未給 = cpuMax − 5〔最低 1〕; maxWaitSec 取 evalMaxWaitSec, 未給 = 90; 無 sampleSec 與 pollSec〔評估層固定 pollSec 5〕)
+ *
+ * @param {Object|null} rs 輸入設定之 resources 物件(非物件視為未給)
+ * @returns {Object} 回傳 { cpuMax, ramUsedMaxGB, cpuStart, ramStartGB, sampleSec, pollSec, maxWaitMin, evalCpuStart, evalMaxWaitSec, loopGate, evalGate }
+ * @example
+ * resourceCfgOf({ cpuMax: '70', evalMaxWaitSec: 'abc' }).evalGate
+ * // => { cpuMax: 70, ramUsedMaxGB: null, cpuStart: 65, ramStartGB: null, maxWaitSec: 90 }
+ */
+let resourceCfgOf = (rs) => {
+    let o = objOf(rs)
+    let out = {}
+    for (let [k, kind] of Object.entries(RESOURCE_NUMS)) {
+        out[k] = rsiNumOf(o[k], kind)
+    }
+    out.loopGate = { cpuMax: out.cpuMax, ramUsedMaxGB: out.ramUsedMaxGB, cpuStart: out.cpuStart, ramStartGB: out.ramStartGB, sampleSec: out.sampleSec, pollSec: out.pollSec, maxWaitSec: out.maxWaitMin === null ? null : out.maxWaitMin * 60 }
+    out.evalGate = {
+        cpuMax: out.cpuMax,
+        ramUsedMaxGB: out.ramUsedMaxGB,
+        cpuStart: out.evalCpuStart !== null ? out.evalCpuStart : (out.cpuMax !== null ? Math.max(1, out.cpuMax - EVAL_GATE_CPU_MARGIN) : null),
+        ramStartGB: out.ramStartGB,
+        maxWaitSec: out.evalMaxWaitSec !== null ? out.evalMaxWaitSec : EVAL_GATE_WAIT_SEC,
+    }
+    return out
+}
+
+export { RSI_NUM_KINDS, RSI_NUMS, RESOURCE_NUMS, rsiNumOf, maxArmsOf, refCountsOf, reverifyParOf, docLimitsOf, preflightOf, resourceCfgOf, EVAL_GATE_WAIT_SEC }

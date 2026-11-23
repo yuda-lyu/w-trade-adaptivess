@@ -2,7 +2,8 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { normBarHours } from '../eval/barGrid.mjs'
-import { evalCfgNumsOf, evalLimitsOf, cfgNumLoose } from '../eval/cfgNum.mjs'
+import { evalCfgNumsOf, evalLimitsOf, evalScoreOf } from '../eval/cfgNum.mjs'
+import { resourceCfgOf } from '../arsi/rsiNums.mjs'
 import { phaseCountOf, phaseText, horizonsOf, periodLenText, dateOf } from '../domain/factsText.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 import { pkgRootOf } from '../domain/pkgRoot.mjs'
@@ -117,22 +118,17 @@ let CONTRACT_FACTS = [
 
 //factsOf, 合約所寫之使用端之事實(取自設定): 決策間隔、暖機、地平線、虛無抽數、活躍度分層、名次寬度、資源閘之等待未給者 = 評估器之預設(即參考版所寫之值);
 //  期間、判讀之門檻、硬上限為必要之設定(建帳本、評估與判讀皆讀), 缺者照參考版所寫; 求解窗與保留期之起點為選配, 未給者不寫日期
-//  數值之取值與其使用處同一規則: eval、score 之各值依評估器之 cfgNumOf(數字字串轉為數值; 判讀與硬上限以數值比較); resources 之等待依資源閘(只收數字)
+//  數值之取值與其使用處同一規則: eval、score 之各值依評估器之 cfgNumOf / evalScoreOf(數字字串轉為數值; 判讀與硬上限以數值比較); resources 之等待依資源閘之 resourceCfgOf(數字字串轉為數值、無效 = 90; 排程第 606 項)
 let factsOf = (st) => {
     let s = st && typeof st === 'object' ? st : {}
     let pe = s.periods && typeof s.periods === 'object' ? s.periods : {}
     let tr = pe.train && typeof pe.train === 'object' ? pe.train : {}
     let bt = pe.backtest && typeof pe.backtest === 'object' ? pe.backtest : {}
     let ev = s.eval && typeof s.eval === 'object' ? s.eval : {}
-    let sc = s.score && typeof s.score === 'object' ? s.score : {}
     //影響評估之數字(暖機日數、決策間隔、虛無抽數、活躍度分層數、名次寬度): 與評估器同一函數(evalCfgNumsOf); 未給 = 預設; 給了而無效 ⇒ 拋 invalid eval.<鍵>(不寫出任何檔)
     let en = evalCfgNumsOf(ev, 'eval')
-    //其餘(硬上限、判讀之門檻): 數字或數字字串取其數值, 其餘為參考版所寫之值
-    let num = (x, def) => {
-        let v = cfgNumLoose(x)
-        return v === null ? def : v
-    }
-    let numOnly = (x, def) => (typeof x === 'number' && Number.isFinite(x) ? x : def)
+    //判讀之門檻(階梯 1 ~ 3): 與評估器(scoreOf)、設定之預檢、任務書同一函數(evalScoreOf; 排程第 606 項; R-EV-44 ④之二、R-EV-55): 未給 = 參考版所寫之值、數字字串轉為數值、給了而無效 ⇒ 拋 invalid score.<鍵>(不寫出任何檔; 原: 無效者靜默改用參考版所寫之值)
+    let sc = evalScoreOf(s.score, 'score')
     let fe = ev.fitEnd && typeof ev.fitEnd === 'object' ? ev.fitEnd : {}
     //硬上限(月均單、最大同時持倉): 與評估器(scoreOf)、任務書(texts.mjs)同一個取值函數與同一預設 400 / 50(evalLimitsOf; 規則 R-EV-44 ④之二); 給了而無效 ⇒ 拋 invalid eval.limits.<鍵>(不寫出任何檔)
     let lim = evalLimitsOf(ev, 'eval')
@@ -156,16 +152,17 @@ let factsOf = (st) => {
         hz: horizonsOf(ev),
         draws: en.nullDraws,
         sc: {
-            S: num(sc.ladder1 && sc.ladder1.S, 15),
-            nullP: num(sc.ladder1 && sc.ladder1.nullP, 0.05),
-            freshMin: num(sc.ladder2 && sc.ladder2.freshMin, 10),
-            worstPhaseMin: num(sc.ladder2 && sc.ladder2.worstPhaseMin, 5),
-            monthlyOrders: num(sc.ladder3 && sc.ladder3.monthlyOrders, 300),
-            peakHold: num(sc.ladder3 && sc.ladder3.peakHold, 30),
+            S: sc.ladder1.S,
+            nullP: sc.ladder1.nullP,
+            freshMin: sc.ladder2.freshMin,
+            worstPhaseMin: sc.ladder2.worstPhaseMin,
+            monthlyOrders: sc.ladder3.monthlyOrders,
+            peakHold: sc.ladder3.peakHold,
         },
         bins: en.actBins,
         half: en.sideActHalf,
-        wait: numOnly(rs.evalMaxWaitSec, 90),
+        //評估層之資源閘之最長等待(秒): 與評估器之資源閘(src/cli/eval.mjs)同一函數(resourceCfgOf; 排程第 606 項; 同一鍵單一解讀): 數字字串轉為數值、未給或無效 = 90
+        wait: resourceCfgOf(rs).evalGate.maxWaitSec,
     }
 }
 

@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
-import { getSettings, argOf, argStrOf, cliMsgOf } from '../cfg.mjs'
+import { settingsOrExit, argOf, argStrOf, cliMsgOf } from '../cfg.mjs'
 import { loadLedger, memberLedger, subsetLedger } from '../eval/ledger.mjs'
 import { parseSubsetRule, subsetMaskOf, SUBSET_MSG, SUBSET_MEMBER_MSG } from '../eval/subsetRule.mjs'
 import { makeEvaluator, ntStaticOf, isCapitalError } from '../eval/evalCore.mjs'
@@ -12,6 +12,7 @@ import { loadPick, loadExt } from '../eval/pickLoader.mjs'
 import { P as PI, pushOwn, safeJson, assertIntrinsics, isIntegrityError } from '../eval/intrinsics.mjs'
 import { scoreOf } from '../eval/score.mjs'
 import { createResourceMonitor } from '../arsi/resources.mjs'
+import { resourceCfgOf } from '../arsi/rsiNums.mjs'
 
 
 //評估一個挑選模組(節點 agent、做夢 agent 與人共用之唯一驗證入口)
@@ -40,8 +41,8 @@ import { createResourceMonitor } from '../arsi/resources.mjs'
 //           同劑量 / 同訊號量 / 同活躍度虛無之替換池為全庫(含求解窗涵蓋此段之策略)⇒ 此段讀組成對照(同側; 同側之 fitEndBar 相同為其前提, 見 evalPolicy 之註解)
 //           須有虛無(--mode full, 或 --null N 且 N ≥ 1); 不與 --ref、--ext-test 併用; 迴圈之重放之 ARSI_LEDGER_DIR / ARSI_EVAL_FROM 不與之併用(皆離開碼 2); --member、--phases 可併用; 擴充診斷不載入
 //           每一個所評估之相位於段內皆須有決策棒(某相位無決策者其等效年化為 0, 併入各相位之平均會稀釋所留之席之數字 ⇒ 不評估, 離開碼 2)
-//    --seed N: 換亂數種子(**只在迴圈之重放(ARSI_HARNESS=1)時生效**; 其他呼叫者帶此旗標即忽略 —— 節點不得藉換種子挑結果)
-//    --tie-salt N: 換同分次序(ctx.meta.tie 與同一進場棒之訊號先後; 同樣只在迴圈之重放時生效; 節點要自檢同分之影響用共用工具區之 snippets/tieAlt.mjs)
+//    --seed N: 換亂數種子(**只在迴圈之重放(ARSI_HARNESS=1)時生效**; 其他呼叫者帶此旗標即忽略 —— 節點不得藉換種子挑結果); 給了而不是整數(小數、非數字、超出安全整數)⇒ 印 invalid --seed: must be an integer、離開碼 2(不評估; 1.0.48 起, 原: 忽略並說明)
+//    --tie-salt N: 換同分次序(ctx.meta.tie 與同一進場棒之訊號先後; 同樣只在迴圈之重放時生效; 節點要自檢同分之影響用共用工具區之 snippets/tieAlt.mjs); 給了而不是整數 ⇒ 印 invalid --tie-salt: must be an integer、離開碼 2(同上)
 //    --member <鹽>:<0|1>: 成員重抽(規則 R-EV-40)—— 只把策略庫之一半交給挑選函數(0 = 甲半、1 = 乙半; 鹽為 0 ~ 4294967295 之整數, 十進位或 0x 開頭之十六進位; 換鹽 = 換一種切法),
 //           模組不必改寫: ctx.n 為半庫之隻數, ctx.meta 之各陣列與 ctx.stat 等皆為半庫內之序號, 各策略之 ctx.meta.tie 與其於全庫時相同; 期間、相位、虛無、擴充診斷照舊
 //           用途: 檢驗成品之內容是否依賴特定成員(「換一批策略」之重複; 兩半皆成立才算不依賴); **此結果不是正本**(結果檔與評估紀錄另記 member), 節點、做夢與迴圈皆可用; 格式不合、帶等號之 --member=… 者不評估(離開碼 2)
@@ -105,6 +106,18 @@ if (phasesArg !== null && phasesArg !== true) {
         process.exit(2)
     }
 }
+//--seed N(亂數種子)、--tie-salt N(同分次序之鹽)(排程第 606 項; R-EV-55; 決定資料口徑之 opt): 給了而不是整數(安全整數之範圍內; 小數、非數字、無值、超出安全整數)⇒ 不評估(離開碼 2; 訊息固定、不帶輸入值; 於讀設定、載入模組與等資源閘之前, 不寫結果檔、不記評估紀錄; 同 --null 與 g_backtest.mjs 之 --seed)
+//  原: 不合者「已忽略(沿用設定之亂數種子 / 正本之同分次序)」並照常評估 —— 以為換了種子卻沒換; 合格之整數而非迴圈之重放(ARSI_HARNESS 不為 1)者仍「只供迴圈之重放使用, 已忽略」(設計: 節點不得藉換種子挑結果; 見下方生效處)
+let seedArg = argOf('seed', null)
+if (seedArg !== null && !(typeof seedArg === 'number' && Number.isSafeInteger(seedArg))) {
+    console.log('invalid --seed: must be an integer')
+    process.exit(2)
+}
+let tieArg = argOf('tie-salt', null)
+if (tieArg !== null && !(typeof tieArg === 'number' && Number.isSafeInteger(tieArg))) {
+    console.log('invalid --tie-salt: must be an integer')
+    process.exit(2)
+}
 //成員重抽(規則 R-EV-40): --member <鹽>:<0|1> ⇒ 以半庫帳本(memberLedger: 只含該半之策略、重新編號、保留各策略於全庫之同分次鍵)評估; 未給 ⇒ 全庫(行為不變)
 //  格式不合者不評估(離開碼 2; 不靜默改用全庫: 那會把全庫之結果當成半庫之結果); 於載入模組與等資源閘之前即檢查(不先耗時), 不寫結果檔、不記評估紀錄
 //  鹽之 0x 十六進位寫法只於此處解析(memberLedger 收整數, 依 iseint); memberTag 為標記('0x<鹽之十六進位>:<0|1>'; 未給為 null): 結果檔之 member.tag 與評估紀錄之每一列(含失敗者)帶之 —— 帶此標記者不是正本之評估
@@ -149,7 +162,7 @@ if (subsetArg !== null) {
     subset = { rules: ps.rules, rule: ps.tag }
 }
 //設定(排程第 547 項: 旗標之檢查皆已於此之前; 其餘依設定者如下)
-let st = getSettings()
+let st = settingsOrExit()
 if (isPostfit) {
     let nullArg0 = nullArg
     let nDraws = 0
@@ -261,19 +274,16 @@ catch (err) {
 //資源閘(評估層): 全機 CPU 或已用記憶體逼近上限(settings.resources)時, 先等一下再開始 —— 多個節點同時評估、或機器上另有他人之負載時, 讓評估錯開
 //  門檻: CPU ≤ evalCpuStart(預設 cpuMax − 5)、已用記憶體 ≤ ramStartGB; 最長等 evalMaxWaitSec(預設 90)秒, 逾時照常開始; 不影響任何數字
 //  迴圈之重跑(ARSI_HARNESS=1)已於迴圈內經資源閘, 此處不再等
+//  settings.resources 之取值(排程第 606 項; R-EV-55; 資源上限屬執行面之設定〔K3〕, 不決定評估之數字): 經 resourceCfgOf —— 與迴圈之資源閘(domain.mjs)與合約之參考版(initProject.mjs)同一函數, 同一鍵單一解讀:
+//    數字字串轉為數值後才使用; 無效 ⇒ 視為未給(用預設); 計時值(evalMaxWaitSec)為非負數且換成毫秒不超過 2147483647(原: 只收 number; 迴圈與評估層各自判定)
 if (st.resources && process.env.ARSI_HARNESS !== '1') {
     try {
-        let rs = st.resources
-        let num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
-        if (num(rs.cpuMax) !== null || num(rs.ramUsedMaxGB) !== null) {
+        let gateCfg = resourceCfgOf(st.resources).evalGate
+        if (gateCfg.cpuMax !== null || gateCfg.ramUsedMaxGB !== null) {
             let gate = createResourceMonitor({
-                cpuMax: rs.cpuMax,
-                ramUsedMaxGB: rs.ramUsedMaxGB,
-                cpuStart: num(rs.evalCpuStart) !== null ? rs.evalCpuStart : (num(rs.cpuMax) !== null ? Math.max(1, rs.cpuMax - 5) : null),
-                ramStartGB: rs.ramStartGB,
+                ...gateCfg,
                 pollSec: 5,
                 jitter: 0.6,
-                maxWaitSec: num(rs.evalMaxWaitSec) !== null ? rs.evalMaxWaitSec : 90,
             })
             let w = await gate.wait('eval')
             if (w.waitedSec >= 3) {
@@ -403,30 +413,21 @@ let win = periodArg === 'train' ? { toBar: trainEndBar } : { fromBar: btStartBar
 if (periodArg === 'train' && trainFrom !== null) {
     win = { fromBar: trainFrom, toBar: trainEndBar }
 }
-//亂數種子: 預設 settings.eval.seed; --seed 只在迴圈之重放(ARSI_HARNESS=1)時生效
-let seedArg = argOf('seed', null)
+//亂數種子: 預設 settings.eval.seed; --seed 只在迴圈之重放(ARSI_HARNESS=1)時生效(值之檢查已於上: 整數; 其他呼叫者帶合格之整數者即忽略並說明)
 let seedOverride = null
 if (seedArg !== null) {
-    if (process.env.ARSI_HARNESS === '1' && typeof seedArg === 'number' && Number.isSafeInteger(seedArg)) {
+    if (process.env.ARSI_HARNESS === '1') {
         seedOverride = seedArg
-    }
-    else if (process.env.ARSI_HARNESS === '1') {
-        //迴圈之重放: 給了而不是整數(小數、非數字、無值、超出安全整數)⇒ 說明原因(原: 一律稱「只供迴圈之重放使用」)
-        console.log('--seed 須為整數(安全整數之範圍內),已忽略(沿用設定之亂數種子)')
     }
     else {
         console.log('--seed 只供迴圈之重放使用,已忽略(沿用設定之亂數種子)')
     }
 }
-//同分次序: 預設為正本; --tie-salt N(非 0 之整數)以另一組固定之同分次序重放(ctx.meta.tie 與同一進場棒之訊號先後), 同樣只在迴圈之重放(ARSI_HARNESS=1)時生效
-let tieArg = argOf('tie-salt', null)
+//同分次序: 預設為正本; --tie-salt N(整數; 0 = 正本)以另一組固定之同分次序重放(ctx.meta.tie 與同一進場棒之訊號先後), 同樣只在迴圈之重放(ARSI_HARNESS=1)時生效(值之檢查已於上)
 let tieSalt = 0
 if (tieArg !== null) {
-    if (process.env.ARSI_HARNESS === '1' && Number.isInteger(tieArg) && Number.isSafeInteger(tieArg)) {
+    if (process.env.ARSI_HARNESS === '1') {
         tieSalt = tieArg
-    }
-    else if (process.env.ARSI_HARNESS === '1') {
-        console.log('--tie-salt 須為整數(安全整數之範圍內),已忽略(沿用正本之同分次序)')
     }
     else {
         console.log('--tie-salt 只供迴圈之重放使用,已忽略(沿用正本之同分次序)')

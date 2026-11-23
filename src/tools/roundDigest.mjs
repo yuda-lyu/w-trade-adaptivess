@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { getSettings, readJson, cliGuard } from '../cfg.mjs'
+import { settingsOrExit, readJson, cliGuard } from '../cfg.mjs'
 import { phaseCountOfMetrics, phaseCountOfAll, phaseText } from '../eval/cfgNum.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 import { rsiNumOf } from '../arsi/rsiNums.mjs'
@@ -13,7 +13,7 @@ cliGuard('roundDigest')
 //唯讀: 某一輪之一頁摘要(不含回測期數字; 只讀輪次結果檔、節點文件、做夢文件與各工作夾之 .evals.log)
 //  node tools/roundDigest.mjs [輪次(預設最近一輪)] [--out]     --out: 另存為 rsi/rounds/rNNN/DIGEST.md
 //  用途: 無人監控(排程執行)時, 回來看這一頁即知該輪做了什麼、有無異常、下一輪要做什麼
-let st = getSettings()
+let st = settingsOrExit()
 let rel = (p) => path.relative(st.FD_ROOT, p).replace(/\\/g, '/')
 let nd = st.records.nodeDir
 let dd = st.records.dreamDir || path.join(path.dirname(nd), 'dreams')

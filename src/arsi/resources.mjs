@@ -1,6 +1,7 @@
 import os from 'os'
 import getTrace from 'wsemi/src/getTrace.mjs'
 import { optOf } from './inputs.mjs'
+import { rsiNumOf } from './rsiNums.mjs'
 
 
 //資源監看與資源閘(通用; 不含領域用語): 讓使用端依自身設備給定 CPU 與記憶體之上限, 迴圈據以決定何時可再起一項工作
@@ -69,16 +70,22 @@ let osRead = () => {
  */
 let createResourceMonitor = (opt0 = {}) => {
     //opt 本身(跨套件規格 V4、§5.1; R-EV-54; 工廠 ⇒ 同步拋固定訊息): null、undefined 視為 {}; 非一般物件拋 invalid opt: must be an object(原: null 於讀鍵時拋原生 TypeError)
-    //  各鍵之值(cpuMax、sampleSec、pollSec、maxWaitSec 等)之檢測不在本輪(settings.resources.* 與評估器之進入檔同讀, 留待下次動評估器; 見規則帳本 R-EV-53 ④之「不在本輪」)
+    //  各鍵之值(排程第 606 項; R-EV-55; K3、K4、K7): 與 settings.resources.* 同一口徑(rsiNumOf 與 RESOURCE_NUMS 之種類): 數字與數字字串轉為數值後才使用; 無效(非數字、NaN、無限、超出值域)與未給 ⇒ 用預設
+    //  cpuMax、ramUsedMaxGB、cpuStart、ramStartGB 為有限數(同改前); sampleSec、pollSec 為正數(秒; 換成毫秒不超過 2147483647); maxWaitSec 為非負數(0 = 不等待、逾時立即放行)
     let opt = optOf(opt0)
+    let cpuMax = rsiNumOf(opt.cpuMax, 'num')
+    let ramMax = rsiNumOf(opt.ramUsedMaxGB, 'num')
+    let cpuStart0 = rsiNumOf(opt.cpuStart, 'num')
+    let ramStart0 = rsiNumOf(opt.ramStartGB, 'num')
+    let cpuStart = cpuStart0 !== null ? cpuStart0 : (cpuMax !== null ? Math.max(1, cpuMax - 15) : null)
+    let ramStart = ramStart0 !== null ? ramStart0 : (ramMax !== null ? Math.max(1, ramMax - 8) : null)
+    let sampleSec0 = rsiNumOf(opt.sampleSec, 'timerSec')
+    let pollSec0 = rsiNumOf(opt.pollSec, 'timerSec')
+    let maxWaitSec0 = rsiNumOf(opt.maxWaitSec, 'waitSec')
+    let sampleSec = sampleSec0 !== null ? sampleSec0 : 5
+    let pollSec = pollSec0 !== null ? pollSec0 : 10
+    let maxWaitSec = maxWaitSec0 !== null ? maxWaitSec0 : 1800
     let num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
-    let cpuMax = num(opt.cpuMax)
-    let ramMax = num(opt.ramUsedMaxGB)
-    let cpuStart = num(opt.cpuStart) !== null ? opt.cpuStart : (cpuMax !== null ? Math.max(1, cpuMax - 15) : null)
-    let ramStart = num(opt.ramStartGB) !== null ? opt.ramStartGB : (ramMax !== null ? Math.max(1, ramMax - 8) : null)
-    let sampleSec = num(opt.sampleSec) || 5
-    let pollSec = num(opt.pollSec) || 10
-    let maxWaitSec = num(opt.maxWaitSec) === null ? 1800 : opt.maxWaitSec
     let read = typeof opt.read === 'function' ? opt.read : osRead
     let log = typeof opt.log === 'function' ? opt.log : () => {}
     let sleep = typeof opt.sleep === 'function' ? opt.sleep : (ms) => new Promise((resolve) => setTimeout(resolve, ms))

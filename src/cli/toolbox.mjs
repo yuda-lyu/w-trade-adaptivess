@@ -1,5 +1,5 @@
 import path from 'path'
-import { getSettings, cliMsgOf, inputMsgOf } from '../cfg.mjs'
+import { settingsOrExit, cliMsgOf, inputMsgOf } from '../cfg.mjs'
 import { createToolbox } from '../arsi/toolbox.mjs'
 import { makeToolboxRules, TB_BASELINE } from '../domain/toolboxRules.mjs'
 import { backtestCfg } from '../domain/backtestCfg.mjs'
@@ -19,7 +19,7 @@ import { setGuardExtra, guardExtraOf } from '../domain/verify.mjs'
         process.exit(2)
     }
 }
-let st = getSettings()
+let st = settingsOrExit()
 //專案另加之禁區字樣(與迴圈之機械檢查同一組); 設定不合(guard.forbidden、source.libraryRoot 給了而無效; R-EV-54 ①)⇒ 印 ERROR、離開碼 2(不寫任何檔、不以失效之禁區繼續); 其餘錯誤照舊拋出
 try {
     setGuardExtra(guardExtraOf(st))

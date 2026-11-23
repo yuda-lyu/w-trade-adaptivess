@@ -7,7 +7,7 @@ import { getSettings, readJson, writeJson, FD_ROOT, inputMsgOf } from '../cfg.mj
 import { scoreOf } from '../eval/score.mjs'
 import { normUnit } from '../eval/unit.mjs'
 import { checkEvalSettings, configMsgOf } from '../eval/barGrid.mjs'
-import { evalRunNumOf, cfgNumOf } from '../eval/cfgNum.mjs'
+import { evalRunNumOf, cfgNumOf, evalScoreOf } from '../eval/cfgNum.mjs'
 import { createFileRecords, roundName, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_LABELS, ARM_KINDS, ARM_LABELS, CLAIM_VERDICTS } from '../arsi/records.mjs'
 import { proposalOf } from './armCatalog.mjs'
 import { buildPickStore } from './pickStore.mjs'
@@ -20,8 +20,8 @@ import { createToolbox } from '../arsi/toolbox.mjs'
 import { agentsCheck } from '../arsi/inputs.mjs'
 import { makeDispatch } from '../arsi/dispatchers.mjs'
 import { createResourceMonitor } from '../arsi/resources.mjs'
-import { resolveRunConfig } from '../arsi/runner.mjs'
-import { maxArmsOf, refCountsOf, reverifyParOf, docLimitsOf, preflightOf } from '../arsi/rsiNums.mjs'
+import { resolveRunConfig, stopFileOf, stopFileExists } from '../arsi/runner.mjs'
+import { maxArmsOf, refCountsOf, reverifyParOf, docLimitsOf, preflightOf, resourceCfgOf } from '../arsi/rsiNums.mjs'
 import { makeTexts, GUIDE, guideText, OUT_SATURATED_NOTE } from './texts.mjs'
 import { nullDrawsOf, nullFloorText, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll } from './factsText.mjs'
 import { makeVerify, summaryOf, notesOf, isHalfOf, scanTrace, shortShareOf, sideFlowIssue, sideFlowCfgOf, extSurfaceOf, extFlagIssue, extBoardMeansOf, runNodeProc, setGuardExtra, guardExtraOf, EXT_FLAG_HEAD, dirWorkIdsOf, dirNodeIdsOf, allowWorkOf } from './verify.mjs'
@@ -661,9 +661,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
 
     //執行規模(每輪幾個節點、同時幾個、一次跑幾輪)與資源上限: 由使用端依自身設備給定(settings.rsi / settings.resources; 命令列可覆寫, 見 g_rsi.mjs)
     let run = resolveRunConfig(st.rsi || {}, inject.run || {})
-    let rc = st.resources || {}
-    //資源上限(settings.resources)之數值只收 number(typeof number): 評估器之進入檔(src/cli/eval.mjs)之資源閘另讀同一組鍵(cpuMax、ramUsedMaxGB、ramStartGB),本輪不動評估器 ⇒ 為免兩處解讀不同(同一鍵單一解讀), settings.resources 整組留待下次動評估器時一併收數字字串(排程第 595 項之餘)
-    let monitor = createResourceMonitor({ cpuMax: rc.cpuMax, ramUsedMaxGB: rc.ramUsedMaxGB, cpuStart: rc.cpuStart, ramStartGB: rc.ramStartGB, sampleSec: rc.sampleSec, pollSec: rc.pollSec, maxWaitSec: typeof rc.maxWaitMin === 'number' ? rc.maxWaitMin * 60 : undefined, log })
+    //資源上限(settings.resources)之取值(排程第 606 項; R-EV-55): 經 resourceCfgOf(數字字串轉為數值、無效 ⇒ 視為未給〔K3〕; 與評估器之進入檔 src/cli/eval.mjs 之資源閘與合約之參考版同一函數 ⇒ 同一鍵單一解讀; 原: 只收 number, 迴圈與評估層各自判定)
+    let monitor = createResourceMonitor({ ...resourceCfgOf(st.resources).loopGate, log })
 
     let texts = makeTexts({ st, FD_ROOT })
 
@@ -975,7 +974,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
     }
 
     //contentPMax, 「有內容」之 p 之門檻 = 階梯 1 之虛無 p(未給為 0.05; 搜尋地圖之「有內容」與看板之「活躍度定義不一致」同一個值)
-    let contentPMax = () => (st.score && st.score.ladder1 && st.score.ladder1.nullP) || 0.05
+    //  取值經 evalScoreOf(與評估器之 scoreOf、設定之預檢、任務書同一函數; 排程第 606 項: 數字字串轉為數值; 組裝時之預檢已確認其有效); 0 仍取 0.05(同改前之 `|| 0.05`; 已知之不一致: scoreOf 之門檻取 0, 列 sgud 已知限制)
+    let contentPMax = () => evalScoreOf(st.score, 'score').ladder1.nullP || 0.05
     //hasContentNode, 「有內容」(模組層之 hasContentOf; 搜尋地圖、並列、主鍵、補位之底共用; 規則 R-REC-49 ⑤)
     let hasContentNode = (n) => hasContentOf(n, contentPMax())
     //actSplitOf, 「活躍度定義不一致」(規則 R-REC-38): 有近期活躍度版之值、且其條件與內建之組成對照之現行條件一過一不過者回 compSplitOf 之結果, 否則 null;
@@ -2306,6 +2306,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //  skip(選配; 輪末之做夢之後之一次所用)= { postfit: [id], member: [id] }: 計畫中所列成品之該項目不執行(同一輪之派做夢之前已執行過者; 失敗者照舊於待重試, 下一次輪末重試)
     //  stage(選配)= 'preDream': 輪末之派做夢之前之一次(摘要之列之寫法見 fillLinesOf; 不更新待重試與不重試之失敗之紀錄, 回傳另帶 tasks; 待重試已達上限之列由做夢之後之一次列出)
     //  prior(選配; 輪末之做夢之後之一次所用)= 同一輪之派做夢之前之一次之回傳(results、tasks): 併入本次之結果以記待重試與不重試之失敗(每輪記一次)
+    //  停止檔(排程第 545 項; source 'cli' 者): 工作者於取下一個成品之前檢查狀態根之停止檔 STOP(runner.mjs 之 stopFileExists; 與 g_rsi.mjs 之輪次同一個檔); 存在 ⇒ 不再取新成品、已取者做完、正常結束,
+    //    回傳帶 stopped = { file(相對專案根)、done(已取而完成之成品數)、rest(未取之成品數) } 並於 lines 寫「因停止檔提前結束」; 未因停止檔而結束者不帶此鍵(與改前相同)
     let fill = async ({ targets = null, postfit = true, ext = true, force = false, nullDraws = null, par = null, runEval = runEvalDefault, storeAfter = true, onEach = null, source = 'cli', backlogSec = 0, member = false, skip = null, stage = null, prior = null } = {}) => {
         nullDraws = fillDrawsOf(nullDraws)
         let t0 = Date.now()
@@ -2574,8 +2576,18 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let nMain = plan.tasks.length
         let tasks = blTasks.length ? [...plan.tasks, ...blTasks] : plan.tasks
         let capped0 = () => next >= nMain && clockOf() - tCap0 >= backlogSec * 1000
+        //停止檔(排程第 545 項; R-RUN-12): 命令列之補算(source 'cli'; g_rsi.mjs --mode fill)之工作者於取下一個成品之前檢查狀態根之停止檔 STOP(與 g_rsi.mjs 之輪次同一個檔、同一個檢查函數 stopFileExists);
+        //  存在 ⇒ 不再取新成品(已取者做完; 每個成品算完即寫入, 未取者留為待補算, 下次補算再取)、正常結束(回傳 stopped = { done, rest }, 摘要寫明);
+        //  輪末之附算(source 'round')不檢: 停止檔之語意是「跑完本輪後停下」, 輪末之附算屬該輪(下一輪開始前才檢查)
+        let stopCheck = src === 'cli'
+        let stopHit = false
         await Promise.all(Array.from({ length: Math.min(nPar, tasks.length) }, async (_, w) => {
             while (next < tasks.length && !capped0()) {
+                //資源閘之等待之前先檢查(停止檔已存在者不必再等閘)
+                if (stopCheck && stopFileExists(st.rsi.root)) {
+                    stopHit = true
+                    break
+                }
                 if (w > 0) {
                     try {
                         await monitor.wait(`附算 併行 #${w + 1}`)
@@ -2584,6 +2596,11 @@ let makeProject = (st = getSettings(), inject = {}) => {
                     if (next >= tasks.length || capped0()) {
                         break
                     }
+                }
+                //取下一個成品之前再檢查(資源閘之等待之後、取用之前: 等待期間才建立之停止檔亦擋得住)
+                if (stopCheck && stopFileExists(st.rsi.root)) {
+                    stopHit = true
+                    break
                 }
                 let i = next++
                 await one(tasks[i], i)
@@ -2802,8 +2819,12 @@ let makeProject = (st = getSettings(), inject = {}) => {
         let nFailBl = results.filter((x) => blDone.has(x.nodeId) && (x.postfit === 'failed' || (x.ext && x.ext.failed.length > 0))).length
         //  成員穩健性之待補算(規則 R-REC-51; 有者才帶)一併處理不取 ⇒ 照列
         let backlog = blDone.size ? { postfit: plan.backlog.postfit.filter((id) => !blDone.has(id)), ext: Object.fromEntries(Object.entries(plan.backlog.ext).map(([nm, ids]) => [nm, ids.filter((id) => !blDone.has(id))])), ...(plan.backlog.member ? { member: plan.backlog.member } : {}) } : plan.backlog
-        let out = { evaluator, source: src, par: nPar, plan: { nTasks: nMain + blDone.size, nCurrent: plan.nCurrent }, results: results.map(({ order, ...x }) => x), ...(preRun ? { tasks } : {}), backlog, skipped, retry, retryInfo, capped, blocked, ...(fsr.note ? { stateNote: fsr.note } : {}), ...(stateError ? { stateError } : {}), sec, ...(blTasks.length || nSkipBl ? { backlogRun: { n: blDone.size, rest: blTasks.length - blDone.size, capSec: backlogSec, ...(nSkipBl ? { skipped: nSkipBl } : {}), ...(nFailBl ? { failed: nFailBl } : {}) } } : {}) }
+        let out = { evaluator, source: src, par: nPar, plan: { nTasks: nMain + blDone.size, nCurrent: plan.nCurrent }, results: results.map(({ order, ...x }) => x), ...(preRun ? { tasks } : {}), backlog, skipped, retry, retryInfo, capped, blocked, ...(fsr.note ? { stateNote: fsr.note } : {}), ...(stateError ? { stateError } : {}), ...(stopHit ? { stopped: { file: rel(stopFileOf(st.rsi.root)), done: next, rest: tasks.length - next } } : {}), sec, ...(blTasks.length || nSkipBl ? { backlogRun: { n: blDone.size, rest: blTasks.length - blDone.size, capSec: backlogSec, ...(nSkipBl ? { skipped: nSkipBl } : {}), ...(nFailBl ? { failed: nFailBl } : {}) } } : {}) }
         out.lines = fillLinesOf(out, stage === 'preDream' ? { stage } : {})
+        //因停止檔提前結束(排程第 545 項): 摘要寫明停止檔之位置與已完成 / 未完成之成品數(未完成者留為待補算; 刪除停止檔後重跑 --mode fill 即續)
+        if (stopHit) {
+            out.lines.push(stopLineOf(out.stopped))
+        }
         //其餘之摘要: 待重試已達上限者(只列、不再於輪末自動重試; 派做夢之前之一次不列 —— 由同一輪做夢之後之一次列出)、不入待重試之失敗、狀態檔之重建與未寫成
         if (capped.length && stage !== 'preDream') {
             out.lines.push(`附算之待重試已達上限(連續失敗 ${FILL_RETRY_MAX} 次;只列、不再於輪末自動重試,以 \`node g_rsi.mjs --mode fill --only <id>\` 個別處理):${capped.map((id) => id.slice(0, 8)).join('、')}`)
@@ -2869,6 +2890,8 @@ let makeProject = (st = getSettings(), inject = {}) => {
             results: r.results.map((x) => (x.ext.ok.length ? { nodeId: x.nodeId, ok: true, filled: x.ext.ok, board: x.board || '', ...(x.ext.failed.length ? { failed: x.ext.failed, error: x.error } : {}) } : { nodeId: x.nodeId, ok: false, error: x.error || '未補入' })),
             store: r.store,
             ...(r.stateError ? { stateError: r.stateError } : {}),
+            //因停止檔提前結束(排程第 545 項; 經 fill 執行之 extFill 同承停止檔): 帶 fill 之 stopped 與摘要句(命令列印於輸出之末); 未因停止檔而結束者不帶此二鍵
+            ...(r.stopped ? { stopped: r.stopped, lines: [stopLineOf(r.stopped)] } : {}),
         }
     }
 
@@ -3299,6 +3322,9 @@ let makeProject = (st = getSettings(), inject = {}) => {
     return { st, rsi, arsi, records, toolbox, typeOf, setDirectionTypes, domain, catalog, selectable, run, monitor, idOf, taskFor, writeBoard, writeCatalogFile, writeSearchMap, validatePending, reverifyAll, extFill, fill, fillPlanOf, fillParOf, rescanTraces, refreshEvalHints, rescanSideFlow, pendingDream, redream, requestDreamOnly, pendingReauditIds, claimedNodeIds, inactiveArmsOf, offDefArmsOf, migrateDocs, annotateDream, closeFrontier, rearmFrontier, proposeDirection, exposureOf: exposureOfNode, exposureOn: expCfg !== null, memberCheck: mcfg, hasContent: hasContentNode, rankBy, gaugeDualOf, sideReadOfTree, pickStore: () => buildPickStore(st), setStatus, getState, setState, log, envKey, layerOfSpec }
 }
 
+
+//stopLineOf, 補算因停止檔提前結束之摘要句(fill 與經 fill 執行之 extFill 共用; 排程第 545 項): stp = fill 回傳之 stopped { file, done(已取之成品數: 皆已做完, 含失敗者), rest(未取之成品數) }
+let stopLineOf = (stp) => `因停止檔提前結束(停止檔 ${stp.file} 存在): 本次待算 ${stp.done + stp.rest} 個成品, 已完成 ${stp.done} 個(已取者皆做完, 含失敗者)、未完成 ${stp.rest} 個(未完成者留為待補算; 刪除停止檔後重跑即續)`
 
 //makeProjectOrExit, 命令列與工具之入口用(g_rsi.mjs 與 tools/ 之 searchMap、briefPreview、armInactive、armDecide、fakeRound; 規則 R-EV-44):
 //  組裝時之設定預檢不合(invalid eval.… / invalid periods.…)⇒ 印 ERROR <訊息>、離開碼 2(不印堆疊; 同 g_eval.mjs); 其他錯誤照舊拋出
