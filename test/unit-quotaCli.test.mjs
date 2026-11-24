@@ -120,6 +120,49 @@ describe('額度用盡之處置:命令列之接線(替身派工套件、合成�
         assert(!/未交付可評估之成品|未交付 pick/.test(r.out), '未重跑驗證')
     })
 
+    //連跑因額度停止之 run-done(規則 R-RUN-5; 排程第 614 項 ①): 與起跑前之 skipped 對稱 —— 事件帶機器可讀之 reason: 'quota' 與 retryAt(達門檻之視窗全部重置之時刻;查得到才有), 狀態檔之 run 同
+    //  規格之句 ⇒ 案: 「連跑時第 2 輪起之額度檢查擋下 ⇒ run-done 帶 reason: 'quota'、retryAt」(下列第 1 案)、「查不到重置時刻 ⇒ 有 reason 而無 retryAt 鍵」(第 2 案)、
+    //    「其餘之結束(未被額度擋下)⇒ 無此二鍵(純新增之鍵; 既有之 stopped 文字與其他鍵不變)」(第 3 案)
+    it('連跑時第 2 輪起之額度檢查擋下 ⇒ 事件 run-done 帶 reason: quota 與 retryAt(取自重置時刻 resetsAt);狀態檔 STATUS.json 之 run 帶同值;stopped 之文字與輪數不變', () => {
+        root = mkProject('qdoneRetry')
+        let r = runCli(root, ['cli', 'rsi.mjs'], ['--mode', 'round', '--rounds', '2'], { usage: usageOf(97), results: ['ok', 'quota', 'quota'] })
+        assert.strictEqual(r.status, 0, r.out)
+        let done = r.events.find((e) => e.event === 'run-done')
+        assert.ok(done, JSON.stringify(r.events))
+        assert.strictEqual(done.reason, 'quota', '機器可讀之原因')
+        assert.strictEqual(done.retryAt, '2026-01-05T00:00:00.000Z', '達門檻之視窗全部重置之時刻(同起跑前之 skipped 事件)')
+        assert.ok(/額度已達起跑門檻/.test(done.stopped) && /備援/.test(done.stopped), `stopped 之文字不變: ${done.stopped}`)
+        assert.deepStrictEqual([done.rounds, done.total], [1, 2], '已跑 1 / 2 輪')
+        let stt = JSON.parse(fs.readFileSync(path.join(root, 'rsi', 'STATUS.json'), 'utf8'))
+        assert.deepStrictEqual([stt.run.reason, stt.run.retryAt, stt.run.done, stt.run.total], ['quota', '2026-01-05T00:00:00.000Z', 1, 2], 'status.run 隨之')
+        assert.ok(/額度已達起跑門檻/.test(stt.run.stopped))
+    })
+
+    it('連跑因額度停止而查不到重置時刻(用量資料無 resetsAt)⇒ run-done 有 reason: quota、無 retryAt 鍵(同 skipped 事件:查得到才有);狀態檔同', () => {
+        root = mkProject('qdoneNoRetry')
+        let usage = { rolling: { percent: 0 }, weekly: { percent: 97 } }
+        let r = runCli(root, ['cli', 'rsi.mjs'], ['--mode', 'round', '--rounds', '2'], { usage, results: ['ok', 'quota', 'quota'] })
+        assert.strictEqual(r.status, 0, r.out)
+        let done = r.events.find((e) => e.event === 'run-done')
+        assert.ok(done, JSON.stringify(r.events))
+        assert.strictEqual(done.reason, 'quota')
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(done, 'retryAt'), false, 'retryAt 鍵不出現')
+        let stt = JSON.parse(fs.readFileSync(path.join(root, 'rsi', 'STATUS.json'), 'utf8'))
+        assert.strictEqual(stt.run.reason, 'quota')
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(stt.run, 'retryAt'), false)
+    })
+
+    it('未被額度擋下之結束(單輪跑完;用量未達門檻)⇒ run-done 無 reason、無 retryAt 鍵(純新增之鍵,既有之事件逐位不變);狀態檔之 run 亦無', () => {
+        root = mkProject('qdoneNone')
+        let r = runCli(root, ['cli', 'rsi.mjs'], ['--mode', 'round'], { usage: usageOf(10), results: ['ok'] })
+        assert.strictEqual(r.status, 0, r.out)
+        let done = r.events.find((e) => e.event === 'run-done')
+        assert.ok(done, JSON.stringify(r.events))
+        assert.deepStrictEqual(['reason', 'retryAt'].filter((k) => Object.prototype.hasOwnProperty.call(done, k)), [])
+        let stt = JSON.parse(fs.readFileSync(path.join(root, 'rsi', 'STATUS.json'), 'utf8'))
+        assert.deepStrictEqual(['reason', 'retryAt'].filter((k) => Object.prototype.hasOwnProperty.call(stt.run, k)), [])
+    })
+
     it('門檻設定經領域層傳到派工器:settings.rsi.preflight.quotaMaxPercent = 98 而用量 97% ⇒ 主模型照派(帶金鑰);未設則取 95 而改派備援', () => {
         let a = mkProject('thr98', (st) => {
             st.rsi.preflight = { quotaMaxPercent: 98 }

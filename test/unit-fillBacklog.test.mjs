@@ -185,7 +185,7 @@ describe('輪末之附算一併處理待補算(規則 R-REC-41)', function () {
             assert.notEqual(FP.fillSigSrcOf(t), s0, why)
         }
         //only: 只取所列之項目 ⇒ 與只含這些項目之任務相同
-        assert.equal(FP.fillSigSrcOf(t0, { postfit: false, ext: ['dB'] }), FP.fillSigSrcOf({ keys: { postfit: null, ext: { dB: kd('p1', 'hb') } } }))
+        assert.strictEqual(FP.fillSigSrcOf(t0, { postfit: false, ext: ['dB'] }), FP.fillSigSrcOf({ keys: { postfit: null, ext: { dB: kd('p1', 'hb') } } }))
         assert.equal(FP.fillSigSrcOf(t0, { postfit: true, ext: [] }), FP.fillSigSrcOf({ keys: { postfit: kp('p1'), ext: {} } }))
     })
 
@@ -211,7 +211,7 @@ describe('輪末之附算一併處理待補算(規則 R-REC-41)', function () {
         let y = mk()
         let r = await y.P.fill({ runEval: y.runEval, storeAfter: false })
         assert.equal(r.results.length, 4)
-        assert.deepEqual(valuesOf(x), valuesOf(y), '補算檔(去時刻)、樹之 ext、節點文件之求解窗後段之列')
+        assert.deepStrictEqual(valuesOf(x), valuesOf(y), '補算檔(去時刻)、樹之 ext、節點文件之求解窗後段之列')
         for (let k = 0; k < 4; k++) {
             assert.deepEqual(argsOf(x, x.ids[k]), argsOf(y, y.ids[k]), `節點 ${k} 之評估之參數`)
         }
@@ -241,7 +241,7 @@ describe('輪末之附算一併處理待補算(規則 R-REC-41)', function () {
         await y.P.fill({ runEval: y.runEval, storeAfter: false })
         fs.writeFileSync(path.join(y.st.records.toolboxDir, 'metrics', 'dC.mjs'), 'export default { v: 3 }\n', 'utf8')
         await y.P.fill({ runEval: y.runEval, storeAfter: false })
-        assert.deepEqual(valuesOf(x), valuesOf(y))
+        assert.deepStrictEqual(valuesOf(x), valuesOf(y))
     })
 
     it('② 總時長之上限:達上限後不再取新者(已開始者照常完成),尚餘者列於摘要;下一次輪末續算(中斷可續)', async () => {

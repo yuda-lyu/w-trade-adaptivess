@@ -60,7 +60,7 @@ describe('共同儲存「自適應挑選策略」區(規則 R-REC-25;保留期�
 
     it('infoOf:欄位取自迴圈重跑之數字(不是 agent 自報);挑選內容 = 內建與近 90 日之超額及其均;缺欄為 null 而不拋錯', () => {
         let x = infoOf(doc(id1, 10.5), { meta: { desc: 'd', params: { a: 1 } }, fam: '家族甲', ho: { perf: '+', content: '-', asOf: '2026-11-10T00:00:00' }, storeRel: 'rsi/picks' })
-        assert.deepEqual([x.id, x.short, x.round, x.type, x.base, x.family], [id1, id1.slice(0, 8), 3, 'explore', null, '家族甲'])
+        assert.deepStrictEqual([x.id, x.short, x.round, x.type, x.base, x.family], [id1, id1.slice(0, 8), 3, 'explore', null, '家族甲'])
         assert.deepEqual([x.status.trust, x.status.action, x.status.vetoed, x.status.ladder, x.status.inactiveArms], ['trusted', 'accept', false, 3, ['B14_pitKey']])
         assert.deepEqual([x.backtest.S, x.backtest.eqYrMean, x.backtest.eqYrMin, x.backtest.nPosPhases], [10.5, 12.35, -1.2, 6])
         assert.deepEqual(x.backtest.content, { builtin: 40.3, p: 0.0154, recent: 20.1, pRecent: 0.03, mean: 30.2 })
@@ -71,8 +71,8 @@ describe('共同儲存「自適應挑選策略」區(規則 R-REC-25;保留期�
         assert.equal(x.files.pick, `rsi/picks/${id1}/pick.mjs`)
         //舊節點文件缺欄: 不拋錯, 值為 null; 未給保留期者三欄皆 null
         let y = infoOf({ nodeId: id2, round: 1, spec: { arms: ['A01_nt'], base: null }, harness: { ok: true, score: { S: 1 } } })
-        assert.deepEqual([y.backtest.eqYrMean, y.backtest.content.mean, y.status.trust, y.design.desc], [null, null, null, null])
-        assert.deepEqual(y.holdout, { perf: null, content: null, asOf: null })
+        assert.deepStrictEqual([y.backtest.eqYrMean, y.backtest.content.mean, y.status.trust, y.design.desc], [null, null, null, null])
+        assert.deepStrictEqual(y.holdout, { perf: null, content: null, asOf: null })
     })
 
     it('buildPickStore:只收有迴圈重跑結果且有交付版者;程式碼逐位複製;總表依 S 由高至低;重跑時內容不變者不重複製', async () => {
@@ -87,7 +87,7 @@ describe('共同儲存「自適應挑選策略」區(規則 R-REC-25;保留期�
         assert(!fs.existsSync(path.join(dir, id3)), '無結果之節點不建夾')
         let idx = JSON.parse(fs.readFileSync(path.join(dir, 'index.json'), 'utf8'))
         assert.deepEqual(idx.items.map((x) => x.id), [id2, id1], '依 S 由高至低')
-        assert.deepEqual([idx.items[0].family, idx.items[1].family, idx.items[0].design.desc], ['家族甲', null, `成品 ${id2.slice(0, 4)}`])
+        assert.deepStrictEqual([idx.items[0].family, idx.items[1].family, idx.items[0].design.desc], ['家族甲', null, `成品 ${id2.slice(0, 4)}`])
         assert.equal(idx.fields.length, FIELD_DEFS.length)
         let md = fs.readFileSync(path.join(dir, 'INDEX.md'), 'utf8')
         assert(md.indexOf(`\`${id2.slice(0, 8)}\``) < md.indexOf(`\`${id1.slice(0, 8)}\``) && md.includes('· / ·'), '總表之次序與未算之保留期欄')
@@ -108,7 +108,7 @@ describe('共同儲存「自適應挑選策略」區(規則 R-REC-25;保留期�
         let idx = JSON.parse(fs.readFileSync(path.join(dir, 'index.json'), 'utf8'))
         let by = Object.fromEntries(idx.items.map((x) => [x.id, x.holdout]))
         assert.deepEqual(by[id2], { perf: '+', content: '-', asOf: '2026-11-10T00:00:00' })
-        assert.deepEqual(by[id1], { perf: null, content: null, asOf: null })
+        assert.deepStrictEqual(by[id1], { perf: null, content: null, asOf: null })
         assert.equal(idx.holdoutAsOf, '2026-11-10T00:00:00')
         let md = fs.readFileSync(path.join(dir, 'INDEX.md'), 'utf8')
         assert(md.includes('| + / - |') && md.includes('| · / · |'))
@@ -131,8 +131,8 @@ describe('共同儲存「自適應挑選策略」區(規則 R-REC-25;保留期�
             fs.writeFileSync(fp, JSON.stringify({ asOf: bad, items }), 'utf8')
             await buildPickStore(st)
             let { idx, readme, by } = read()
-            assert.equal(idx.holdoutAsOf, null, `holdoutAsOf ${JSON.stringify(bad)}`)
-            assert.deepEqual(by[id2], { perf: '+', content: '-', asOf: null }, `asOf ${JSON.stringify(bad)}`)
+            assert.strictEqual(idx.holdoutAsOf, null, `holdoutAsOf ${JSON.stringify(bad)}`)
+            assert.deepStrictEqual(by[id2], { perf: '+', content: '-', asOf: null }, `asOf ${JSON.stringify(bad)}`)
             assert(readme.includes('目前尚無任何檢定結果。') && !readme.includes('目前之檢定所用資料至'), `README ${JSON.stringify(bad)}`)
             assert(!readme.includes('20261110') && !JSON.stringify(idx).includes('20261110'), '數字不入 README 與 index.json')
         }
@@ -144,8 +144,8 @@ describe('共同儲存「自適應挑選策略」區(規則 R-REC-25;保留期�
         assert(ok.readme.includes('目前之檢定所用資料至 2026-11-10T00:00:00。'))
         //infoOf(純函數)同口徑
         let d0 = { nodeId: id2, round: 1, spec: { arms: ['A01_nt'], base: null }, harness: { ok: true, score: { S: 1 } } }
-        assert.deepEqual(infoOf(d0, { ho: { perf: '+', content: '-', asOf: 20261110 } }).holdout, { perf: '+', content: '-', asOf: null })
-        assert.deepEqual(infoOf(d0, { ho: { perf: '+', content: '-', asOf: '' } }).holdout, { perf: '+', content: '-', asOf: null })
+        assert.deepStrictEqual(infoOf(d0, { ho: { perf: '+', content: '-', asOf: 20261110 } }).holdout, { perf: '+', content: '-', asOf: null })
+        assert.deepStrictEqual(infoOf(d0, { ho: { perf: '+', content: '-', asOf: '' } }).holdout, { perf: '+', content: '-', asOf: null })
         assert.deepEqual(infoOf(d0, { ho: { perf: '+', content: '-', asOf: 'x' } }).holdout, { perf: '+', content: '-', asOf: 'x' })
         if (orig === null) {
             fs.rmSync(fp, { force: true })
@@ -347,8 +347,8 @@ describe('共同儲存區:挑選模組載入時改了內建物件(EVAL_INTEGRITY
         assert.deepEqual([r.n, r.copied], [3, 3])
         let idx = JSON.parse(fs.readFileSync(path.join(st.rsi.root, 'picks', 'index.json'), 'utf8'))
         let by = Object.fromEntries(idx.items.map((x) => [x.id, x.design]))
-        assert.equal(by[ida].desc, null)
-        assert.equal(by[idb].desc, null)
+        assert.strictEqual(by[ida].desc, null)
+        assert.strictEqual(by[idb].desc, null)
         assert.equal(by[idc].desc, `成品 ${idc.slice(0, 4)}`)
     })
 

@@ -280,7 +280,7 @@ describe('records:任務類型與擴建(/3 之選配欄)', function () {
         let a = dreamPart(['n1'])
         a.synthesis.overview = good
         assert.deepEqual(tallyDream(a).overview, { coverage: 'concentrated', progress: 'advancing', localOptimum: 'unknown', nFamilies: 1, outwardChecked: 0 })
-        assert.equal(tallyDream(dreamPart(['n1'])).overview, null)
+        assert.strictEqual(tallyDream(dreamPart(['n1'])).overview, null)
         //outwardChecked(選配; 規則 R-REC-26): 本輪已預先核對而皆無內容之向外候選 { kinds: 正整數, files: [檔名…](至少 1 個) }; tallyDream 取其種數; 渲染於「據此之調整」之後
         assert.deepEqual(mk({ ...good, outwardChecked: { kinds: 4, files: ['fp_a.mjs', 'ab_b.mjs'] } }), [])
         assert.deepEqual(mk({ ...good, outwardChecked: null }), [], 'null 視同未給')
@@ -423,7 +423,7 @@ describe('records:渲染與檔案儲存', function () {
     it('刪除節點文件:正本與渲染檔移入 trash 並留理由;原處不再有', () => {
         let moved = rec.removeNodeDoc('n1', '偏差太大')
         assert.equal(moved.length, 2)
-        assert.equal(rec.getNodeDoc('n1'), null)
+        assert.strictEqual(rec.getNodeDoc('n1'), null)
         assert.deepEqual(rec.listNodeDocs(), [])
         let files = fs.readdirSync(path.join(t.dir, 'trash'))
         assert.equal(files.length, 3)

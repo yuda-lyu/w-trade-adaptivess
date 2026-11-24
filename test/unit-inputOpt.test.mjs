@@ -96,12 +96,12 @@ describe('入口之 opt 與必給件之檢測(R-EV-54 ② ③ ④ ⑤)', functio
             assert.strictEqual((await cnt(undefined)).n, 1)
             assert.strictEqual((await cnt(null)).n, 1)
             assert.strictEqual((await cnt(0)).n, 0)
-            assert.deepEqual((await cnt(0)).r, { done: [], stopped: null })
+            assert.deepStrictEqual((await cnt(0)).r, { done: [], stopped: null })
             assert.strictEqual((await cnt(3)).n, 3)
             assert.strictEqual((await cnt('3')).n, 3)
             assert.strictEqual((await cnt(' 2 ')).n, 2)
             let h = await runRounds({ rounds: 3, runRound: async ({ index }) => ({ index, halt: index === 1 ? '停' : null }) })
-            assert.deepEqual(h, { done: [{ index: 0, halt: null }, { index: 1, halt: '停' }], stopped: '停' })
+            assert.deepStrictEqual(h, { done: [{ index: 0, halt: null }, { index: 1, halt: '停' }], stopped: '停' })
             let s = await runRounds({ rounds: 5, shouldStop: ({ index }) => (index === 2 ? '額度' : null), runRound: ok })
             assert.strictEqual(s.done.length, 2)
             assert.strictEqual(s.stopped, '額度')
@@ -155,7 +155,7 @@ describe('入口之 opt 與必給件之檢測(R-EV-54 ② ③ ④ ⑤)', functio
             for (let v of NOTOBJ) {
                 throwsMsg(() => peekRunLock(path.join(t.dir, 'none.lock'), v), 'invalid opt: must be an object', `opt ${typeof v}`)
             }
-            assert.deepEqual(peekRunLock(path.join(t.dir, 'none.lock'), null), { running: false, stale: false, pid: null, startedAt: null, beatAt: null })
+            assert.deepStrictEqual(peekRunLock(path.join(t.dir, 'none.lock'), null), { running: false, stale: false, pid: null, startedAt: null, beatAt: null })
             let fp = path.join(sub('lockB'), 'r.lock')
             let l = acquireRunLock(fp)
             let p = peekRunLock(fp)
@@ -209,16 +209,16 @@ describe('入口之 opt 與必給件之檢測(R-EV-54 ② ③ ④ ⑤)', functio
             let marker = path.join(sub('rn'), 'ran.txt')
             let script = `require('fs').mkdirSync(${JSON.stringify(path.dirname(marker))}, { recursive: true }); require('fs').writeFileSync(${JSON.stringify(marker)}, '1')`
             for (let a of [undefined, null, 'x', 5, {}, [], [1], ['-e', 5], [null]]) {
-                assert.deepEqual(await runNodeProc(a, { cwd: t.dir }), fixed('invalid args: must be a non-empty array of strings'), `args ${JSON.stringify(a)}`)
+                assert.deepStrictEqual(await runNodeProc(a, { cwd: t.dir }), fixed('invalid args: must be a non-empty array of strings'), `args ${JSON.stringify(a)}`)
             }
             for (let v of NOTOBJ) {
-                assert.deepEqual(await runNodeProc(['-e', script], v), fixed('invalid opt: must be an object'), `opt ${typeof v}`)
+                assert.deepStrictEqual(await runNodeProc(['-e', script], v), fixed('invalid opt: must be an object'), `opt ${typeof v}`)
             }
             for (let v of ['', 5, {}, [], true]) {
-                assert.deepEqual(await runNodeProc(['-e', script], { cwd: v }), fixed('invalid opt.cwd: must be a non-empty string'), `cwd ${typeof v}`)
+                assert.deepStrictEqual(await runNodeProc(['-e', script], { cwd: v }), fixed('invalid opt.cwd: must be a non-empty string'), `cwd ${typeof v}`)
             }
             for (let v of ['x', 5, [], true]) {
-                assert.deepEqual(await runNodeProc(['-e', script], { cwd: t.dir, env: v }), fixed('invalid opt.env: must be an object'), `env ${typeof v}`)
+                assert.deepStrictEqual(await runNodeProc(['-e', script], { cwd: t.dir, env: v }), fixed('invalid opt.env: must be an object'), `env ${typeof v}`)
             }
             assert.ok(!fs.existsSync(marker), '子行程未被起動')
         })
@@ -233,7 +233,7 @@ describe('入口之 opt 與必給件之檢測(R-EV-54 ② ③ ④ ⑤)', functio
                 assert.deepEqual(ev.map((e) => e.type), ['error'], want)
                 assert.strictEqual(ev[0].message, want)
                 assert.strictEqual(r.error, want)
-                assert.deepEqual(await runNodeProc(a, o), fixed(want), '不傳 onTrace')
+                assert.deepStrictEqual(await runNodeProc(a, o), fixed(want), '不傳 onTrace')
             }
         })
         it('timeoutMs(計時值): 缺或無效(NaN、負數、0、超過 2147483647、非數字、布林、空字串、null)⇒ 用預設 900000(原: 計時器約 1 毫秒觸發而子行程即被終止並回 timeout); 有效者(正數、數字字串)照用; 以 onTrace 之 spawn 事件觀察實際採用之值', async () => {
@@ -259,7 +259,7 @@ describe('入口之 opt 與必給件之檢測(R-EV-54 ② ③ ④ ⑤)', functio
                 assert.deepEqual({ code: r.code, timeout: r.timeout, out: r.out.trim() }, { code: 0, timeout: false, out: 'late' }, `timeoutMs ${String(v)}`)
             }
             let r2 = await runNodeProc(['-e', 'setTimeout(() => {}, 20000)'], { cwd: t.dir, timeoutMs: 300 })
-            assert.deepEqual({ code: r2.code, timeout: r2.timeout }, { code: null, timeout: true }, '有效之短逾時照常終止')
+            assert.deepStrictEqual({ code: r2.code, timeout: r2.timeout }, { code: null, timeout: true }, '有效之短逾時照常終止')
         })
     })
 

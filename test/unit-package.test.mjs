@@ -402,7 +402,7 @@ describe('套件:發布內容不含宿主之痕跡', function () {
             assert(tracesOf(textOf(fp16be)).length > 0, 'UTF-16BE')
             let fpBin = path.join(t.dir, 'a.bin')
             fs.writeFileSync(fpBin, Buffer.from([1, 0, 2, 3]))
-            assert.equal(textOf(fpBin), null)
+            assert.strictEqual(textOf(fpBin), null)
         }
         finally {
             t.cleanup()

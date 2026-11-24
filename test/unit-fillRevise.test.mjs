@@ -253,7 +253,7 @@ describe('附算與補算之強健性(位置、攔截、待重試、心跳、狀
         let { P, st, ids, runEval } = mk()
         await P.fill({ runEval, storeAfter: false })
         assert.deepEqual(P.fillPlanOf().tasks, [], '補齊之後皆現行')
-        assert.equal(fstOf(st).registry.dA.since, null, '第一次建立: since 為 null')
+        assert.strictEqual(fstOf(st).registry.dA.since, null, '第一次建立: since 為 null')
         //損毀
         fs.writeFileSync(path.join(st.rsi.root, 'fill_state.json'), '{"schema": "arsi.fillState/1", "registry": ', 'utf8')
         let p = P.fillPlanOf()
@@ -488,7 +488,7 @@ describe('附算與補算之採信條件與邊界', function () {
         assert(r.lines.some((l) => l.startsWith('附算:補回節點文件之求解窗後段之列 1 個')), JSON.stringify(r.lines))
         let d1 = P.records.getNodeDoc(ids[0])
         assert(d1.harness.summary.includes('S 99(重驗)') && d1.harness.summary.some((s) => s.startsWith(FP.POSTFIT_HEAD)), JSON.stringify(d1.harness.summary))
-        assert.deepEqual(d1.harness.postfit, FK.readFill(st.rsi.root, ids[0]).postfit)
+        assert.deepStrictEqual(d1.harness.postfit, FK.readFill(st.rsi.root, ids[0]).postfit)
         assert(fs.readFileSync(FK.fillFileOf(st.rsi.root, ids[0])).equals(f0), '補算檔不動')
         //已一致 ⇒ 不列
         let r2 = await P.fill({ runEval: re, storeAfter: false })
@@ -746,7 +746,7 @@ describe('附算與補算之採信條件與邊界', function () {
         assert(r0.error.includes('求解窗後段:結果檔不是本次之輸出') && r0.error.includes('擴充診斷:結果檔不是本次之輸出'), r0.error)
         assert.strictEqual(FK.readFill(st.rsi.root, ids[0]), null, '不寫補算檔')
         assert(!fs.existsSync(FK.postfitFileOf(st.rsi.root, ids[0])), '不留完整結果檔')
-        assert.equal(P.rsi.store.getNode(ids[0]).raw.metrics.ext.dB, undefined, '殘留之值不併入樹')
+        assert.strictEqual(P.rsi.store.getNode(ids[0]).raw.metrics.ext.dB, undefined, '殘留之值不併入樹')
         assert.deepEqual(fstOf(st).retry.map((x) => x.id), [ids[0]])
         assert(!fs.existsSync(fpP) && !fs.existsSync(fpE), '殘留之暫存檔已移除')
     })
@@ -1027,7 +1027,7 @@ describe('附算與補算之採信條件與邊界', function () {
         assert(typeof r.error === 'string' && r.error.length > 0, JSON.stringify(r))
         //對照: 工作目錄存在者照常
         let ok = await runNodeProc(['-e', 'process.stdout.write("x")'], { cwd: t.dir, timeoutMs: 20000 })
-        assert.deepEqual([ok.code, ok.out, ok.timeout, ok.error], [0, 'x', false, undefined])
+        assert.deepStrictEqual([ok.code, ok.out, ok.timeout, ok.error], [0, 'x', false, undefined])
     })
 
     //強制重算之失敗者留在待重試且下次重試仍為強制重算, 直到成功(Gitea #178 §7 第 11 點之主控裁定; 不採「寫回節點文件原內容」)

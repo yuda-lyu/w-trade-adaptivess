@@ -1234,7 +1234,7 @@ let M = [
     ['RV02', 'src/cfg.mjs', [["                if (hasVal) {\n                    i++\n                }\n                continue\n            }\n            return `invalid --${nm}: must be written as", "                continue\n            }\n            return `invalid --${nm}: must be written as"]], ['unit-cliStrictFlags']], //own 旗標之空值不被消耗(被當成多餘之值)
     ['RV03', 'src/cli/rsi.mjs', [["if (!(typeof cv === 'string' && /^[0-9a-f]{8}$/.test(cv))) {", "if (false) {"]], ['unit-cliStrictFlags']], //--claim 之格式不檢
     ['RV04', 'src/cfg.mjs', [["        board: [],", "        board: ['claim'],"]], ['unit-cliStrictFlags']], //--claim 不限 frontier 模式(原由進入檔自己判; 排程第 595 項之接續改由模式表一併判定)
-    ['RV05', 'src/cli/rsi.mjs', [["let bs = argStrOf('base', undefined)", "let bs = argOf('base', undefined)"]], ['unit-cliStrictFlags']], //--base 經數值轉型(全數字之 id 前綴被丟掉)
+    ['RV05', 'src/cli/rsi.mjs', [["to: String(toArg).split('+'), why: String(whyArg), ...(typeof bsc === 'string' && bsc ? { base: bsc } : {}),", "to: String(toArg).split('+'), why: String(whyArg), ...(typeof bsc === 'string' && bsc ? { base: Number.isFinite(Number(bsc)) ? Number(bsc) : bsc } : {}),"]], ['unit-frontierOps', 'unit-cliStrictFlags']], //改掛之 --base 經數值轉型(全數字之 id 前綴被丟掉; 結案與改掛共用 bsc 後, 本項只改改掛側)
     ['RV06', 'src/cli/build.mjs', [["if (train && limitArg !== null) {", "if (false) {"]], ['unit-cliStrictFlags']], //--limit 與 --train 併用不拒
     ['RV07', 'src/cli/backtest.mjs', [["if (!(btEndBar > btStartBar)) {", "if (false) {"]], ['unit-backtestEnd']], //回測期終點不晚於起點不拒
     ['RV08', 'src/cli/backtest.mjs', [["if (runs.every((r) => r.bars.length === 0)) {", "if (false) {"]], ['unit-backtestEnd']], //回測期內無任何決策不拒
@@ -1456,7 +1456,7 @@ let M = [
     ['IN44', 'src/cli/rsi.mjs', [["let rd = argNumOf('round', 'posInt', 0)\n    let fpJs", "let rd = argOf('round', 0)\n    let fpJs"]], ['unit-cliValues']],
     ['IN45', 'src/cli/rsi.mjs', [["let why = String(argStrOf('why', ''))", "let why = String(argOf('why', ''))"]], ['unit-cliValues']],
     ['IN46', 'src/cli/rsi.mjs', [["why: String(argStrOf('why', ''))", "why: String(argOf('why', ''))"]], ['unit-cliValues']],
-    ['IN47', 'src/cli/rsi.mjs', [["let why = argStrOf('why', '')\n        if (!to", "let why = argOf('why', '')\n        if (!to"]], ['unit-cliValues']],
+    ['IN47', 'src/cli/rsi.mjs', [["let whyArg = doRearm ? argStrOf('why', '') : ''", "let whyArg = doRearm ? argOf('why', '') : ''"]], ['unit-cliValues']],
     ['IN48', 'src/tools/waitEvent.mjs', [["let since = i0 >= 0 ? timeMsOf(process.argv[i0 + 1]) : Date.now()", "let since = Date.now()"]], ['unit-cliValues']], //--since 不採
     ['IN49', 'src/tools/waitEvent.mjs', [["argNumOf('timeout-min', 'timerMin', 110) * 60000", "argNumOf('timeout-min', 'timerMin', 110) * 1000"]], ['unit-cliValues']],
     ['IN50', 'src/tools/waitEvent.mjs', [["Math.max(2, argNumOf('poll-sec', 'timerSec', 20)) * 1000", "Math.max(1, argNumOf('poll-sec', 'timerSec', 20)) * 1000"]], ['unit-cliValues']],
@@ -1665,22 +1665,23 @@ let M = [
     ['SF08', 'src/domain/verify.mjs', [["baseShort: { backtest: sideNumOf(b.backtest, SIDE_FLOW.baseShort.backtest, SIDE_FLOW_OK.share), train: sideNumOf(b.train, SIDE_FLOW.baseShort.train, SIDE_FLOW_OK.share) },", "baseShort: { backtest: sideNumOf(b.train, SIDE_FLOW.baseShort.backtest, SIDE_FLOW_OK.share), train: sideNumOf(b.backtest, SIDE_FLOW.baseShort.train, SIDE_FLOW_OK.share) },"]], ['unit-sideFlowCfg']], //基準之回測期與訓練期對調
     ['SF10', 'src/domain/verify.mjs', [["        let x = cfgNumOf(v, def, 'sideFlow', 'num')\n", "        let x = typeof v === 'number' ? v : (v === undefined || v === null ? def : Number(v))\n"]], ['unit-sideFlowCfg']], //不經 cfgNumOf(布林、空字串、陣列被轉為數值)
     ['SF11', 'src/domain/verify.mjs', [["        let x = cfgNumOf(v, def, 'sideFlow', 'num')\n", "        let x = typeof v === 'number' ? v : def\n"]], ['unit-sideFlowCfg']], //數字字串不轉為數值(當未給)
-    ['FB01', 'src/cfg.mjs', [["    if (sc.freqBands[0] > sc.freqBands[1]) {\n", "    if (sc.freqBands[0] >= sc.freqBands[1]) {\n"]], ['unit-sideFlowCfg']], //b1 = b2 亦拒
-    ['FB02', 'src/cfg.mjs', [["    if (sc.freqBands[0] > sc.freqBands[1]) {\n", "    if (sc.freqBands[0] < sc.freqBands[1]) {\n"]], ['unit-sideFlowCfg']], //順序判反
-    ['FB03', 'src/cfg.mjs', [["    freqBandsCheck(st.score)\n", "    void 0\n"]], ['unit-sideFlowCfg']], //讀設定不檢順序
-    ['FB04', 'src/cfg.mjs', [["    try {\n        sc = evalScoreOf(score, 'score')\n    }\n    catch (err) {\n        return\n    }\n", "    sc = evalScoreOf(score, 'score')\n"]], ['unit-sideFlowCfg']], //他種之 score 無效亦於讀設定時拋(改變既有處置)
-    ['FB05', 'src/cfg.mjs', [["    if (sc.freqBands[0] > sc.freqBands[1]) {\n", "    if (score && Array.isArray(score.freqBands) && score.freqBands[0] > score.freqBands[1]) {\n"]], ['unit-sideFlowCfg']], //比較原值(數字字串依字典序)
+    //  FB01 ~ FB05 之錨點隨 freqBands 順序檢查移入 evalScoreOf(單一來源; tadm9)而改(變異之內容不變); FB07 ~ FB10 為移入後新增
+    ['FB01', 'src/eval/cfgNum.mjs', [["        if (out.freqBands[0] > out.freqBands[1]) {\n", "        if (out.freqBands[0] >= out.freqBands[1]) {\n"]], ['unit-sideFlowCfg', 'unit-freqBandsOrder']], //b1 = b2 亦拒
+    ['FB02', 'src/eval/cfgNum.mjs', [["        if (out.freqBands[0] > out.freqBands[1]) {\n", "        if (out.freqBands[0] < out.freqBands[1]) {\n"]], ['unit-sideFlowCfg', 'unit-freqBandsOrder']], //順序判反
+    ['FB03', 'src/cfg.mjs', [["    try {\n        evalScoreOf(st.score, 'score')\n    }\n    catch (err) {\n        if (err && err.code === FREQ_BANDS_ORDER_CODE) {\n            throw err\n        }\n    }\n", "    void 0\n"]], ['unit-sideFlowCfg', 'unit-freqBandsOrder']], //讀設定不檢順序
+    ['FB04', 'src/cfg.mjs', [["        if (err && err.code === FREQ_BANDS_ORDER_CODE) {\n            throw err\n        }\n", "        throw err\n"]], ['unit-sideFlowCfg', 'unit-freqBandsOrder']], //他種之 score 無效亦於讀設定時拋(改變既有處置)
+    ['FB05', 'src/eval/cfgNum.mjs', [["        if (out.freqBands[0] > out.freqBands[1]) {\n", "        if (fb[0] > fb[1]) {\n"]], ['unit-sideFlowCfg', 'unit-freqBandsOrder']], //比較原值(數字字串依字典序)
     ['FB06', 'src/cfg.mjs', [["|backtest:|score\\.freqBands:)/", "|backtest:)/"]], ['unit-sideFlowCfg']], //入口不認得此訊息(印「無法讀取專案設定」)
-    ['DA01', 'src/domain/domain.mjs', [["let armKey = (a) => (Array.isArray(a) ? [...new Set(a)].sort().join('+') : '')", "let armKey = (a) => (Array.isArray(a) ? a.slice().sort().join('+') : '')"]], ['unit-frontierOps']], //臂之鍵不去重
-    ['DA02', 'src/domain/domain.mjs', [["let armKey = (a) => (Array.isArray(a) ? [...new Set(a)].sort().join('+') : '')", "let armKey = (a) => (Array.isArray(a) ? [...new Set(a)].join('+') : '')"]], ['unit-frontierOps']], //臂之鍵不排序
+    ['DA01', 'src/arsi/records.mjs', [["let armKeyOf = (arms) => (Array.isArray(arms) ? [...new Set(arms)].sort().join('+') : '')", "let armKeyOf = (arms) => (Array.isArray(arms) ? arms.slice().sort().join('+') : '')"]], ['unit-frontierOps']], //臂之鍵不去重
+    ['DA02', 'src/arsi/records.mjs', [["let armKeyOf = (arms) => (Array.isArray(arms) ? [...new Set(arms)].sort().join('+') : '')", "let armKeyOf = (arms) => (Array.isArray(arms) ? [...new Set(arms)].join('+') : '')"]], ['unit-frontierOps']], //臂之鍵不排序
     ['RB01', 'src/domain/domain.mjs', [["            if (old && old.status === 'blocked') {\n                rsi.store.markFrontier([old.specHash], 'proposed')\n", "            if (false) {\n                rsi.store.markFrontier([old.specHash], 'proposed')\n"]], ['unit-frontierOps']], //改掛不重開已結案之目的
     ['RB02', 'src/domain/domain.mjs', [["                rsi.store.markFrontier([old.specHash], 'proposed')\n            }\n            else {\n                return { ok: false, why: old ?", "                void 0\n            }\n            else {\n                return { ok: false, why: old ?"]], ['unit-frontierOps']], //重開而不改狀態(目的仍為 blocked)
     ['RB03', 'src/domain/domain.mjs', [["return { ok: false, why: old ? `前緣已有同規格之項(該項狀態 ${old.status},不會執行)` : '新提案未能入前緣' }", "return { ok: false, why: '新提案未能入前緣' }"]], ['unit-frontierOps']], //拒絕之訊息不註明該項之狀態
     ['RB04', 'src/domain/domain.mjs', [["            if (old && old.status === 'blocked') {\n                rsi.store.markFrontier([old.specHash], 'proposed')\n", "            if (old && old.status !== 'proposed') {\n                rsi.store.markFrontier([old.specHash], 'proposed')\n"]], ['unit-frontierOps']], //改掛亦重開非待執行之他種狀態(rejectedByGate 等)
-    ['CB01', 'src/cli/rsi.mjs', [["...(typeof bsc === 'string' && bsc ? { base: bsc } : {}), ", ""]], ['unit-frontierOps']], //結案不傳 --base
+    ['CB01', 'src/cli/rsi.mjs', [["why: String(argStrOf('why', '')), ...(typeof bsc === 'string' && bsc ? { base: bsc } : {}), ", "why: String(argStrOf('why', '')), "]], ['unit-frontierOps']], //結案不傳 --base
     ['CB02', 'src/cli/rsi.mjs', [["let bsc = argStrOf('base', undefined)", "let bsc = argOf('base', undefined)"]], ['unit-frontierOps']], //--base 經數值轉型(全數字之 id 被丟掉位數)
     ['CB03', 'src/cli/rsi.mjs', [["        if (k === 0 && typeof bsc === 'string' && bsc) {\n", "        if (false) {\n"]], ['unit-frontierOps']], //--base 未命中不提示須為完整 id
-    ['CB04', 'src/cli/rsi.mjs', [["        let k = P.closeFrontier({ arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof bsc === 'string' && bsc ? { base: bsc } : {}), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) })", "        let k = P.closeFrontier({ arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof bsc === 'string' && bsc && !process.argv.includes('--rearm') ? { base: bsc } : {}), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) })"]], ['unit-frontierOps']], //與 --rearm 並用時 --close 不受 --base 限(原行為)
+    ['CB04', 'src/cli/rsi.mjs', [["let closeOpt = doClose ? { arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof bsc === 'string' && bsc ? { base: bsc } : {}),", "let closeOpt = doClose ? { arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof bsc === 'string' && bsc && !process.argv.includes('--rearm') ? { base: bsc } : {}),"]], ['unit-frontierOps']], //與 --rearm 並用時 --close 不受 --base 限(原行為)
     //── 成品之形式之紀錄(FM 系列; 規則 R-REC-53)──
     ['FM01', 'src/arsi/records.mjs', [["if (a.conclusion.form !== undefined && a.conclusion.form !== null && !FORMS.includes(a.conclusion.form)) {", "if (false) {"]], ['unit-formRecord']], //節點文件之形式不檢
     ['FM02', 'src/arsi/records.mjs', [["if (x.form !== undefined && x.form !== null && !FORMS.includes(x.form)) {", "if (false) {"]], ['unit-formRecord']], //審計之形式不檢
@@ -1763,6 +1764,110 @@ let M = [
     //  NE21 ~ NE22: 兩批(R-EV-57 之 K3 取值 × R-REC-55 ③ 之 sideFlowIssueOfSt)交會處之接線: 同 SF01、SF11 之變異, 由 unit-briefDefaults 之取值案(經 sideFlowIssueOfSt)抓出
     ['NE21', 'src/domain/verify.mjs', [["        return ok(x) ? x : def\n", "        return x\n"]], ['unit-briefDefaults']], //門檻值域不檢(經 sideFlowIssueOfSt 仍受檢測)
     ['NE22', 'src/domain/verify.mjs', [["        let x = cfgNumOf(v, def, 'sideFlow', 'num')\n", "        let x = typeof v === 'number' ? v : def\n"]], ['unit-briefDefaults']], //數字字串不轉為數值(經 sideFlowIssueOfSt)
+    //  QD、BP、CL、AK 系列(排程第 614 項; tadm8; 與 CB / DA 同族): 連跑因額度停止之 run-done(reason / retryAt)、--base 唯一前綴、--close 取輪次鎖與必給 --why、臂之鍵單一實作
+    //    DA01、DA02 之錨點改至 records.mjs 之 armKeyOf(單一實作); CB04、IN47 之錨點隨 --close / --rearm 之區塊重排而更新(變異之內容不變)
+    ['QD01', 'src/cli/rsi.mjs', [["                        stopReason = 'quota'\n", ""]], ['unit-quotaCli']], //額度停止之 run-done 不帶 reason
+    ['QD02', 'src/cli/rsi.mjs', [["                        stopRetryAt = q.retryAt || null\n", "                        stopRetryAt = null\n"]], ['unit-quotaCli']], //額度停止之 run-done 不帶 retryAt
+    ['QD03', 'src/cli/rsi.mjs', [["...retryKey, ...satKey }, dreamOnly", "...satKey }, dreamOnly"]], ['unit-quotaCli']], //狀態檔之 run 不帶 retryAt
+    ['QD04', 'src/cli/rsi.mjs', [["stopped: rr.stopped || null, ...(stopReason ? { reason: stopReason } : {}), ...retryKey,", "stopped: rr.stopped || null, ...(stopReason ? { reason: stopReason } : {}),"]], ['unit-quotaCli']], //事件之 run-done 不帶 retryAt
+    ['QD05', 'src/cli/rsi.mjs', [["let retryKey = stopReason === 'quota' && stopRetryAt ? { retryAt: stopRetryAt } : {}", "let retryKey = { retryAt: stopRetryAt }"]], ['unit-quotaCli']], //未被額度擋下 / 查不到重置時刻者亦帶 retryAt 鍵(null)
+    ['BP01', 'src/domain/domain.mjs', [["        if (ids.includes(base)) {", "        if (false) {"]], ['unit-frontierOps']], //完整 id 不優先於前綴(一起點為另一起點之前綴時判模糊)
+    ['BP02', 'src/domain/domain.mjs', [["let hit = ids.filter((b) => b.startsWith(base))", "let hit = ids.filter((b) => b.includes(base))"]], ['unit-frontierOps']], //以子字串代前綴
+    ['BP03', 'src/domain/domain.mjs', [["return hit.length > 1 ? { base, ambiguous: hit } : { base: hit.length === 1 ? hit[0] : base, ambiguous: null }", "return { base: hit.length >= 1 ? hit[0] : base, ambiguous: null }"]], ['unit-frontierOps']], //前綴符合多個起點時取第一個(不拒)
+    ['BP04', 'src/domain/domain.mjs', [["let ids = [...new Set(cands.map((f) => f.spec.base)", "let ids = [...new Set(rsi.store.listFrontier().filter((f) => f.spec).map((f) => f.spec.base)"]], ['unit-frontierOps']], //候選取全前緣之起點(含他臂、已結案者)
+    ['BP05', 'src/domain/domain.mjs', [["        base = rb.base\n        let hit = cands.filter((f) => base === undefined || (f.spec.base || null) === (base || null))\n        if (dry) {", "        let hit = cands.filter((f) => base === undefined || (f.spec.base || null) === (base || null))\n        if (dry) {"]], ['unit-frontierOps']], //結案不採解析後之完整 id
+    ['BP06', 'src/domain/domain.mjs', [["        base = rb.base\n        let hit = cands.filter((f) => base === undefined || (f.spec.base || null) === (base || null))\n        if (hit.length !== 1) {", "        let hit = cands.filter((f) => base === undefined || (f.spec.base || null) === (base || null))\n        if (hit.length !== 1) {"]], ['unit-frontierOps']], //改掛不採解析後之完整 id
+    ['BP07', 'src/domain/domain.mjs', [["{ code: 'BASE_AMBIGUOUS' }", "{ code: 'OTHER' }"]], ['unit-frontierOps']], //模糊之錯誤不帶可辨識之 code(命令列當成非預期之錯)
+    ['BP08', 'src/domain/domain.mjs', [["        if (rb.ambiguous) {\n            return { ok: false, why: baseAmbiguousMsg(rb.ambiguous) }\n        }\n", ""]], ['unit-frontierOps']], //改掛不檢查模糊
+    ['BP09', 'src/cli/rsi.mjs', [["            console.log(`未結案: ${err.message}`)\n            process.exit(1)", "            console.log(`未結案: ${err.message}`)\n            process.exit(0)"]], ['unit-frontierOps']], //模糊之結案離開碼 0
+    ['BP10', 'src/cli/rsi.mjs', [["console.log('提示: --base 未命中同臂待執行提案之任何起點(給完整之起點節點 id 或其前綴;列示之 ←xxxxxxxx 為前 8 碼)')", "console.log('提示: --base 未命中')"]], ['unit-frontierOps']], //未命中之提示不說明前綴之用法
+    ['BP11', 'src/domain/domain.mjs', [["${hit.slice(0, 10).join('、')}", "${hit.slice(0, 1).join('、')}"]], ['unit-frontierOps']], //只列第一個候選
+    ['BP12', 'src/domain/domain.mjs', [["normArms(f.spec.arms).join('+') === key && (claim === undefined || (f.spec.claim || null) === (claim || null)))", "normArms(f.spec.arms).join('+') === key)"]], ['unit-frontierOps']], //候選不依主張鍵限縮
+    ['CL01', 'src/cli/rsi.mjs', [["    if (doClose || doRearm) {", "    if (doRearm) {"]], ['unit-frontierOps']], //結案不取輪次鎖
+    ['CL02', 'src/cli/rsi.mjs', [["${doClose && doRearm ? '結案與改掛' : doClose ? '結案' : '改掛'}", "${'改掛'}"]], ['unit-frontierOps']], //取不到鎖之訊息一律寫「改掛」
+    ['CL03', 'src/cli/rsi.mjs', [["    if (doRearm && (!toArg || toArg === true || !whyArg || whyArg === true)) {", "    if (false) {"]], ['unit-frontierOps']], //改掛之用法不於動作之前檢查(並用時先結案)
+    ['CL04', 'src/cli/rsi.mjs', [["        process.on('exit', () => lockF.release())\n", ""]], ['unit-frontierOps']], //以 process.exit 結束之路徑不釋放鎖
+    ['CL05', 'src/cfg.mjs', [["claim: ['close', 'rearm'], close: ['why'] }", "claim: ['close', 'rearm'] }"]], ['unit-cliModeFlags']], //--close 不須隨 --why
+    ['CL06', 'src/cli/rsi.mjs', [["    if (doClose && doRearm) {\n        try {", "    if (false) {\n        try {"]], ['unit-frontierOps']], //並用時不預檢(先結案、改掛側才拒而半途停止)
+    ['CL07', 'src/domain/domain.mjs', [["        if (dry) {\n            return hit.length\n        }\n", ""]], ['unit-frontierOps']], //closeFrontier 之 dry 仍寫
+    ['CL08', 'src/domain/domain.mjs', [["        if (dry) {\n            //預檢(不寫任何檔)", "        if (false) {\n            //預檢(不寫任何檔)"]], ['unit-frontierOps']], //rearmFrontier 之 dry 仍寫
+    ['CL09', 'src/domain/domain.mjs', [["return old0 && old0.status !== 'blocked' ? {", "return old0 && old0.status !== 'blocked' && false ? {"]], ['unit-frontierOps']], //預檢不拒他種狀態之同規格項
+    ['CL10', 'src/cli/rsi.mjs', [["            console.log('(與 --close 並用: 兩者皆未執行)')\n            process.exit(1)", "            console.log('(與 --close 並用: 兩者皆未執行)')\n            process.exit(0)"]], ['unit-frontierOps']], //預檢不合之離開碼為 0
+    ['CL11', 'src/cli/rsi.mjs', [["    if (doClose && doRearm && armKeyOf(String(cl).split('+')) === armKeyOf(String(ra).split('+'))) {", "    if (false) {"]], ['unit-frontierOps']], //並用而臂相同者不拒(結案後改掛側必敗)
+    ['CL12', 'src/cli/rsi.mjs', [["armKeyOf(String(cl).split('+')) === armKeyOf(String(ra).split('+'))", "String(cl) === String(ra)"]], ['unit-frontierOps']], //臂相同之判定不計次序與重複(寫法不同之同一集合漏判)
+    ['CL13', 'src/domain/domain.mjs', [["        let id = idOf(spec)\n        let ex = rsi.store.getNode(id)\n", "        let id = idOf(spec)\n        if (dry) {\n            return { ok: true, dry: true, nodeId: id, arms: spec.arms, round: null }\n        }\n        let ex = rsi.store.getNode(id)\n"]], ['unit-frontierOps']], //預檢於節點 / 待執行提案之檢查之前即返回
+    //  AS 系列(R-PKG-12; 非嚴格斷言之盤點工具與動態盤點之預載)
+    ['AS01', 'test/tools/auditAssert.mjs', [["        if (mask[m.index] === 0) {", "        if (false) {"]], ['unit-assertStrict']], //不略過字串、註解內之字樣
+    ['AS02', 'test/tools/auditAssert.mjs', [["                    if (stack.includes('[')) {", "                    if (true) {"]], ['unit-assertStrict']], //物件屬性之 null 亦記為陣列內
+    ['AS03', 'test/tools/auditAssert.mjs', [["let isKey = prev === '.' || (next === ':' && stack[stack.length - 1] === '{')", "let isKey = false"]], ['unit-assertStrict']], //屬性名與物件之鍵亦當值
+    ['AS04', 'test/tools/auditAssert.mjs', [["let CALL_RE = () => new RegExp(`(?<![\\\\w$.])assert", "let CALL_RE = () => new RegExp(`assert"]], ['unit-assertStrict']], //他物件 / 他識別字之同名方法亦計
+    ['AS05', 'test/tools/auditAssert.mjs', [["    if (kind !== 'loose') {", "    if (false) {"]], ['unit-assertStrict']], //嚴格之檔亦掃
+    ['AS06', 'test/tools/auditAssert.mjs', [["r.nFiles >= 50 && ", ""]], ['unit-assertStrict']], //防空集合檢查不查檔數之下限
+    ['AS07', 'test/tools/assertTap.mjs', [["            s.strictFail++", "            void 0"]], ['unit-assertStrict']], //不記寬鬆過而嚴格不過者
+    ['AS08', 'test/tools/assertTap.mjs', [["s.nullInArray += fl.nullInArray ? 1 : 0", "s.nullInArray += 0"]], ['unit-assertStrict']], //不記期望值之陣列內 null
+    ['AS09', 'test/tools/auditAssert.mjs', [["(c.method === 'deepEqual' || c.method === 'equal') && (c.hasNull || c.hasUndef)", "(c.method === 'deepEqual' || c.method === 'equal') && c.hasNull"]], ['unit-assertStrict']], //undefined 不列入含 null / undefined 者
+    ['AS10', 'test/tools/auditAssert.mjs', [["(c) => (c.method === 'deepEqual' || c.method === 'equal') && (c.hasNull || c.hasUndef)", "(c) => c.hasNull || c.hasUndef"]], ['unit-assertStrict']], //負向之斷言亦列入「含 null / undefined 期望值」
+    ['AS11', 'test/tools/auditAssert.mjs', [["            if (mask[u.index] === 1) {", "            if (true) {"]], ['unit-assertStrict']], //字串與註解內之不涵蓋寫法亦計
+    ['AS12', 'test/tools/assertTap.mjs', [["let m = /((?:file:\\/\\/)?\\S+?\\.mjs):(\\d+):\\d+\\)?\\s*$/.exec(l)", "let m = /(?:file:\\/\\/\\/)?([A-Za-z]:[^\\s()]*?\\.mjs):(\\d+):\\d+/.exec(l)"]], ['unit-assertStrict']], //站點辨識只認 Windows 磁碟機代號(原式)
+    ['AS13', 'test/tools/assertTap.mjs', [["let m = /((?:file:\\/\\/)?\\S+?\\.mjs):(\\d+):\\d+\\)?\\s*$/.exec(l)", "let m = /((?:file:\\/\\/)?[^\\s()]+?\\.mjs):(\\d+):\\d+/.exec(l)"]], ['unit-assertStrict']], //站點辨識遇括號即誤歸
+    ['AS14', 'test/tools/auditAssert.mjs', [["    ['轉指', /(?<![\\w$.])(?<!import\\s+)assert(?![\\w$])(?!\\s*[.([?])/g],", "    ['轉指', /(?<![\\w$.])(?<!import\\s+)assert(?![\\w$])(?!\\s*[.([?])x/g],"]], ['unit-assertStrict']], //轉指(解構、傳遞整個 assert)不被辨識
+    ['AS15', 'test/tools/auditAssert.mjs', [["    ['裸引用', new RegExp(`(?<![\\\\w$.])assert\\\\.(?:${MS})\\\\b(?!\\\\s*\\\\()`, 'g')],", "    ['裸引用', new RegExp(`(?<![\\\\w$.])assert\\\\.(?:${MS})\\\\bx(?!\\\\s*\\\\()`, 'g')],"]], ['unit-assertStrict']], //裸引用(別名、傳遞)不被辨識
+    ['AK01', 'src/domain/texts.mjs', [["let keyOf = (d) => `${d.round}|${armKeyOf(d.arms)}|", "let keyOf = (d) => `${d.round}|${[...(d.arms || [])].sort().join('+')}|"]], ['unit-frontierOps']], //做夢範本之回顧列另用不去重之臂鍵
+    //── 擴充診斷之各策略自身之歷史統計(ST 系列; 規則 R-EV-59; evalCore.mjs 之 statKeyOf / statAt / statCursorsAt / dataStat / apiOf 與合約 §7 之示例與前視之句)──
+    ['ST01', 'src/eval/evalCore.mjs', [['ce[s] = lowerBound(L.ent, L.off[s], L.off[s + 1], b)', 'ce[s] = lowerBound(L.ent, L.off[s], L.off[s + 1], b + 1)']], ['unit-extStat']], //api 之進場游標含 bar 那一根(前視一根)
+    ['ST02', 'src/eval/evalCore.mjs', [['cx[s] = lowerBound(L.xExt, L.xoff[s], L.xoff[s + 1], b)', 'cx[s] = lowerBound(L.xExt, L.xoff[s], L.xoff[s + 1], b + 1)']], ['unit-extStat']], //api 之出場游標含 bar 那一根
+    ['ST03', 'src/eval/evalCore.mjs', [['                let cur = statCursorsAt(b)', '                let cur = statCursorsAt(b - 1)']], ['unit-extStat']], //api 之游標少一根
+    ['ST04', 'src/eval/evalCore.mjs', [['                let key = statKeyOf(days)\n                let cur', '                let key = 0\n                let cur']], ['unit-extStat']], //api 忽略 days
+    ['ST05', 'src/eval/evalCore.mjs', [['                let key = statKeyOf(days)\n                let cur', '                let key = days > 0 && Number.isFinite(days) ? Math.floor(days) : 0\n                let cur']], ['unit-extStat']], //api 另寫一套 days 之正規化(與 ctx 不同份)
+    ['ST06', 'src/eval/evalCore.mjs', [['                let key = statKeyOf(days)\n                let cur', '                let key = statKeyOf(Number(days))\n                let cur']], ['unit-extStat']], //api 把非數字型之 days 轉為數字(與 ctx 不同)
+    ['ST07', 'src/eval/evalCore.mjs', [["                let b = barOf('stat', bar)", '                let b = Number(bar)']], ['unit-extStat']], //bar 不檢查
+    ['ST08', 'src/eval/evalCore.mjs', [["            let dataStat = (bar, days = 0) => {\n                guardExt('ext')\n", '            let dataStat = (bar, days = 0) => {\n']], ['unit-evalIntegrity']], //入口不比對內建物件
+    ['ST09', 'src/eval/evalCore.mjs', [['stat: ObjectFreeze(apiFn(dataStat)),', 'stat: apiFn(dataStat),']], ['unit-extStat']], //函數物件不凍結
+    ['ST10', 'src/eval/evalCore.mjs', [['stat: ObjectFreeze(apiFn(dataStat)),', 'stat: ObjectFreeze(dataStat),']], ['unit-extStat']], //各診斷共用同一個函數物件
+    ['ST11', 'src/eval/evalCore.mjs', [['                stat: ObjectFreeze(apiFn(dataStat)),\n', '']], ['unit-extStat']], //api 無 stat
+    ['ST12', 'src/eval/evalCore.mjs', [['                return statAt(statBufOf(), b, key, cur.ce, cur.cx)', '                return statAt({ ...statBufOf() }, b, key, cur.ce, cur.cx)']], ['unit-extStat']], //回傳之物件不凍結
+    ['ST13', 'src/eval/evalCore.mjs', [['            let dataStat = (bar, days = 0) => {', '            let apiStatBuf = null\n            let dataStat = (bar, days = 0) => {'], ['                return statAt(statBufOf(), b, key, cur.ce, cur.cx)', '                apiStatBuf = apiStatBuf || statBufOf()\n                return statAt(apiStatBuf, b, key, cur.ce, cur.cx)']], ['unit-extStat']], //各次呼叫共用同一組陣列
+    ['ST14', 'src/eval/evalCore.mjs', [['                let key = statKeyOf(days)\n                let B = MapPrototypeGet(bufs, key)', '                let key = days > 0 && NumberIsFinite(days) ? MathFloor(days) : 0\n                let B = MapPrototypeGet(bufs, key)']], ['unit-extStat']], //ctx 另寫一套 days 之正規化(兩邊不同份)
+    ['ST15', 'src/eval/evalCore.mjs', [['            B.open[s] = (e1 - elo) - (x1 - xlo)', '            B.open[s] = (e1 - e0) - (x1 - x0)']], ['unit-extStat', 'unit-evalCore']], //open 隨回看窗(共用實作之語意)
+    ['ST16', 'src/eval/evalCore.mjs', [['            B.lastEntryAgo[s] = e1 > elo ? b - 1 - L.ent[e1 - 1] : 1000000000', '            B.lastEntryAgo[s] = e1 > elo ? b - L.ent[e1 - 1] : 1000000000']], ['unit-extStat', 'unit-evalCore']], //lastEntryAgo 差一根
+    ['ST17', 'src/eval/evalCore.mjs', [['ce[s] = lowerBound(L.ent, L.off[s], L.off[s + 1], b)', 'ce[s] = lowerBound(L.ent, L.off[s], L.off[s], b)']], ['unit-extStat']], //api 之游標之區段錯
+    ['ST18', 'src/eval/evalCore.mjs', [['            let dataStat = (bar, days = 0) => {', '            let dataStat = (bar, days = 30) => {']], ['unit-extStat']], //api 之 days 之預設與 ctx.stat 不同
+    ['ST19', 'contract/pick-contract.md', [['取值之棒須不晚於評估期間之第一個決策棒(各相位 `phases[i].bars[0]` 之最早者)', '取值之棒不限']], ['unit-extStat']], //合約缺靜態分組之取值時點
+    ['ST20', 'contract/pick-contract.md', [['        let e = api.stat(end, D).entries', '        let e = api.stat(end + W, D).entries']], ['unit-extStat']], //示例之窗取較晚之棒(前視)
+    ['ST21', 'contract/pick-contract.md', [['        let open = api.stat(bar).open', '        let open = api.stat(bar + 1).open']], ['unit-extStat']], //示例不用該決策自己之決策棒
+    ['ST22', 'contract/pick-contract.md', [['**以 `market` / `factor` / `series` / `stat` 為某次決策分組時亦同**', '**以 `market` / `factor` / `series` 為某次決策分組時亦同**']], ['unit-extStat']], //合約之前視條不涵蓋 stat
+    //── 做夢任務書之 api 列舉併入 stat(R-EV-59 ③; texts.mjs; tadm9): ST23 ~ ST24 ──
+    ['ST23', 'src/domain/texts.mjs', [["`market` / `factor` / `series` / `stat` 取某棒以前之行情、因子、外部序列、各策略之進出場統計之值", "`market` / `factor` / `series` 取某棒以前之行情、因子、外部序列之值"]], ['unit-texts', 'unit-dreamOnly']], //任務書之 api 列舉不含 stat
+    ['ST24', 'src/domain/texts.mjs', [["`market` / `factor` / `series` / `stat` 取某棒以前之行情、因子、外部序列、各策略之進出場統計之值", "`market` / `factor` / `series` / `stat` 取某棒以前之行情、因子、外部序列之值"]], ['unit-texts', 'unit-dreamOnly']], //任務書列了 stat 而不說明其為何(各策略之進出場統計)
+    //── freqBands 順序檢查之單一來源(FB 系列之續; evalScoreOf; tadm9): FB07 ~ FB10 ──
+    ['FB07', 'src/eval/cfgNum.mjs', [["            e.code = FREQ_BANDS_ORDER_CODE\n", ""]], ['unit-sideFlowCfg', 'unit-freqBandsOrder']], //順序之錯誤不帶 code(讀設定處攔不到)
+    ['FB08', 'src/eval/cfgNum.mjs', [["`invalid ${who}.freqBands: must be two non-negative numbers with b1 <= b2`", "'invalid score.freqBands: must be two non-negative numbers with b1 <= b2'"]], ['unit-freqBandsOrder']], //順序之訊息不隨 who(位置名稱)
+    ['FB09', 'src/eval/cfgNum.mjs', [["        out.freqBands = fb.map((x, i) => {", "        out.freqBands = fb.slice().sort((a, b) => a - b).map((x, i) => {"]], ['unit-freqBandsOrder', 'unit-scoreCfg']], //順序顛倒者被靜默排正(不拒)
+    ['FB10', 'src/cfg.mjs', [["import { evalScoreOf, FREQ_BANDS_ORDER_CODE } from './eval/cfgNum.mjs'", "import { evalScoreOf } from './eval/cfgNum.mjs'\nlet FREQ_BANDS_ORDER_CODE = 'OTHER'"]], ['unit-sideFlowCfg', 'unit-freqBandsOrder']], //讀設定處另寫一個 code(與評估器之單一來源不同份)
+    //── 範例之 pick 為〔機制〕之寫法(排程第 616 項案一; examples/pick_example.mjs; unit-briefDefaults): PE01 ~ PE07 ──
+    ['PE01', 'examples/pick_example.mjs', [["let side = mode[s] === 1 ? cfg.long : cfg.short", "let side = cfg.long"]], ['unit-briefDefaults']], //兩側共用做多側之條件
+    ['PE02', 'examples/pick_example.mjs', [["st.pnl[s] / c >= side.minAvgPnl", "st.pnl[s] / c > side.minAvgPnl"]], ['unit-briefDefaults']], //每單平均損益之界線不含等號
+    ['PE03', 'examples/pick_example.mjs', [["if (c < cfg.minClosed) {", "if (false) {"]], ['unit-briefDefaults']], //已結單不足者亦入選
+    ['PE04', 'examples/pick_example.mjs', [["    return ids\n}", "    return ids.slice(0, 40)\n}"]], ['unit-briefDefaults']], //回到取前 K(固定席數)
+    ['PE05', 'examples/pick_example.mjs', [["let side = mode[s] === 1 ? cfg.long : cfg.short", "let side = mode[s] === -1 ? cfg.long : cfg.short"]], ['unit-briefDefaults']], //兩側之條件對調
+    ['PE06', 'examples/pick_example.mjs', [["st.wins[s] / c >= side.minWinRate", "st.wins[s] / c > side.minWinRate"]], ['unit-briefDefaults']], //勝率之界線不含等號
+    ['PE07', 'examples/pick_example.mjs', [["可多、可少、可為零", "固定取一組"]], ['unit-briefDefaults']], //檔頭不再註明入選隻數是結果
+    //── 派工之 stderr 留存改用 wsemi 之串流遮罩器(第 486 項之使用端; dispatchers.mjs 之 makeStderrSink; unit-stderrMask): SM01 ~ SM09 ──
+    ['SM01', 'src/arsi/dispatchers.mjs', [["            put(sm.flush())\n", "            put('')\n"]], ['unit-stderrMask']], //收尾不交出遮罩器內之餘文(結尾無換行之一段遺失)
+    ['SM02', 'src/arsi/dispatchers.mjs', [["            let out = started ? '' : head\n", "            let out = head\n"]], ['unit-stderrMask']], //標頭每次寫入皆重複
+    ['SM03', 'src/arsi/dispatchers.mjs', [["        if (s === '') {\n            return\n        }\n        try {\n            let out = started", "        try {\n            let out = started"]], ['unit-stderrMask']], //空輸出亦建檔與寫標頭
+    ['SM04', 'src/arsi/dispatchers.mjs', [["let sm = genDiagStreamMasker(secrets)", "let sm = genDiagStreamMasker([])"]], ['unit-stderrMask', 'unit-dispatchQuota']], //不傳本次讀到之金鑰
+    ['SM05', 'src/arsi/dispatchers.mjs', [["let sm = genDiagStreamMasker(secrets)", "let sm = genDiagStreamMasker(secrets, { credPatterns: false })"]], ['unit-stderrMask', 'unit-dispatchQuota']], //不遮憑證樣式(網址帳密、Bearer)
+    ['SM06', 'src/arsi/dispatchers.mjs', [["            put(sm.push(chunk))\n", "            put(sm.push(String(chunk)))\n"]], ['unit-stderrMask']], //塊先轉字串(二進位跨塊之字元變 U+FFFD、物件之 toString 被執行)
+    ['SM07', 'src/arsi/dispatchers.mjs', [["            fs.appendFileSync(fp, out + s)\n        }\n        catch (err) {}", "            fs.appendFileSync(fp, out + s)\n        }\n        finally {}"]], ['unit-stderrMask', 'unit-dispatchQuota']], //寫留存檔失敗即拋(影響派工之結果)
+    ['SM08', 'src/arsi/dispatchers.mjs', [["            put(sm.push(chunk))\n", "            put(sm.push(chunk).trimEnd())\n"]], ['unit-stderrMask']], //輸出之列尾換行被吃掉
+    ['PE11', 'examples/pick_example.mjs', [["short: { minAvgPnl: 0.25, minWinRate: 0.5 }", "short: { minAvgPnl: 0.5, minWinRate: 0.55 }"]], ['unit-fakeRound']], //範例之做空條件過嚴(下單偏一側 ⇒ 假輪次之成品皆不可為底, 排序鍵之鑑別被靜默略過; SK27 因此存活)
+    ['SM10', 'src/arsi/dispatchers.mjs', [["        finally {\n            sink.flush()\n        }\n", "        catch (err) {\n            throw err\n        }\n        sink.flush()\n"]], ['unit-stderrMask']], //派工拋錯之路徑不收尾(無換行之尾段與遮罩器內之餘文遺失)
+    ['SM11', 'src/arsi/dispatchers.mjs', [["            if (k.length >= min) {", "            if (k.length >= min + 100) {"]], ['unit-dispatchQuota']], //金鑰之長度門檻過高(短金鑰不列入秘密清單)
+    ['PE08', 'examples/pick_example.mjs', [["let st = ctx.stat(cfg.lookbackDays)", "let st = ctx.stat(0)"]], ['unit-briefDefaults']], //回看日數不取自 meta.params.lookbackDays
+    ['PE09', 'examples/pick_example.mjs', [["            ids.push(s)\n", "            ids.push(s)\n            if (ids.length >= 40) {\n                break\n            }\n"]], ['unit-briefDefaults']], //以計數截斷(固定席數)而不用 .slice(
+    ['PE10', 'examples/pick_example.mjs', [["return sig.mode === 1 ? book.openLong < 25 : book.openShort < 25", "return sig.mode === 1 ? book.openLong < 26 : book.openShort < 25"]], ['unit-briefDefaults']], //accept 之做多上限與 meta.params.maxHoldPerSide 不同
+    ['SM09', 'src/arsi/dispatchers.mjs', [["let sm = genDiagStreamMasker(secrets)\n    let started = false", "let started = false\n    let sm = null\n    let get = () => (sm = sm || genDiagStreamMasker(secrets))"], ["            put(sm.push(chunk))\n", "            put(get().push(chunk))\n"], ["            put(sm.flush())\n", "            put(get().flush())\n"]], ['unit-stderrMask'], 'equiv'], //遮罩器延到第一塊才建(行為等價: 秘密清單為建立時之快照, 同一次派工內不變)
 ]
 
 let args = process.argv.slice(2)
@@ -1801,6 +1906,12 @@ for (let f of fs.readdirSync(path.join(FD_ROOT, 'test', 'tools'))) {
     fs.copyFileSync(path.join(FD_ROOT, 'test', 'tools', f), path.join(root, 'test', 'tools', f))
 }
 let testFiles = new Set(sel.flatMap((x) => [...x.m[3], ...GUARDS]))
+//unit-assertStrict(R-PKG-12)盤點全庫之測試檔(防空集合檢查要求檔數 ≥ 50): 含它者, 複本內須有全部之 *.test.mjs
+if (testFiles.has('unit-assertStrict')) {
+    for (let f of fs.readdirSync(path.join(FD_ROOT, 'test')).filter((x) => x.endsWith('.test.mjs'))) {
+        testFiles.add(f.replace(/\.test\.mjs$/, ''))
+    }
+}
 for (let g of testFiles) {
     let f = `${g}.test.mjs`
     if (fs.existsSync(path.join(FD_ROOT, 'test', f))) {

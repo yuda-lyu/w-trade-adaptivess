@@ -117,12 +117,12 @@ describe('向外飽和之宣告(R-REC-29)', function () {
         it('範本:nUntried === 0 時整體研判多 outwardSaturated: null(位於 outwardChecked 與 prevReview 之間),其餘欄與鍵序不變', () => {
             let ov0 = texts.dreamTemplate(ctx()).synthesis.overview
             let ov1 = texts.dreamTemplate(ctx({ outward: { nUntried: 0 } })).synthesis.overview
-            assert.equal(ov1.outwardSaturated, null)
+            assert.strictEqual(ov1.outwardSaturated, null)
             let k0 = Object.keys(ov0)
             let k1 = Object.keys(ov1)
             assert.deepEqual(k1, [...k0.slice(0, k0.indexOf('prevReview')), 'outwardSaturated', ...k0.slice(k0.indexOf('prevReview'))])
             let { outwardSaturated, ...rest } = ov1
-            assert.deepEqual(rest, ov0)
+            assert.deepStrictEqual(rest, ov0)
         })
 
         it('只做夢輪次(帶要求;任務書列「## 0. 主控之要求」)亦依同一條件列出(兩者獨立)', () => {
@@ -362,7 +362,7 @@ describe('向外飽和之宣告(R-REC-29)', function () {
             assert(calls.templates[0].synthesis.overview.outwardSaturated === null)
             assert(mixLine(hk).endsWith(`配比 向外 0、向內 1${OUT_SATURATED_NOTE}`), mixLine(hk))
             assert(hk.lines.some((l) => l.includes('審計 1 節點 ⇒ 採納 1')), hk.lines.join(' / ').slice(0, 800))
-            assert.equal(P.pendingDream(), null)
+            assert.strictEqual(P.pendingDream(), null)
         })
 
         it('宣告須每輪重申(迴圈不跨輪記憶):上一輪宣告過、本輪做夢文件未填 ⇒ 本輪摘要照舊標示', async () => {

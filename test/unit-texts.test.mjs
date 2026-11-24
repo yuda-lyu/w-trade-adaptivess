@@ -218,7 +218,7 @@ describe('texts:任務類型與共用工具區', function () {
         assert(Array.isArray(texts.nodeTemplate({ workDir: wd, task: task() }).code.shareable))
         let off = brief(task({ toolbox: null }))
         assert(!off.includes('共用工具') && !off.includes('code.shareable'))
-        assert.equal(texts.nodeTemplate({ workDir: wd, task: task({ toolbox: null }) }).code.shareable, undefined)
+        assert.strictEqual(texts.nodeTemplate({ workDir: wd, task: task({ toolbox: null }) }).code.shareable, undefined)
     })
 
     it('節點任務書(不含來源方向之全文)不逾 15,000 位元組', () => {
@@ -250,7 +250,7 @@ describe('texts:任務類型與共用工具區', function () {
         assert(/不得匯入迴圈與評估器之程式\(`(?:node_modules\/w-trade-adaptivess\/)?src\/`\)/.test(s), '診斷腳本一條所指之程式夾')
         //規則 R-REC-26:「每輪至少 1 條向外」之例外 —— 可選之臂皆已試過、且本輪已預先核對 3 種以上而皆無內容; 種數與迴圈之門檻(OUT_CHECK_MIN)一致
         assert(s.includes('**例外(向外可為 0 條)**') && s.includes(`**${OUT_CHECK_MIN} 種以上**`) && s.includes('`synthesis.overview.outwardChecked`') && s.includes('尚有未試之臂、或只核了 1 ~ 2 種者,照舊須有向外'), '配比之例外條款')
-        assert.equal(texts.dreamTemplate(ctx(toolbox)).synthesis.overview.outwardChecked, null, '交付範本含此欄(預設 null = 不適用)')
+        assert.strictEqual(texts.dreamTemplate(ctx(toolbox)).synthesis.overview.outwardChecked, null, '交付範本含此欄(預設 null = 不適用)')
         //輪末摘要之附註(純函數): 有向外或無方向 ⇒ 無附註; 尚有未試之臂 ⇒ 標示; 皆已試過且已核達門檻 ⇒ 另列、不標示; 未達門檻 ⇒ 標示
         assert.equal(outwardNoteOf({ nOut: 1, nDirs: 2, nUntried: 0, nChecked: 0 }), '')
         assert.equal(outwardNoteOf({ nOut: 0, nDirs: 0, nUntried: 0, nChecked: 0 }), '')
@@ -260,9 +260,11 @@ describe('texts:任務類型與共用工具區', function () {
         assert(s.includes('## 4. 擴建:共用工具(由你統籌並親手完成)'))
         assert(s.includes('**交付前執行 `node g_toolbox.mjs` 自檢**'), '自檢入口(與迴圈之機械檢查同一套規則;做夢不必自寫檢查腳本)')
         //規則 R-EV-36: 擴充診斷之資料存取(api.market / factor / series)列於做夢任務書之擴建一節(細節見合約 §7), 並註明「為某次決策分組只用該決策自己之決策棒或更早者」; 未啟用共用工具區者不出現
-        assert(s.includes('`market` / `factor` / `series` 取某棒以前之行情、因子、外部序列之值'), '擴充診斷之資料存取之說明')
+        assert(s.includes('`market` / `factor` / `series` / `stat` 取某棒以前之行情、因子、外部序列、各策略之進出場統計之值'), '擴充診斷之資料存取之說明(含 R-EV-59 之 stat: 併入同一句之列舉, 前視之提醒同句涵蓋)')
         assert(s.includes('為某次決策分組時 `bar` 只用該決策自己之決策棒或更早者'), '資料存取之分組須用該決策之決策棒或更早者(前視)')
+        assert.strictEqual(s.split('`market` / `factor` / `series` / `stat`').length - 1, 1, 'stat 併入既有列舉之句、全文恰出現一次(不另立句)')
         assert(!texts.dreamBrief(ctx(null)).includes('`market` / `factor` / `series`'))
+        assert(!texts.dreamBrief(ctx(null)).includes('`stat`'), '未啟用共用工具區者不出現')
         //規則 R-EV-38: replaceNull 可只換一部分之席(onlyGroups / onlyDecisions)亦列於同一節(細節見合約 §7); 未啟用共用工具區者不出現
         assert(s.includes('`replaceNull` 配對隨機替換(可只換所列子帳之席 `onlyGroups`、或只換遮罩內之決策之席 `onlyDecisions`)'), 'replaceNull 只換一部分之席之說明')
         assert(!texts.dreamBrief(ctx(null)).includes('`onlyGroups`'))
@@ -276,7 +278,7 @@ describe('texts:任務類型與共用工具區', function () {
         assert(Array.isArray(tpl.expansion) && 'type' in tpl.guidance.directions[0] && 'claim' in tpl.guidance.directions[0])
         let off = texts.dreamBrief(ctx(null))
         assert(!off.includes('擴建') && off.includes('## 4. 參考') && off.includes('## 6. 禁止'))
-        assert.equal(texts.dreamTemplate(ctx(null)).expansion, undefined)
+        assert.strictEqual(texts.dreamTemplate(ctx(null)).expansion, undefined)
     })
 
     it('做夢範本之前次方向回顧(Gitea #154):帶鍵之探索方向(無主張)列依據之開頭;帶鍵之驗證列主張;不帶鍵者皆無;節點已自判者預填其判定', () => {
@@ -287,8 +289,8 @@ describe('texts:任務類型與共用工具區', function () {
         let node = { nodeId: 'n1aaaaaaaaaaaaaa', arms: ['A04_act'], base: null, S: 1, worst: 0, excess: 0, ladder: 0, vetoed: false, claimedS: 1, nEvals: 1, nFull: 1, nFullSel: 1, issues: [], type: 'explore', docMd: 'd.md', workDir: 'rsi/work/n1', from: { round: 3, arms: ['A04_act'], base: null, claimKey: 'a1b2c3d4' }, claimVerdict: 'confirmed', claimNote: '節點之自判' }
         let c = { round: 4, nodeIds: ['n1aaaaaaaaaaaaaa'], reworkedIds: [], workDir: path.join(st.records.workDir, 'dream_r004'), context: { nodes: [node], failed: [], refs: [], prevDirections: pds, maxDirections: 7, extra: '2. 更新文件', toolbox } }
         let out = texts.dreamTemplate(c).synthesis.prevDirections
-        assert.deepEqual(out.map((x) => [x.claim, x.rationale]), [[undefined, '依據甲'], ['主張乙', undefined], [undefined, '依據丁'], [undefined, undefined]])
-        assert.deepEqual(pds.map((x) => x.claimKey), ['a1b2c3d4', '0a1b2c3d', 'e5f6a7b8', undefined])
+        assert.deepStrictEqual(out.map((x) => [x.claim, x.rationale]), [[undefined, '依據甲'], ['主張乙', undefined], [undefined, '依據丁'], [undefined, undefined]])
+        assert.deepStrictEqual(pds.map((x) => x.claimKey), ['a1b2c3d4', '0a1b2c3d', 'e5f6a7b8', undefined])
         //節點之來源方向帶同一鍵者預填自判之判定; 不帶鍵之同臂方向不吃到(鍵不同 ⇒ 不是同一條)
         assert.deepEqual(out.map((x) => x.verdict.startsWith('confirmed |') ? 'pending' : x.verdict), ['confirmed', 'pending', 'pending', 'pending'])
     })

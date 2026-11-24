@@ -115,8 +115,8 @@ describe('ledger(真實帳本):與官方 runStrategy 逐張一致', function () 
             conds.forEach((c, q) => {
                 let i = m.keyOff[s] + q
                 assert.equal(m.keyNames[m.keyIdx[i]], c.key)
-                assert.equal(m.keySym[i], (c.sym === undefined ? '>' : c.sym) === '>' ? 1 : -1)
-                assert.equal(m.keyTh[i], c.th === undefined ? 0 : c.th)
+                assert.strictEqual(m.keySym[i], (c.sym === undefined ? '>' : c.sym) === '>' ? 1 : -1)
+                assert.strictEqual(m.keyTh[i], c.th === undefined ? 0 : c.th)
                 assert.equal(m.keyOr[i], c.opr === 'or' ? 1 : 0)
             })
         }

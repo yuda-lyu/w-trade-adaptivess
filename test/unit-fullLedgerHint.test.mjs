@@ -45,11 +45,11 @@ describe('全期帳本未建之訊息:不指向不存在之 g_build.mjs --full�
         //R-EV-45 ⑨: 訊息不指向不存在之 g_build.mjs --full
         let { st } = mkSt('bt1', {})
         let r = await makeBacktest({ st, FD_ROOT }).run({ nodeId: 'x', attempt: 1, workDir: t.dir })
-        assert.equal(r.flag, null)
+        assert.strictEqual(r.flag, null)
         assertMsg(r.error, 'makeBacktest().run')
         let { st: st2 } = mkSt('bt2', { enabled: false })
         let r2 = await makeBacktest({ st: st2, FD_ROOT }).run({ nodeId: 'x', attempt: 1, workDir: t.dir })
-        assert.deepEqual({ flag: r2.flag, error: r2.error }, { flag: null, error: '未啟用' })
+        assert.deepStrictEqual({ flag: r2.flag, error: r2.error }, { flag: null, error: '未啟用' })
     })
 
     it('② 補算旗標之出口(domain.validatePending,即 g_rsi.mjs --mode validate 印「未執行: …」):啟用而全期帳本未建 ⇒ why 為新訊息;未啟用者仍為「回測期旗標未啟用」', async () => {

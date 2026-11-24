@@ -225,6 +225,15 @@ describe('tools/fakeRound.mjs:擴充診斷之補算 —— 略過不計失敗(�
         assert.deepEqual(lineOf(r.out, PROBE_HEAD), PROBE_OK)
     })
 
+    it('補位載體之排序鍵之鑑別於範例為底之假輪次實際執行(不得為「不足 2 個(未驗)」):可為底之成品 ≥ 2 個、暫改 S 最高者之重放後底為排序鍵最高者(規則 R-REC-40; 範例改〔機制〕之寫法後須仍成立:範例之做空條件過嚴使下單偏一側、成品皆不可為底時此項被靜默略過)', () => {
+        let r = run(mkRoot('keycheck'))
+        assert.equal(r.status, 0, `${r.err}\n${r.out.slice(-800)}`)
+        let l = r.out.split('\n').find((x) => x.startsWith('補位載體之排序鍵:'))
+        assert.ok(l !== undefined, `應有「補位載體之排序鍵:」一行: ${r.out.slice(-600)}`)
+        assert.ok(!l.includes('未驗'), `排序鍵之鑑別未執行(可為底之成品不足 2 個): ${l}`)
+        assert.ok(/S 最高者 \S+ 之重放暫改為甚低 ⇒ 底 \S+\(預期 \S+\)/.test(l), l)
+    })
+
     it('① 同上(--redream --two:補做夢與第 2 輪):離開碼 0、補算之兩行同上', () => {
         let r = run(mkRoot('none2'), ['--redream', '--two'])
         assert.equal(r.status, 0, `${r.err}\n${r.out.slice(-800)}`)
@@ -261,7 +270,7 @@ describe('tools/fakeRound.mjs:擴充診斷之補算 —— 略過不計失敗(�
     it('⑥ 設定未給 records.toolboxDir(= <rsi.root>/toolbox):「真實診斷」取預設位置之診斷檔 —— fill: true、離開碼 0', () => {
         //R-EV-45 ⑦: 取檔之夾之預設 = <rsi.root>/toolbox(同 src/cli/eval.mjs:433、domain.mjs:449); initProject 之參考設定帶 records.toolboxDir, 此案刪去之以走「未給」之分支
         let root = mkRoot('toolboxnone', { diag: DIAG_OK, noToolboxDir: true })
-        assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'settings.json'), 'utf8')).records.toolboxDir, undefined, '鑑別前提: 設定未給 records.toolboxDir')
+        assert.strictEqual(JSON.parse(fs.readFileSync(path.join(root, 'settings.json'), 'utf8')).records.toolboxDir, undefined, '鑑別前提: 設定未給 records.toolboxDir')
         let r = run(root)
         assert.equal(r.status, 0, `${r.err}\n${r.out.slice(-800)}`)
         let f = lineOf(r.out, FILL_HEAD)

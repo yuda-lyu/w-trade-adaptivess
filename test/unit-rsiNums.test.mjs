@@ -108,11 +108,11 @@ describe('settings.rsi / agents 之數值鍵(排程第 595 項)', function () {
 
         it('rsi.docLimits.maxBytes / keepBytes / keepRows(docLimitsOf; 領域之輪末與 tools/archiveDocs.mjs 共用): 數字字串轉數值; 無效與未給為 undefined(⇒ 整理函數用其預設; 原: null / \'\' / false 被當 0 而每輪搬走全部、\'abc\' 為 NaN)', () => {
             assert.deepEqual(docLimitsOf({ docLimits: { maxBytes: '20000', keepBytes: ' 9000 ', keepRows: '7' } }), { maxBytes: 20000, keepBytes: 9000, keepRows: 7 })
-            assert.deepEqual(docLimitsOf({ docLimits: { maxBytes: null, keepBytes: '', keepRows: false } }), { maxBytes: undefined, keepBytes: undefined, keepRows: undefined })
-            assert.deepEqual(docLimitsOf({ docLimits: { maxBytes: 'abc', keepBytes: -1, keepRows: 2.5 } }), { maxBytes: undefined, keepBytes: undefined, keepRows: undefined })
-            assert.deepEqual(docLimitsOf({ docLimits: { maxBytes: 0, keepBytes: 0, keepRows: 0 } }), { maxBytes: undefined, keepBytes: 0, keepRows: 0 }, 'maxBytes 0 無效(每輪皆搬); keepBytes / keepRows 0 有效')
-            assert.deepEqual(docLimitsOf({ docLimits: false }), { maxBytes: undefined, keepBytes: undefined, keepRows: undefined })
-            assert.deepEqual(docLimitsOf(undefined), { maxBytes: undefined, keepBytes: undefined, keepRows: undefined })
+            assert.deepStrictEqual(docLimitsOf({ docLimits: { maxBytes: null, keepBytes: '', keepRows: false } }), { maxBytes: undefined, keepBytes: undefined, keepRows: undefined })
+            assert.deepStrictEqual(docLimitsOf({ docLimits: { maxBytes: 'abc', keepBytes: -1, keepRows: 2.5 } }), { maxBytes: undefined, keepBytes: undefined, keepRows: undefined })
+            assert.deepStrictEqual(docLimitsOf({ docLimits: { maxBytes: 0, keepBytes: 0, keepRows: 0 } }), { maxBytes: undefined, keepBytes: 0, keepRows: 0 }, 'maxBytes 0 無效(每輪皆搬); keepBytes / keepRows 0 有效')
+            assert.deepStrictEqual(docLimitsOf({ docLimits: false }), { maxBytes: undefined, keepBytes: undefined, keepRows: undefined })
+            assert.deepStrictEqual(docLimitsOf(undefined), { maxBytes: undefined, keepBytes: undefined, keepRows: undefined })
             assert.deepEqual(docLimitsOf({ docLimits: { maxBytes: 40000, keepBytes: 20000, keepRows: 10 } }), { maxBytes: 40000, keepBytes: 20000, keepRows: 10 }, '數字逐位不變')
         })
 

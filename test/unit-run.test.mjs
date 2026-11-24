@@ -22,7 +22,7 @@ describe('runner:每輪幾個節點、同時幾個、一次跑幾輪', function 
     it('runRounds:連跑指定輪數,每輪後呼叫回調;結果依序回傳', async () => {
         let seen = []
         let r = await runRounds({ rounds: 3, runRound: async ({ index }) => ({ n: index }), onRoundDone: (x, c) => seen.push([x.n, c.index, c.rounds]) })
-        assert.deepEqual(r, { done: [{ n: 0 }, { n: 1 }, { n: 2 }], stopped: null })
+        assert.deepStrictEqual(r, { done: [{ n: 0 }, { n: 1 }, { n: 2 }], stopped: null })
         assert.deepEqual(seen, [[0, 0, 3], [1, 1, 3], [2, 2, 3]])
     })
 
@@ -132,7 +132,7 @@ describe('runner:單一執行之鎖與事件檔', function () {
     })
 
     it('acquireRunLock / peekRunLock:行程仍在而心跳逾時 ⇒ stale(不接手,等人處理);peek 只看不動', () => {
-        assert.deepEqual(peekRunLock(fpLock), { running: false, stale: false, pid: null, startedAt: null, beatAt: null })
+        assert.deepStrictEqual(peekRunLock(fpLock), { running: false, stale: false, pid: null, startedAt: null, beatAt: null })
         fs.mkdirSync(path.dirname(fpLock), { recursive: true })
         let old = new Date(Date.now() - 7 * 3600000).toISOString()
         write({ pid: process.pid, startedAt: old, beatAt: old })
@@ -191,7 +191,7 @@ describe('resources:資源監看與資源閘', function () {
     it('未設任何上限 ⇒ 資源閘立即放行', async () => {
         let m = createResourceMonitor({ read: fakeRead([{ cpu: 99, ram: 999 }]), sleep: noSleep })
         assert.deepEqual(await m.wait('x'), { waitedSec: 0, forced: false })
-        assert.deepEqual(m.stats().limits, { cpuMax: null, ramUsedMaxGB: null, cpuStart: null, ramStartGB: null })
+        assert.deepStrictEqual(m.stats().limits, { cpuMax: null, ramUsedMaxGB: null, cpuStart: null, ramStartGB: null })
     })
 
     it('起新工作之門檻預設為上限減餘裕(CPU − 15、記憶體 − 8)', () => {
@@ -262,6 +262,6 @@ describe('resources:資源監看與資源閘', function () {
         assert(m.stats().samples > 0)
         m.reset()
         let s = m.stats()
-        assert.deepEqual([s.samples, s.cpuPeak, s.waits, s.forced, s.overCpu], [0, null, 0, 0, 0])
+        assert.deepStrictEqual([s.samples, s.cpuPeak, s.waits, s.forced, s.overCpu], [0, null, 0, 0, 0])
     })
 })

@@ -8,7 +8,7 @@ import { scoreOf } from '../eval/score.mjs'
 import { normUnit } from '../eval/unit.mjs'
 import { checkEvalSettings, configMsgOf } from '../eval/barGrid.mjs'
 import { evalRunNumOf, cfgNumOf, evalScoreOf } from '../eval/cfgNum.mjs'
-import { createFileRecords, roundName, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_LABELS, ARM_KINDS, ARM_LABELS, CLAIM_VERDICTS, FORMS, formLabelOf } from '../arsi/records.mjs'
+import { createFileRecords, roundName, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_LABELS, ARM_KINDS, ARM_LABELS, CLAIM_VERDICTS, FORMS, formLabelOf, armKeyOf } from '../arsi/records.mjs'
 import { proposalOf } from './armCatalog.mjs'
 import { buildPickStore } from './pickStore.mjs'
 import { RECENT_DIAG, recentDiagOf, neutralDeltaOf } from './diagRead.mjs'
@@ -831,8 +831,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
 
     //taskFor, 節點任務(迴圈指派): 指定之臂、起點、參考(由專案指定: 起點、最佳節點、最近之做夢文件、臂看板)
     //directionOf, 節點規格所出自之做夢方向(臂之集合與起點皆相同者; 取最近一份做夢文件): { round, arms, base, doc, rationale, expect } 或 null
-    //  armKey: 臂之「集合」之鍵(去重、排序): 方向之 arms 含重複者, 入前緣以去重後之臂(normArms), 節點之規格 arms 為集合 ⇒ 此處同樣去重才對得上(排程第 481 項之核實; R-EV-57: 原不去重 ⇒ 含重複臂之方向對不到來源方向, 驗證類被當作探索)
-    let armKey = (a) => (Array.isArray(a) ? [...new Set(a)].sort().join('+') : '')
+    //  臂之「集合」之鍵 armKeyOf(去重、排序; 單一實作在 src/arsi/records.mjs, 做夢範本之前次方向回顧同用): 方向之 arms 含重複者, 入前緣以去重後之臂(normArms), 節點之規格 arms 為集合 ⇒ 此處同樣去重才對得上(排程第 481 項之核實; R-EV-57: 原不去重 ⇒ 含重複臂之方向對不到來源方向, 驗證類被當作探索; 排程第 614 項 ③ X2: 範本之回顧列原另用不去重之鍵)
     //  主張鍵(規則 R-REC-24): 驗證類方向入前緣時所帶之鍵記於該文件之 harness.applied.proposals(與 guidance.directions 逐條對齊)之 claimKey;
     //  對應 = 臂之集合、起點、主張鍵三者皆相同(規格無 claim ⇔ 該方向入前緣時無鍵: 探索類、與本規則之前之文件)⇒ 同臂同起點而主張不同之驗證各對到自己之方向
     //  回傳另含 index(該方向於文件內之位置)與 claimKey(無則 null)
@@ -848,7 +847,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
     let directionOf = (spec) => {
         for (let d of records.listDreamDocs().slice().reverse()) {
             let dirs = (d.guidance && d.guidance.directions) || []
-            let i = dirs.findIndex((x, k) => x && armKey(x.arms) === armKey(spec.arms) && ((x.base || null) === (spec.base || null) || (spec.base && baseUsedAt(d, k) === spec.base)) && claimKeyAt(d, k) === (spec.claim || null))
+            let i = dirs.findIndex((x, k) => x && armKeyOf(x.arms) === armKeyOf(spec.arms) && ((x.base || null) === (spec.base || null) || (spec.base && baseUsedAt(d, k) === spec.base)) && claimKeyAt(d, k) === (spec.claim || null))
             if (i >= 0) {
                 let hit = dirs[i]
                 let ek = d.harness && d.harness.applied ? d.harness.applied.envKey : null
@@ -1681,7 +1680,7 @@ let makeProject = (st = getSettings(), inject = {}) => {
             //帶主張鍵之方向(規則 R-REC-24)另以鍵區分, 並附主張之開頭供做夢辨認: 同臂同起點之數條驗證各自回顧
             //  探索類之區分用之鍵(Gitea #154)無主張, 改附依據之開頭(同臂同起點之探索與既有節點之方向各自回顧)
             let add = (r, x, ck = null) => {
-                let k = `${r}|${armKey(x.arms)}|${x.base || ''}|${ck || ''}`
+                let k = `${r}|${armKeyOf(x.arms)}|${x.base || ''}|${ck || ''}`
                 if (!seen.has(k)) {
                     seen.add(k)
                     prevDirections.push(prevDirectionOf(r, x, ck))
@@ -3300,10 +3299,41 @@ let makeProject = (st = getSettings(), inject = {}) => {
         return { ...r, note: `${r.note}(起點 ${from} 為 ${to} 之別名(選集相同),已改以 ${to} 為起點)`, baseUsed: track.rebased.to }
     }
 
-    //closeFrontier, 主代理把前緣內尚未執行之提案結案(例: 提案之依據已被其後之回測期旗標推翻); arms 為臂 id 陣列(須完全相同), base 省略 = 不限, claim(主張鍵)省略 = 不限
-    let closeFrontier = ({ arms, base, claim, why }) => {
+    //proposedOf, 前緣內「同臂(臂之集合相同; key = normArms 之串)、尚未執行(proposed)」之提案, 依 claim 篩選(closeFrontier 與 rearmFrontier 共用之單一實作; 原兩處各寫一份相同之篩選); claim 省略 = 不限
+    let proposedOf = (key, claim) => rsi.store.listFrontier().filter((f) => f.status === 'proposed' && f.spec && Array.isArray(f.spec.arms) && normArms(f.spec.arms).join('+') === key && (claim === undefined || (f.spec.claim || null) === (claim || null)))
+    //baseResolveOf, --base 之解析(--close 與 --rearm 共用; 排程第 614 項 ②): cands = proposedOf 之結果
+    //  base 非字串(undefined = 不限、null = 只無起點者)或空字串 ⇒ 原值; 與 cands 內某起點完全相同(完整之節點 id)⇒ 原值(完整 id 優先於前綴, 行為不變);
+    //  否則於 cands 之起點(去重; 只計同臂之待執行提案: 已結案者、他臂者之起點不入候選)中取以 base 為前綴者: 恰 1 個 ⇒ 該起點之完整 id; 0 個 ⇒ 原值(其後之比對不中: 結案 0 條 / 無尚未執行之提案); 多個 ⇒ ambiguous(候選之陣列)
+    //  列示(--mode frontier)只印起點之前 8 碼, 故照列示抄之 8 碼為唯一之前綴者可直接用(複審所見: 原須完整 id, 抄 8 碼者只得「結案 0 條」)
+    let baseResolveOf = (cands, base) => {
+        if (typeof base !== 'string' || base === '') {
+            return { base, ambiguous: null }
+        }
+        let ids = [...new Set(cands.map((f) => f.spec.base).filter((b) => typeof b === 'string' && b !== ''))]
+        if (ids.includes(base)) {
+            return { base, ambiguous: null }
+        }
+        let hit = ids.filter((b) => b.startsWith(base))
+        return hit.length > 1 ? { base, ambiguous: hit } : { base: hit.length === 1 ? hit[0] : base, ambiguous: null }
+    }
+    //baseAmbiguousMsg, 前綴符合多個起點之訊息(列候選之完整 id; 候選多者列前 10 個與總數)
+    let baseAmbiguousMsg = (hit) => `前緣內有 ${hit.length} 個起點符合 --base 之前綴(${hit.slice(0, 10).join('、')}${hit.length > 10 ? `…等共 ${hit.length} 個` : ''});請給更長之前綴或完整之起點節點 id`
+
+    //closeFrontier, 主代理把前緣內尚未執行之提案結案(例: 提案之依據已被其後之回測期旗標推翻); arms 為臂 id 陣列(須完全相同), base 省略 = 不限(給字串 = 完整之起點節點 id 或其唯一之前綴; null = 只無起點者), claim(主張鍵)省略 = 不限
+    //  base 為前綴而符合多個起點 ⇒ 拋錯(code: 'BASE_AMBIGUOUS'; 訊息列候選; 全部不動; 排程第 614 項 ②); 回傳結案之條數
+    //  dry: true ⇒ 只解析與計數、不寫(命令列於 --close 與 --rearm 並用時先預檢兩者, 任一不合即兩者皆不執行; 複審 G-1); 模糊時照拋
+    let closeFrontier = ({ arms, base, claim, why, dry = false }) => {
         let key = normArms(arms).join('+')
-        let hit = rsi.store.listFrontier().filter((f) => f.status === 'proposed' && f.spec && Array.isArray(f.spec.arms) && normArms(f.spec.arms).join('+') === key && (base === undefined || (f.spec.base || null) === (base || null)) && (claim === undefined || (f.spec.claim || null) === (claim || null)))
+        let cands = proposedOf(key, claim)
+        let rb = baseResolveOf(cands, base)
+        if (rb.ambiguous) {
+            throw Object.assign(new Error(baseAmbiguousMsg(rb.ambiguous)), { code: 'BASE_AMBIGUOUS' })
+        }
+        base = rb.base
+        let hit = cands.filter((f) => base === undefined || (f.spec.base || null) === (base || null))
+        if (dry) {
+            return hit.length
+        }
         if (hit.length) {
             rsi.store.markFrontier(hit.map((f) => f.specHash), 'blocked')
             log(`前緣結案(主代理)${hit.length} 條: ${key}${base ? `←${String(base).slice(0, 8)}` : ''}: ${String(why || '').slice(0, 200)}`)
@@ -3317,9 +3347,17 @@ let makeProject = (st = getSettings(), inject = {}) => {
     //  作法: 舊提案結案、以新之臂推入同理由同優先序之提案(前緣內已有同規格而已結案〔blocked〕者重開之, 沿用該條原有之理由與優先序; 排程第 481 項之核實、R-EV-57); 來源做夢文件之該條方向之 arms 改為新之臂(原臂記於 rearmedFrom, 另加迴圈註記) —— 任務書之來源方向依臂之集合比對
     //  只改臂之歸屬, 不改方向之內容(依據、預期、類型、主張); 起點不變; 輪次進行中不得執行(由呼叫端把關)
     //  claim(選配): 主張鍵(規則 R-REC-24); 同臂同起點有數條驗證時用以指明; 新規格承接原規格之主張鍵
-    let rearmFrontier = ({ arms, base, claim, to, why }) => {
+    //  dry: true ⇒ 做完所有會拒絕之檢查(模糊之前綴、候選數、臂目錄、同規格之節點 / 提案 / 他種狀態之項)而不寫任何檔、回 { ok, why }(ok 時另帶 dry: true; 命令列於並用時先預檢; 複審 G-1)
+    let rearmFrontier = ({ arms, base, claim, to, why, dry = false }) => {
         let key = normArms(arms).join('+')
-        let hit = rsi.store.listFrontier().filter((f) => f.status === 'proposed' && f.spec && Array.isArray(f.spec.arms) && normArms(f.spec.arms).join('+') === key && (base === undefined || (f.spec.base || null) === (base || null)) && (claim === undefined || (f.spec.claim || null) === (claim || null)))
+        let cands = proposedOf(key, claim)
+        //base 同 closeFrontier: 完整之起點節點 id 或其唯一之前綴; 前綴符合多個起點 ⇒ 不改掛、列候選(排程第 614 項 ②)
+        let rb = baseResolveOf(cands, base)
+        if (rb.ambiguous) {
+            return { ok: false, why: baseAmbiguousMsg(rb.ambiguous) }
+        }
+        base = rb.base
+        let hit = cands.filter((f) => base === undefined || (f.spec.base || null) === (base || null))
         if (hit.length !== 1) {
             let cks = hit.map((f) => f.spec.claim).filter(Boolean)
             return { ok: false, why: hit.length ? `前緣內有 ${hit.length} 條同臂之提案,請另給 base${cks.length ? ` 或 claim(主張鍵: ${cks.join('、')})` : ''} 指明` : `前緣內無尚未執行之提案 ${key}` }
@@ -3342,6 +3380,11 @@ let makeProject = (st = getSettings(), inject = {}) => {
         }
         if (rsi.store.listFrontier().some((x) => x.status === 'proposed' && x.specHash === specHash(spec))) {
             return { ok: false, why: '前緣已有同規格之提案' }
+        }
+        if (dry) {
+            //預檢(不寫任何檔): 推入前緣之結果 —— 同規格之項不存在 ⇒ 可推入、為 blocked ⇒ 可重開、其他狀態(proposed 者已於上方拒)⇒ 拒並註明狀態(同下方之實際推入)
+            let old0 = rsi.store.listFrontier().find((x) => x.specHash === specHash(spec))
+            return old0 && old0.status !== 'blocked' ? { ok: false, why: `前緣已有同規格之項(該項狀態 ${old0.status},不會執行)` } : { ok: true, dry: true, nodeId: id, arms: spec.arms, round: null }
         }
         //來源方向(最近一份含此臂集合、起點與主張鍵之做夢文件)
         let src = directionOf(f.spec)

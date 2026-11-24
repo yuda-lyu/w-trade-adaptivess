@@ -31,7 +31,7 @@ let msgOf = (fn) => {
 //runExt, 以一個擴充診斷跑一次完整評估; 診斷內之斷言失敗會被評估器記為 ext.<名>.error ⇒ 於此轉為測試失敗
 let runExt = (ev, fn, pick, opt = {}) => {
     let m = ev.evalPolicy(pick, { accept, ...opt, ext: [{ name: 'd', fn }] })
-    assert.equal(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
+    assert.strictEqual(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
     return m
 }
 let rd = (dir, f, C) => {
@@ -911,10 +911,11 @@ describe('擴充診斷之 api.fillRandom:給定各決策之兩側席數之活躍
             ],
         })
         for (let k of ['before', 'mut', 'after']) {
-            assert.equal(m.ext[k].error, undefined, `${k}: ${m.ext[k].error}`)
+            assert.strictEqual(m.ext[k].error, undefined, `${k}: ${m.ext[k].error}`)
         }
         assert.deepEqual([m.ext.mut.frozen, m.ext.mut.errs], [true, 3], '凍結: 掛屬性與改 call 皆被拒(TypeError)')
-        assert.deepEqual(m.ext.mut.keys, ['simulate', 'summarize', 'replaceNull', 'sideGroups', 'geoGroups', 'market', 'factor', 'series', 'rand', 'fillRandom'])
+        //(R-EV-59 起另有 stat, 附於 fillRandom 之後; 見 unit-extStat)
+        assert.deepEqual(m.ext.mut.keys, ['simulate', 'summarize', 'replaceNull', 'sideGroups', 'geoGroups', 'market', 'factor', 'series', 'rand', 'fillRandom', 'stat'])
         let { ms: _a, ...before } = m.ext.before
         let { ms: _b, ...after } = m.ext.after
         assert.deepEqual(after, before, '前一診斷之改動不影響後一診斷')

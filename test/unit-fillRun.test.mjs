@@ -102,7 +102,7 @@ describe('附算與補算之執行(規則 R-REC-34)', function () {
         assert.deepEqual(byNode, [['ext:dB', 'postfit:'], ['postfit:'], ['ext:dA,dB', 'postfit:']])
         assert(calls.every((c) => c.args.includes('--no-log') && c.args[c.args.indexOf('--mode') + 1] === 'full'))
         let resBy = Object.fromEntries(r.results.map((x) => [x.nodeId, [x.postfit, x.ext.ok, x.ext.failed, x.error]]))
-        assert.deepEqual(ids.map((id) => resBy[id]), [['ok', ['dB'], [], null], ['ok', [], [], null], ['ok', ['dA', 'dB'], [], null]])
+        assert.deepStrictEqual(ids.map((id) => resBy[id]), [['ok', ['dB'], [], null], ['ok', [], [], null], ['ok', ['dA', 'dB'], [], null]])
         assert.deepEqual(r.results.map((x) => x.nodeId), [...ids].sort(), '依節點 id 之序')
         let evaluator = FK.evaluatorFpOf(st)
         assert.equal(r.evaluator, evaluator)
@@ -112,7 +112,7 @@ describe('附算與補算之執行(規則 R-REC-34)', function () {
             assert(!tmpLeft(st), '暫存之結果檔已移除')
             assert(!fs.existsSync(path.join(wd, 'harness_fill.json')) && !fs.existsSync(path.join(wd, 'harness_postfit.json')), '工作夾內不寫')
             //求解窗後段之完整結果檔(評估器之輸出原樣)另存, 供診斷工具直接讀
-            assert.deepEqual(JSON.parse(fs.readFileSync(FK.postfitFileOf(st.rsi.root, id), 'utf8')), pfOf(k))
+            assert.deepStrictEqual(JSON.parse(fs.readFileSync(FK.postfitFileOf(st.rsi.root, id), 'utf8')), pfOf(k))
             let f = JSON.parse(fs.readFileSync(FK.fillFileOf(st.rsi.root, id), 'utf8'))
             assert.equal(f.nodeId, id)
             let pickHash = FK.pickHashOf(fs.readFileSync(path.join(wd, 'pick.mjs')))
@@ -141,7 +141,7 @@ describe('附算與補算之執行(規則 R-REC-34)', function () {
         assert.deepEqual(P.records.getNodeDoc(ids[2]).harness.raw.metrics.ext.dB, { board: 'dB-2-new', flag: '提示 dB' })
         //狀態: 診斷之登錄(第一次 ⇒ since null)、待重試 0
         let fst = JSON.parse(fs.readFileSync(path.join(st.rsi.root, 'fill_state.json'), 'utf8'))
-        assert.deepEqual(fst.registry, { dA: { hash: diags.dA, since: null }, dB: { hash: diags.dB, since: null } })
+        assert.deepStrictEqual(fst.registry, { dA: { hash: diags.dA, since: null }, dB: { hash: diags.dB, since: null } })
         assert.deepEqual(fst.retry, [])
         //共同儲存區(storeAfter): 各列之 postfit = 補算檔之值 + at + current; 總表之欄不含此段
         assert.deepEqual(r.store, { ok: true, n: 3 })
@@ -235,7 +235,7 @@ describe('附算與補算之執行(規則 R-REC-34)', function () {
         assert.deepEqual(calls.slice(n2).map((c) => [ids.indexOf(c.nodeId), c.kind, argOfA(c.args, '--ext-only')]).sort(), [[0, 'ext', 'dA'], [1, 'ext', 'dA'], [2, 'ext', 'dA']])
         let fst = JSON.parse(fs.readFileSync(path.join(st.rsi.root, 'fill_state.json'), 'utf8'))
         assert.notEqual(fst.registry.dA.since, null)
-        assert.equal(fst.registry.dB.since, null)
+        assert.strictEqual(fst.registry.dB.since, null)
         assert.deepEqual(r.results.map((x) => x.ext.ok), [['dA'], ['dA'], ['dA']])
         //其後之完整評估(harness_full.json 之 at 晚於 since)且樹上有值 ⇒ 不補: 以節點 0 為例(去掉其補算檔之 dA、正本時刻改為未來)
         let wd0 = wdOf(st, ids[0])

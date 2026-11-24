@@ -144,8 +144,8 @@ describe('共同儲存區:其他標的之正負號(規則 R-REC-30)', function (
         let idx = readIdx(dir)
         let by = Object.fromEntries(idx.items.map((x) => [x.id, x]))
         assert.deepEqual(by[ids[0]].cross, { backtest: { perf: '-', content: '+' }, holdout: { perf: '+', content: '0' } })
-        assert.deepEqual(by[ids[1]].cross, { backtest: { perf: '0', content: null }, holdout: { perf: null, content: null } })
-        assert.deepEqual(by[ids[2]].cross, ALL_NULL)
+        assert.deepStrictEqual(by[ids[1]].cross, { backtest: { perf: '0', content: null }, holdout: { perf: null, content: null } })
+        assert.deepStrictEqual(by[ids[2]].cross, ALL_NULL)
         assert.deepEqual(Object.keys(by[ids[0]]), ['id', 'short', 'round', 'type', 'arms', 'base', 'claimKey', 'claim', 'family', 'status', 'design', 'backtest', 'ext', 'holdout', 'cross', 'files'])
         assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, ids[0], 'info.json'), 'utf8')).cross, by[ids[0]].cross)
         //保留期之號照舊(不受其他標的影響)
@@ -190,9 +190,9 @@ describe('共同儲存區:其他標的之正負號(規則 R-REC-30)', function (
         //只讀共同儲存區內之策略: ids[0] 3 個值(5551.7、'+0.25'、物件), ids[1] 兩段, ids[2] 整個策略 ⇒ 6
         assert.deepEqual(r.cross, { invalid: false, signed: 2, ignored: 6 })
         let by = Object.fromEntries(readIdx(dir).items.map((x) => [x.id, x.cross]))
-        assert.deepEqual(by[ids[0]], { backtest: { perf: null, content: '-' }, holdout: { perf: null, content: null } })
-        assert.deepEqual(by[ids[1]], ALL_NULL)
-        assert.deepEqual(by[ids[2]], ALL_NULL)
+        assert.deepStrictEqual(by[ids[0]], { backtest: { perf: null, content: '-' }, holdout: { perf: null, content: null } })
+        assert.deepStrictEqual(by[ids[1]], ALL_NULL)
+        assert.deepStrictEqual(by[ids[2]], ALL_NULL)
         assert.deepEqual(by[ids[3]], { backtest: { perf: '+', content: '+' }, holdout: { perf: '-', content: '-' } }, '只帶四個號, 其他鍵不帶出')
         let snap = snapOf(dir, true)
         for (let f of Object.keys(snap)) {
@@ -205,7 +205,7 @@ describe('共同儲存區:其他標的之正負號(規則 R-REC-30)', function (
         for (let i = 0; i < BAD.length; i++) {
             let before = cr.ignored()
             let x = cr.signsOf(`x${i}`)
-            assert.deepEqual(x, { backtest: { perf: null, content: '+' }, holdout: { perf: '-', content: '0' } }, `值 ${JSON.stringify(BAD[i])}`)
+            assert.deepStrictEqual(x, { backtest: { perf: null, content: '+' }, holdout: { perf: '-', content: '0' } }, `值 ${JSON.stringify(BAD[i])}`)
             assert.equal(cr.ignored() - before, 1, `值 ${JSON.stringify(BAD[i])} 計入 ignored`)
         }
         //四格皆可收 "+" / "-" / "0"(逐字相符)
@@ -217,24 +217,24 @@ describe('共同儲存區:其他標的之正負號(規則 R-REC-30)', function (
         let a1 = c5.signsOf('a')
         assert.deepEqual([c5.ignored(), c5.signed()], [1, 1])
         a1.backtest.perf = 'MUT'
-        assert.deepEqual(c5.signsOf('a'), { backtest: { perf: '+', content: null }, holdout: { perf: '-', content: null } })
+        assert.deepStrictEqual(c5.signsOf('a'), { backtest: { perf: '+', content: null }, holdout: { perf: '-', content: null } })
         c5.signsOf('a')
         c5.signsOf('b')
         c5.signsOf('b')
         assert.deepEqual([c5.ignored(), c5.signed()], [2, 1], '重複讀同一個 id 不重複計數')
         //null / undefined = 未算(不計入 ignored)
         let c2 = PS.crossOf({ items: { a: { backtest: { perf: null }, holdout: null }, b: null } })
-        assert.deepEqual(c2.signsOf('a'), ALL_NULL)
-        assert.deepEqual(c2.signsOf('b'), ALL_NULL)
-        assert.deepEqual(c2.signsOf('zz'), ALL_NULL)
+        assert.deepStrictEqual(c2.signsOf('a'), ALL_NULL)
+        assert.deepStrictEqual(c2.signsOf('b'), ALL_NULL)
+        assert.deepStrictEqual(c2.signsOf('zz'), ALL_NULL)
         assert.deepEqual([c2.ignored(), c2.signed()], [0, 0])
         //原型上之鍵不當作策略(只認自有屬性)
         let c3 = PS.crossOf({ items: Object.create({ inherited: { backtest: { perf: '+', content: '+' } } }) })
-        assert.deepEqual(c3.signsOf('inherited').backtest, { perf: null, content: null })
+        assert.deepStrictEqual(c3.signsOf('inherited').backtest, { perf: null, content: null })
         //整段 / 整個策略為陣列(帶同名屬性)亦不取其值
         let c4 = PS.crossOf({ items: { a: Object.assign([], { backtest: { perf: '+', content: '+' } }), b: { backtest: Object.assign(['x'], { perf: '+' }) } } })
-        assert.deepEqual(c4.signsOf('a'), ALL_NULL)
-        assert.deepEqual(c4.signsOf('b'), ALL_NULL)
+        assert.deepStrictEqual(c4.signsOf('a'), ALL_NULL)
+        assert.deepStrictEqual(c4.signsOf('b'), ALL_NULL)
     })
 
     it('檔之形狀不合(非 JSON、頂層非物件、items 非物件或為陣列)⇒ 視同無此檔:產出與舊版逐位相同、回傳 { invalid: true };讀取器回 null', async () => {
@@ -248,13 +248,13 @@ describe('共同儲存區:其他標的之正負號(規則 R-REC-30)', function (
             t.cleanup()
             t = null
         }
-        assert.equal(PS.crossOf(null), null)
+        assert.strictEqual(PS.crossOf(null), null)
         for (let v of [undefined, 5, 'x', true, () => 0]) {
-            assert.equal(PS.crossOf(v), null, `非物件 ${String(v)}`)
+            assert.strictEqual(PS.crossOf(v), null, `非物件 ${String(v)}`)
         }
-        assert.equal(PS.crossOf([]), null)
-        assert.equal(PS.crossOf({ items: [] }), null)
-        assert.equal(PS.crossOf({ items: null }), null)
+        assert.strictEqual(PS.crossOf([]), null)
+        assert.strictEqual(PS.crossOf({ items: [] }), null)
+        assert.strictEqual(PS.crossOf({ items: null }), null)
     })
 
     it('區內尚無策略而有可用之 _cross.json:回傳 { invalid: false, signed: 0, ignored: 0 }、總表有欄無列、不拋錯;無策略而無此檔者回傳 cross 為 null', async () => {
@@ -278,15 +278,15 @@ describe('共同儲存區:其他標的之正負號(規則 R-REC-30)', function (
     it('infoOf:未給 cross ⇒ 不含 cross 鍵;給 null ⇒ 四值皆 null;直接給物件者亦只帶出合法之號(其餘鍵與非號之值不帶出)', () => {
         let d = doc(ids[0], 0)
         assert(!('cross' in infoOf(d)))
-        assert.deepEqual(infoOf(d, { cross: null }).cross, ALL_NULL)
-        assert.deepEqual(infoOf(d, { cross: { backtest: { perf: 1.5, content: '+', x: 9 }, holdout: { perf: '-', content: '+5' }, y: 3 } }).cross, { backtest: { perf: null, content: '+' }, holdout: { perf: '-', content: null } })
-        assert.deepEqual(infoOf(d, { cross: { backtest: ['+'], holdout: '+' } }).cross, ALL_NULL)
+        assert.deepStrictEqual(infoOf(d, { cross: null }).cross, ALL_NULL)
+        assert.deepStrictEqual(infoOf(d, { cross: { backtest: { perf: 1.5, content: '+', x: 9 }, holdout: { perf: '-', content: '+5' }, y: 3 } }).cross, { backtest: { perf: null, content: '+' }, holdout: { perf: '-', content: null } })
+        assert.deepStrictEqual(infoOf(d, { cross: { backtest: ['+'], holdout: '+' } }).cross, ALL_NULL)
         for (let v of [5, '+', true, () => 0]) {
-            assert.deepEqual(infoOf(d, { cross: v }).cross, ALL_NULL, `整體非物件 ${String(v)}`)
+            assert.deepStrictEqual(infoOf(d, { cross: v }).cross, ALL_NULL, `整體非物件 ${String(v)}`)
         }
         //鑑別前提: 段或整體不是一般物件而帶同名屬性者(帶 perf 之陣列、帶 content 之函數、帶 backtest 之陣列)亦不取其值
-        assert.deepEqual(infoOf(d, { cross: { backtest: Object.assign(['x'], { perf: '+' }), holdout: Object.assign(() => 0, { content: '-' }) } }).cross, ALL_NULL)
-        assert.deepEqual(infoOf(d, { cross: Object.assign([], { backtest: { perf: '+', content: '+' } }) }).cross, ALL_NULL)
+        assert.deepStrictEqual(infoOf(d, { cross: { backtest: Object.assign(['x'], { perf: '+' }), holdout: Object.assign(() => 0, { content: '-' }) } }).cross, ALL_NULL)
+        assert.deepStrictEqual(infoOf(d, { cross: Object.assign([], { backtest: { perf: '+', content: '+' } }) }).cross, ALL_NULL)
     })
 
     it('命令列 src/tools/pickStore.mjs:有 _cross.json 時多印其他標的之統計(含忽略數;不印檔內之數字);無此檔時輸出之行與舊版相同(不提其他標的);形狀不合者印「形狀不合(未列)」', () => {
@@ -350,13 +350,13 @@ describe('共同儲存區:保留期之正負號只收 "+" / "-" / "0"(規則 R-R
         }
         for (let v of BAD) {
             let h = infoOf(doc, { ho: { perf: v, content: v, asOf: 'T1' } }).holdout
-            assert.deepEqual(h, { perf: null, content: null, asOf: 'T1' }, `值 ${JSON.stringify(v)}`)
+            assert.deepStrictEqual(h, { perf: null, content: null, asOf: 'T1' }, `值 ${JSON.stringify(v)}`)
             //另一格為合法之號時不受影響(逐格判定)
-            assert.deepEqual(infoOf(doc, { ho: { perf: v, content: '-' } }).holdout, { perf: null, content: '-', asOf: null }, `值 ${JSON.stringify(v)}`)
-            assert.deepEqual(infoOf(doc, { ho: { perf: '+', content: v } }).holdout, { perf: '+', content: null, asOf: null }, `值 ${JSON.stringify(v)}`)
+            assert.deepStrictEqual(infoOf(doc, { ho: { perf: v, content: '-' } }).holdout, { perf: null, content: '-', asOf: null }, `值 ${JSON.stringify(v)}`)
+            assert.deepStrictEqual(infoOf(doc, { ho: { perf: '+', content: v } }).holdout, { perf: '+', content: null, asOf: null }, `值 ${JSON.stringify(v)}`)
         }
-        assert.deepEqual(infoOf(doc, { ho: { perf: undefined, content: null } }).holdout, { perf: null, content: null, asOf: null })
-        assert.deepEqual(infoOf(doc).holdout, { perf: null, content: null, asOf: null })
+        assert.deepStrictEqual(infoOf(doc, { ho: { perf: undefined, content: null } }).holdout, { perf: null, content: null, asOf: null })
+        assert.deepStrictEqual(infoOf(doc).holdout, { perf: null, content: null, asOf: null })
     })
 
     it('buildPickStore:_holdout.json 內不是正負號之值不進入任何產出檔(index.json、info.json、INDEX.md、README.md);holdoutSigned 只計有號者;該檔原樣保留', async () => {
@@ -380,9 +380,9 @@ describe('共同儲存區:保留期之正負號只收 "+" / "-" / "0"(規則 R-R
         assert.equal(r.holdoutSigned, 1, '只有 ids[1] 之 perf 為號')
         assert.equal(fs.readFileSync(path.join(dir, '_holdout.json'), 'utf8'), text, '正負號檔原樣保留')
         let by = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(dir, 'index.json'), 'utf8')).items.map((x) => [x.id, x.holdout]))
-        assert.deepEqual(by[ids[0]], { perf: null, content: '+', asOf: '2026-11-10T00:00:00' })
-        assert.deepEqual(by[ids[1]], { perf: '-', content: null, asOf: '2026-11-10T00:00:00' })
-        assert.deepEqual(by[ids[2]], { perf: null, content: null, asOf: '2026-11-10T00:00:00' })
+        assert.deepStrictEqual(by[ids[0]], { perf: null, content: '+', asOf: '2026-11-10T00:00:00' })
+        assert.deepStrictEqual(by[ids[1]], { perf: '-', content: null, asOf: '2026-11-10T00:00:00' })
+        assert.deepStrictEqual(by[ids[2]], { perf: null, content: null, asOf: '2026-11-10T00:00:00' })
         for (let f of ['index.json', 'INDEX.md', 'README.md', ...ids.map((x) => `${x}/info.json`)]) {
             let s = fs.readFileSync(path.join(dir, f), 'utf8')
             for (let n of ['7137.4219', '8283.6671', '4417.2203', '5559.8841']) {

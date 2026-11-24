@@ -176,7 +176,7 @@ describe('命令列對 L.ntStatic 之接線:g_eval.mjs 之兩條路徑(帳本涵
             assert.equal(r.status, 5, `${kind}: ${r.out.slice(0, 800)}`)
             assert(r.out.includes('ERROR 全期帳本與評估帳本之訓練期進場數不一致'), `${kind}: ${r.out.slice(0, 800)}`)
             assert(r.out.includes(`策略序號 ${s} `), `${kind}: ${r.out.slice(0, 800)}`)
-            assert.equal(r.nt, null, `${kind}: 未進入挑選函數之執行`)
+            assert.strictEqual(r.nt, null, `${kind}: 未進入挑選函數之執行`)
         }
     })
 
@@ -190,7 +190,7 @@ describe('命令列對 L.ntStatic 之接線:g_eval.mjs 之兩條路徑(帳本涵
             let r = runBt(root)
             assert.equal(r.status, 5, `${nEval}: ${r.out.slice(0, 800)}`)
             assert(r.out.includes('ERROR 全期帳本與評估帳本之訓練期進場數不一致(策略數不同)'), `${nEval}: ${r.out.slice(0, 800)}`)
-            assert.equal(r.nt, null, `${nEval}: 未進入挑選函數之執行`)
+            assert.strictEqual(r.nt, null, `${nEval}: 未進入挑選函數之執行`)
         }
     })
 
@@ -270,7 +270,7 @@ describe('命令列對 L.ntStatic 之接線:g_eval.mjs 之兩條路徑(帳本涵
             let r = runBt(root)
             assert.equal(r.status, 5, `${w}: ${r.out.slice(0, 800)}`)
             assert(r.out.includes(`ERROR 全期帳本與評估帳本不合核對之前提(${why})`), `${w}: ${r.out.slice(0, 800)}`)
-            assert.equal(r.nt, null, `${w}: 未進入挑選函數之執行`)
+            assert.strictEqual(r.nt, null, `${w}: 未進入挑選函數之執行`)
         }
         //全期帳本之 off 欄短一個
         let { root: root2 } = mkBt('bt_pre_full_off')
@@ -290,7 +290,7 @@ describe('命令列對 L.ntStatic 之接線:g_eval.mjs 之兩條路徑(帳本涵
         let r4 = runBt(root4)
         assert.equal(r4.status, 5, r4.out.slice(0, 800))
         assert(r4.out.includes('ERROR 全期帳本與評估帳本不合核對之前提(帳本未涵蓋訓練期終點)'), r4.out.slice(0, 800))
-        assert.equal(r4.nt, null, '未進入挑選函數之執行')
+        assert.strictEqual(r4.nt, null, '未進入挑選函數之執行')
         //meta.nBars 為數字字串或小數(無 px.f64 者 loadLedger 不驗): 比較式 `'3000' >= 1200` 為真而放行 ⇒ 須以整數檢查拒收(評估帳本、全期帳本各一)
         for (let [w, nb] of [['數字字串', '3000'], ['小數', 2400.5]]) {
             let { root: rootS } = mkBt(`bt_pre_strbars_${typeof nb}`, (dir) => {
@@ -345,7 +345,7 @@ describe('命令列對 L.ntStatic 之接線:g_eval.mjs 之兩條路徑(帳本涵
             let r8 = runBt(root8)
             assert.equal(r8.status, 5, `${nb}: ${r8.out.slice(0, 800)}`)
             assert(r8.out.includes('ERROR 全期帳本與評估帳本不合核對之前提(全期帳本未涵蓋回測期起點)'), `${nb}: ${r8.out.slice(0, 800)}`)
-            assert.equal(r8.nt, null, `${nb}: 未進入挑選函數之執行`)
+            assert.strictEqual(r8.nt, null, `${nb}: 未進入挑選函數之執行`)
         }
         //評估帳本未涵蓋訓練期終點(只有 1186 棒 < 界線 1200): 即使訓練期之進場數恰相同亦拒絕
         let { root: root3 } = mkBt('bt_pre_short', null, { evalCut: 1186 })

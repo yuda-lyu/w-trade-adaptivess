@@ -28,7 +28,7 @@ let accept = (sig, book) => {
 //runExt, 以一個擴充診斷跑一次完整評估; 診斷內之斷言失敗會被評估器記為 ext.<名>.error ⇒ 於此轉為測試失敗
 let runExt = (ev, fn, pk = pickG) => {
     let m = ev.evalPolicy(pk, { accept, ext: [{ name: 'd', fn }] })
-    assert.equal(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
+    assert.strictEqual(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
     return m
 }
 let msgOf = (fn) => {
@@ -222,7 +222,7 @@ describe('擴充診斷之 api.replaceNull:只替換一部分之席(onlyGroups / 
                 }
             }]
         })
-        assert.equal(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
+        assert.strictEqual(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
     })
 
     it('onlyGroups:成品只在部分決策分帳時,未分帳之決策其席皆屬子帳 0(列子帳 1 ⇒ 該決策全部原樣;列子帳 0 ⇒ 該決策全部替換)', () => {
@@ -249,7 +249,7 @@ describe('擴充診斷之 api.replaceNull:只替換一部分之席(onlyGroups / 
                 }
             }]
         })
-        assert.equal(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
+        assert.strictEqual(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
     })
 
     it('onlyGroups:所列子帳於成品無席 ⇒ 各抽皆為成品本身(均 = 成品、標準差 0、超額 0);obs 與 api.obs.mean 逐位相同、obsPnl 與 simulate 之兩側損益和相符', () => {
@@ -321,7 +321,7 @@ describe('擴充診斷之 api.replaceNull:只替換一部分之席(onlyGroups / 
                 }
             }]
         })
-        assert.equal(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
+        assert.strictEqual(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
     })
 
     it('成品未分帳(含 group 全為 0):給 onlyGroups ⇒ 回 { applicable: false, reason }(不拋錯、不重放);只給 onlyDecisions 照常', () => {

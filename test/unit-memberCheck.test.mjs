@@ -138,7 +138,7 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
             let rets2 = rc2.filter((v) => v !== null).map((v) => v / 7.5)
             assert.equal(r2.kind, 'recent')
             assert.equal(r2.full, 7.5)
-            assert.deepEqual(r2.halves.map((h) => h.retention), rc2.map((v) => (v === null ? null : v / 7.5)))
+            assert.deepStrictEqual(r2.halves.map((h) => h.retention), rc2.map((v) => (v === null ? null : v / 7.5)))
             assert.deepEqual(r2.retention, { median: med(rets2), min: Math.min(...rets2), n: 5 })
             assert.equal(r2.retention.median, rets2.slice().sort((a, b) => a - b)[2], '奇數個 ⇒ 中間一個')
             assert.deepEqual(r2.halves.map((h) => h.excess), [1, 2, 3, 4, 5, 6], '內建之超額照列')
@@ -150,7 +150,7 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
                 let c = { ...canonB, nullSideAct: full === null ? undefined : { excess: full } }
                 let rz = VM.memberRowOf(c, halfOf(ex, rc, eq), cfg)
                 assert.equal(rz.applicable, false, String(full))
-                assert.deepEqual(rz.retention, { median: null, min: null, n: 0 })
+                assert.deepStrictEqual(rz.retention, { median: null, min: null, n: 0 })
                 assert.equal(rz.nNeg, 2)
                 assert.strictEqual(VM.memberHintOf(rz, cfg), null, '不適用 ⇒ 整條不判(負之半庫數超過上限亦然)')
             }
@@ -188,7 +188,7 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
             let P0 = (over = {}) => FP.planFill({ nodes, evaluator: 'e', now: '2026-01-01T00:00:00Z', postfit: false, ext: false, member: { sig, eligible: ['a1', 'b2'] }, ...over })
             //a1 現行、b2 須算、c3 不合格(不計畫)
             let p = P0()
-            assert.deepEqual(p.tasks, [{ nodeId: 'b2', postfit: false, ext: [], keys: { postfit: null, ext: {}, member: { pick: 'pb', evaluator: 'e', member: sig } }, member: true }])
+            assert.deepStrictEqual(p.tasks, [{ nodeId: 'b2', postfit: false, ext: [], keys: { postfit: null, ext: {}, member: { pick: 'pb', evaluator: 'e', member: sig } }, member: true }])
             assert.equal(p.nCurrent, 2)
             assert.equal('member' in p.backlog, false, '無待補算者不帶')
             //targets 以外 ⇒ 待補算之 member
@@ -217,14 +217,14 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
             assert.equal(FP.sameKey({ pick: 'p', evaluator: 'e' }, { pick: 'p', evaluator: 'e', member: null }), true)
             //fillDocOf: 本次有 member 者取代; 未給者沿用; 兩者皆無者不帶此鍵
             let d1 = FP.fillDocOf(null, { nodeId: 'a1', at: 'T', member: { key: { k: 1 }, row, canon: { selHash: 's', at: 'c' } } })
-            assert.deepEqual(d1.member, { key: { k: 1 }, at: 'T', row, canon: { selHash: 's', at: 'c' } })
-            assert.deepEqual(FP.fillDocOf(d1, { nodeId: 'a1', at: 'T2', postfit: { key: {}, row: { y: 2 } } }).member, d1.member, '沿用')
+            assert.deepStrictEqual(d1.member, { key: { k: 1 }, at: 'T', row, canon: { selHash: 's', at: 'c' } })
+            assert.deepStrictEqual(FP.fillDocOf(d1, { nodeId: 'a1', at: 'T2', postfit: { key: {}, row: { y: 2 } } }).member, d1.member, '沿用')
             assert.equal('member' in FP.fillDocOf(null, { nodeId: 'a1', at: 'T', postfit: { key: {}, row: {} } }), false)
             //memberOfFill / memberInfoOf
             let f = fillOf({ pick: 'pa', evaluator: 'e', member: sig }, 'sA')
-            assert.deepEqual(FP.memberOfFill(f, { pick: 'pa', evaluator: 'e', member: sig }, 'sA'), { at: 't1', row, canon: { selHash: 'sA', at: 'c0' } })
+            assert.deepStrictEqual(FP.memberOfFill(f, { pick: 'pa', evaluator: 'e', member: sig }, 'sA'), { at: 't1', row, canon: { selHash: 'sA', at: 'c0' } })
             assert.strictEqual(FP.memberOfFill(f, { pick: 'pa', evaluator: 'e', member: sig }, 'sZ'), null)
-            assert.deepEqual(FP.memberInfoOf(f, { pick: 'pa', evaluator: 'e' }, 'sA'), { ...row, at: 't1', current: true })
+            assert.deepStrictEqual(FP.memberInfoOf(f, { pick: 'pa', evaluator: 'e' }, 'sA'), { ...row, at: 't1', current: true })
             assert.equal(FP.memberInfoOf(f, { pick: 'pa', evaluator: 'e2' }, 'sA').current, false)
             assert.strictEqual(FP.memberInfoOf(f, { pick: 'pz', evaluator: 'e' }, 'sA'), null, '成品已重做')
             //memberLineOf 之字面值(不列門檻)
@@ -269,7 +269,7 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
             let plan = (over = {}) => FP.planFill({ nodes, diags: [{ name: RD, hash: 'H1' }], registry: { [RD]: { hash: 'H1', since: null } }, evaluator: 'e', now: NOW, postfit: false, ext: false, member: M(['a1', 'b2'], ['a1']), ...over })
             //①鍵: 依者帶診斷之雜湊、不依者不帶(未給 recent 者不帶)
             assert.deepEqual(FP.memberKeyOf({ pick: 'p', evaluator: 'e', sig, dep: true, diag: 'H1' }), { pick: 'p', evaluator: 'e', member: sig, diag: 'H1' })
-            assert.deepEqual(FP.memberKeyOf({ pick: 'p', evaluator: 'e', sig, dep: true }), { pick: 'p', evaluator: 'e', member: sig, diag: null }, '診斷檔不存在 ⇒ null')
+            assert.deepStrictEqual(FP.memberKeyOf({ pick: 'p', evaluator: 'e', sig, dep: true }), { pick: 'p', evaluator: 'e', member: sig, diag: null }, '診斷檔不存在 ⇒ null')
             assert.deepEqual(FP.memberKeyOf({ pick: 'p', evaluator: 'e', sig, dep: false, diag: 'H1' }), { pick: 'p', evaluator: 'e', member: sig }, '不依者不帶(即使給了雜湊)')
             //②診斷未改: 皆現行
             let p0 = plan()
@@ -296,7 +296,7 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
             assert.deepEqual(p4c.backlog.member, ['a1'])
             //⑤本次補該診斷(ext true、名單含): 同任務(先補診斷、後算讀數): a1 之任務含該診斷與 member(鍵帶新雜湊); b2 只補該診斷(讀數不依)
             let p5 = FP.planFill({ nodes, diags: diag2, registry: reg2, evaluator: 'e', now: NOW, postfit: false, ext: true, member: M(['a1', 'b2'], ['a1']) })
-            assert.deepEqual(p5.tasks.map((x) => [x.nodeId, x.ext, x.member === true, x.keys.member ? x.keys.member.diag : undefined]), [['a1', [RD], true, 'H2'], ['b2', [RD], false, undefined]])
+            assert.deepStrictEqual(p5.tasks.map((x) => [x.nodeId, x.ext, x.member === true, x.keys.member ? x.keys.member.diag : undefined]), [['a1', [RD], true, 'H2'], ['b2', [RD], false, undefined]])
             assert(!('member' in p5.backlog))
             //  ext 為名單且含該診斷者亦然
             let p5b = FP.planFill({ nodes, diags: diag2, registry: reg2, evaluator: 'e', now: NOW, postfit: false, ext: [RD], member: M(['a1'], ['a1']) })
@@ -314,7 +314,7 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
             assert.deepEqual(p7b.tasks.map((x) => [x.nodeId, x.keys.member.diag]), [['a1', 'H1']], '診斷出現 ⇒ 算')
             //  診斷檔不存在而節點之正本無該診斷之值(extNames 不含): 不延後(無診斷可補)
             let p7c = FP.planFill({ nodes: [{ ...nd0, fill: null }], diags: [], evaluator: 'e', now: NOW, postfit: false, ext: false, member: M(['a1'], ['a1']) })
-            assert.deepEqual(p7c.tasks.map((x) => [x.nodeId, x.keys.member.diag]), [['a1', null]])
+            assert.deepStrictEqual(p7c.tasks.map((x) => [x.nodeId, x.keys.member.diag]), [['a1', null]])
             //⑧不合格者不入 recent 之效果: recent 所列而不在 eligible 者不計畫
             let p8 = plan({ member: M(['b2'], ['a1']), diags: diag2 })
             assert.deepEqual([p8.tasks, p8.nCurrent, 'member' in p8.backlog], [[], 2, false], 'a1 不合格 ⇒ 不計畫、不延後、不列待補算;b2 不依診斷 ⇒ 現行')
@@ -463,14 +463,14 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
             let f = JSON.parse(fs.readFileSync(FK.fillFileOf(st.rsi.root, id), 'utf8'))
             let pickHash = FK.pickHashOf(fs.readFileSync(path.join(st.records.workDir, id, 'pick.mjs')))
             //鍵: 讀數依近期活躍度版之診斷者(節點 3: 選集極活躍)另帶該診斷之內容雜湊(此夾之共用工具區無該診斷 ⇒ null); 不依者(內建)不帶
-            assert.deepEqual(f.member.key, { pick: pickHash, evaluator, member: '0x5bd1e995,0x2545f491,0x9e3779b9|n32', ...(k === 3 ? { diag: null } : {}) })
-            assert.deepEqual(f.member.row, expRowOf(k), `節點 ${k} 之讀數`)
+            assert.deepStrictEqual(f.member.key, { pick: pickHash, evaluator, member: '0x5bd1e995,0x2545f491,0x9e3779b9|n32', ...(k === 3 ? { diag: null } : {}) })
+            assert.deepStrictEqual(f.member.row, expRowOf(k), `節點 ${k} 之讀數`)
             assert.deepEqual(f.member.canon, { selHash: `sel-${k}`, at: `2026-01-0${k + 1}T00:00:00.000Z` })
             let doc = P.records.getNodeDoc(id)
-            assert.deepEqual(doc.harness.member, f.member)
+            assert.deepStrictEqual(doc.harness.member, f.member)
             assert.deepEqual(doc.harness.notes, [`既有之判讀 ${k}`, FP.memberLineOf(expRowOf(k))], '迴圈判讀:既有之列照留 + 一列')
             let n = P.rsi.store.getNode(id)
-            assert.deepEqual(n.raw.member, { at: f.member.at, row: expRowOf(k), selHash: `sel-${k}` })
+            assert.deepStrictEqual(n.raw.member, { at: f.member.at, row: expRowOf(k), selHash: `sel-${k}` })
             assert.equal(n.score.S, 10 + k, 'S 不動')
             assert.equal(n.raw.metrics.selHash, `sel-${k}`, '選集指紋不動')
             //提示: 0 命中(中位 0.45)、3 不命中、4 不適用(負之半庫 3 個亦不判)
@@ -527,7 +527,7 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
         for (let k of [0, 3, 4]) {
             let f = JSON.parse(fs.readFileSync(FK.fillFileOf(st.rsi.root, ids[k]), 'utf8'))
             assert(f.postfit && f.postfit.row && !('member' in f), `節點 ${k}`)
-            assert.equal(P.rsi.store.getNode(ids[k]).raw.member, undefined)
+            assert.strictEqual(P.rsi.store.getNode(ids[k]).raw.member, undefined)
             assert(!fs.readdirSync(path.join(st.rsi.root, FP.FILL_DIR)).some((x) => x.includes('.tmp-')), '暫存檔已移除')
         }
         assert.deepEqual(r.retry.slice().sort(), [ids[0], ids[4]].sort())
@@ -596,8 +596,8 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
             delete x.raw.member
         })
         let r4 = await P4.fill({ ext: false, postfit: false, runEval })
-        assert.equal(r4.memberFixed, undefined)
-        assert.equal(P4.rsi.store.getNode(ids[3]).raw.member, undefined, '鍵不同 ⇒ 不補回')
+        assert.strictEqual(r4.memberFixed, undefined)
+        assert.strictEqual(P4.rsi.store.getNode(ids[3]).raw.member, undefined, '鍵不同 ⇒ 不補回')
         await P.fill({ ext: false, postfit: false, runEval })
         assert.deepEqual(P.rsi.store.getNode(ids[3]).raw.member.row, expRowOf(3), '現行之設定 ⇒ 補回')
         //唯讀之預覽(scanCheck; 子行程之專案根 = 合成專案): 節點文件內之成員依賴之提示不列入「節點文件內」之項 ⇒ 相同
@@ -1055,7 +1055,7 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
                 return { tag, n: o.member.n, metrics: o.metrics }
             })
             let cfg = VM.memberCheckOf({ salts: [0x5bd1e995], nullDraws: 4 }, {})
-            assert.deepEqual(f.member.row, VM.memberRowOf(canon.metrics, halves, cfg))
+            assert.deepStrictEqual(f.member.row, VM.memberRowOf(canon.metrics, halves, cfg))
             assert.deepEqual(f.member.row.halves.map((h) => [h.n, h.eqYrMean, h.excess]), halves.map((h) => [h.n, h.metrics.op.eqYr.mean, h.metrics.nullSideAct.excess]), '逐值相同')
             assert.equal(halves[0].n + halves[1].n, 60, '兩半之和 = 全庫')
             //--no-member 之實跑: 不算(已現行者亦不重算); 不記入節點之評估紀錄(--no-log)

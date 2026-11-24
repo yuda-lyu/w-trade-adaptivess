@@ -101,12 +101,12 @@ describe('近期活躍度版之組成對照之「有值」之唯一判準(規則
         })
         it('infoOf: 有限值之 backtest.content 逐位不變(改前原文之字面值); 無值之形 ⇒ recent / pRecent 皆 null、mean = 內建之超額', () => {
             for (let g of GOOD) {
-                assert.deepEqual(infoOf(mk(id1, 10.5, g.v)).backtest.content, { builtin: 40.3, p: 0.0154, recent: g.recent, pRecent: g.pRecent, mean: g.mean }, g.name)
+                assert.deepStrictEqual(infoOf(mk(id1, 10.5, g.v)).backtest.content, { builtin: 40.3, p: 0.0154, recent: g.recent, pRecent: g.pRecent, mean: g.mean }, g.name)
             }
             //不帶此診斷者(改前亦如此)
-            assert.deepEqual(infoOf(mk(id1, 10.5)).backtest.content, { builtin: 40.3, p: 0.0154, recent: null, pRecent: null, mean: 40.3 })
+            assert.deepStrictEqual(infoOf(mk(id1, 10.5)).backtest.content, { builtin: 40.3, p: 0.0154, recent: null, pRecent: null, mean: 40.3 })
             for (let b of BAD) {
-                assert.deepEqual(infoOf(mk(id1, 10.5, b.v)).backtest.content, { builtin: 40.3, p: 0.0154, recent: null, pRecent: null, mean: 40.3 }, b.name)
+                assert.deepStrictEqual(infoOf(mk(id1, 10.5, b.v)).backtest.content, { builtin: 40.3, p: 0.0154, recent: null, pRecent: null, mean: 40.3 }, b.name)
             }
         })
         it('buildPickStore: 帶 error 之診斷(仍有 side)之節點 ⇒ info.json / index.json / INDEX.md 之近期版皆無值; 有限值者不變', async () => {
@@ -127,9 +127,9 @@ describe('近期活躍度版之組成對照之「有值」之唯一判準(規則
                 let dir = path.join(st.rsi.root, 'picks')
                 let info = (id) => JSON.parse(fs.readFileSync(path.join(dir, id, 'info.json'), 'utf8'))
                 assert.deepEqual(info(id1).backtest.content, { builtin: 40.3, p: 0.0154, recent: 20.1, pRecent: 0.03, mean: 30.2 })
-                assert.deepEqual(info(id2).backtest.content, { builtin: 40.3, p: 0.0154, recent: null, pRecent: null, mean: 40.3 })
+                assert.deepStrictEqual(info(id2).backtest.content, { builtin: 40.3, p: 0.0154, recent: null, pRecent: null, mean: 40.3 })
                 let idx = JSON.parse(fs.readFileSync(path.join(dir, 'index.json'), 'utf8'))
-                assert.deepEqual(idx.items.map((x) => [x.id, x.backtest.content.recent, x.backtest.content.mean]), [[id2, null, 40.3], [id1, 20.1, 30.2]])
+                assert.deepStrictEqual(idx.items.map((x) => [x.id, x.backtest.content.recent, x.backtest.content.mean]), [[id2, null, 40.3], [id1, 20.1, 30.2]])
                 let md = fs.readFileSync(path.join(dir, 'INDEX.md'), 'utf8')
                 let row = (id) => md.split('\n').find((l) => l.includes(id.slice(0, 8))) || ''
                 assert(row(id1).includes('40.3 / 20.1(0.0154)'), row(id1))

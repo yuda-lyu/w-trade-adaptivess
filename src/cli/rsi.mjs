@@ -4,7 +4,7 @@ import { spawnSync } from 'child_process'
 import { settingsOrExit, argOf, argStrOf, argNumOf, cliMsgOf, writeJson } from '../cfg.mjs'
 import { peekRound } from '../engineApi.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
-import { roundName } from '../arsi/records.mjs'
+import { roundName, armKeyOf } from '../arsi/records.mjs'
 import { runRounds, acquireRunLock, appendEvent, readEvents, trailingFailures, planGateOf, roundOkOf, stopFileOf, stopFileExists } from '../arsi/runner.mjs'
 import { checkQuota } from '../arsi/dispatchers.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
@@ -80,8 +80,8 @@ let FP_DIGEST = fileURLToPath(new URL('../tools/roundDigest.mjs', import.meta.ur
 //  node g_rsi.mjs --mode fill [--dry] [--only <id 前綴,…>] [--force] [--no-postfit] [--ext <診斷名,…> | none] [--null N] [--par N] [--no-member]
 //                                             附算與補算(規則 R-REC-34): 求解窗後段之值與所缺或已過時之擴充診斷(佐證; 不動數字、分數、階梯; 存於狀態根之 fill/);
 //                                             輪末鉤子只算本輪之節點與待重試者, 其餘以此補齊; 與輪次共用同一把鎖(離開碼 3 = 有輪次或另一次重算執行中)
-//  node g_rsi.mjs --mode frontier [--close <臂+臂> --why <理由> [--base <起點 id>] [--claim <主張鍵>]]   列出前緣; 主代理把尚未執行之提案結案(--base 限定起點)
-//  node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why <理由> [--base <起點 id>] [--claim <主張鍵>]
+//  node g_rsi.mjs --mode frontier [--close <臂+臂> --why <理由> [--base <起點 id 或其前綴>] [--claim <主張鍵>]]   列出前緣; 主代理把尚未執行之提案結案(--base 限定起點; --close 須給 --why、取輪次鎖)
+//  node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why <理由> [--base <起點 id 或其前綴>] [--claim <主張鍵>]
 //                                             主控通過新臂後, 把做夢暫掛於既有臂之未執行方向改掛新臂(規則 R-ARM-4; 只改臂之歸屬)
 //  node g_rsi.mjs --mode annotate --round N --file <文字檔>      於該輪做夢文件加「迴圈註記」(文件完成後之更正)
 //  node g_rsi.mjs --mode dirtype --round N --file <JSON 檔>      補記該輪做夢文件之方向之任務類型([{ index, type: 'explore' | 'verify', claim }]; 舊做夢文件無此欄時用)
@@ -443,8 +443,10 @@ else if (mode === 'round') {
         P.log(`資源(全機;每 ${resourceCfgOf(st.resources).sampleSec || 5} 秒取樣 ${resources.samples} 次): CPU 平均 ${resources.cpuMean}%、最高 ${resources.cpuPeak}%(上限 ${resources.limits.cpuMax === null ? '未設' : resources.limits.cpuMax});已用記憶體最高 ${resources.ramPeakGB} GB(上限 ${resources.limits.ramUsedMaxGB === null ? '未設' : resources.limits.ramUsedMaxGB});超過上限之取樣 CPU ${resources.overCpu} / 記憶體 ${resources.overRam};資源閘等待 ${resources.waits} 次共 ${resources.waitedSec} 秒;節點評估之等待 ${resources.evalWaits.n} 次共 ${resources.evalWaits.sec} 秒`)
         return { ...out, halt: out.hook && out.hook.failed ? `輪末回調失敗(${(out.hook.errors || []).join(';').slice(0, 200)})` : null }
     }
-    //stopReason, 不再起新輪之機器可讀原因(目前只有起跑前之計畫判斷給值: 'frontier-empty' / 'dream-only-busy'); 併入事件 run-done 之 reason
+    //stopReason, 不再起新輪之機器可讀原因: 每輪開始前之計畫判斷給 'frontier-empty' / 'dream-only-busy'; 連跑時第 2 輪起之額度檢查擋下給 'quota'(排程第 614 項 ①; 同起跑前 skipped 事件之 reason); 併入事件 run-done 與狀態檔 run 之 reason
+    //stopRetryAt, 因額度停止時達門檻之視窗全部重置之時刻(查得到才有; 同 skipped 事件之 retryAt) —— 無人值守之監看端據以決定何時再起, 不必另查額度; 併入事件 run-done 與狀態檔 run 之 retryAt
     let stopReason = null
+    let stopRetryAt = null
     let rr = await runRounds({
         rounds: roundsPerRun,
         runRound: runOne,
@@ -473,6 +475,8 @@ else if (mode === 'round') {
                 try {
                     let q = await checkQuota({ ...quotaArgs(), probe: true })
                     if (!q.ok) {
+                        stopReason = 'quota'
+                        stopRetryAt = q.retryAt || null
                         return `額度已達起跑門檻(${q.why})`
                     }
                 }
@@ -499,8 +503,9 @@ else if (mode === 'round') {
         P.log(`做夢已宣告向外飽和(${roundName(satInfo.round)});其後之出路(新資訊源、新臂、結束搜尋)待主控裁示`)
     }
     //dreamOnly: 本次執行為只做夢者標記, 否則移除(undefined 於寫檔時略去; 狀態檔以合併寫入, 不移除則會殘留上次只做夢之標記)
-    P.setStatus({ stage: 'done', done: true, run: { done: rr.done.length, total: roundsPerRun, stopped: rr.stopped, ...(stopReason ? { reason: stopReason } : {}), ...satKey }, dreamOnly: dreamOnly ? true : undefined })
-    ev({ event: 'run-done', rounds: rr.done.length, total: roundsPerRun, stopped: rr.stopped || null, ...(stopReason ? { reason: stopReason } : {}), ...satKey })
+    let retryKey = stopReason === 'quota' && stopRetryAt ? { retryAt: stopRetryAt } : {}
+    P.setStatus({ stage: 'done', done: true, run: { done: rr.done.length, total: roundsPerRun, stopped: rr.stopped, ...(stopReason ? { reason: stopReason } : {}), ...retryKey, ...satKey }, dreamOnly: dreamOnly ? true : undefined })
+    ev({ event: 'run-done', rounds: rr.done.length, total: roundsPerRun, stopped: rr.stopped || null, ...(stopReason ? { reason: stopReason } : {}), ...retryKey, ...satKey })
     if (roundsPerRun > 1 || rr.stopped) {
         P.log(`本次執行結束: 已跑 ${rr.done.length} / ${roundsPerRun} 輪${rr.stopped ? `;提前停止: ${rr.stopped}` : ''}`)
     }
@@ -639,46 +644,95 @@ else if (mode === 'fill') {
     process.exit(bad.length || r.stateError ? 5 : 0)
 }
 else if (mode === 'frontier') {
-    //列出前緣; 或結案: node g_rsi.mjs --mode frontier --close A02_ntPit[+B14_pitKey] --why "<理由>" [--base <起點 id>] [--claim <主張鍵>]
-    //  --base: 起點之節點 id(完整; 與 --rearm 之 --base 同; 排程第 481 項之核實: 原 --close 不收 --base ⇒ 同臂之提案不論起點全部結案; 未給 = 不限〔不變〕; 未命中 ⇒ 結案 0 條); 同時給 --close 與 --rearm 者,兩者共用之
+    //列出前緣; 或結案: node g_rsi.mjs --mode frontier --close A02_ntPit[+B14_pitKey] --why "<理由>" [--base <起點 id 或其前綴>] [--claim <主張鍵>]
+    //  --base: 起點之節點 id(完整 id 或其唯一之前綴〔排程第 614 項 ②; 列示之 ←xxxxxxxx 為前 8 碼, 照抄即可〕; 與 --rearm 之 --base 同; 排程第 481 項之核實: 原 --close 不收 --base ⇒ 同臂之提案不論起點全部結案; 未給 = 不限〔不變〕);
+    //    前綴限於同臂(且主張鍵符合者)之待執行提案之起點內比對: 完整 id 優先; 前綴符合多個起點 ⇒ 拒並列出候選(離開碼 1、不動); 未命中 ⇒ 結案 0 條與提示; 同時給 --close 與 --rearm 者,兩者共用之
     //  --claim: 主張鍵(8 個十六進位字; 列示中之〔主張 …〕; 探索類之區分用之鍵列為〔鍵 …〕, 同以本參數指明); 取命令列之原字串(全為數字之鍵不得被轉成數值)
+    //  --close 須給 --why(已於上之 cliMsgOf 之模式內相依拒收: invalid --close: must be used with --why; 排程第 614 項 ③ X3); --close 與 --rearm 皆取輪次鎖(同一把; 規則 R-RUN-4; 排程第 614 項 ③ X1: 原只有 --rearm 取)
     let claimArg = () => {
         let i = process.argv.indexOf('--claim'); let v = i > 0 ? process.argv[i + 1] : undefined; return typeof v === 'string' && /^[0-9a-f]{8}$/.test(v) ? v : undefined
     }
     let cl = argOf('close', '')
-    if (cl && cl !== true) {
-        let ckc = claimArg()
-        let bsc = argStrOf('base', undefined)
-        let k = P.closeFrontier({ arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof bsc === 'string' && bsc ? { base: bsc } : {}), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) })
-        console.log(`結案 ${k} 條`)
-        //--base 未命中者提示(列示只印起點 id 之前 8 碼, 而 --base 須為完整之 id; 複審所見: 照列示抄前 8 碼者原只得「結案 0 條」而無從知其故)
-        if (k === 0 && typeof bsc === 'string' && bsc) {
-            console.log('提示: --base 須為完整之起點節點 id(列示之 ←xxxxxxxx 只印前 8 碼)')
-        }
-    }
-    //改掛(規則 R-ARM-4): node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why "<理由>" [--base <起點 id>]
-    //  主控通過新臂後, 把做夢「暫掛於既有臂」之未執行方向改掛新臂; 只改臂之歸屬、不改方向之內容; 輪次進行中不得執行
     let ra = argOf('rearm', '')
-    if (ra && ra !== true) {
-        let to = argOf('to', '')
-        let why = argStrOf('why', '')
-        if (!to || to === true || !why || why === true) {
-            console.log('用法: node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why "<理由>" [--base <起點 id>] [--claim <主張鍵>]')
-            process.exit(2)
-        }
-        let lockF = acquireRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
+    let doClose = !!cl && cl !== true
+    let doRearm = !!ra && ra !== true
+    //改掛(規則 R-ARM-4): node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why "<理由>" [--base <起點 id 或其前綴>]
+    //  主控通過新臂後, 把做夢「暫掛於既有臂」之未執行方向改掛新臂; 只改臂之歸屬、不改方向之內容; 輪次進行中不得執行
+    //  用法於任何動作之前檢查(含與 --close 並用者: 原先結案、其後才報用法而半途停止; 排程第 614 項 ③)
+    let toArg = doRearm ? argOf('to', '') : ''
+    let whyArg = doRearm ? argStrOf('why', '') : ''
+    if (doRearm && (!toArg || toArg === true || !whyArg || whyArg === true)) {
+        console.log('用法: node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why "<理由>" [--base <起點 id 或其前綴>] [--claim <主張鍵>]')
+        process.exit(2)
+    }
+    //並用而兩者之臂為同一集合: 結案後改掛側必然無提案可改(結案與改掛之篩選相同)⇒ 恆為半途動作 ⇒ 拒收(離開碼 2; 先於取鎖與任何動作; 複審 L2-1)
+    if (doClose && doRearm && armKeyOf(String(cl).split('+')) === armKeyOf(String(ra).split('+'))) {
+        console.log('未執行: --close 與 --rearm 之臂相同(結案後無提案可改掛);請分開執行')
+        process.exit(2)
+    }
+    //結案與改掛同取輪次鎖(同一把; 與輪次、重算、附算不得並行 —— 前緣於輪次進行中會被改寫); 結束(含 process.exit)時釋放
+    let lockF = null
+    if (doClose || doRearm) {
+        lockF = acquireRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
         if (!lockF.ok) {
-            console.log(`未執行: 有輪次或重算執行中(pid ${lockF.pid});等它結束再改掛`)
+            console.log(`未執行: 有輪次或重算執行中(pid ${lockF.pid});等它結束再${doClose && doRearm ? '結案與改掛' : doClose ? '結案' : '改掛'}`)
             process.exit(3)
         }
-        let bs = argStrOf('base', undefined)
-        let ck = claimArg()
-        let r = P.rearmFrontier({ arms: String(ra).split('+'), to: String(to).split('+'), why: String(why), ...(typeof bs === 'string' && bs ? { base: bs } : {}), ...(typeof ck === 'string' && ck ? { claim: ck } : {}) })
-        lockF.release()
+        process.on('exit', () => lockF.release())
+    }
+    let bsc = argStrOf('base', undefined)
+    let ckc = claimArg()
+    let closeOpt = doClose ? { arms: String(cl).split('+'), why: String(argStrOf('why', '')), ...(typeof bsc === 'string' && bsc ? { base: bsc } : {}), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) } : null
+    let rearmOpt = doRearm ? { arms: String(ra).split('+'), to: String(toArg).split('+'), why: String(whyArg), ...(typeof bsc === 'string' && bsc ? { base: bsc } : {}), ...(typeof ckc === 'string' && ckc ? { claim: ckc } : {}) } : null
+    //--close 與 --rearm 並用時先預檢兩者(不寫任何檔: 前綴之模糊、候選數、臂目錄、同規格之節點 / 提案 / 他種狀態之項): 任一不合 ⇒ 兩者皆不執行(離開碼 1; 複審 G-1;
+    //  原: 先結案、改掛側才拒而半途停止); 預檢依動作前之前緣 —— 兩者之臂為同一集合者已於上拒收; 改掛之目的與結案之臂重疊者預檢可能誤拒(較依序執行為嚴; 保守, 請分開下); 其餘依序執行(先結案後改掛)
+    if (doClose && doRearm) {
+        try {
+            P.closeFrontier({ ...closeOpt, dry: true })
+        }
+        catch (err) {
+            if (!(err && err.code === 'BASE_AMBIGUOUS')) {
+                throw err
+            }
+            console.log(`未結案: ${err.message}`)
+            console.log('(與 --rearm 並用: 兩者皆未執行)')
+            process.exit(1)
+        }
+        let pre = P.rearmFrontier({ ...rearmOpt, dry: true })
+        if (!pre.ok) {
+            console.log(`未改掛: ${pre.why}`)
+            console.log('(與 --close 並用: 兩者皆未執行)')
+            process.exit(1)
+        }
+    }
+    if (doClose) {
+        let k
+        try {
+            k = P.closeFrontier(closeOpt)
+        }
+        catch (err) {
+            //--base 之前綴符合多個起點: 不結案(全部不動)、列候選、離開碼 1(與 --rearm 之「未改掛」同); 其他之錯誤照拋
+            if (!(err && err.code === 'BASE_AMBIGUOUS')) {
+                throw err
+            }
+            console.log(`未結案: ${err.message}`)
+            process.exit(1)
+        }
+        console.log(`結案 ${k} 條`)
+        //--base 未命中者提示(列示只印起點 id 之前 8 碼; 複審所見: 照列示抄前 8 碼者原只得「結案 0 條」而無從知其故 —— 今 --base 收唯一之前綴, 未命中者為前緣內無同臂提案以此為起點)
+        if (k === 0 && typeof bsc === 'string' && bsc) {
+            console.log('提示: --base 未命中同臂待執行提案之任何起點(給完整之起點節點 id 或其前綴;列示之 ←xxxxxxxx 為前 8 碼)')
+        }
+    }
+    if (doRearm) {
+        let r = P.rearmFrontier(rearmOpt)
         console.log(r.ok ? `已改掛: ${String(ra)} → ${r.arms.join('+')}(節點 ${r.nodeId.slice(0, 8)}${r.round ? `;已更新做夢 ${roundName(r.round)} 之方向` : ''})` : `未改掛: ${r.why}`)
         if (!r.ok) {
             process.exitCode = 1
         }
+    }
+    if (lockF) {
+        lockF.release()
     }
     for (let f of rsi.store.listFrontier()) {
         console.log(`  ${f.status.padEnd(14)} p${f.priority === undefined ? '-' : f.priority} ${f.spec && f.spec.arms ? f.spec.arms.join('+') : '?'}${f.spec && f.spec.base ? ` ←${String(f.spec.base).slice(0, 8)}` : ''}${f.spec && f.spec.claim ? `〔${P.typeOf(f.spec) === 'verify' ? '主張' : '鍵'} ${f.spec.claim}〕` : ''} | ${String(f.reason || '').slice(0, 80)}`)

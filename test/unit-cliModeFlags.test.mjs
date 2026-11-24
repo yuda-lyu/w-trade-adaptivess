@@ -34,8 +34,9 @@ let LEGAL = {
 }
 //--file 之模式相容由進入檔自己檢查(取決於 --dream-only; CLI_MODE_OWN), 通用檢查不判
 let OWN_SKIP = ['file']
-//frontier 內之相依(獨立之預期): --to 須隨 --rearm; --base、--why、--claim 須隨 --close 或 --rearm(排程第 481 項之核實: --base 原只隨 --rearm、與 --close 並用被拒; 今 --close 亦收之,與 --rearm 對稱 —— 見 unit-frontierOps)
-let NEEDS = { to: ['rearm'], base: ['close', 'rearm'], why: ['close', 'rearm'], claim: ['close', 'rearm'] }
+//frontier 內之相依(獨立之預期): --to 須隨 --rearm; --base、--why、--claim 須隨 --close 或 --rearm(排程第 481 項之核實: --base 原只隨 --rearm、與 --close 並用被拒; 今 --close 亦收之,與 --rearm 對稱 —— 見 unit-frontierOps);
+//  --close 須隨 --why(排程第 614 項 ③ X3: 結案須記理由; 原 --close 缺 --why 不拒、理由記為空字串)
+let NEEDS = { to: ['rearm'], base: ['close', 'rearm'], why: ['close', 'rearm'], claim: ['close', 'rearm'], close: ['why'] }
 let modesOf = (flag) => MODES.filter((m) => LEGAL[m].includes(flag))
 let said = (ms) => (ms.length > 1 ? `${ms.slice(0, -1).join(', ')} or ${ms[ms.length - 1]}` : ms[0])
 //  值之種類屬 CLI_VALUES.rsi 者(規模旗標與 --round; 排程第 607 項)取合格之值('3'), 其餘為任意字串(值之種類之案見 unit-cliValues)
@@ -225,6 +226,8 @@ describe('命令列之「模式 × 旗標」與 g_backtest.mjs --seed 之拒收(
             assert.strictEqual(M(['--mode', 'extfill', '--keep-flags']), 'invalid --keep-flags: must be used with --mode reverify')
             assert.strictEqual(M(['--mode', 'frontier', '--base', 'abc']), 'invalid --base: must be used with --close or --rearm')
             assert.strictEqual(M(['--mode', 'frontier', '--close', 'A', '--why', 'x', '--base', 'abc']), null, '--base 隨 --close 合格(與 --rearm 對稱)')
+            assert.strictEqual(M(['--mode', 'frontier', '--close', 'A']), 'invalid --close: must be used with --why', '--close 須隨 --why(排程第 614 項 ③)')
+            assert.strictEqual(M(['--mode', 'frontier', '--close', 'A', '--rearm', 'B', '--to', 'C']), 'invalid --close: must be used with --why', '並用 --rearm 而缺 --why 者亦拒')
             assert.strictEqual(M(['--mode', 'extfill', '--no-member']), 'invalid --no-member: must be used with --mode fill')
             assert.strictEqual(M(['--mode', 'reverify', '--why', 'x', '--force']), 'invalid --force: must be used with --mode round, validate, extfill or fill')
             assert.strictEqual(M(['--mode', 'round', '--par', '2']), 'invalid --par: must be used with --mode fill')

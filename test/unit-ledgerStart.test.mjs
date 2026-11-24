@@ -489,7 +489,7 @@ describe('帳本之起點(opt.startTime)與求解窗核對之下界(規則 R-EV-
                 let m = await bw(path.join(t.dir, `ckW_${iT}`), iT === 0 ? {} : { startTime: W.bars[iT].time })
                 let want = expectCheck(W, iT, 700)
                 assert.deepEqual(m.check, want, `起點第 ${iT} 根`)
-                assert.equal('skipped' in m.check, want.skipped !== undefined)
+                assert.strictEqual('skipped' in m.check, want.skipped !== undefined)
                 //記錄: 「注意:」起首(有受核對者)、附第一個被略過者之檔名與其 summary.timeOhlcStart(JSON 字串化後截至 40 字)
                 let note = logs.find((s) => s.startsWith(`注意: ${want.skipped} 隻策略之求解窗起點`))
                 assert(want.skipped > 0 && note !== undefined, logs.join('\n'))

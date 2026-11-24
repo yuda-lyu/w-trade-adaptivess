@@ -115,7 +115,7 @@ describe('settings.score.* 之取值與檢測(R-EV-55)', function () {
             for (let o of [{}, { mean: 10, min: 10 }, { p: 0.05 }, { p: 0.06 }, { fresh: 10 }, { fresh: 9.9 }, { min: 5 }, { min: 4.9 }, { mo: 300 }, { mo: 301 }, { pk: 30 }, { pk: 31 }, { mo: 99 }, { mo: 100 }, { mo: 249 }, { mo: 250 }, { mean: 20, min: 10 }]) {
                 let a = scoreOf(mk(o), { limits: OPT_LIM, score: SC, layer: 'L1' })
                 let b = scoreOf(mk(o), { limits: OPT_LIM, score: strSc, layer: 'L1' })
-                assert.deepEqual(b, a, JSON.stringify(o))
+                assert.deepStrictEqual(b, a, JSON.stringify(o))
                 n++
             }
             assert.equal(n, 17)
@@ -129,7 +129,7 @@ describe('settings.score.* 之取值與檢測(R-EV-55)', function () {
             }
             //缺鍵(修前: TypeError Cannot read properties of undefined)⇒ 預設
             assert.doesNotThrow(() => scoreOf(mk(), { limits: OPT_LIM, score: { ladder1: { S: 15 } } }))
-            assert.deepEqual(scoreOf(mk(), { limits: OPT_LIM, score: { ladder1: { S: 15 } } }), scoreOf(mk(), { limits: OPT_LIM, score: SC }))
+            assert.deepStrictEqual(scoreOf(mk(), { limits: OPT_LIM, score: { ladder1: { S: 15 } } }), scoreOf(mk(), { limits: OPT_LIM, score: SC }))
             assert.doesNotThrow(() => scoreOf(mk(), { limits: OPT_LIM }))
             //無評估結果者(raw 為空)不讀門檻(同改前之先行回傳)
             assert.equal(scoreOf(null, { limits: OPT_LIM, score: { ladder1: 'x' } }).flags.vetoed, true)

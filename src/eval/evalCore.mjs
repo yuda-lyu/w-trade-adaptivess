@@ -37,6 +37,7 @@ const { ObjectFreeze, ObjectSeal, ObjectHasOwn, ReflectApply, ArrayIsArray, Arra
 //       每次呼叫 pick 後、每批 accept 呼叫(一次逐訊號模擬)後、每個擴充診斷呼叫後與其 api 函數之入口比對受保護之內建物件, 不一致即拋 code 為 EVAL_INTEGRITY 之錯誤
 //    模組之回傳值與參數先只以擷取之參照讀成評估器自有之資料(此段可能執行模組之存取子), 比對通過後才以一般寫法處理
 //  擴充診斷之資料存取(規則 R-EV-36): api.market / factor / series 與 ctx 之同名介面共用同一份取值(marketAt / factorAt / seriesAt), 於同一棒逐位相同; api 之三個函數同其他 api 函數(apiFn、入口比對)
+//  擴充診斷之各策略自身之歷史統計(規則 R-EV-59): api.stat(bar, days) 與 ctx.stat(days) 共用同一份取值(statKeyOf / statAt / statBufOf), 於同一棒、同一回看日數逐位相同; 同其他 api 函數(apiFn、入口比對)
 //  擴充診斷之隨機填席(規則 R-EV-46): api.fillRandom 與 api.replaceNull(nullGroupActOf)共用同一份排名與抽取(actRankPrep / actRankAt / drawNear); 給定各決策之兩側席數, 預設(opt.pool = 'toDate')只用各決策棒以前之資訊('phase' 除外: 其目標名次之池含成品其後之決策之席)
 /**
  * 於已升冪排序之陣列 arr 的 [lo, hi) 區間內做二分搜尋, 回傳第一個「值 >= v」之位置
@@ -357,6 +358,42 @@ let makeEvaluator = (L, cfg = {}) => {
         let m = NumberIsFinite(nBack) ? MathMax(0, MathMin(MathRound(nBack), b)) : 0
         return copyRange(Float64ArrayCtor, S, si * nBars + b - m, si * nBars + b)
     }
+    //statKeyOf / statBufOf / statAt / statCursorsAt, 各策略於棒 b 以前之歷史統計(規則 R-EV-59): 挑選函數之 ctx.stat(b = 決策棒)與擴充診斷之 api.stat(b = 呼叫端所給之棒)共用同一份實作
+    //  (原寫法在 ctx.stat 內; 移出後 ctx.stat 之取值與訊息逐位不變) ⇒ 兩邊於同一棒、同一回看日數之取值逐位相同(由結構保證, 不靠兩份程式碼同步)
+    //  statKeyOf(days): 回看日數之正規化 —— 正有限數取 Math.round; 其餘(0、負數、非有限數、非數字型)為 0 = 全部歷史(物件型於比較時經其 valueOf; 同 ctx.stat 之既有寫法)
+    //  statBufOf(): 一組六欄(closed、wins、pnl、entries、open、lastEntryAgo; 各長度 n)之凍結物件(各欄不可換成他物)
+    //  statAt(B, b, key, ce, cx): 寫入 B 並回 B; ce[s] / cx[s] = 策略 s「進場棒 >= b 之第一單」/「出場棒 >= b 之第一筆已結單」之位置
+    //    ctx 之游標為 runPick 跨決策推進者; api 之游標由 statCursorsAt(b) 以二分搜尋求得 —— 帳本之逐單欄依進場棒升冪、已結單欄依出場棒升冪(setExitCols)⇒ 兩者於同一棒相同
+    //  只用擷取之參照與索引讀寫(ctx.stat 於 pick 執行期間被呼叫, api.stat 於入口比對之後才呼叫; 規則 R-EV-35 ②)
+    let statKeyOf = (days) => (days > 0 && NumberIsFinite(days) ? MathRound(days) : 0)
+    let statBufOf = () => ObjectFreeze({ closed: new Int32ArrayCtor(n), wins: new Int32ArrayCtor(n), pnl: new Float64ArrayCtor(n), entries: new Int32ArrayCtor(n), open: new Int32ArrayCtor(n), lastEntryAgo: new Int32ArrayCtor(n) })
+    let statAt = (B, b, key, ce, cx) => {
+        let from = key > 0 ? b - key * bpd : -1
+        for (let s = 0; s < n; s++) {
+            let xlo = L.xoff[s]
+            let x1 = cx[s]
+            let x0 = from <= 0 ? xlo : lowerBound(L.xExt, xlo, x1, from)
+            B.closed[s] = x1 - x0
+            B.pnl[s] = (x1 > xlo ? L.xPnlCum[x1 - 1] : 0) - (x0 > xlo ? L.xPnlCum[x0 - 1] : 0)
+            B.wins[s] = (x1 > xlo ? L.xWinCum[x1 - 1] : 0) - (x0 > xlo ? L.xWinCum[x0 - 1] : 0)
+            let elo = L.off[s]
+            let e1 = ce[s]
+            let e0 = from <= 0 ? elo : lowerBound(L.ent, elo, e1, from)
+            B.entries[s] = e1 - e0
+            B.open[s] = (e1 - elo) - (x1 - xlo)
+            B.lastEntryAgo[s] = e1 > elo ? b - 1 - L.ent[e1 - 1] : 1000000000
+        }
+        return B
+    }
+    let statCursorsAt = (b) => {
+        let ce = new Uint32ArrayCtor(n)
+        let cx = new Uint32ArrayCtor(n)
+        for (let s = 0; s < n; s++) {
+            ce[s] = lowerBound(L.ent, L.off[s], L.off[s + 1], b)
+            cx[s] = lowerBound(L.xExt, L.xoff[s], L.xoff[s + 1], b)
+        }
+        return { ce, cx }
+    }
 
     //meta, 交給挑選函數之靜態欄(複本; 帳本自身之陣列不外露)
     //  只含結構屬性; ntAll 為訓練期之進場數, 屬「靜態、含決策日之後」之樣本內計數(要走勢前向之計數請用 ctx.stat)
@@ -674,7 +711,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 if (!alive) {
                     throw deadErr()
                 }
-                let key = days > 0 && NumberIsFinite(days) ? MathRound(days) : 0
+                let key = statKeyOf(days)
                 let B = MapPrototypeGet(bufs, key)
                 if (!B) {
                     //緩衝重用: 回看日數逐次不同時(例如「自某固定日起」), 不為每個日數各留一組緩衝 —— 取用本次決策尚未用到之舊緩衝(其內容依合約只在當次 pick 內有效)
@@ -688,7 +725,7 @@ let makeEvaluator = (L, cfg = {}) => {
                     }
                     if (!B) {
                         //回傳物件凍結(各欄不可換成他物; 陣列內容為每次決策重寫之暫存)
-                        B = ObjectFreeze({ closed: new Int32ArrayCtor(n), wins: new Int32ArrayCtor(n), pnl: new Float64ArrayCtor(n), entries: new Int32ArrayCtor(n), open: new Int32ArrayCtor(n), lastEntryAgo: new Int32ArrayCtor(n) })
+                        B = statBufOf()
                     }
                     MapPrototypeSet(bufs, key, B)
                 }
@@ -697,26 +734,12 @@ let makeEvaluator = (L, cfg = {}) => {
                 }
                 //重用前核對: 模組可轉移(structuredClone 之 transfer)交出之陣列之緩衝使其分離(長度歸 0, 其後寫入無效)⇒ 有任一欄長度不符即另建一組
                 if (TypedArrayPrototypeGetLength(B.closed) !== n || TypedArrayPrototypeGetLength(B.wins) !== n || TypedArrayPrototypeGetLength(B.pnl) !== n || TypedArrayPrototypeGetLength(B.entries) !== n || TypedArrayPrototypeGetLength(B.open) !== n || TypedArrayPrototypeGetLength(B.lastEntryAgo) !== n) {
-                    B = ObjectFreeze({ closed: new Int32ArrayCtor(n), wins: new Int32ArrayCtor(n), pnl: new Float64ArrayCtor(n), entries: new Int32ArrayCtor(n), open: new Int32ArrayCtor(n), lastEntryAgo: new Int32ArrayCtor(n) })
+                    B = statBufOf()
                     MapPrototypeSet(bufs, key, B)
                 }
                 MapPrototypeSet(done, key, true)
-                let from = key > 0 ? b - key * bpd : -1
-                for (let s = 0; s < n; s++) {
-                    let xlo = L.xoff[s]
-                    let x1 = cx[s]
-                    let x0 = from <= 0 ? xlo : lowerBound(L.xExt, xlo, x1, from)
-                    B.closed[s] = x1 - x0
-                    B.pnl[s] = (x1 > xlo ? L.xPnlCum[x1 - 1] : 0) - (x0 > xlo ? L.xPnlCum[x0 - 1] : 0)
-                    B.wins[s] = (x1 > xlo ? L.xWinCum[x1 - 1] : 0) - (x0 > xlo ? L.xWinCum[x0 - 1] : 0)
-                    let elo = L.off[s]
-                    let e1 = ce[s]
-                    let e0 = from <= 0 ? elo : lowerBound(L.ent, elo, e1, from)
-                    B.entries[s] = e1 - e0
-                    B.open[s] = (e1 - elo) - (x1 - xlo)
-                    B.lastEntryAgo[s] = e1 > elo ? b - 1 - L.ent[e1 - 1] : 1000000000
-                }
-                return B
+                //取值為共用實作 statAt(與擴充診斷之 api.stat 同一份; 規則 R-EV-59); 游標 ce / cx 為本次決策已推進者
+                return statAt(B, b, key, ce, cx)
             }
             let orders = (s) => {
                 if (!alive) {
@@ -2353,6 +2376,10 @@ let makeEvaluator = (L, cfg = {}) => {
         //      用途: 依「各決策之決策棒以前之行情 / 因子 / 外部序列狀態」把成品之選集分組後以 simulate 重放(各狀態之獨立重放: 持倉簿各自起算, 不保證相加為成品之損益, 執行規則依持倉簿狀態時尤然)
         //      擴充診斷於評估完成後才執行, 介面無從得知呼叫端拿某棒之值去為哪一次決策分組 —— 為某次決策分組時, bar 須用該決策自己之決策棒(phases[].bars)或更早者;
         //        用較晚之棒 = 把較晚之資訊挪到較早之決策(前視), 與「不得把較晚做出之選集挪到較早之決策使用」同一條(只寫於合約, 不以程式強制; 同 pre)
+        //    stat(bar, days?)(規則 R-EV-59): 挑選函數於決策棒 bar 呼叫 ctx.stat(days) 所見者之複本 —— { closed, wins, pnl, entries, open, lastEntryAgo }(各長度 n; 凍結之新物件, 每次呼叫另建; days 省略或 0 = 全部歷史)
+        //      取值與 ctx.stat 於同一棒、同一 days 逐位相同(同一份實作); bar 之檢查與訊息同 market 等; 不進逐訊號模擬(不受重入之限)
+        //      用途: 以各策略自身之進出場歷史組分組(例: 各策略於各種行情狀態之進場數 = 行情足跡 ⇒ replaceNull 之 grp; 各決策當下之持倉中 / 非持倉中 ⇒ 自組選集以 simulate 重放)
+        //      前視之界線同 market 等; 另: replaceNull 之 grp 為整段評估期間共用之靜態分組 ⇒ 其取值之棒須不晚於評估期間之第一個決策棒(只寫於合約, 不以程式強制)
         let ext = null
         if (Array.isArray(extOpt) && extOpt.length) {
             ext = {}
@@ -2825,7 +2852,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 }
                 return v
             }
-            //  api 之十個函數(simulate、summarize、replaceNull、fillRandom、sideGroups、geoGroups、rand 與此三個)皆於 apiOf 內以 apiFn 另包並凍結(每個診斷各一份函數物件: 一個診斷於函數物件上掛屬性、改 call 等, 不影響其他診斷)
+            //  api 之十一個函數(simulate、summarize、replaceNull、fillRandom、sideGroups、geoGroups、rand、此三個與 stat〔規則 R-EV-59〕)皆於 apiOf 內以 apiFn 另包並凍結(每個診斷各一份函數物件: 一個診斷於函數物件上掛屬性、改 call 等, 不影響其他診斷)
             let dataMarket = (bar, nBack = 180) => {
                 guardExt('ext')
                 return marketAt(barOf('market', bar), nBack, 'api.market')
@@ -2844,6 +2871,18 @@ let makeEvaluator = (L, cfg = {}) => {
                     throw new ErrorCtor(`api.series: invalid name: must be one of meta.seriesNames (${serAvailEn()})`)
                 }
                 return seriesAt(si, barOf('series', bar), nBack, 'api.series')
+            }
+            //各策略自身之歷史統計(規則 R-EV-59): stat(bar, days) —— 挑選函數於決策棒 bar 呼叫 ctx.stat(days) 所見者之複本(六欄同 ctx.stat; 每次呼叫另建一組, 不與 ctx.stat 之暫存、帳本、其他呼叫、其他診斷共用記憶體)
+            //  取值與 ctx.stat 共用 statKeyOf / statAt / statBufOf(同一份實作); 游標以 statCursorsAt 之二分搜尋求得(ctx 為跨決策推進之游標; 於同一棒相同)
+            //  同其他需比對之 api 函數: apiFn 包裝、入口先比對內建物件(guardExt); bar 之檢查同 market / factor / series(barOf: iseint、0 ~ nBars; 訊息不帶輸入值); days 之處理同 ctx.stat(statKeyOf)
+            //  不進逐訊號模擬(不受 simulate / replaceNull 之重入之限; 同 fillRandom); 前視之界線同 market 等: 為某次決策分組須用該決策自己之決策棒或更早者,
+            //    整段共用之靜態分組(replaceNull 之 grp)須取不晚於評估期間之第一個決策棒 —— 只寫於合約(§1、§7), 不以程式強制
+            let dataStat = (bar, days = 0) => {
+                guardExt('ext')
+                let b = barOf('stat', bar)
+                let key = statKeyOf(days)
+                let cur = statCursorsAt(b)
+                return statAt(statBufOf(), b, key, cur.ce, cur.cx)
             }
             let rand = (k = 0) => mulberry32(seed + 32452843 + (NumberIsInteger(k) ? k : 0) * 7919)
             //apiOf, 每個擴充診斷各給一份 api(規則 R-EV-35 ①: meta 與各相位之選集 / tag 皆為該診斷自己之複本; 一個診斷改它, 不影響其他診斷)
@@ -2882,6 +2921,7 @@ let makeEvaluator = (L, cfg = {}) => {
                 series: ObjectFreeze(apiFn(dataSeries)),
                 rand: ObjectFreeze(apiFn(rand)),
                 fillRandom: ObjectFreeze(apiFn(fillRandom)),
+                stat: ObjectFreeze(apiFn(dataStat)),
             })
             for (let x of extOpt) {
                 let te = Date.now()

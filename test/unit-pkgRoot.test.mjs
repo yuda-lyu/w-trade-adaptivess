@@ -58,7 +58,7 @@ describe('pkgRootOf:往上找本套件之 package.json;打包檔之定位(排程
         fs.mkdirSync(path.join(t.dir, 'b', 'dirpkg', 'package.json'), { recursive: true })
         assert.equal(pkgRootOf(path.join(t.dir, 'b', 'dirpkg')), root, 'package.json 為目錄者略過')
         assert.equal(pkgRootOf(path.join(t.dir, 'b', 'mid'), 'other'), path.join(t.dir, 'b', 'mid'), '給另一個套件名 ⇒ 依其找')
-        assert.equal(pkgRootOf(path.join(t.dir, 'b', 'mid'), 'no-such-package-name'), null, '找不到 ⇒ null')
+        assert.strictEqual(pkgRootOf(path.join(t.dir, 'b', 'mid'), 'no-such-package-name'), null, '找不到 ⇒ null')
     })
 
     it('fillKeys 之 SRC(評估器原始碼之夾): 有本套件之 package.json 者以套件根下之 src 為準 —— 原始檔、打包檔(dist)、更深之打包檔(dist/umd)皆同一個指紋、隨原始碼而變;找不到套件根者依檔案位置推導(原作法)', async () => {

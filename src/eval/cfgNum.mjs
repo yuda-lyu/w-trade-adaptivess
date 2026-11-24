@@ -177,12 +177,14 @@ let EVAL_SCORE = {
     ladder2: { freshMin: [10, 'num'], worstPhaseMin: [5, 'num'] },
     ladder3: { monthlyOrders: [300, 'nonNegNum'], peakHold: [30, 'nonNegNum'] },
 }
-//freqBands, 月均單之分段界線 [低 | 中 | 高]: 兩個非負數(預設 [100, 250])
+//freqBands, 月均單之分段界線 [低 | 中 | 高]: 兩個非負數(預設 [100, 250]), 且 b1 ≤ b2(evalScoreOf 檢查; 順序顛倒者之錯誤帶 code = FREQ_BANDS_ORDER_CODE)
 let EVAL_FREQ_BANDS = [100, 250]
+let FREQ_BANDS_ORDER_CODE = 'SCORE_FREQ_BANDS_ORDER'
 
 /**
  * 判讀之門檻(settings.score)之取值與檢測:ladder1(S、nullP)、ladder2(freshMin、worstPhaseMin)、ladder3(monthlyOrders、peakHold)、freqBands(兩個非負數)依 EVAL_SCORE 逐一以 cfgNumOf 取值;
- * score 或各 ladder 未給(undefined 或 null)為預設;非物件(含陣列)拋 invalid <who>: must be an object / invalid <who>.ladderN: must be an object;給了而無效者拋 invalid <who>.<鍵>: must be …(不帶輸入值);回傳新物件(不改呼叫端之物件)
+ * score 或各 ladder 未給(undefined 或 null)為預設;非物件(含陣列)拋 invalid <who>: must be an object / invalid <who>.ladderN: must be an object;給了而無效者拋 invalid <who>.<鍵>: must be …(不帶輸入值);
+ * freqBands 之順序顛倒(b1 > b2;以轉換後之數值比較)者拋 invalid <who>.freqBands: must be two non-negative numbers with b1 <= b2(錯誤帶 code = FREQ_BANDS_ORDER_CODE; 規則 R-EV-57 ③);回傳新物件(不改呼叫端之物件)
  *
  * @param {Object} score 輸入判讀之門檻(settings.score;可為 null 或 undefined)
  * @param {String} [who='score'] 輸入錯誤訊息所用之物件名稱,預設'score'
@@ -228,6 +230,14 @@ let evalScoreOf = (score, who = 'score') => {
             }
             return cfgNumOf(x, 0, `${who}.freqBands[${i}]`, 'nonNegNum')
         })
+        //順序(規則 R-EV-57 ③; 第 614 項之餘移入評估器〔與 R-EV-59 同批〕: 單一來源 —— scoreOf、設定之預檢、任務書、合約之參考版與 API 直呼 scoreOf / makeProject 者皆經此): 月均單之分段界線 [b1, b2] 須 b1 ≤ b2
+        //  順序顛倒者之「中」段恆空、搜尋地圖之格(scoreOf 之 cell)無意義 ⇒ 給了而顛倒即拒絕; 比較取上列之轉換值(數字字串依數值比較: ['9', '10'] 合格); 其餘鍵與型別之無效先於本檢查拋出(本檢查置於末)
+        //  固定訊息(不帶輸入值); 錯誤帶 code = FREQ_BANDS_ORDER_CODE, 供讀設定處(getSettings)只攔此一種(其餘之無效留待組裝時之預檢)
+        if (out.freqBands[0] > out.freqBands[1]) {
+            let e = new Error(`invalid ${who}.freqBands: must be two non-negative numbers with b1 <= b2`)
+            e.code = FREQ_BANDS_ORDER_CODE
+            throw e
+        }
     }
     return out
 }
@@ -330,4 +340,4 @@ let cfgListOf = (v, def, where, kind, allowEmpty = false) => {
 }
 
 
-export { cfgNumOf, CFG_KINDS, EVAL_NUMS, evalCfgNumsOf, EVAL_RUN_NUMS, evalRunNumsOf, evalRunNumOf, EVAL_LIMITS, evalLimitsOf, EVAL_SCORE, evalScoreOf, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll, cfgListOf }
+export { cfgNumOf, CFG_KINDS, EVAL_NUMS, evalCfgNumsOf, EVAL_RUN_NUMS, evalRunNumsOf, evalRunNumOf, EVAL_LIMITS, evalLimitsOf, EVAL_SCORE, evalScoreOf, FREQ_BANDS_ORDER_CODE, phaseCountOf, phaseText, phaseCountOfMetrics, phaseCountOfAll, cfgListOf }

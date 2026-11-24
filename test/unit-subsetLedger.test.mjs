@@ -266,7 +266,7 @@ describe('子庫之規則(parseSubsetRule、subsetMaskOf、subsetLedger)', funct
         }
         //極窄之訓練期: 多數策略無此類單 ⇒ 不屬任何帶(連「hold:0:」亦去除)
         let narrow = maskOf(L, 'hold:0:', { trainEndBar: 1200, trainFromBar: 1160 })
-        assert.deepEqual(narrow, keepOf(L, (s) => holdIndep(L, s, 1160, 1200) !== null))
+        assert.deepStrictEqual(narrow, keepOf(L, (s) => holdIndep(L, s, 1160, 1200) !== null))
         assert(narrow.some((x) => x === 0) && narrow.some((x) => x === 1), '前提:有無單者、有有單者')
         //未給訓練期之終點 ⇒ 拋錯
         assert.equal(msgOf(() => subsetMaskOf(L, parseSubsetRule('hold:1:').rules)), 'invalid opt.trainEndBar: must be a non-negative integer (required by the hold rule)')
@@ -325,7 +325,7 @@ describe('子庫之規則(parseSubsetRule、subsetMaskOf、subsetLedger)', funct
         let cnt3 = indep(1, 3).cnt
         assert(new Set(cnt3.values()).size > 1)
         assert.equal(indep(1, 3).fams.length, cnt3.size, '比例 1 ⇒ 全部家族皆去除')
-        assert.equal(subsetMaskOf(L, parseSubsetRule('side:long').rules).topFamilies, null, '無 nofam:top 者為 null')
+        assert.strictEqual(subsetMaskOf(L, parseSubsetRule('side:long').rules).topFamilies, null, '無 nofam:top 者為 null')
     })
 
     it('多條規則 = 交集(各條各自於全庫上判定,與逐條遮罩之 AND 相同)', () => {
@@ -351,7 +351,7 @@ describe('子庫之規則(parseSubsetRule、subsetMaskOf、subsetLedger)', funct
         assert.equal(S.n, keep.length)
         assert.deepEqual(S.subset, { rule: 'tp:0.02:0.06,side:long', nFull: N })
         assert(Object.isFrozen(S.subset))
-        assert.equal(S.member, undefined)
+        assert.strictEqual(S.member, undefined)
         keep.forEach((s, i) => {
             for (let k of ['mode', 'tp', 'sl', 'nKeys', 'lv', 'fitNt']) {
                 assert.equal(S[k][i], L[k][s], `${k} ${s}`)
@@ -501,7 +501,7 @@ describe('子庫之規則(parseSubsetRule、subsetMaskOf、subsetLedger)', funct
                 assert(a.out.indexOf('子庫') < a.out.indexOf('[full|'), '註明在結果之前')
             }
             let log = logOf(root)
-            assert.deepEqual(log.map((x) => [x.subset, x.member]), [[undefined, undefined], ['rand:0.5:0x5bd1e995:0', undefined], [undefined, '0x5bd1e995:0'], ['rand:0.5:0x5bd1e995:1', undefined], [undefined, '0x5bd1e995:1']])
+            assert.deepStrictEqual(log.map((x) => [x.subset, x.member]), [[undefined, undefined], ['rand:0.5:0x5bd1e995:0', undefined], [undefined, '0x5bd1e995:0'], ['rand:0.5:0x5bd1e995:1', undefined], [undefined, '0x5bd1e995:1']])
             assert(!('subset' in log[0]))
             assert.equal(log[1].selHash, log[2].selHash)
             assert.equal(log[3].selHash, log[4].selHash)
@@ -558,7 +558,7 @@ describe('子庫之規則(parseSubsetRule、subsetMaskOf、subsetLedger)', funct
                 assert.equal(r.status, 2, `${what}: ${r.out.slice(0, 300)}`)
                 assert.equal(r.out.split('\n').filter(Boolean)[0], msg, what)
                 assert(!r.out.includes('secret-token-xyz'), `${what}: 不回顯輸入值`)
-                assert.equal(r.o, null, `${what}: 不寫結果檔`)
+                assert.strictEqual(r.o, null, `${what}: 不寫結果檔`)
             }
             assert.deepEqual(logOf(root), [], '不記評估紀錄')
         })
@@ -585,7 +585,7 @@ describe('子庫之規則(parseSubsetRule、subsetMaskOf、subsetLedger)', funct
                 assert.equal(r.out.split('\n').filter(Boolean)[0], msg, what)
                 assert.equal(r.out.split('\n').filter(Boolean).length, 1, `${what}: 訊息只一行`)
                 assert(!r.out.includes('secret-token-xyz'), `${what}: 不回顯輸入值`)
-                assert.equal(r.o, null, `${what}: 不寫結果檔`)
+                assert.strictEqual(r.o, null, `${what}: 不寫結果檔`)
             }
             assert.deepEqual(logOf(root), [], '不記評估紀錄')
             //不帶等號之合格寫法照常評估(對照: 上列被拒者若被靜默忽略,離開碼會是 0)
@@ -595,7 +595,7 @@ describe('子庫之規則(parseSubsetRule、subsetMaskOf、subsetLedger)', funct
             let okM = run(root, ['--member', '1:0'])
             assert.equal(okM.status, 0, okM.out.slice(0, 300))
             assert.equal(okM.o.member.tag, '0x1:0')
-            assert.deepEqual(logOf(root).map((x) => [x.subset, x.member]), [['side:long', undefined], [undefined, '0x1:0']])
+            assert.deepStrictEqual(logOf(root).map((x) => [x.subset, x.member]), [['side:long', undefined], [undefined, '0x1:0']])
         })
 
         it('空子庫(規則使留下 0 隻):畫面於「子庫 …」一列之後另加一句警示,評估照常(離開碼 0、ok、選集恆空);留下 ≥ 1 隻者與未給 --subset 者畫面無此句', () => {

@@ -192,11 +192,11 @@ describe('評估之執行面之數字(seed、tieSalt、replicaSeeds、replicaNul
         })
 
         it('evalListsOf: 未給 ⇒ null(評估器取預設); 元素 × 每日棒數須為整數(每日 6 根者 0.5 日 = 3 根合法、0.1 日不合; 每日 1 根者 0.5 不合); horizons 之空陣列合法', () => {
-            assert.deepEqual(BG.evalListsOf({}, 6), { phases: null, horizons: null })
-            assert.deepEqual(BG.evalListsOf(undefined, 6), { phases: null, horizons: null })
+            assert.deepStrictEqual(BG.evalListsOf({}, 6), { phases: null, horizons: null })
+            assert.deepStrictEqual(BG.evalListsOf(undefined, 6), { phases: null, horizons: null })
             assert.deepEqual(BG.evalListsOf({ phases: ['0', 3], horizons: ['7', 14.5] }, 2), { phases: [0, 3], horizons: [7, 14.5] })
             assert.deepEqual(BG.evalListsOf({ phases: [0, 0.5] }, 6).phases, [0, 0.5])
-            assert.deepEqual(BG.evalListsOf({ horizons: [] }, 6), { phases: null, horizons: [] })
+            assert.deepStrictEqual(BG.evalListsOf({ horizons: [] }, 6), { phases: null, horizons: [] })
             assert.strictEqual(msgOf(() => BG.evalListsOf({ phases: [0, 0.1] }, 6, 'eval')), 'invalid eval.phases[1]: must be a non-negative number of days that is a whole number of bars')
             assert.strictEqual(msgOf(() => BG.evalListsOf({ phases: [0.5] }, 1, 'cfg')), 'invalid cfg.phases[0]: must be a non-negative number of days that is a whole number of bars')
             assert.strictEqual(msgOf(() => BG.evalListsOf({ horizons: [7, 0.5] }, 1)), 'invalid eval.horizons[1]: must be a positive number of days that is a whole number of bars')
@@ -390,7 +390,7 @@ describe('評估之執行面之數字(seed、tieSalt、replicaSeeds、replicaNul
         let accept = (sig, book) => book.open < 4
         let runExt = (fn) => {
             let m = ev.evalPolicy(pickG, { accept, ext: [{ name: 'd', fn }] })
-            assert.equal(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
+            assert.strictEqual(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
             return m
         }
         let ERR_ACT = 'invalid opt.actDays: must be a non-negative integer (0 for the cumulative entry count)'
@@ -477,7 +477,7 @@ describe('評估之執行面之數字(seed、tieSalt、replicaSeeds、replicaNul
                 return { text: 'ok' }
             }
             let m = evBig.evalPolicy(pickBig, { accept, ext: [{ name: 'd', fn }] })
-            assert.equal(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
+            assert.strictEqual(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
         })
 
         it('驗證之次序: 形狀之錯(grp、onlyGroups、onlyDecisions)先於 actDays、draws 之值之錯; actDays 先於 draws; 於「成品未分帳」之不適用情形亦先檢查(不因短路而放行)', () => {
@@ -737,7 +737,7 @@ describe('評估之執行面之數字(seed、tieSalt、replicaSeeds、replicaNul
                 let r = runBt({ seed: 20261110 }, ['--seed', sd])
                 assert.equal(r.status, 2, `${sd}: ${r.out.slice(0, 300)}`)
                 assert(r.out.split('\n').includes('invalid --seed: must be an integer'), `${sd}: ${r.out.slice(0, 300)}`)
-                assert.equal(r.o, null, `${sd}: 不寫結果檔`)
+                assert.strictEqual(r.o, null, `${sd}: 不寫結果檔`)
             }
         })
 
@@ -745,7 +745,7 @@ describe('評估之執行面之數字(seed、tieSalt、replicaSeeds、replicaNul
             let bad = runBt({ seed: 'abc' })
             assert.equal(bad.status, 2, bad.out.slice(0, 300))
             assert(bad.out.includes('ERROR invalid eval.seed: must be an integer'), bad.out.slice(0, 300))
-            assert.equal(bad.o, null, '不寫結果檔')
+            assert.strictEqual(bad.o, null, '不寫結果檔')
             let noPhases = runBt({ seed: 1, phases: undefined })
             assert.equal(noPhases.status, 0, noPhases.out.slice(0, 400))
             assert.equal(noPhases.o.op.eqYr.byPhase.length, 7, '七個相位')

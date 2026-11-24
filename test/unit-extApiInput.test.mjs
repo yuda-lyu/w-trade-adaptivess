@@ -16,7 +16,7 @@ let accept = (sig, book) => book.open < 4
 //runExt, 以一個擴充診斷跑一次完整評估; 診斷內之斷言失敗會被評估器記為 ext.<名>.error ⇒ 於此轉為測試失敗
 let runExt = (ev, fn, pk = pickG) => {
     let m = ev.evalPolicy(pk, { accept, ext: [{ name: 'd', fn }] })
-    assert.equal(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
+    assert.strictEqual(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
     return m
 }
 let errOf = (fn) => {
@@ -666,7 +666,7 @@ describe('擴充診斷 api.simulate / api.summarize / api.replaceNull 之輸入:
             //已撤銷之代理相位 ⇒ 視為非陣列(沿用成品之 tag)
             let rvTag = Proxy.revocable([], {})
             rvTag.revoke()
-            assert.equal(json(api.simulate(okA, [rvTag.proxy, []])), json(api.simulate(okA, [null, []])), 'tagsByPhase 之相位為已撤銷之代理')
+            assert.strictEqual(json(api.simulate(okA, [rvTag.proxy, []])), json(api.simulate(okA, [null, []])), 'tagsByPhase 之相位為已撤銷之代理')
             //length 為負之代理 ⇒ 無效
             let negLen = new Proxy(okA[0].slice(), {
                 get(tg, k, rc) {

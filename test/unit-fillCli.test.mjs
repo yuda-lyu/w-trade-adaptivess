@@ -275,7 +275,7 @@ describe('附算與補算之命令列:g_rsi.mjs --mode fill(規則 R-REC-34)', f
                 delete c.metrics.ms
             } return c
         }
-        assert.deepEqual(strip(JSON.parse(fs.readFileSync(FK.postfitFileOf(path.join(root, 'rsi'), id), 'utf8'))), strip(o))
+        assert.deepStrictEqual(strip(JSON.parse(fs.readFileSync(FK.postfitFileOf(path.join(root, 'rsi'), id), 'utf8'))), strip(o))
         let idx = JSON.parse(fs.readFileSync(path.join(root, 'rsi', 'picks', 'index.json'), 'utf8'))
         assert.deepEqual(idx.items[0].postfit, { ...f.postfit.row, at: f.postfit.at, current: true })
         assert(!fs.readFileSync(path.join(root, 'rsi', 'picks', 'INDEX.md'), 'utf8').includes('求解窗後段'))
@@ -400,7 +400,7 @@ describe('附算與補算之命令列:g_rsi.mjs --mode fill(規則 R-REC-34)', f
         assert(r1.out.includes('附算與補算:待算 1 個成品、現行 0 個;併行 3;'), `實際使用之併行數 = 解析後之值: ${r1.out.slice(0, 1500)}`)
         let f1 = JSON.parse(fs.readFileSync(FK.fillFileOf(rsiRoot, id), 'utf8'))
         assert.deepEqual(Object.keys(f1.ext), ['dA'], '只補 dA')
-        assert.equal(f1.postfit, null, '不算求解窗後段')
+        assert.strictEqual(f1.postfit, null, '不算求解窗後段')
         assert.equal(f1.ext.dA.key.nulls, 2, '--null 作用於評估(補算檔之鍵帶虛無抽數)')
         assert.equal(f1.ext.dA.value.text, '診斷 dA')
         assert(!fs.existsSync(FK.postfitFileOf(rsiRoot, id)))

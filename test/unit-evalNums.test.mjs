@@ -118,10 +118,10 @@ describe('影響評估之數字給了而無效即拒絕(規則 R-EV-44 ④之二
                 assert.equal(configMsgOf(new Error(m)), m)
             }
             for (let e of [new TypeError('Cannot read properties of undefined (reading \'train\')'), new Error('ENOENT: no such file'), new Error('invalid barHours: must be a positive number of hours that divides 24'), 'oops', null]) {
-                assert.equal(configMsgOf(e), null, String(e))
+                assert.strictEqual(configMsgOf(e), null, String(e))
             }
-            assert.equal(periodAt({}, 'train', 'end'), undefined)
-            assert.equal(periodAt({ periods: { train: null } }, 'train', 'end'), undefined)
+            assert.strictEqual(periodAt({}, 'train', 'end'), undefined)
+            assert.strictEqual(periodAt({ periods: { train: null } }, 'train', 'end'), undefined)
             assert.equal(periodAt({ periods: { train: { end: 'E' } } }, 'train', 'end'), 'E')
         })
     })
@@ -178,7 +178,7 @@ describe('影響評估之數字給了而無效即拒絕(規則 R-EV-44 ④之二
             assert.equal(run({ nullDraws: null }).null.draws, 5, 'null ⇒ 設定值(K3 / V5)')
             assert.equal(run({ nullDraws: '3' }).null.draws, 3, '數字字串 ⇒ 數值')
             assert.equal(run({ nullDraws: 3 }).null.draws, 3)
-            assert.equal(run({ nullDraws: 0 }).null, null, '0 ⇒ 不算虛無')
+            assert.strictEqual(run({ nullDraws: 0 }).null, null, '0 ⇒ 不算虛無')
             //p 之分母為 1 + 抽數(數字字串不得字串相接: 1 + '3' = '13')
             let m3 = run({ nullDraws: '3' })
             assert([0.25, 0.5, 0.75, 1].includes(m3.null.p), `p = (1 + ge) / (1 + 3): ${m3.null.p}`)
@@ -320,7 +320,7 @@ describe('影響評估之數字給了而無效即拒絕(規則 R-EV-44 ④之二
             assert.equal(JSON.parse(fs.readFileSync(fp, 'utf8')).metrics.null.draws, 3)
             let fp0 = path.join(root, 'n0.json')
             assert.equal(run(root, ['--pick', 'pick_all.mjs', '--mode', 'full', '--null', '0', '--out', fp0]).status, 0)
-            assert.equal(JSON.parse(fs.readFileSync(fp0, 'utf8')).metrics.null, null, '--null 0 ⇒ 不算虛無')
+            assert.strictEqual(JSON.parse(fs.readFileSync(fp0, 'utf8')).metrics.null, null, '--null 0 ⇒ 不算虛無')
             //--period postfit 須有虛無: 設定之 nullDraws 無效 ⇒ 同樣拒絕(離開碼 2), 不以 TypeError 結束
             let rootP = mkProj('nullArgPostfit', (s) => {
                 s.eval.nullDraws = 'x'

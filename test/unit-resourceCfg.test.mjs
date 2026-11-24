@@ -94,10 +94,10 @@ describe('settings.resources.* 之單一解讀(R-EV-55)', function () {
 
         it('預設: 迴圈側 cpuStart / ramStartGB 未給 ⇒ 交資源閘之預設(cpuMax − 15、ramUsedMaxGB − 8); 評估層 cpuStart 未給 ⇒ cpuMax − 5(最低 1)、maxWaitSec 未給 ⇒ 90; 評估層之 ramStartGB 同迴圈側', () => {
             let r = resourceCfgOf({ cpuMax: 70, ramUsedMaxGB: 110 })
-            assert.deepEqual(r.loopGate, { cpuMax: 70, ramUsedMaxGB: 110, cpuStart: null, ramStartGB: null, sampleSec: null, pollSec: null, maxWaitSec: null })
-            assert.deepEqual(r.evalGate, { cpuMax: 70, ramUsedMaxGB: 110, cpuStart: 65, ramStartGB: null, maxWaitSec: 90 })
+            assert.deepStrictEqual(r.loopGate, { cpuMax: 70, ramUsedMaxGB: 110, cpuStart: null, ramStartGB: null, sampleSec: null, pollSec: null, maxWaitSec: null })
+            assert.deepStrictEqual(r.evalGate, { cpuMax: 70, ramUsedMaxGB: 110, cpuStart: 65, ramStartGB: null, maxWaitSec: 90 })
             assert.equal(resourceCfgOf({ cpuMax: 3 }).evalGate.cpuStart, 1, 'cpuMax − 5 最低 1')
-            assert.equal(resourceCfgOf({ ramUsedMaxGB: 50 }).evalGate.cpuStart, null, '無 cpuMax 且無 evalCpuStart ⇒ null')
+            assert.strictEqual(resourceCfgOf({ ramUsedMaxGB: 50 }).evalGate.cpuStart, null, '無 cpuMax 且無 evalCpuStart ⇒ null')
             //evalCpuStart 無效 ⇒ 回到 cpuMax − 5
             assert.equal(resourceCfgOf({ cpuMax: 70, evalCpuStart: 'abc' }).evalGate.cpuStart, 65)
             //evalMaxWaitSec 無效或超出 ⇒ 90; 0 ⇒ 0(不等待)
@@ -144,7 +144,7 @@ describe('settings.resources.* 之單一解讀(R-EV-55)', function () {
             assert.deepEqual(c.monitor.stats().limits, { cpuMax: 80, ramUsedMaxGB: 100, cpuStart: 65, ramStartGB: 92 })
             //無效之鍵 ⇒ 未給(cpuMax 無效 ⇒ 無上限、cpuStart 無預設): 其餘之鍵照用
             let d = mkP({ cpuMax: 'abc', ramUsedMaxGB: '100', cpuStart: true })
-            assert.deepEqual(d.monitor.stats().limits, { cpuMax: null, ramUsedMaxGB: 100, cpuStart: null, ramStartGB: 92 })
+            assert.deepStrictEqual(d.monitor.stats().limits, { cpuMax: null, ramUsedMaxGB: 100, cpuStart: null, ramStartGB: 92 })
         })
 
         it('資源閘之等待上限與間隔取同一口徑: maxWaitSec 數字字串 ⇒ 轉數值(0 = 立即放行並記 forced); sampleSec、pollSec 無效 ⇒ 預設(取樣於 start 事件可觀察)', async () => {

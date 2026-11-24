@@ -436,7 +436,7 @@ describe('命令列旗標之等號寫法(排程第 590 項)', function () {
                 let r = run(entry, args)
                 let v = CLI_FLAGS[entry][name]
                 assert.strictEqual(r.status, 2, `${entry} ${args.join(' ')}: ${r.out.join('|').slice(0, 200)}`)
-                assert.deepEqual(r.out, [v === null ? `invalid --${name}: must be written as --${name} alone (a flag without a value, not =)` : `invalid --${name}: must be written as --${name} ${v} (a space, not =)`])
+                assert.deepStrictEqual(r.out, [v === null ? `invalid --${name}: must be written as --${name} alone (a flag without a value, not =)` : `invalid --${name}: must be written as --${name} ${v} (a space, not =)`])
             }
             assert.deepEqual(fs.readdirSync(root).sort(), before, '未建任何檔或夾(帳本夾、狀態根、日誌夾)')
         })

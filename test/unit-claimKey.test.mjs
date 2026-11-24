@@ -75,7 +75,7 @@ describe('驗證類方向之主張鍵(規則 R-REC-24):同臂同起點而主張�
         let t0 = P.taskFor(s0, 2)
         assert.deepEqual([t1.type, t1.claim, t1.direction.rationale], ['verify', c1, 'r1'])
         assert.deepEqual([t2.type, t2.claim, t2.direction.rationale], ['verify', c2, 'r2'])
-        assert.deepEqual([t0.type, t0.claim, t0.direction.rationale], ['explore', null, 'r3'])
+        assert.deepStrictEqual([t0.type, t0.claim, t0.direction.rationale], ['explore', null, 'r3'])
     })
 
     it('方向入前緣之去重:驗證類含主張 —— 同臂同起點而主張不同者皆入前緣且規格各異;主張相同者略過;探索類維持「臂 + 起點」;鍵隨回傳值記錄', () => {
@@ -90,12 +90,12 @@ describe('驗證類方向之主張鍵(規則 R-REC-24):同臂同起點而主張�
         assert.deepEqual([r1.ok, r1.note, r2.ok, r2.note], [true, '已入前緣', true, '已入前緣'])
         assert(/^[0-9a-f]{8}$/.test(r1.claimKey) && /^[0-9a-f]{8}$/.test(r2.claimKey) && r1.claimKey !== r2.claimKey && r1.nodeId !== r2.nodeId)
         assert.deepEqual([r3.ok, r3.note, r3.claimKey, r3.nodeId], [false, '前緣已有同規格', r1.claimKey, r1.nodeId], '主張相同(頭尾空白不計)⇒ 同規格而略過')
-        assert.deepEqual([rx.ok, rx.note, rx.claimKey], [true, '已入前緣', undefined], '探索類不帶鍵, 與同臂同起點之驗證並存')
+        assert.deepStrictEqual([rx.ok, rx.note, rx.claimKey], [true, '已入前緣', undefined], '探索類不帶鍵, 與同臂同起點之驗證並存')
         assert.deepEqual([rx2.ok, rx2.note], [false, '前緣已有同規格'], '探索類仍以臂 + 起點去重')
         let specs = P.rsi.store.listFrontier().filter((f) => f.status === 'proposed' && f.spec.arms.join('+') === a3.join('+')).map((f) => f.spec.claim || null).sort()
-        assert.deepEqual(specs, [null, r1.claimKey, r2.claimKey].sort())
+        assert.deepStrictEqual(specs, [null, r1.claimKey, r2.claimKey].sort())
         //驗證類而無主張者(不合任務書, 但規格容許)不帶鍵
-        assert.equal(P.proposeDirection({ type: 'verify', arms: ['A01_nt', 'B16_perTradeQuality'], base: null, claim: '  ', rationale: 'r' }, 5).claimKey, undefined)
+        assert.strictEqual(P.proposeDirection({ type: 'verify', arms: ['A01_nt', 'B16_perTradeQuality'], base: null, claim: '  ', rationale: 'r' }, 5).claimKey, undefined)
         assert.equal(P.closeFrontier({ arms: a3, why: '測試收尾' }), 3)
         //已結案之同規格提案(改掛後之舊項、主控結案)不擋其後之同規格方向: 重開而非當成重複(例: 暫掛之寬臂組合與上一輪改掛掉之舊項同規格)
         let again = P.proposeDirection({ type: 'explore', arms: a3, base: null, rationale: '再提' }, 6)
@@ -134,7 +134,7 @@ describe('驗證類方向之主張鍵(規則 R-REC-24):同臂同起點而主張�
         assert(r1c.ok === false && r1c.claimKey === r1.claimKey && r1c.nodeId === r1.nodeId && r1c.note.includes('依據相同之探索') && r1c.note.includes(r1.nodeId.slice(0, 8)), JSON.stringify(r1c))
         //無依據文字者無從產生鍵 ⇒ 照舊回「同規格之節點已存在」
         let r4 = P.proposeDirection({ type: 'explore', arms: a4, base: null, rationale: '   ' }, 8)
-        assert.deepEqual([r4.ok, r4.claimKey], [false, undefined])
+        assert.deepStrictEqual([r4.ok, r4.claimKey], [false, undefined])
         assert(r4.note.includes('同規格之節點已存在') && r4.note.includes(id0.slice(0, 8)), r4.note)
         //驗證類不走此路(有主張者以主張鍵區分; 無主張而相撞者照舊略過)
         let r5 = P.proposeDirection({ type: 'verify', arms: a4, base: null, claim: ' ', rationale: '驗證而無主張' }, 8)
@@ -142,7 +142,7 @@ describe('驗證類方向之主張鍵(規則 R-REC-24):同臂同起點而主張�
         //未與既有節點相撞之探索: 規格不帶鍵(既有形式不變)
         let a5 = ['A01_nt', 'B16_perTradeQuality', 'C23_recent365']
         let r6 = P.proposeDirection({ type: 'explore', arms: a5, base: null, rationale: '未相撞' }, 8)
-        assert.deepEqual([r6.ok, r6.note, r6.claimKey], [true, '已入前緣', undefined])
+        assert.deepStrictEqual([r6.ok, r6.note, r6.claimKey], [true, '已入前緣', undefined])
         assert(P.rsi.store.listFrontier().filter((f) => f.status === 'proposed' && f.spec.arms.join('+') === a5.join('+')).every((f) => f.spec.claim === undefined), '未相撞者之規格不帶鍵')
         //帶鍵之規格: 來源方向以 harness.applied.proposals 之 claimKey 對應 ⇒ 類型為探索、無主張; 不帶鍵之同臂規格(既有節點)不對到它
         P.records.putDreamDoc({
@@ -157,7 +157,7 @@ describe('驗證類方向之主張鍵(規則 R-REC-24):同臂同起點而主張�
             harness: { applied: { accepted: [], rework: [], deleted: [], proposals: [{ arms: a4, base: null, ...r1 }], skipped: [] } },
         })
         let tk = P.taskFor(f1.spec, 8)
-        assert.deepEqual([tk.type, tk.claim, tk.direction.rationale, tk.direction.round, tk.direction.claimKey], ['explore', null, '機制甲:另一種量', 7, r1.claimKey])
+        assert.deepStrictEqual([tk.type, tk.claim, tk.direction.rationale, tk.direction.round, tk.direction.claimKey], ['explore', null, '機制甲:另一種量', 7, r1.claimKey])
         assert.equal(P.typeOf(f1.spec), 'explore')
         assert(!P.taskFor(s0, 8).direction, '不帶鍵之既有節點之規格不對到帶鍵之方向')
         assert.equal(P.closeFrontier({ arms: a4, why: '測試收尾' }), 2)
@@ -184,11 +184,11 @@ describe('驗證類方向之主張鍵(規則 R-REC-24):同臂同起點而主張�
         //(2) 帶鍵之節點已執行(同一依據之鍵與臂組合無關; 例: 帶鍵之方向改掛到另一臂組合後執行)而該臂組合之不帶鍵之規格未被占用 ⇒ 同一依據重提仍略過(不得另產生不帶鍵之節點); 依據不同者照常不帶鍵入前緣
         let mk = q2.claimKey
         putExecuted({ arms: a7, base: null, claim: mk }, 4)
-        assert.equal(P.rsi.store.getNode(P.idOf({ arms: a7, base: null })), null, '前置: 不帶鍵之規格未被占用')
+        assert.strictEqual(P.rsi.store.getNode(P.idOf({ arms: a7, base: null })), null, '前置: 不帶鍵之規格未被占用')
         let q3 = P.proposeDirection({ type: 'explore', arms: a7, base: null, rationale: '另一種機制' }, 9)
         assert(q3.ok === false && q3.claimKey === mk && q3.nodeId === P.idOf({ arms: a7, base: null, claim: mk }) && q3.note.includes('依據相同之探索'), JSON.stringify(q3))
         let q4 = P.proposeDirection({ type: 'explore', arms: a7, base: null, rationale: '再一種機制' }, 9)
-        assert.deepEqual([q4.ok, q4.note, q4.claimKey], [true, '已入前緣', undefined], '依據不同 ⇒ 不帶鍵入前緣')
+        assert.deepStrictEqual([q4.ok, q4.note, q4.claimKey], [true, '已入前緣', undefined], '依據不同 ⇒ 不帶鍵入前緣')
         //同臂組合之既有節點為帶鍵者之重提: 同一依據 ⇒ 略過
         putExecuted({ ...s6, claim: mk }, 5)
         let q5 = P.proposeDirection({ type: 'explore', arms: a6, base: null, rationale: '另一種機制' }, 11)

@@ -19,7 +19,7 @@ describe('archiveDocs:專案指引文件之自動整理', function () {
         let body = (n) => `${n}. **〔通用〕標題${n}**(2026-11-12;r00x): ${'內文'.repeat(120)}`
         let mk = () => ['# 經驗', '', '> 說明', '', '## 主代理(建置期)', '', body(1), body(2), '', '## 做夢 agent(r001)', '', body(3), body(4), '', '## 做夢 agent(r002)', '', body(5), '', '## 做夢 agent(r003)', '', body(6), ''].join('\n')
         fs.writeFileSync(fp, mk(), 'utf8')
-        assert.equal(archiveExperience({ fp, maxBytes: 1e6 }), null)
+        assert.strictEqual(archiveExperience({ fp, maxBytes: 1e6 }), null)
         let r = archiveExperience({ fp, maxBytes: 2000, keepBytes: 2500, keepSections: 2, date: new Date(2026, 10, 12) })
         assert.deepEqual([r.moved, r.from, r.to, r.file], [4, 1, 4, 'experience_20261112.md'])
         let main = fs.readFileSync(fp, 'utf8')
@@ -35,14 +35,14 @@ describe('archiveDocs:專案指引文件之自動整理', function () {
         let main2 = fs.readFileSync(fp, 'utf8')
         assert.equal(main2.split('## 已抽出之舊經驗').length - 1, 1)
         assert(main2.includes('  - 1. 〔通用〕標題1') && main2.includes('  - 5. 〔通用〕標題5') && main2.includes(body(6)) && main2.includes(body(7)) && !main2.includes(body(5)))
-        assert.equal(archiveExperience({ fp, maxBytes: 100, keepBytes: 100, keepSections: 2 }), null, '只剩應保留之節時不再搬')
+        assert.strictEqual(archiveExperience({ fp, maxBytes: 100, keepBytes: 100, keepSections: 2 }), null, '只剩應保留之節時不再搬')
     })
 
     it('回饋檔:逾上限時保留表頭與最後數列,其餘搬出(帶同一表頭);檔頭加註去處', () => {
         let fp = path.join(t.dir, 'feedback.md')
         let row = (i) => `| 2026-11-12 | 類別 | 對象${i} | ${'內容'.repeat(60)} | 依據 |`
         fs.writeFileSync(fp, ['# 回饋', '', '> 說明', '', '| 日期 | 類別 | 對象 | 內容 | 依據 |', '|---|---|---|---|---|', ...Array.from({ length: 10 }, (_, i) => row(i + 1)), ''].join('\n'), 'utf8')
-        assert.equal(archiveFeedback({ fp, maxBytes: 1e6 }), null)
+        assert.strictEqual(archiveFeedback({ fp, maxBytes: 1e6 }), null)
         let r = archiveFeedback({ fp, maxBytes: 1000, keepRows: 3, date: new Date(2026, 10, 12) })
         assert.deepEqual([r.moved, r.file], [7, 'feedback_20261112.md'])
         let main = fs.readFileSync(fp, 'utf8')

@@ -207,7 +207,13 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
                 assert.equal(t.split(ITEM1_OLD).length - 1, 0, '審計規程第 1 點之原句不殘留')
                 return t.split(SUM_NEW).join(SUM_OLD).split(ITEM8_ADD).join('').split(ITEM1_NEW).join(ITEM1_OLD)
             }
-            let sha = (s0, nFill) => {
+            //擴建一節之 api 列舉之句併入 stat(規則 R-EV-59; 只在有共用工具區時出現): 雜湊取「把該句換回改前之原文 STAT_OLD」之後之全文 ⇒ 其餘文字仍與釘死之值逐字相同; 新句出現次數 = 有共用工具區者 1、無者 0, 原句不殘留
+            let STAT_OLD = '`market` / `factor` / `series` 取某棒以前之行情、因子、外部序列之值'
+            let STAT_NEW = '`market` / `factor` / `series` / `stat` 取某棒以前之行情、因子、外部序列、各策略之進出場統計之值'
+            let sha = (s00, nFill) => {
+                assert.equal(s00.split(STAT_NEW).length - 1, nFill, 'stat 併入之句之出現次數')
+                assert.equal(s00.split(STAT_OLD).length - 1, 0, '改前之句不殘留')
+                let s0 = s00.split(STAT_NEW).join(STAT_OLD)
                 let s = revertSuspect(s0)
                 let ls = s.split('\n')
                 assert.equal(ls.filter((x) => x === PRE_CHECK).length, 1, '新增之一句恰出現一次')
@@ -304,9 +310,9 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
             let { P, calls } = mk()
             let hk = await P.domain.hooks.afterRound({ round: 1, nodes: [] })
             assert.equal(calls.dream, 0)
-            assert.equal(hk.dream, null)
+            assert.strictEqual(hk.dream, null)
             assert.deepEqual(hk.lines, ['代理式做夢:本輪無可審計之節點,略過'])
-            assert.equal(P.records.getDreamDoc(1), null)
+            assert.strictEqual(P.records.getDreamDoc(1), null)
         })
 
         it('已要求:0 個節點仍派做夢一次;任務書含要求之原文;做夢文件記 scope.request、審計 0;方向入前緣;回傳帶 dreamOnly;要求取用即清除', async () => {
@@ -327,8 +333,8 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
             //要求只對一次鉤子有效
             let hk2 = await P.domain.hooks.afterRound({ round: 2, nodes: [] })
             assert.equal(calls.dream, 1, '第二次未再派做夢')
-            assert.equal(hk2.dream, null)
-            assert.equal(P.pendingDream(), null, '只做夢輪次不被當成「做夢未交付」')
+            assert.strictEqual(hk2.dream, null)
+            assert.strictEqual(P.pendingDream(), null, '只做夢輪次不被當成「做夢未交付」')
         })
 
         it('要求之文字含 Windows 換行(\\r\\n):摘要首列不帶 \\r、任務書逐行引用不帶 \\r、做夢文件之要求併為一行;首行逾 160 字者截斷', async () => {
@@ -364,7 +370,7 @@ describe('只做夢輪次與前緣為空(R-RUN-9)', function () {
             }
             let hk = await P.domain.hooks.afterRound({ round: 1, nodes: [] })
             assert.equal(calls.dream, 0, '拋錯者未登記')
-            assert.equal(hk.dream, null)
+            assert.strictEqual(hk.dream, null)
             assert.deepEqual(P.pendingReauditIds(), [])
             P.setState({ pendingReaudit: ['nonexistent0000000000'] })
             assert.deepEqual(P.pendingReauditIds(), [], '不在樹上者不計')
@@ -601,16 +607,16 @@ module.exports = {
             let r = runCli(dir, ['--mode', 'round'])
             assert.equal(r.status, 0, r.out)
             assert.deepEqual(r.events.map((e) => e.event), ['run-start', 'round-done', 'run-done'], r.out)
-            assert.equal(r.events[2].reason, undefined)
+            assert.strictEqual(r.events[2].reason, undefined)
             assert.deepEqual(roundDirs(dir), ['r001'])
             assert(r.calls.some((c) => c.fn === 'dispatchOpencode'), JSON.stringify(r.calls))
-            assert.equal(r.events[1].dreamOnly, undefined)
-            assert.equal(r.events[0].dreamOnly, undefined)
+            assert.strictEqual(r.events[1].dreamOnly, undefined)
+            assert.strictEqual(r.events[0].dreamOnly, undefined)
             let stt = JSON.parse(fs.readFileSync(path.join(dir, 'rsi', 'STATUS.json'), 'utf8'))
             assert.equal('dreamOnly' in stt, false, '一般輪次之狀態檔不帶 dreamOnly 鍵(與改前逐位相同之鍵集)')
             assert(!/只做夢輪次\(主控要求\)/.test(r.out), '一般輪次之開始日誌不標只做夢')
             let R = JSON.parse(fs.readFileSync(path.join(dir, 'rsi', 'rounds', 'r001', 'ROUND.json'), 'utf8'))
-            assert.equal(R.dreamOnly, undefined, '一般輪次之 ROUND.json 不帶 dreamOnly')
+            assert.strictEqual(R.dreamOnly, undefined, '一般輪次之 ROUND.json 不帶 dreamOnly')
             let digest = fs.readFileSync(path.join(dir, 'rsi', 'rounds', 'r001', 'DIGEST.md'), 'utf8')
             assert(digest.includes('## 一眼看完') && !digest.includes('只做夢輪次'), '一般輪次之一頁摘要照常產生、不列只做夢')
         })
@@ -687,7 +693,7 @@ module.exports = {
             assert.equal(r.status, 0, r.out)
             let evs = r.events.slice(r0.events.length)
             assert.deepEqual(evs.map((e) => e.event), ['run-start', 'round-done', 'run-done'], r.out)
-            assert.equal(evs[2].reason, undefined)
+            assert.strictEqual(evs[2].reason, undefined)
             assert.deepEqual(roundDirs(dir), ['r001'])
             assert(r.calls.some((c) => c.fn === 'dispatchOpencode'), '回收後重新計畫、派了節點:' + JSON.stringify(r.calls))
         })
@@ -728,7 +734,7 @@ module.exports = {
             assert.deepEqual([r.events[0].dreamOnly, r.events[0].rounds], [true, 1], '只跑 1 輪(--rounds 不採)')
             let rd = r.events[1]
             assert.deepEqual([rd.round, rd.ok, rd.dreamOnly, rd.nExecuted, rd.hookFailed], [1, true, true, 0, false], JSON.stringify(rd))
-            assert.deepEqual([r.events[2].rounds, r.events[2].stopped, r.events[2].reason], [1, null, undefined])
+            assert.deepStrictEqual([r.events[2].rounds, r.events[2].stopped, r.events[2].reason], [1, null, undefined])
             let R = JSON.parse(fs.readFileSync(path.join(dir, 'rsi', 'rounds', 'r001', 'ROUND.json'), 'utf8'))
             assert.deepEqual(R.dreamOnly, { why: '成員重抽之重放已可用\n請重審現有各變體' })
             assert.equal(R.hook.lines[0], '只做夢輪次(主控要求;本輪無節點、審計 0):成員重抽之重放已可用')

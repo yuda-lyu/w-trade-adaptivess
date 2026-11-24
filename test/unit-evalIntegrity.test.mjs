@@ -424,7 +424,7 @@ describe('evalCore 內建物件之完整性(R-EV-35 ②):被改即評估失敗(E
             throw new TypeError('自己拋')
         }, 0))
         assert.equal(String(err2), 'TypeError: 自己拋')
-        assert.equal(err2.code, undefined)
+        assert.strictEqual(err2.code, undefined)
     })
 
     it('runPick 開始前內建物件已被改(例: 模組之延後程式)⇒ 先拋 EVAL_INTEGRITY, 不執行評估器之一般程式', () => {
@@ -821,12 +821,14 @@ describe('evalCore 內建物件之完整性(R-EV-35 ②):被改即評估失敗(E
         assert(err.items.includes('Array.prototype.[Symbol(Symbol.iterator)]'), err.message)
     })
 
-    it('擴充診斷之 api.market / api.factor / api.series 於內建物件被改時與既有之 api 函數(geoGroups)一致:入口比對 ⇒ 該次呼叫拋 EVAL_INTEGRITY(where = ext)、替身未被呼叫、bar 之判定(iseint)於比對之後才執行;診斷攔下並改回者該次評估仍失敗', () => {
+    it('擴充診斷之 api.market / api.factor / api.series / api.stat 於內建物件被改時與既有之 api 函數(geoGroups)一致:入口比對 ⇒ 該次呼叫拋 EVAL_INTEGRITY(where = ext)、替身未被呼叫、bar 之判定(iseint)於比對之後才執行;診斷攔下並改回者該次評估仍失敗', () => {
         //R-EV-36 / R-EV-35 ②: 三個新介面經 apiFn / guardExt 包裝(同既有之 api 函數); 內建物件被改 ⇒ 入口比對即拋, 不執行其下之一般寫法(含 wsemi 之 iseint: bar 以數字字串給, 其判定經 String.prototype.trim 與 RegExp.prototype.test)
+        //R-EV-59: api.stat 同此寫法(days 以數字給, 其正規化經 Math.round 與 Number.isFinite)
         let calls = {
             market: (api) => api.market('12', 5),
             factor: (api) => api.factor(1, '12', 5),
             series: (api) => api.series('a', '12', 5),
+            stat: (api) => api.stat('12', 5),
             geoGroups: (api) => api.geoGroups(3, 3),
         }
         let targets = [
@@ -866,8 +868,45 @@ describe('evalCore 內建物件之完整性(R-EV-35 ②):被改即評估失敗(E
             }
         }
         //未被改時照常
-        let m = ev.evalPolicy(ids, { phases: [0], nullDraws: 0, ext: [{ name: 'ok', fn: (api) => ({ m: api.market('12', 5).close.length, f: api.factor(1, '12', 5).length, s: api.series('a', '12', 5).length }) }] })
-        assert.deepEqual([m.ext.ok.m, m.ext.ok.f, m.ext.ok.s], [5, 5, 5])
+        let m = ev.evalPolicy(ids, { phases: [0], nullDraws: 0, ext: [{ name: 'ok', fn: (api) => ({ m: api.market('12', 5).close.length, f: api.factor(1, '12', 5).length, s: api.series('a', '12', 5).length, st: api.stat('12', 5).entries.length }) }] })
+        assert.deepEqual([m.ext.ok.m, m.ext.ok.f, m.ext.ok.s, m.ext.ok.st], [5, 5, 5, L.n])
+    })
+
+    it('擴充診斷之 api.stat 之 days 於呼叫中(其 valueOf)改內建物件:該次回傳仍正確(只用擷取之參照,替身未被呼叫)、評估以 EVAL_INTEGRITY 失敗;物件型之 days 為全部歷史(同 ctx.stat 之慣例)', () => {
+        //R-EV-59 / R-EV-35 ②: 共用之取值(statKeyOf / statAt / statCursorsAt)只用擷取之參照(MathRound、NumberIsFinite、定型陣列之建構子等); 改而不改回者於其後之比對偵測到
+        let fired = Object.create(null)
+        let got = null
+        let ref = null
+        let err = keep([[Math, 'round'], [Number, 'isFinite']], () => integrityOf(() => ev.evalPolicy(ids, {
+            phases: [0],
+            nullDraws: 0,
+            ext: [{
+                name: 'x',
+                fn: (api) => {
+                    ref = api.stat(700)
+                    let days = {
+                        valueOf() {
+                            let stub = function () {
+                                fired.roundFinite = true
+                                throw new Error('替身被呼叫')
+                            }
+                            Math.round = stub
+                            Number.isFinite = stub
+                            return 3
+                        },
+                    }
+                    got = api.stat(700, days)
+                    return { text: 'x' }
+                },
+            }],
+        })))
+        assert.equal(err && err.code, 'EVAL_INTEGRITY', String(err))
+        assert.equal(err.where, 'ext')
+        assert(err.items.includes('Math.round') && err.items.includes('Number.isFinite'), err.message)
+        assert.deepEqual(Object.keys(fired), [], '替身未被呼叫')
+        let KS = ['closed', 'wins', 'pnl', 'entries', 'open', 'lastEntryAgo']
+        assert(got && ref && KS.every((k) => got[k].length === L.n && Buffer.compare(Buffer.from(got[k].buffer), Buffer.from(ref[k].buffer)) === 0), '該次回傳與未被改者(全部歷史)相同')
+        assert(Array.from(ref.entries).some((v) => v > 0), '鑑別前提: 所取之棒有進場')
     })
 
     it('擴充診斷之 api.market 之 nBack 於呼叫中(其 valueOf)改內建物件:該次回傳仍正確(只用擷取之參照,替身未被呼叫)、評估以 EVAL_INTEGRITY 失敗;api.factor / api.series 之物件型 nBack 不被呼叫任何方法(同 ctx 之慣例)', () => {

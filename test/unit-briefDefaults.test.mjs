@@ -1,6 +1,7 @@
 import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
+import { pathToFileURL } from 'url'
 import { getSettings } from '../src/cfg.mjs'
 import { makeTexts } from '../src/domain/texts.mjs'
 import { makeProject } from '../src/domain/domain.mjs'
@@ -227,5 +228,132 @@ describe('任務書之舊預設(規則 R-REC-55)', function () {
         assert.equal(renderContract(ref, { barHours: 4, settings: st }), ref, '參考設定與每根 4 小時 ⇒ 逐字相同')
         let ex = fs.readFileSync(path.join(FD_ROOT, 'examples', 'pick_example.mjs'), 'utf8')
         assert(ex.includes('    return sig.mode === 1 ? book.openLong < 25 : book.openShort < 25') && !ex.includes('book.open < 30'))
+    })
+
+    //範例之 pick 為〔機制〕之寫法(排程第 616 項案一; 合約 §5「判讀名詞」之形式): 逐策略之入選條件、兩側各有自己之條件、入選隻數是結果(可多可少可為零); 不取名次、分位、前 K、固定席數
+    //  規格之句 ⇒ 案: 「逐策略之入選條件」= 行為案(改變他隻策略之量不改變某隻之入選); 「兩側各有自己之條件」= meta.params 之 long / short 各有 minAvgPnl 與 minWinRate、pick 依 ctx.meta.mode 取對應之側、各門檻 ± 邊界;
+    //  「入選隻數是結果」= 同一份 pick 於不同之輸入得 0 隻 / 全部 / 中間; 「不含取前 K 之寫法」= pick 本文無 .sort( .slice( .splice( .reverse( 與 take / top / rank / quantile 等字樣; 「檔頭註明」= 四句要點
+    describe('範例之 pick 為〔機制〕之寫法(第 616 項案一)', () => {
+        let exFile = path.join(FD_ROOT, 'examples', 'pick_example.mjs')
+        let exSrc = fs.readFileSync(exFile, 'utf8')
+        let pickSrc = exSrc.slice(exSrc.indexOf('export default function pick'), exSrc.indexOf('export function accept'))
+        let M = null
+        before(async () => {
+            M = await import(`${pathToFileURL(exFile).href}?e616`)
+        })
+        //ctx 之替身: n 隻, 各隻之 closed / wins / pnl 與方向(mode); 各欄之值逐隻相異
+        //  log 給了則記下 ctx.stat 之 days 引數(核對 pick 以 meta.params.lookbackDays 取統計, 不寫死他值)
+        let ctxOf = (rows, log = null) => ({
+            n: rows.length,
+            stat: (d) => {
+                if (log) {
+                    log.push(d)
+                }
+                return { closed: rows.map((r) => r.c), wins: rows.map((r) => r.w), pnl: rows.map((r) => r.p) }
+            },
+            meta: { mode: rows.map((r) => r.m) },
+        })
+
+        it('pick 本文不含取前 K / 名次 / 分位 / 固定席數之寫法;meta.params 兩側各有 minAvgPnl、minWinRate(兩側之值不同)與共同之 lookbackDays、minClosed;pick 依 ctx.meta.mode 取該側之條件', () => {
+            assert.ok(pickSrc.length > 100 && pickSrc.includes('ctx.stat(') && pickSrc.includes('return'), '取到 pick 之本文(防空)')
+            for (let w of ['.sort(', '.slice(', '.splice(', '.reverse(', 'toSorted', 'toSpliced', 'take', 'top', 'rank', 'quantile', 'percentile', 'K =', 'Math.floor(ctx.n']) {
+                assert.ok(!pickSrc.includes(w), `pick 不應含 ${w}`)
+            }
+            let p = M.meta.params
+            assert.ok(Number.isFinite(p.lookbackDays) && Number.isFinite(p.minClosed), '共同之回看日數與最少已結單數')
+            for (let side of ['long', 'short']) {
+                assert.ok(Number.isFinite(p[side].minAvgPnl) && Number.isFinite(p[side].minWinRate), `${side} 之條件`)
+            }
+            assert.ok(p.long.minAvgPnl !== p.short.minAvgPnl || p.long.minWinRate !== p.short.minWinRate, '兩側各有自己之條件(值不同)')
+            assert.ok(/mode\[s\]\s*===\s*1\s*\?\s*cfg\.long\s*:\s*cfg\.short/.test(pickSrc), 'pick 依 ctx.meta.mode 取該側之條件')
+            //檔頭註明: 入選隻數是結果(可多可少可為零)、真庫須以條件之鬆緊與 accept 之上限使月均單與持倉在硬限制內、門檻為示範值
+            let head = exSrc.slice(0, exSrc.indexOf('export const meta'))
+            for (let w of ['〔機制〕', '入選隻數與多空組成是結果', '可多、可少、可為零', '條件之鬆緊與 accept 之上限', '月均單 ≤ 400、最大同時持倉 ≤ 50', '為示範值']) {
+                assert.ok(head.includes(w), `檔頭應註明: ${w}`)
+            }
+        })
+
+        it('逐策略之入選條件:各側之門檻 ± 邊界(已結單、每單平均損益、勝率各單獨移動一格);改變他隻策略之量不改變某隻之入選;入選隻數是結果(0 隻、全部、中間皆可)', () => {
+            let p = M.meta.params
+            let L = p.long
+            let S = p.short
+            //基準列: 恰達門檻者入選(含等號)
+            let base = (m) => {
+                let side = m === 1 ? L : S
+                return { m, c: 20, w: 20 * side.minWinRate, p: 20 * side.minAvgPnl }
+            }
+            let at = (row) => M.default(ctxOf([row])).length === 1
+            for (let m of [1, -1]) {
+                let side = m === 1 ? L : S
+                assert.equal(at(base(m)), true, `方向 ${m}: 恰達門檻者入選`)
+                assert.equal(at({ ...base(m), c: p.minClosed - 1, w: (p.minClosed - 1) * side.minWinRate, p: (p.minClosed - 1) * side.minAvgPnl }), false, `方向 ${m}: 已結單不足者不入選`)
+                assert.equal(at({ ...base(m), c: p.minClosed, w: p.minClosed * side.minWinRate, p: p.minClosed * side.minAvgPnl }), true, `方向 ${m}: 已結單恰達下限者入選`)
+                assert.equal(at({ ...base(m), p: 20 * side.minAvgPnl - 0.01 }), false, `方向 ${m}: 每單平均損益差一格者不入選`)
+                assert.equal(at({ ...base(m), w: 20 * side.minWinRate - 0.01 }), false, `方向 ${m}: 勝率差一格者不入選`)
+            }
+            //兩側各有自己之條件: 做多之門檻值對做空不夠(或反之), 同一組量於兩側結果不同
+            //  取兩側各量之較寬者: 該列恰達較寬一側之門檻、不達較嚴一側之門檻 ⇒ 同一組量於兩側之結果由各側之條件決定
+            let mn = { c: 20, w: 20 * Math.min(L.minWinRate, S.minWinRate), p: 20 * Math.min(L.minAvgPnl, S.minAvgPnl) }
+            assert.equal(at({ ...mn, m: 1 }), L.minAvgPnl <= S.minAvgPnl && L.minWinRate <= S.minWinRate, '做多側之條件')
+            assert.equal(at({ ...mn, m: -1 }), S.minAvgPnl <= L.minAvgPnl && S.minWinRate <= L.minWinRate, '做空側之條件')
+            assert.notEqual(at({ ...mn, m: 1 }), at({ ...mn, m: -1 }), '示範值使同一組量於兩側結果不同(防兩側條件相同)')
+            //逐策略: 改變他隻之量不改變某隻之入選(各隻之量逐隻相異)
+            let rows = []
+            for (let i = 0; i < 9; i++) {
+                let m = i % 2 === 0 ? 1 : -1
+                let side = m === 1 ? L : S
+                rows.push({ m, c: 8 + i, w: (8 + i) * (side.minWinRate + (i % 3 === 0 ? 0.07 : -0.03)), p: (8 + i) * (side.minAvgPnl + (i % 3 === 0 ? 0.05 : -0.02)) })
+            }
+            let ids = M.default(ctxOf(rows))
+            assert.ok(ids.length > 0 && ids.length < rows.length, '中間(非 0、非全部)')
+            for (let k = 0; k < rows.length; k++) {
+                let others = rows.map((r, i) => (i === k ? r : { ...r, c: r.c + 3 * (i + 1), w: 0, p: -50 - i }))
+                assert.equal(M.default(ctxOf(others)).includes(k), ids.includes(k), `第 ${k} 隻之入選不受他隻之量影響`)
+            }
+            //入選隻數是結果: 全不達 ⇒ 0 隻(空陣列); 全達 ⇒ 全部
+            assert.deepEqual(M.default(ctxOf(rows.map((r) => ({ ...r, c: 1 })))), [])
+            assert.deepEqual(M.default(ctxOf(rows.map((r) => ({ ...r, c: 30, w: 30, p: 300 })))), rows.map((r, i) => i))
+            //無固定之席數上限(不因達 40 隻即停): 120 隻皆達門檻 ⇒ 120 隻皆入選
+            let many = Array.from({ length: 120 }, (_, i) => ({ m: i % 2 === 0 ? 1 : -1, c: 30 + i, w: 30 + i, p: 300 + i }))
+            assert.deepEqual(M.default(ctxOf(many)), many.map((r, i) => i), '入選隻數不設上限(結果)')
+            //回看日數取自 meta.params.lookbackDays(單一來源,不寫死他值)
+            let days = []
+            M.default(ctxOf(rows, days))
+            assert.deepEqual(days, [p.lookbackDays], 'ctx.stat 只呼叫一次,days = meta.params.lookbackDays')
+            //accept 之各側上限與 meta.params.maxHoldPerSide 一致(fakeRound 以字串替換其字面值 25)
+            assert.ok(exSrc.includes(`book.openLong < ${p.maxHoldPerSide}`) && exSrc.includes(`book.openShort < ${p.maxHoldPerSide}`), 'accept 之上限 = meta.params.maxHoldPerSide')
+        })
+
+        it('於合成帳本(同 g.mjs: 60 隻、2400 根)之完整評估:各決策之入選隻數不固定(不是席數 40;各決策之隻數不全相同,取值至少 3 種)、不逾策略數;月均單與最大同時持倉在硬限制內;同一模組重跑 selHash 相同', async () => {
+            let { writeSynthLedger } = await import('./tools/synthLedger.mjs')
+            let W = (await import('../src/WTradeAdaptivess.mjs')).default
+            let { loadLedger, ntStaticOf, makeEvaluator, loadPick } = W
+            let t = makeTmp('pickExample')
+            try {
+                writeSynthLedger(path.join(t.dir, 'ledger'), { n: 60, nBars: 2400, seed: 1 })
+                let L = loadLedger(path.join(t.dir, 'ledger'))
+                L.ntStatic = ntStaticOf(L, L.nBars)
+                let ev = makeEvaluator(L, { warmupDays: 60, cadenceDays: 7 })
+                let pk = await loadPick(exFile)
+                let sizes = []
+                let wrap = (ctx) => {
+                    let r = pk.pick(ctx)
+                    sizes.push((Array.isArray(r) ? r : r.ids).length)
+                    return r
+                }
+                let run = (fn) => ev.evalPolicy(fn, { accept: pk.accept, phases: [0, 3], horizons: [3, 7], nullDraws: 16, seed: 11 })
+                let m = run(wrap)
+                assert.ok(sizes.length >= 20, `決策數 ${sizes.length}`)
+                let kinds = new Set(sizes)
+                assert.ok(kinds.size >= 3, `入選隻數之取值只有 ${[...kinds].join(',')}`)
+                assert.ok(!kinds.has(40) || kinds.size > 1, '不是固定 40')
+                assert.ok(Math.max(...sizes) <= 60, '不逾策略數')
+                assert.ok(m.op.monthlyOrders.mean <= 400 && m.op.peakHold.max <= 50, `硬限制: 月均單 ${m.op.monthlyOrders.mean}、最大同時持倉 ${m.op.peakHold.max}`)
+                assert.equal(run(pk.pick).selHash, m.selHash, '同一模組重跑之 selHash 相同')
+            }
+            finally {
+                t.cleanup()
+            }
+        })
     })
 })

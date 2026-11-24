@@ -110,13 +110,13 @@ describe('派工:額度造成之失敗帶 quota(Gitea #156)', function () {
         assert.equal(r.agent.model, 'ocgo:opencode-go/m')
         //派工套件負責偵測與終止: 本套件不追加命令列參數(只帶使用者之 variant)、不自行判讀錯誤字樣
         assert.deepEqual(f.calls[0].extraArgs, ['--variant', 'high'])
-        assert.deepEqual([f.calls[0].model, f.calls[0].key, f.calls[0].useStoredAuth], ['opencode/m-free', undefined, false])
+        assert.deepStrictEqual([f.calls[0].model, f.calls[0].key, f.calls[0].useStoredAuth], ['opencode/m-free', undefined, false])
     })
 
     it('主模型未達門檻 ⇒ 照常派主模型(帶金鑰);成功結果不帶 quota', async () => {
         let f = fakeWda({ usage: COOL })
         let r = await run(f, agentsOf([FREE]))
-        assert.deepEqual([r.ok, r.quota, r.agent.model], [true, undefined, 'ocgo:opencode-go/m'])
+        assert.deepStrictEqual([r.ok, r.quota, r.agent.model], [true, undefined, 'ocgo:opencode-go/m'])
         assert.deepEqual([f.calls.length, f.calls[0].model, f.calls[0].key, f.calls[0].provider], [1, 'opencode-go/m', K1, 'opencode-go'])
         assert.deepEqual(f.calls[0].extraArgs, ['--variant', 'high'])
     })
@@ -133,24 +133,24 @@ describe('派工:額度造成之失敗帶 quota(Gitea #156)', function () {
         assert.deepEqual([r.ok, r.quota, f.calls.length], [false, true, 1])
         let g = fakeWda({ usage: COOL, behavior: (m) => (m === 'opencode-go/m' ? 'quota' : 'exec') })
         let r2 = await run(g, agentsOf([FREE]))
-        assert.deepEqual([r2.ok, r2.quota], [false, undefined])
-        assert.deepEqual(r2.tried.map((x) => x.quota), [true, undefined])
+        assert.deepStrictEqual([r2.ok, r2.quota], [false, undefined])
+        assert.deepStrictEqual(r2.tried.map((x) => x.quota), [true, undefined])
     })
 
     it('備援為其他原因之失敗(離開碼、逾時、派工例外)⇒ 不標 quota(任一家為其他原因者照既有流程處理)', async () => {
         for (let [mode, re] of [['exec', /exec Exit code 1/], ['timeout', /timeout TIMEOUT after 60s/], ['throw', /派工例外: boom/]]) {
             let f = fakeWda({ behavior: () => mode })
             let r = await run(f, agentsOf([FREE]))
-            assert.deepEqual([r.ok, r.quota], [false, undefined], mode)
+            assert.deepStrictEqual([r.ok, r.quota], [false, undefined], mode)
             assert(re.test(r.error), r.error)
-            assert.deepEqual(r.tried.map((x) => x.quota), [true, undefined], '主模型達門檻 = quota; 備援為其他原因')
+            assert.deepStrictEqual(r.tried.map((x) => x.quota), [true, undefined], '主模型達門檻 = quota; 備援為其他原因')
         }
     })
 
     it('第一個備援因額度未完成、第二個可用 ⇒ 改派第二個並成功(不標 quota)', async () => {
         let f = fakeWda({ behavior: (m) => (m === 'opencode/m-free' ? 'quota' : 'ok') })
         let r = await run(f, agentsOf([FREE, FREE2]))
-        assert.deepEqual([r.ok, r.quota, r.agent.model], [true, undefined, 'oc:opencode/n-free'])
+        assert.deepStrictEqual([r.ok, r.quota, r.agent.model], [true, undefined, 'oc:opencode/n-free'])
         assert.deepEqual(f.calls.map((c) => c.model), ['opencode/m-free', 'opencode/n-free'])
         assert.deepEqual(r.tried.map((x) => x.quota), [true, true])
     })
@@ -161,12 +161,12 @@ describe('派工:額度造成之失敗帶 quota(Gitea #156)', function () {
         assert.deepEqual([r.ok, r.quota], [false, true])
         let g = fakeWda({ claude: () => 'exec' })
         let r2 = await makeDispatch({ agents: { node: { kind: 'claude', model: 'c' } }, skillsRoot: t.dir, envFile, cwd: t.dir, inject: { wda: g.wda } })('node', { prompt: 'p', tag: 'x', logFile })
-        assert.deepEqual([r2.ok, r2.quota], [false, undefined])
+        assert.deepStrictEqual([r2.ok, r2.quota], [false, undefined])
     })
 
     it('role 未設定 ⇒ 失敗且不標 quota', async () => {
         let r = await make(fakeWda(), {})('node', { prompt: 'p', tag: 'x', logFile })
-        assert.deepEqual([r.ok, r.quota], [false, undefined])
+        assert.deepStrictEqual([r.ok, r.quota], [false, undefined])
     })
 
     it('用量守門之門檻可設定(makeDispatch 之 maxPercent = 專案設定 rsi.preflight.quotaMaxPercent):週用量 96% 而門檻 98 ⇒ 仍派主模型;門檻 96、未給、非有限數 ⇒ 不派(預設 95)', async () => {
@@ -175,7 +175,7 @@ describe('派工:額度造成之失敗帶 quota(Gitea #156)', function () {
             let r = await run(f, agentsOf([FREE]), maxPercent === 'unset' ? {} : { maxPercent })
             return [r.agent.model, f.calls[0].model, ((/用量已達 (\d+)%/.exec((r.tried[0] || {}).error || '')) || [])[1] || null]
         }
-        assert.deepEqual(await go(98), ['ocgo:opencode-go/m', 'opencode-go/m', null])
+        assert.deepStrictEqual(await go(98), ['ocgo:opencode-go/m', 'opencode-go/m', null])
         assert.deepEqual(await go(96), ['oc:opencode/m-free', 'opencode/m-free', '96'])
         assert.deepEqual(await go('unset'), ['oc:opencode/m-free', 'opencode/m-free', '95'])
         assert.deepEqual((await go(NaN))[0], 'oc:opencode/m-free')
@@ -345,7 +345,7 @@ describe('起跑前之額度檢查:備援之探測(Gitea #156)', function () {
     it('未給 probe ⇒ 舊行為:主模型達門檻而有備援即不擋、不探測;重置時刻取自 resetsAt', async () => {
         let f = fakeWda({ behavior: () => 'quota' })
         let q = await check(f, agentsOf([FREE]))
-        assert.deepEqual([q.ok, q.retryAt, f.calls.length], [true, null, 0])
+        assert.deepStrictEqual([q.ok, q.retryAt, f.calls.length], [true, null, 0])
         assert(/改用 fallback/.test(q.rows[0].note))
         assert.deepEqual(q.rows[0].windows.find((w) => w.label === 'weekly'), { label: 'weekly', percent: 96, resetAt: '2026-01-05T00:00:00.000Z' })
         //舊欄名 resetAt 亦收
@@ -361,7 +361,7 @@ describe('起跑前之額度檢查:備援之探測(Gitea #156)', function () {
         assert(/weekly 96%/.test(q.why) && /≥ 95%/.test(q.why) && /備援/.test(q.why) && /額度/.test(q.why) && /2026-01-05T00:00:00\.000Z/.test(q.why), q.why)
         assert.equal(f.calls.length, 1)
         let c = f.calls[0]
-        assert.deepEqual([c.model, c.timeoutMs, c.extraArgs, c.useStoredAuth, c.key], ['opencode/m-free', 1234, ['--variant', 'high'], false, undefined])
+        assert.deepStrictEqual([c.model, c.timeoutMs, c.extraArgs, c.useStoredAuth, c.key], ['opencode/m-free', 1234, ['--variant', 'high'], false, undefined])
         assert(c.prompt.length > 0 && c.prompt.length <= 30, `提示詞極小: ${c.prompt}`)
         assert(c.cwdEmpty && path.dirname(path.resolve(c.cwd)) === path.resolve(os.tmpdir()) && /^arsi-probe-/.test(path.basename(c.cwd)), c.cwd)
         assert(!fs.existsSync(c.cwd), '用畢即刪')
@@ -375,7 +375,7 @@ describe('起跑前之額度檢查:備援之探測(Gitea #156)', function () {
         for (let [behavior, fb, nCalls] of [[() => 'ok', [FREE], 1], [() => 'exec', [FREE], 1], [() => 'timeout', [FREE], 1], [() => 'throw', [FREE], 1], [(m) => (m === 'opencode/m-free' ? 'quota' : 'ok'), [FREE, FREE2], 2]]) {
             let f = fakeWda({ behavior })
             let q = await check(f, agentsOf(fb), { probe: true })
-            assert.deepEqual([q.ok, q.rows[0].blocked, f.calls.length, q.retryAt], [true, false, nCalls, null], String(behavior))
+            assert.deepStrictEqual([q.ok, q.rows[0].blocked, f.calls.length, q.retryAt], [true, false, nCalls, null], String(behavior))
             assert(/改用 fallback/.test(q.rows[0].note))
         }
         //全部備援皆因額度 ⇒ 擋下
@@ -394,7 +394,7 @@ describe('起跑前之額度檢查:備援之探測(Gitea #156)', function () {
         assert.deepEqual([q2.ok, f2.calls.length], [true, 0])
         let f3 = fakeWda({ usage: COOL, behavior: () => 'quota' })
         let q3 = await check(f3, agentsOf([FREE]), { probe: true })
-        assert.deepEqual([q3.ok, q3.rows[0].note, f3.calls.length], [true, null, 0])
+        assert.deepStrictEqual([q3.ok, q3.rows[0].note, f3.calls.length], [true, null, 0])
         let f4 = fakeWda()
         let q4 = await check(f4, agentsOf(null), { probe: true })
         assert.deepEqual([q4.ok, q4.retryAt, f4.calls.length], [false, '2026-01-05T00:00:00.000Z', 0])
@@ -412,7 +412,7 @@ describe('起跑前之額度檢查:備援之探測(Gitea #156)', function () {
         assert.deepEqual([q2.ok, q2.retryAt], [false, '2026-01-01T05:00:00.000Z'])
         //達門檻之視窗查不到重置時刻
         let q3 = await check(fakeWda({ usage: { weekly: { percent: 97 } } }), agentsOf(null))
-        assert.deepEqual([q3.ok, q3.retryAt], [false, null])
+        assert.deepStrictEqual([q3.ok, q3.retryAt], [false, null])
         assert(!/全部重置/.test(q3.why), q3.why)
         //多個角色被擋
         let ag = { node: agentsOf(null).node, dream: { ...agentsOf(null).node, id: 'ocgo:opencode-go/m2' } }
@@ -420,7 +420,7 @@ describe('起跑前之額度檢查:備援之探測(Gitea #156)', function () {
         let q4 = await check(f4, ag)
         assert.deepEqual([q4.ok, q4.retryAt, q4.rows.filter((r) => r.blocked).length], [false, '2026-01-05T00:00:00.000Z', 2])
         let q5 = await check(fakeWda({ usage: { weekly: { percent: 97 } } }), ag)
-        assert.equal(q5.retryAt, null)
+        assert.strictEqual(q5.retryAt, null)
         //兩個被擋之角色之可用時刻不同(以角色之門檻區分): 全部皆可用之時刻 = 較晚者
         let two2 = { rolling: { percent: 99, resetsAt: '2026-01-01T05:00:00.000Z' }, weekly: { percent: 50, resetsAt: '2026-01-05T00:00:00.000Z' } }
         let ag2 = { node: agentsOf(null).node, dream: { ...agentsOf(null).node, quotaMaxPercent: 40 } }
@@ -437,7 +437,7 @@ describe('起跑前之額度檢查:備援之探測(Gitea #156)', function () {
         let g = fakeWda({ usage: HOT, limited: true, nextResetAt: '2026-01-02T00:00:00.000Z' })
         assert.equal((await check(g, agentsOf(null))).retryAt, '2026-01-05T00:00:00.000Z')
         let h = fakeWda({ usage: COOL, limited: true })
-        assert.equal((await check(h, agentsOf(null))).retryAt, null, '限流而無解除時刻')
+        assert.strictEqual((await check(h, agentsOf(null))).retryAt, null, '限流而無解除時刻')
         //未被限流之行不帶 limited
         assert.equal((await check(fakeWda({ usage: HOT }), agentsOf(null))).rows[0].limited, false)
     })
@@ -473,7 +473,7 @@ describe('起跑前之額度檢查:備援之探測(Gitea #156)', function () {
         let f = fakeWda({ usage: FULL, behavior: () => 'quota' })
         let ag = agentsOf([FREE], { quotaMaxPercent: 101 })
         let q = await check(f, ag, { probe: true, maxPercent: 50 })
-        assert.deepEqual([q.ok, q.rows[0].maxPercent, q.rows[0].note, f.calls.length], [true, 101, null, 0])
+        assert.deepStrictEqual([q.ok, q.rows[0].maxPercent, q.rows[0].note, f.calls.length], [true, 101, null, 0])
         let g = fakeWda({ usage: usageOf(0, 70, 0) })
         let q2 = await check(g, agentsOf(null, { quotaMaxPercent: 60 }), { maxPercent: 95 })
         assert.deepEqual([q2.ok, q2.rows[0].maxPercent], [false, 60])

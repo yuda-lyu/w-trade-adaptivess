@@ -471,8 +471,8 @@ describe('安全閘與會使操作與意圖相反者之輸入之檢測(R-EV-54 �
             assert.deepEqual(decideArgsOf(pNew, 5), { error: 'invalid opt: must be an object' })
         })
         it('未給(undefined、null)⇒ accept false(不採)、selectable 預設可選、noGrid false; opt 為 null 或 undefined ⇒ {}; 合法之布林照舊', () => {
-            assert.deepEqual(decideArgsOf(pNew, null), { args: { accept: false, why: undefined, by: '主控' } })
-            assert.deepEqual(decideArgsOf(pNew, undefined), { args: { accept: false, why: undefined, by: '主控' } })
+            assert.deepStrictEqual(decideArgsOf(pNew, null), { args: { accept: false, why: undefined, by: '主控' } })
+            assert.deepStrictEqual(decideArgsOf(pNew, undefined), { args: { accept: false, why: undefined, by: '主控' } })
             assert.deepEqual(decideArgsOf(pNew, { accept: null, why: 'w' }).args, { accept: false, why: 'w', by: '主控' })
             let a = decideArgsOf(pNew, { accept: true, why: 'w', name: 'k', selectable: null, noGrid: null, catalog: catalog() }).args.arm
             assert.strictEqual(a.selectable, true, 'selectable null = 預設可選')

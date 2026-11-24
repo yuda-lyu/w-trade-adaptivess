@@ -2,7 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { createRequire } from 'module'
-import maskDiagText from 'wsemi/src/maskDiagText.mjs'
+import genDiagStreamMasker from 'wsemi/src/genDiagStreamMasker.mjs'
 import { agentEnvOf } from './agentRole.mjs'
 import { rsiNumOf } from './rsiNums.mjs'
 import { isPlain, objReq, strReq, strOpt, boolOpt, agentsCheck } from './inputs.mjs'
@@ -21,16 +21,16 @@ let numOr = (v, kind, def) => {
 //  ③ 呼叫端(arsi.mjs 之 runNode)遇 quota: true 不重跑驗證、不把工作夾內之半成品當成交付
 //  ④ 起跑前之檢查(checkQuota 之 probe: true)於主模型達門檻而有備援時實際試一次備援, 備援因額度而不可用即擋下, 並回報達門檻之視窗全部重置之時刻(retryAt)
 //  ⑤ 用量守門之門檻可設定(makeDispatch 之 maxPercent、agents.<role>.quotaMaxPercent)
-//  ⑥ 全部 opencode 條目之 stderr 經共用遮罩(wsemi 之 maskDiagText; 秘密 = 本次讀到之金鑰)後附寫到派工紀錄檔同夾之 <主檔名>.stderr.log
+//  ⑥ 全部 opencode 條目之 stderr 經共用之串流遮罩器(wsemi 之 genDiagStreamMasker; 秘密 = 本次讀到之金鑰; 排程第 486 項之使用端)後附寫到派工紀錄檔同夾之 <主檔名>.stderr.log
+//     輸出以列為單位(收到換行才交出該列; 每列 = maskDiagText(該列); 與塊之切法無關); 已登錄之秘密(含跨塊與跨列者)、網址帳密、憑證鍵值對與 Bearer 皆整段遮到; 長列分段之切點避開整段命中; 二進位塊以 UTF-8 串流解碼
+//     已知限制(wsemi 之 genDiagStreamMasker 之 JSDoc): 未登錄之憑證值若為引號內含換行者, 第二列起不被視為憑證值(逐列遮罩之結果; 原: 整批完整列合成一塊遮, 視塊之切法可能整段遮到); 已登錄之秘密不受此限
+//     另: 派工結果之 error 欄(派工套件取 stderr 尾段至多 300 字元, 只遮當次所用之金鑰)不經本庫之秘密清單(既有; 見 sgud 之已知限制)
 
 //PROBE_PROMPT, 探測備援用之極小提示詞
 let PROBE_PROMPT = '只回覆兩個字: OK'
 
-//STDERR_PIECE, 遮罩一次處理之字元數上限(maskDiagText 對超過 20000 字元者會截斷, 故過長之列分段處理)
-let STDERR_PIECE = 16000
-
-//secretsOf, 本次自金鑰檔讀到之金鑰(供遮罩 maskDiagText 之秘密清單; 去重):
-//  ① 金鑰變數(派工套件條目表所列之 envVar, 預設 OPENCODE_GO_KEYS)之各值依「,」「;」拆開、長度 ≥ 4 者(這些必為金鑰, 取較低之門檻; maskDiagText 對 < 4 字元者本就不遮)
+//secretsOf, 本次自金鑰檔讀到之金鑰(供串流遮罩器 genDiagStreamMasker 之秘密清單; 去重):
+//  ① 金鑰變數(派工套件條目表所列之 envVar, 預設 OPENCODE_GO_KEYS)之各值依「,」「;」拆開、長度 ≥ 4 者(這些必為金鑰, 取較低之門檻; 長度門檻在此取 ≥ 4 / ≥ 8, 免得把短值如旗標、數字遮成亂碼 —— 遮罩器本身對各長度之秘密皆照遮)
 //  ② 檔內其他變數之各值依同法拆開、長度 ≥ 8 者(未知用途之值: 短值如旗標、數字不列入, 免得把一般文字遮成亂碼)
 let secretsOf = (env, keyVars) => {
     let out = new Set()
@@ -46,49 +46,11 @@ let secretsOf = (env, keyVars) => {
     return [...out]
 }
 
-//RE_CRED, 憑證之樣式(Bearer 之值、鍵值對之值; 鍵名同 maskDiagText 所遮者): 切點不得落在其中, 否則 maskDiagText 之樣式比對在兩段上皆不成立
-let RE_CRED = /(?:\bBearer\s+|\b(?:password|passwd|pwd|secret|token|authorization|api[-_]?key|x-api-key|__sysToken__)["']?\s*[:=]\s*["']?)[^\s"',}]*/gi
-
-//safeCut, 長字串分段之切點: 優先取 limit 內最後一個空白(無則 limit); 切點不得落在已登錄之金鑰或憑證樣式(RE_CRED)之中間(落入者移到其起點), 免得金鑰被切在兩段之間而遮不到
-//  空白切點退到 0(整個前段屬金鑰或樣式)者改以 limit 為切點重新避開; 仍為 0 者(金鑰長於 limit, 不尋常)回 limit
-//  憑證樣式只在切點前後各 1000 字元內比對(更長之值不保證)
-let safeCut = (s, limit, secrets) => {
-    let avoid = (cut) => {
-        let moved = true
-        while (moved && cut > 0) {
-            moved = false
-            for (let k of secrets) {
-                for (let i = s.indexOf(k, Math.max(0, cut - k.length + 1)); i >= 0 && i < cut; i = s.indexOf(k, i + 1)) {
-                    if (i + k.length > cut) {
-                        cut = i
-                        moved = true
-                    }
-                }
-            }
-            let from = Math.max(0, cut - 1000)
-            for (let m of s.slice(from, cut + 1000).matchAll(RE_CRED)) {
-                let a = from + m.index
-                if (a < cut && cut < a + m[0].length) {
-                    cut = a
-                    moved = true
-                }
-            }
-        }
-        return cut
-    }
-    let sp = s.lastIndexOf(' ', limit)
-    let c1 = sp > 0 ? avoid(sp) : 0
-    if (c1 > 0) {
-        return c1
-    }
-    let c2 = avoid(limit)
-    return c2 > 0 ? c2 : limit
-}
-
-//makeStderrSink, 錯誤輸出之留存: 逐列遮罩後附寫(金鑰被切在兩個區塊之間者仍遮得到); push(chunk) 收區塊、flush() 收尾(無換行之尾段); 有輸出時才建檔(先寫一行標頭); 失敗不拋
-//  過長之列(> STDERR_PIECE)分段處理(maskDiagText 對單一輸入逾 20000 字元者會截斷); 切點避開橫跨之金鑰與憑證樣式(safeCut)
+//makeStderrSink, 錯誤輸出之留存: 以 wsemi 之串流遮罩器(genDiagStreamMasker; 排程第 486 項之使用端; 診斷輸出與遮罩規格 §2)逐列遮罩後附寫; push(chunk) 收區塊、flush() 收尾(無換行之尾段)
+//  遮罩之規則、跨塊與跨列之秘密、長列之分段、二進位塊之解碼與不可檢查之塊之 fail-closed 皆由遮罩器負責(本套件不再自寫切點與憑證樣式); 回傳非空才寫(有輸出時才建檔, 先寫一行標頭); 寫檔失敗不拋
+//  輸出以列為單位: 收到換行才交出該列(原: 逐塊之完整列合成一塊遮); 遮罩器之 push / flush 永不拋錯(內部失敗回 ***)
 let makeStderrSink = ({ fp, head, secrets }) => {
-    let pend = ''
+    let sm = genDiagStreamMasker(secrets)
     let started = false
     let put = (s) => {
         if (s === '') {
@@ -97,34 +59,16 @@ let makeStderrSink = ({ fp, head, secrets }) => {
         try {
             let out = started ? '' : head
             started = true
-            let rest = s
-            while (rest.length > STDERR_PIECE) {
-                let cut = safeCut(rest, STDERR_PIECE, secrets)
-                out += maskDiagText(rest.slice(0, cut), secrets)
-                rest = rest.slice(cut)
-            }
-            fs.appendFileSync(fp, out + maskDiagText(rest, secrets))
+            fs.appendFileSync(fp, out + s)
         }
         catch (err) {}
     }
     return {
         push: (chunk) => {
-            pend += String(chunk)
-            let i = pend.lastIndexOf('\n')
-            if (i >= 0) {
-                put(pend.slice(0, i + 1))
-                pend = pend.slice(i + 1)
-            }
-            //無換行而累積過長者(不尋常)先吐出前段, 切點同樣避開橫跨之金鑰
-            if (pend.length > STDERR_PIECE * 4) {
-                let cut = safeCut(pend, STDERR_PIECE * 4, secrets)
-                put(pend.slice(0, cut))
-                pend = pend.slice(cut)
-            }
+            put(sm.push(chunk))
         },
         flush: () => {
-            put(pend)
-            pend = ''
+            put(sm.flush())
         },
     }
 }

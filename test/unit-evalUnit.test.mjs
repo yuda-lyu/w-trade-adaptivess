@@ -141,8 +141,8 @@ let errOfAsync = async (fn) => {
 describe('基礎單位之設定與每根棒之名義(src/eval/unit.mjs)', function () {
 
     it('normUnit:未給 ⇒ null;給者正規化(緩衝預設 0.1、asOf / source 照存、其他欄不收)且凍結', () => {
-        assert.equal(normUnit(undefined), null)
-        assert.equal(normUnit(null), null)
+        assert.strictEqual(normUnit(undefined), null)
+        assert.strictEqual(normUnit(null), null)
         let nu = normUnit({ rule: { ...RULE_A, asOf: 'x', source: 'y', extra: 1 }, uIni: 10000, other: 2 })
         assert.deepStrictEqual(JSON.parse(JSON.stringify(nu)), { rule: { stepSize: 0.001, minQty: 0.001, minNotional: 20, asOf: 'x', source: 'y' }, buffer: 0.1, uIni: 10000 })
         assert(Object.isFrozen(nu) && Object.isFrozen(nu.rule))
@@ -808,7 +808,7 @@ describe('評估器之實際名義口徑(makeEvaluator 之 L.unitN / L.unit)', f
         let w = wOf(2400)
         let ev1 = makeEvaluator(withUnit(loadLedger(dir), w), CFG)
         let m = ev1.evalPolicy(pick, { accept: acc, ext: [{ name: 'd', fn: (api) => ({ sim: api.simulate(api.phases.map((p) => p.sels)), obs: api.obs.byPhase }) }] })
-        assert.equal(m.ext.d.error, undefined, m.ext.d.error)
+        assert.strictEqual(m.ext.d.error, undefined, m.ext.d.error)
         m.op.eqYr.byPhase.forEach((v, i) => assert(Math.abs(m.ext.d.sim.byPhase[i] - v) <= 1e-4, `${m.ext.d.sim.byPhase[i]} vs ${v}`))
         //鑑別前提: 與每單 1 單位之重放不同
         let m0 = makeEvaluator(loadLedger(dir), CFG).evalPolicy(pick, { accept: acc, ext: [{ name: 'd', fn: (api) => ({ sim: api.simulate(api.phases.map((p) => p.sels)) }) }] })
@@ -871,7 +871,7 @@ describe('評估器之實際名義口徑(makeEvaluator 之 L.unitN / L.unit)', f
             assert.equal(mk(w2, UNIT_E).message, MSG, String(v))
         }
         assert.equal(mk(w, { rule: RULE_A }).message, 'invalid L.unit.uIni: must be a positive finite number')
-        assert.equal(mk(undefined, undefined), null)
+        assert.strictEqual(mk(undefined, undefined), null)
     })
 
     it('L.unit 之數值為數字字串 ⇒ 轉為數值後使用(跨套件規格 K4;結果與數值之設定逐位相同、metrics.unit 為數值);非數字之字串 ⇒ 拒絕建評估器(訊息不帶值)', () => {
@@ -1021,7 +1021,7 @@ describe('評估器之實際名義口徑(makeEvaluator 之 L.unitN / L.unit)', f
         assert(augPk > opPk * 1.02, `擴充診斷之重放之峰值名義 ${augPk} > uIni ${opPk}(鑑別前提)`)
         let m = makeEvaluator(withUnit(loadLedger(dir), w, { ...UNIT_E, uIni: opPk }), CFG).evalPolicy(pulse, { ext: [{ name: 'd', fn: (api) => ({ sim: api.simulate(api.phases.map((p) => aug(p.sels))) }) }] })
         assert(m.fresh[30].peakNotional > opPk * 1.05, `新鮮度之峰值名義 ${m.fresh[30].peakNotional} > uIni ${opPk}(鑑別前提)`)
-        assert.equal(m.ext.d.error, undefined, m.ext.d.error)
+        assert.strictEqual(m.ext.d.error, undefined, m.ext.d.error)
         assert(Array.isArray(m.ext.d.sim.byPhase) && m.ext.d.sim.byPhase.every((v) => Number.isFinite(v)))
         assert(Number.isFinite(m.op.eqYr.mean))
         //對照: uIni 略低於成品之峰值 ⇒ 中止
@@ -1442,7 +1442,7 @@ describe('命令列(g_eval.mjs 之帳本與設定之比對、研究用本金;g_b
             }
             else {
                 assert.equal(res.err, MSG_NP, m)
-                assert.equal(res.cause, null, m)
+                assert.strictEqual(res.cause, null, m)
             }
         }
         //命令列: 拋錯 ⇒ 離開碼 2、只印訊息(不印原錯誤之訊息與堆疊)、不寫出; 回傳之名義不合 ⇒ 同
@@ -1607,7 +1607,7 @@ console.log('RESULT ' + JSON.stringify(res))
         //改前: 每單 1 單位
         assert.equal(res.r0.length, 1)
         assert.equal(res.r0[0].ok, true, JSON.stringify(res.r0))
-        assert.equal(res.unit0, null)
+        assert.strictEqual(res.unit0, null)
         //啟用後: envKey 改變、節點之 id 與樹之節點集合不變、選集指紋不變、結果依新口徑、S 改變
         assert.notEqual(res.env1, res.env0)
         assert(res.env1.endsWith('|uIni10000'), res.env1)

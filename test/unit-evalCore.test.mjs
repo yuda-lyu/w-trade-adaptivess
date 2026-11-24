@@ -208,7 +208,7 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         //無 tag 之模組: tags 為空陣列; 分佈為常數
         let m2 = ev.evalPolicy(() => [1, 2, 3], {})
         assert.deepEqual([m2.sel.tags, m2.sel.sizeDist, m2.sel.emptyRate], [[], { p10: 3, p50: 3, p90: 3 }, 0])
-        assert.deepEqual([m2.sel.tagKinds, m2.sel.tagStats], [undefined, undefined], '無 tag 者不給 tagKinds / tagStats')
+        assert.deepStrictEqual([m2.sel.tagKinds, m2.sel.tagStats], [undefined, undefined], '無 tag 者不給 tagKinds / tagStats')
     })
 
     it('評估期間(fromBar / toBar):挑選函數仍自帳本起點連續執行,只有落在期間內之決策計入;切片之績效 = 直接以該切片計算者;執行規則收到之 sig.k 與 ctx.k 一致', () => {
@@ -270,7 +270,7 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         let mStr = ev.evalPolicy((ctx) => ({ ids: [1, 2, 3], tag: String(ctx.k % 3) }), {})
         assert.deepEqual([mStr.sel.tagKinds, mStr.sel.tagStats.n], [3, vals.length])
         let mMix = ev.evalPolicy((ctx) => ({ ids: [1, 2, 3], tag: ctx.k % 2 ? 'on' : 1 }), {})
-        assert.deepEqual([mMix.sel.tagKinds, mMix.sel.tagStats], [2, undefined])
+        assert.deepStrictEqual([mMix.sel.tagKinds, mMix.sel.tagStats], [2, undefined])
         //每次決策皆不同之 tag: 逾 64 種者列前 64 種, 其餘併為末筆(rest: true); 各筆之占比合計為 1
         let c = 0
         let mMany = ev.evalPolicy(() => ({ ids: [1, 2, 3], tag: `t${c++}` }), {})
@@ -382,11 +382,11 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         //合法者(長度為 L.n 之 Int32Array)照常建出
         let L3 = loadLedger(t.dir)
         L3.ntStatic = new Int32Array(L3.n)
-        assert.equal(msgOf(L3), null)
+        assert.strictEqual(msgOf(L3), null)
         //跨 realm 建立之真 Int32Array(內部槽為 Int32Array)照收
         let L4 = loadLedger(t.dir)
         L4.ntStatic = vm.runInNewContext(`new Int32Array(${L4.n})`)
-        assert.equal(msgOf(L4), null)
+        assert.strictEqual(msgOf(L4), null)
     })
 
     it('ntStaticOf(L, trainEndBar):逐策略之進場棒 < trainEndBar 之單數(進場棒升冪之逐單欄之二分搜尋); trainEndBar 不合者拋 invalid trainEndBar: must be …', () => {
@@ -488,7 +488,7 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         L0.keyOr = null
         Object.defineProperty(L0, 'fac', { value: null })
         let ev0 = makeEvaluator(L0, CFG)
-        assert.deepEqual([ev0.meta.keySym, ev0.meta.keyTh, ev0.meta.keyOr], [null, null, null])
+        assert.deepStrictEqual([ev0.meta.keySym, ev0.meta.keyTh, ev0.meta.keyOr], [null, null, null])
         assert.throws(() => ev0.runPick((ctx) => {
             ctx.factor(0, 3); return []
         }, 0), /請重建帳本/)
@@ -547,7 +547,7 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
             assert(seen > 10)
             //未建入外部序列之帳本(含舊帳本): seriesNames 為空陣列, series 拋錯並說明未建入
             assert.deepEqual(L.seriesNames, [])
-            assert.equal(L.ser, null)
+            assert.strictEqual(L.ser, null)
             assert.deepEqual(Array.from(ev.meta.seriesNames), [])
             assert.throws(() => ev.runPick((ctx) => {
                 ctx.series('ser_a', 3); return []
@@ -727,7 +727,7 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
             //無此檔(舊帳本)⇒ px 為 null, 不拋錯; ctx.market 拋「帳本無 K 線欄」
             fs.rmSync(fpPx)
             let Lold = loadLedger(t2.dir)
-            assert.equal(Lold.px, null)
+            assert.strictEqual(Lold.px, null)
             assert.throws(() => makeEvaluator(Lold, { ...CFG, warmupDays: 20 }).runPick((ctx) => {
                 ctx.market(3); return []
             }, 0), /帳本無 K 線欄\(請重建帳本\)/)
@@ -802,7 +802,7 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         assert(quiet.nullVol && quiet.nullVol.ratio < 0.9 && quiet.nullVol.sizeMean < 8)
         //訊號數與全體隨機相當(全體皆選)⇒ 不另算
         let all = ev.evalPolicy(() => order, { accept: (sig, book) => book.open < 5 })
-        assert.equal(all.nullVol, null)
+        assert.strictEqual(all.nullVol, null)
     })
 
     it('同活躍度虛無:與同訊號量虛無同一觸發條件;隨機選集只來自成品所在之活躍度層、各層隻數與成品相同', () => {
@@ -813,7 +813,7 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         assert(quiet.nullVol && quiet.nullAct && quiet.nullAct.bins === 10 && quiet.nullAct.draws === 16)
         assert(typeof quiet.nullAct.p === 'number' && typeof quiet.nullAct.excess === 'number' && quiet.nullAct.sigPerPick >= 0)
         let all = ev.evalPolicy(() => order, { accept: (sig, book) => book.open < 5 })
-        assert.equal(all.nullAct, null)
+        assert.strictEqual(all.nullAct, null)
         //獨立算各決策之分層(nBins 層; 層 = floor(累計進場數小於它之策略數 / n × nBins))
         let nBins = 5
         let bars = ev.decisionBars(0)
@@ -870,7 +870,7 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         assert(quiet.nullSideAct.thirdsMean.length === 3 && quiet.nullSideGeo.thirdsMean.length === 3)
         //不算虛無時兩者皆無
         let q0 = ev.evalPolicy(() => order.slice(-8), { nullDraws: 0 })
-        assert.deepEqual([q0.nullSideAct, q0.nullSideGeo], [null, null])
+        assert.deepStrictEqual([q0.nullSideAct, q0.nullSideGeo], [null, null])
         //幾何分組: 各側內依止盈、止損各自三等分(同值依 tie); 替換只落在同一組
         let G = ev.sideGeoGroups(3, 3)
         assert.equal(G.nGroups, 18)
@@ -1026,7 +1026,7 @@ describe('evalCore:無前視、執行規則、虛無與靜態欄', function () {
         assert.equal(m.selHash, base.selHash)
         assert.deepEqual(m.op.eqYr, base.op.eqYr)
         assert.deepEqual(m.null, base.null)
-        assert.equal(base.ext, undefined, '未給 ext 者無此欄')
+        assert.strictEqual(base.ext, undefined, '未給 ext 者無此欄')
         //以原選集重放 = 成品本身
         assert(Math.abs(m.ext.same.mean - m.op.eqYr.mean) < 1e-3 && m.ext.same.text === 'ok' && typeof m.ext.same.ms === 'number')
         assert(m.ext.same.thirds.every((v, g) => Math.abs(v - m.op.thirds[g].eqYr.mean) < 1e-3))

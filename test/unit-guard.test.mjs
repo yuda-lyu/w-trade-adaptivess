@@ -312,7 +312,7 @@ describe('守門:節點 agent 之操作紀錄掃描', function () {
         let fp = path.join(t.dir, 'agent.log')
         fs.writeFileSync(fp, [cl({ command: 'node g_eval.mjs --pick rsi/work/n/pick.mjs --mode full --out rsi/work/dream_r001/recheck.json' }), cl({ file_path: 'rsi/records/nodes/n.md' })].join('\n'))
         let ok = scanTrace({ workDir: t.dir, logFile: fp, privateRoot })
-        assert.deepEqual([ok.issues, ok.nEvals, ok.note], [[], 1, null])
+        assert.deepStrictEqual([ok.issues, ok.nEvals, ok.note], [[], 1, null])
         fs.writeFileSync(fp, cl({ file_path: `${privateRoot}/backtest/n_a1.json` }))
         let bad = scanTrace({ workDir: t.dir, logFile: fp, privateRoot })
         assert(bad.issues.some((x) => x.includes('私有根')))
@@ -395,7 +395,7 @@ describe('守門:節點 agent 之操作紀錄掃描', function () {
     })
 
     it('評估次數以評估器之紀錄(.evals.log)為準:每次執行一列;無此檔回 null', () => {
-        assert.equal(evalsLogged(t.dir), null)
+        assert.strictEqual(evalsLogged(t.dir), null)
         fs.writeFileSync(path.join(t.dir, '.evals.log'), '{"at":"a","pick":"p.mjs","mode":"full","ok":true}\n{"at":"b","pick":"q.mjs","mode":"quick","ok":false}\n\n')
         assert.equal(evalsLogged(t.dir), 2)
     })
@@ -494,13 +494,13 @@ describe('守門:節點 agent 之操作紀錄掃描', function () {
         let bt = { start: '2025-10-06T00:00:00', end: '2026-07-31T00:00:00' }
         assert.equal(datedIn('if (ctx.time >= \'2026-03-01\') { side = \'short\' }', bt), '2026-03-01')
         assert.equal(datedIn('let cut = "2025/11"', bt), '2025/11')
-        assert.equal(datedIn('let fitEnd = \'2025-04-08\'; let t0 = \'2022-07-01\'', bt), null, '訓練期內之日期不列')
-        assert.equal(datedIn('let x = 2026 - 3; let v = 20251', bt), null)
+        assert.strictEqual(datedIn('let fitEnd = \'2025-04-08\'; let t0 = \'2022-07-01\'', bt), null, '訓練期內之日期不列')
+        assert.strictEqual(datedIn('let x = 2026 - 3; let v = 20251', bt), null)
     })
 
     it('完整評估之相異版本數:只計成功之 full 列;只差 tag、只加 --ref 或同一內容重跑者不算新版本', () => {
         //verify.mjs 之 evalsDistinct: 「試得越多, 最佳者越可能只是運氣」以相異 selHash 數衡量(例: 5 個節點之完整評估 21 次只有 13 個相異 selHash)
-        assert.equal(evalsDistinct(t.dir), null)
+        assert.strictEqual(evalsDistinct(t.dir), null)
         fs.writeFileSync(path.join(t.dir, '.evals.log'), [
             { mode: 'quick', ok: true, h: 'a', selHash: 's0' },
             { mode: 'full', ok: true, h: 'a', selHash: 's1' },
@@ -632,16 +632,16 @@ describe('守門:節點 agent 之操作紀錄掃描', function () {
         let h = deniedHalt(fp)
         assert(h && h.tool === 'write' && h.target.includes('projHalf'), JSON.stringify(h))
         fs.writeFileSync(fp, [bad, ok].join('\n'))
-        assert.equal(deniedHalt(fp), null)
+        assert.strictEqual(deniedHalt(fp), null)
         fs.writeFileSync(fp, evtS('edit', { filePath: 'a' }, { status: 'error', error: 'oldString not found in content' }))
-        assert.equal(deniedHalt(fp), null)
-        assert.equal(deniedHalt(path.join(wd, 'none.log')), null)
+        assert.strictEqual(deniedHalt(fp), null)
+        assert.strictEqual(deniedHalt(path.join(wd, 'none.log')), null)
         //同一步並行發出數個呼叫: 被拒者不一定是最後一筆(#141 結案留言); 被拒後另起一步續做者不算
         let step = JSON.stringify({ type: 'step_start', part: { type: 'step-start' } })
         fs.writeFileSync(fp, [step, ok, step, bad, ok, JSON.stringify({ type: 'step_finish', part: { type: 'step-finish', reason: 'tool-calls' } })].join('\n'))
         assert(deniedHalt(fp) && deniedHalt(fp).tool === 'write')
         fs.writeFileSync(fp, [step, bad, step, ok].join('\n'))
-        assert.equal(deniedHalt(fp), null)
+        assert.strictEqual(deniedHalt(fp), null)
     })
 
     it('規劃於評估後才寫(nodeRules):節點文件之首次寫入晚於第一次完整評估 ⇒ 列出;先寫、只評估起點複本、看不到寫入、未啟用 ⇒ 不列', () => {
@@ -664,7 +664,7 @@ describe('守門:節點 agent 之操作紀錄掃描', function () {
         assert.deepEqual(run([quick('try_a'), full('base_pick'), doc, full('try_a')]).issues, [])
         //操作紀錄看不到節點文件之寫入 ⇒ 不判
         let unseen = run([full('try_a')])
-        assert.deepEqual([unseen.issues, unseen.planAfterEval], [[], null])
+        assert.deepStrictEqual([unseen.issues, unseen.planAfterEval], [[], null])
         //評估後才寫: 寫檔工具、改檔工具、指令之重導向皆算; 以 cp 複製範本不算寫規劃
         let bad = run([full('try_a'), doc])
         assert(bad.issues.length === 1 && bad.issues[0].startsWith('規劃於評估後才寫'), JSON.stringify(bad.issues))
@@ -699,7 +699,7 @@ describe('守門:節點 agent 之操作紀錄掃描', function () {
     it('操作紀錄無法解析或不存在 ⇒ 不給評估次數並註明', () => {
         fs.writeFileSync(path.join(t.dir, 'agent_a1.log'), 'plain text log\n')
         let a = scanTrace({ workDir: t.dir, attempt: 1, privateRoot })
-        assert.deepEqual([a.nEvals, a.issues.length], [null, 0])
+        assert.deepStrictEqual([a.nEvals, a.issues.length], [null, 0])
         assert.match(a.note, /無可解析/)
         let b = scanTrace({ workDir: t.dir, attempt: 2, privateRoot })
         assert.match(b.note, /無操作紀錄檔/)
@@ -737,17 +737,17 @@ describe('守門:節點 agent 之操作紀錄掃描', function () {
         //席次之做多比例正常(固定側別之檢查不列), 仍可經由兩側活躍度之不對稱使下單集中於一側 = 把回測期之方向寫進模組
         let mk = (l, s) => ({ op: { bySide: { long: { orders: l }, short: { orders: s } } } })
         assert.equal(shortShareOf(mk(470, 530)), 0.53)
-        assert.equal(shortShareOf(mk(0, 0)), null)
-        assert.equal(shortShareOf({ op: {} }), null)
+        assert.strictEqual(shortShareOf(mk(0, 0)), null)
+        assert.strictEqual(shortShareOf({ op: {} }), null)
         //基準: 回測期 0.16、訓練期 0.22(verify.mjs 之 SIDE_FLOW 預設); 以下為示意之比例
         assert.match(sideFlowIssue(0.530, 0.728), /^下單流量偏一側: 做空單之比例 訓練期 0\.728 \/ 回測期 0\.53.*偏做空側/)
         assert.match(sideFlowIssue(0.700, 0.850), /^下單流量偏一側/) //分側組合之探針
-        assert.equal(sideFlowIssue(0.337, 0.389), null)
-        assert.equal(sideFlowIssue(0.109, 0.225), null)
-        assert.equal(sideFlowIssue(0.891, 0.433), null, '只有回測期偏者不列(兩期不同向)')
+        assert.strictEqual(sideFlowIssue(0.337, 0.389), null)
+        assert.strictEqual(sideFlowIssue(0.109, 0.225), null)
+        assert.strictEqual(sideFlowIssue(0.891, 0.433), null, '只有回測期偏者不列(兩期不同向)')
         assert.match(sideFlowIssue(0.05, 0.08), /偏做多側/)
-        assert.equal(sideFlowIssue(null, 0.5), null)
-        assert.equal(sideFlowIssue(0.3, 0.5), null)
+        assert.strictEqual(sideFlowIssue(null, 0.5), null)
+        assert.strictEqual(sideFlowIssue(0.3, 0.5), null)
         assert.match(String(sideFlowIssue(0.3, 0.5, { hi: 1.5 })), /≥ 1\.5 倍/, '門檻可由設定覆寫')
         let m = { op: { eqYr: { mean: 1, min: 0, byPhase: [1, 0] }, nDecisions: [1], acceptRate: 1, winRate: 0.5, bySide: { long: { orders: 470, pnl: 1, winRate: 0.5 }, short: { orders: 530, pnl: 1, winRate: 0.5 } }, pnl: 2 }, sel: { sizeMean: 1, sizeMin: 1, sizeMax: 1, turnoverJaccard: 1, longRatio: 0.67 } }
         let ns = notesOf(m, [], { longRatio: 0.66, tags: [], shortShare: 0.728 })

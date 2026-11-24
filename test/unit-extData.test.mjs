@@ -21,7 +21,7 @@ let accept = (sig, book) => book.open < 3
 //runExt, 以一個擴充診斷跑一次完整評估; 診斷內之斷言失敗會被評估器記為 ext.<名>.error ⇒ 於此轉為測試失敗
 let runExt = (ev, fn, pk = pick, opt = {}) => {
     let m = ev.evalPolicy(pk, { accept, ...opt, ext: [{ name: 'd', fn }] })
-    assert.equal(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
+    assert.strictEqual(m.ext.d.error, undefined, `擴充診斷拋錯: ${m.ext.d.error}`)
     return m
 }
 //msgOf, 呼叫 fn 取得拋出之錯誤訊息(未拋錯者回 null)
@@ -265,7 +265,7 @@ describe('擴充診斷之資料存取(api.market / api.factor / api.series)', fu
             ],
         })
         for (let k of ['before', 'mut', 'after']) {
-            assert.equal(m.ext[k].error, undefined, `${k}: ${m.ext[k].error}`)
+            assert.strictEqual(m.ext[k].error, undefined, `${k}: ${m.ext[k].error}`)
         }
         assert.deepEqual([m.ext.mut.frozen, m.ext.mut.tried, m.ext.mut.errs, m.ext.mut.allType], [true, 18, 18, true], '凍結: 掛屬性與改 call 皆被拒(TypeError)')
         let { ms: _a, ...before } = m.ext.before

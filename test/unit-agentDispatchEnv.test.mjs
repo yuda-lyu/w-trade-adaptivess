@@ -84,8 +84,8 @@ describe('派工器之接線:真 w-dispatch-ai 把角色之環境變數交給 ag
             assert.equal(rd.ok, true, JSON.stringify(rd))
             let ra = await d('audit', { prompt: 'p', tag: 't3', logFile: path.join(t.dir, 'logs', 'audit.log') })
             assert.equal(ra.ok, true, JSON.stringify(ra))
-            assert.deepEqual(calls(), [{ cli: 'opencode', role: 'node', sentinel: 'seam-1' }, { cli: 'claude', role: 'dream', sentinel: 'seam-1' }, { cli: 'claude', role: null, sentinel: 'seam-1' }])
-            assert.equal(process.env.ARSI_AGENT_ROLE, undefined, '本行程之環境不帶角色(迴圈其後起之評估與驗證之子行程不繼承)')
+            assert.deepStrictEqual(calls(), [{ cli: 'opencode', role: 'node', sentinel: 'seam-1' }, { cli: 'claude', role: 'dream', sentinel: 'seam-1' }, { cli: 'claude', role: null, sentinel: 'seam-1' }])
+            assert.strictEqual(process.env.ARSI_AGENT_ROLE, undefined, '本行程之環境不帶角色(迴圈其後起之評估與驗證之子行程不繼承)')
         }
         finally {
             for (let k of keys) {

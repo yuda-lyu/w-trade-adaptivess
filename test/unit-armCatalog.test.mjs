@@ -68,7 +68,7 @@ describe('臂目錄之提案、審定與生效目錄(規則 R-ARM-1 ~ R-ARM-3;�
     })
 
     it('proposalOf:提案轉為引擎之提案形 —— 非字串之選配欄當成未給、出處只留字串(否則引擎整筆不收)', () => {
-        assert.deepEqual(proposalOf({ kind: 'new', layer: ' A ', title: 't', mechanism: ' m ', boundary: 3, evidence: ['x'], sources: ['n1', 2], nodeId: 'zz' }), { kind: 'new', arm: null, layer: 'A', title: 't', mechanism: 'm', boundary: null, evidence: null, sources: ['n1'] })
+        assert.deepStrictEqual(proposalOf({ kind: 'new', layer: ' A ', title: 't', mechanism: ' m ', boundary: 3, evidence: ['x'], sources: ['n1', 2], nodeId: 'zz' }), { kind: 'new', arm: null, layer: 'A', title: 't', mechanism: 'm', boundary: null, evidence: null, sources: ['n1'] })
     })
 
     describe('與引擎之治理接線(makeProject 於暫存之狀態根;不派工)', function () {
@@ -152,7 +152,7 @@ describe('臂目錄之提案、審定與生效目錄(規則 R-ARM-1 ~ R-ARM-3;�
             assert(Q.domain.operators.some((o) => o.name === `add:${armNew}` && o.applies({ arms: ['A01_nt'] })))
             //修訂: 說明改、格點移除(任務書之格點為無)
             assert(byId.get('A01_nt').desc === '修訂後之定義(移除格點)' && Object.keys(byId.get('A01_nt').grid).length === 0)
-            assert.equal(Q.taskFor({ arms: ['A01_nt'], base: null }).arms[0].grid, null)
+            assert.strictEqual(Q.taskFor({ arms: ['A01_nt'], base: null }).arms[0].grid, null)
             //修訂為不可選: 不出算子、不可指派
             assert(!Q.selectable.some((a) => a.id === 'A02_ntPit') && !Q.domain.operators.some((o) => o.name === 'add:A02_ntPit'))
             assert.throws(() => Q.domain.validateSpec({ arms: ['A02_ntPit'], base: null }), /不可選/)

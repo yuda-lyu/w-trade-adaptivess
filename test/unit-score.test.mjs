@@ -107,7 +107,7 @@ describe('score:S、階梯與否決', function () {
         assert(fail.flags.why.some((w) => /回測期旗標 fail/.test(w)))
         //檔頭: 未算 ⇒ flags.backtest = null, ladder = 訓練期階梯
         let none = scoreOf(mk(), { ...OPT, evidence: { trust: 'trusted' } })
-        assert.deepEqual([none.ladder, none.flags.vetoed, none.flags.backtest, none.flags.trainLadder], [3, false, null, 3])
+        assert.deepStrictEqual([none.ladder, none.flags.vetoed, none.flags.backtest, none.flags.trainLadder], [3, false, null, 3])
     })
 
     it('回測期旗標之分級(evidence.backtest):階梯改為樣本外等級 pass 4 / above 3 / mixed 2 / level 1 / below 0;level 與 below 否決;above 與 mixed 不否決', () => {
@@ -130,7 +130,7 @@ describe('score:S、階梯與否決', function () {
         }
         //分級字串優先於舊制之布林; 不認得之字串視同未算
         assert.equal(scoreOf(mk(), { ...OPT, evidence: { backtest: 'mixed', backtestOK: false } }).flags.backtest, 'mixed')
-        assert.equal(scoreOf(mk(), { ...OPT, evidence: { backtest: 'unknown' } }).flags.backtest, null)
+        assert.strictEqual(scoreOf(mk(), { ...OPT, evidence: { backtest: 'unknown' } }).flags.backtest, null)
     })
 
     it('無評估結果 ⇒ 否決;格(cell)= 層 | 頻率帶', () => {

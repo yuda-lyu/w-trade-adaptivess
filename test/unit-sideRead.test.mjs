@@ -27,7 +27,7 @@ let rowsOf = (n, f) => Array.from({ length: n }, (_, i) => ({ id: `n${String(i).
 describe('全樹之側別讀數(sideRead.mjs;規則 R-REC-50)', function () {
     it('設定之解讀:false = 關閉;不合之鍵用預設(不拋錯);lo ≥ hi 者兩者皆回預設', () => {
         assert.deepEqual(SIDE_READ_DEFAULT, { minNodes: 10, top: 10, corrAbs: 0.6, lo: 0.2, hi: 0.8 })
-        assert.equal(sideReadCfgOf(false), null)
+        assert.strictEqual(sideReadCfgOf(false), null)
         for (let v of [undefined, null, true, 'x', [], {}]) {
             assert.deepEqual(sideReadCfgOf(v), { minNodes: 10, top: 10, corrAbs: 0.6, lo: 0.2, hi: 0.8 }, JSON.stringify(v))
         }
@@ -58,13 +58,13 @@ describe('全樹之側別讀數(sideRead.mjs;規則 R-REC-50)', function () {
         let sr9 = sideReadOf(rows, sideReadCfgOf({ minNodes: 5, top: 8 }))
         assert(sr9.topHi < ok[5].longRatio || ok.filter((x, i) => i !== 5).some((x) => x.longRatio === sr9.topHi), '鍵為 null 者不在前 8 名')
         //不足下限 ⇒ null(恰為下限者照列); 關閉 ⇒ null
-        assert.equal(sideReadOf(rows, sideReadCfgOf({ minNodes: 10 })), null)
+        assert.strictEqual(sideReadOf(rows, sideReadCfgOf({ minNodes: 10 })), null)
         assert.equal(sideReadOf(rows, sideReadCfgOf({ minNodes: 9 })).n, 9)
-        assert.equal(sideReadOf(rows, null), null)
+        assert.strictEqual(sideReadOf(rows, null), null)
         //變異數為 0 ⇒ r = null(不據以警示)
         let flat = rowsOf(6, (i) => ({ longRatio: 0.5, mean: 10 + i, key: i }))
         let sf = sideReadOf(flat, sideReadCfgOf({ minNodes: 5 }))
-        assert.equal(sf.r, null)
+        assert.strictEqual(sf.r, null)
         assert.equal(sf.warn.corr, false)
     })
 

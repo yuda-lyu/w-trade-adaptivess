@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { roundName, armProposalLine, FORMS } from '../arsi/records.mjs'
+import { roundName, armProposalLine, FORMS, armKeyOf } from '../arsi/records.mjs'
 import { TRIALS } from './briefTrials.mjs'
 import { libSizeText, periodLenText, cadenceOf, nullDrawsOf, phaseCountOf, phaseText, horizonsOf, dateOf } from './factsText.mjs'
 import { POSTFIT_HEAD, fillBacklogSecOf, autoFillOf } from './fillPlan.mjs'
@@ -575,7 +575,7 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
             L.push('   - `snippets/*.mjs`:可貼入挑選模組之**純函數片段**(挑選模組不得 `import`,所以節點是複製使用)。須符合合約 §1 之限制(不 `import`、不用時鐘與 `Math.random`);亂數用傳入之 `ctx.rand`,同分次鍵用 `ctx.meta.tie`。檔頭註解寫:用途、參數與回傳、**`ctx.rand` 之消耗次數**(影響同種子之配對對照)、出處節點。')
             L.push('   - `templates/*.mjs`:完整之挑選模組樣板(須為合法之挑選模組;例:中性預設之骨架、去臂對照之樣板)。')
             L.push('   - `diag/*.mjs`:診斷腳本,**只讀評估結果檔(`*.json`)與 `.evals.log`** 做整理與比較;只可匯入 node 內建模組(`fs`、`path` 等),不得匯入迴圈與評估器之程式(`' + codeRootRel + '/`)、不得讀帳本、不得自行計算績效、不得起子行程(績效數字一律出自 `g_eval.mjs`)。')
-            L.push('   - `metrics/*.mjs`:**擴充診斷** —— 每次完整評估由評估器自動載入,結果列於評估輸出之「擴充診斷」、結果檔之 `metrics.ext.<檔名>` 與節點文件(節點與你都不必再手跑)。**你或兩個以上之節點為了判讀而反覆手跑之對照、虛無、安慰劑、分段,就寫成它。**寫法:`export default function (api) { … return { text: \'一行說明\', … } }`,限制同挑選模組(不 `import`、不碰檔案與時鐘);`api` 只給唯讀之資料與函數(成品之逐決策選集、成品之績效與三等分、`simulate` 以成品之執行規則(或另給之 `opts.accept`)重放另一組選集並回兩側與各子帳之下單數與損益,另可給 `opts.orderSalt` 只換同一進場棒之訊號次序、`replaceNull` 配對隨機替換(可只換所列子帳之席 `onlyGroups`、或只換遮罩內之決策之席 `onlyDecisions`)、`fillRandom` 依各決策之兩側席數以活躍度匹配隨機填席(回可直接交給 `simulate` 之選集;同比例、隨機時機之安慰劑等用)、分組、亂數、`market` / `factor` / `series` 取某棒以前之行情、因子、外部序列之值(依各決策當時之狀態把選集分組後重放用;為某次決策分組時 `bar` 只用該決策自己之決策棒或更早者);詳見合約 §7),**改不了 S、階梯、selHash**。回傳物件另帶 `board` / `boardLabel`(短值與其欄名)者自動列於看板與搜尋地圖,帶 `flag`(一句提示)者列入節點之迴圈檢查(不否決),帶 `notContent`(一句理由;條件不成立時不帶)者表示「此成品之組成對照不是挑選內容之量」—— 搜尋地圖不把它計入「有內容」與量尺之「挑選內容」,並於譜系與看板註明理由,帶 `subset`(子集之名稱,例:「時效 ≥ 15」;條件不成立時不帶)者表示「此成品屬於該子集」—— 搜尋地圖於量尺旁另列各子集內「有內容且可信」之最高者(並列、不取代現行量尺)—— 要讓某個診斷之量出現在看板或迴圈檢查、或要改變某類成品在量尺上之計法,由你在診斷內帶這幾欄,不必列改進項。**新增或改寫之診斷只對其後之完整評估生效**;' + (backlogOn ? FILL_BACKLOG_ON : FILL_BACKLOG_OFF) + '不得把較晚做出之選集挪到較早之決策使用(那是前視)。機械檢查會以範例模組實際試跑一次;單檔執行宜在數秒內(每次完整評估都會跑)。檔頭註解寫:觸發(何時看這一列)、作法、判讀方式。')
+            L.push('   - `metrics/*.mjs`:**擴充診斷** —— 每次完整評估由評估器自動載入,結果列於評估輸出之「擴充診斷」、結果檔之 `metrics.ext.<檔名>` 與節點文件(節點與你都不必再手跑)。**你或兩個以上之節點為了判讀而反覆手跑之對照、虛無、安慰劑、分段,就寫成它。**寫法:`export default function (api) { … return { text: \'一行說明\', … } }`,限制同挑選模組(不 `import`、不碰檔案與時鐘);`api` 只給唯讀之資料與函數(成品之逐決策選集、成品之績效與三等分、`simulate` 以成品之執行規則(或另給之 `opts.accept`)重放另一組選集並回兩側與各子帳之下單數與損益,另可給 `opts.orderSalt` 只換同一進場棒之訊號次序、`replaceNull` 配對隨機替換(可只換所列子帳之席 `onlyGroups`、或只換遮罩內之決策之席 `onlyDecisions`)、`fillRandom` 依各決策之兩側席數以活躍度匹配隨機填席(回可直接交給 `simulate` 之選集;同比例、隨機時機之安慰劑等用)、分組、亂數、`market` / `factor` / `series` / `stat` 取某棒以前之行情、因子、外部序列、各策略之進出場統計之值(依各決策當時之狀態把選集分組後重放用;為某次決策分組時 `bar` 只用該決策自己之決策棒或更早者);詳見合約 §7),**改不了 S、階梯、selHash**。回傳物件另帶 `board` / `boardLabel`(短值與其欄名)者自動列於看板與搜尋地圖,帶 `flag`(一句提示)者列入節點之迴圈檢查(不否決),帶 `notContent`(一句理由;條件不成立時不帶)者表示「此成品之組成對照不是挑選內容之量」—— 搜尋地圖不把它計入「有內容」與量尺之「挑選內容」,並於譜系與看板註明理由,帶 `subset`(子集之名稱,例:「時效 ≥ 15」;條件不成立時不帶)者表示「此成品屬於該子集」—— 搜尋地圖於量尺旁另列各子集內「有內容且可信」之最高者(並列、不取代現行量尺)—— 要讓某個診斷之量出現在看板或迴圈檢查、或要改變某類成品在量尺上之計法,由你在診斷內帶這幾欄,不必列改進項。**新增或改寫之診斷只對其後之完整評估生效**;' + (backlogOn ? FILL_BACKLOG_ON : FILL_BACKLOG_OFF) + '不得把較晚做出之選集挪到較早之決策使用(那是前視)。機械檢查會以範例模組實際試跑一次;單檔執行宜在數秒內(每次完整評估都會跑)。檔頭註解寫:觸發(何時看這一列)、作法、判讀方式。')
             L.push(`   - \`${tb.indexName}\`:索引。**須有「## 依情境找工具」一節:一列一個情境(遇到什麼情況 → 用哪個檔),每個工具檔都要出現在該節**(機械檢查;節點與你靠它不必讀程式碼即知何時用哪個工具),其後為「工具一覽」之表,**每個檔一列**(相對路徑、用途、用法、出處、驗證方式、加入之輪次);新增或更新工具時兩處同步改。已發布之檔不得刪除;要改既有工具之行為時另存新檔名(如 \`_v2\`),舊檔留著(已有成品抄自舊版;檔頭註解以外之改寫會被還原);**\`metrics/\` 之擴充診斷可同名修正**,改後由迴圈或補算工具重算。`)
             L.push('4. 下一輪之節點任務書會指向索引;你給方向時,可在 `expect` 指名要用之共用工具。沒有值得共用者,`expansion` 給空陣列,不必湊數。')
             L.push('5. **共用片段之計算量也歸你管**:上表「成品每次完整評估之挑選耗時」偏高(約 60 秒以上)者,節點能試之次數與一輪之時長都受其限制(節點同時併行,實際更慢)。其耗時若出自共用片段(每次決策重算全部策略之多個窗),另存 `_v2` 改為增量或快取於 `ctx.state` 之寫法,**以「同一成品改用新片段後 `selHash` 相同」為證**,並在索引註明舊版較慢。')
@@ -635,7 +635,8 @@ let makeTexts = ({ st, FD_ROOT, nStrategies }) => {
             prevDirections: ((c.context && c.context.prevDirections) || []).map((x) => {
             //節點已自判主張之成立與否者(conclusion.claimVerdict)預填其判定: 做夢核對後照用或改判
             //帶主張鍵之方向(同臂同起點而主張不同之驗證)另以鍵區分, 並於該條列出主張之開頭; 探索類之區分用之鍵(無主張)則列依據之開頭
-                let keyOf = (d) => `${d.round}|${[...(d.arms || [])].sort().join('+')}|${d.base || ''}|${d.claimKey || ''}`
+                //臂之鍵取單一實作 armKeyOf(去重; 與領域層對應方向與來源方向者同一個; 排程第 614 項 ③ X2: 原此處另用不去重之鍵)
+                let keyOf = (d) => `${d.round}|${armKeyOf(d.arms)}|${d.base || ''}|${d.claimKey || ''}`
                 let hit = ((c.context && c.context.nodes) || []).find((n) => n.from && n.claimVerdict && keyOf(n.from) === keyOf(x))
                 return { round: x.round, arms: x.arms, ...(x.claimKey ? ('claim' in x ? { claim: x.claim } : { rationale: x.rationale }) : {}), verdict: hit ? hit.claimVerdict : 'confirmed | refuted | inconclusive | flawed | not-run(擇一)', note: hit ? `(節點 ${String(hit.nodeId).slice(0, 8)} 自判 ${hit.claimVerdict}${hit.claimNote ? `: ${hit.claimNote}` : ''};請核對後改寫為依據,要改判者說明原因)` : '(對應之節點與依據)' }
             }),

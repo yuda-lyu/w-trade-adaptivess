@@ -64,7 +64,7 @@ describe('pickLoader:靜態檢查與載入', function () {
         assert.equal(typeof ok.accept, 'function')
         assert.deepEqual(ok.meta.arms, ['X'])
         let noAcc = await loadPick(put('noacc.mjs', 'export default function pick(ctx) { return [] }\n'))
-        assert.equal(noAcc.accept, null)
+        assert.strictEqual(noAcc.accept, null)
         await assert.rejects(() => loadPick(path.join(t.dir, 'none.mjs')), (e) => e.code === 'PICK_MISSING')
         await assert.rejects(() => loadPick(put('bad.mjs', `${OK}\nlet r = Math.random()`)), (e) => e.code === 'PICK_SCAN' && e.issues.length === 1)
         await assert.rejects(() => loadPick(put('badacc.mjs', 'export default function pick(ctx) { return [] }\nexport const accept = 1\n')), (e) => e.code === 'PICK_SCAN')

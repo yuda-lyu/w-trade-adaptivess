@@ -330,7 +330,8 @@ describe('命令列旗標之嚴格檢查(未列之旗標、重複、無值、列
         it('rsi: --claim 只用於 --mode frontier 且須為 8 個十六進位字(原: 不合者靜默視為未給 ——「--close <臂> --claim zz」把該臂之全部 proposed 提案結案); --base 取原字串(全數字之 id 前綴不被轉成數值)', () => {
             let FRONT = 'invalid --claim: must be an 8-digit hexadecimal claim key (as listed after 主張 or 鍵)'
             for (let v of ['zz', '1234567', '123456789', 'ABCDEF12', '0xabcdef1', 'abcdef1g']) {
-                let r = runIn('rsi', ['--mode', 'frontier', '--close', 'A02', '--claim', v])
+                //--close 須隨 --why(排程第 614 項 ③; 缺者先被 cliMsgOf 之模式內相依拒收)⇒ 本案給 --why, 只驗 --claim 之值
+                let r = runIn('rsi', ['--mode', 'frontier', '--close', 'A02', '--why', 'w', '--claim', v])
                 assert.strictEqual(r.status, 2, v)
                 assert.deepEqual(r.out, [FRONT], v)
             }
@@ -341,7 +342,7 @@ describe('命令列旗標之嚴格檢查(未列之旗標、重複、無值、列
             assert.deepEqual(bare.out, ['invalid --claim: must be written as --claim <claim-key> (a value is required)'])
             //合格者通過此檢查(其後於讀設定時離開)
             for (let v of ['abcdef12', '12345678']) {
-                let r = runIn('rsi', ['--mode', 'frontier', '--close', 'A02', '--claim', v])
+                let r = runIn('rsi', ['--mode', 'frontier', '--close', 'A02', '--why', 'w', '--claim', v])
                 assert(!r.out.some((l) => l.startsWith('invalid --claim')), `${v}: 通過檢查`)
             }
             assert.deepEqual(fs.readdirSync(emptyRoot), [], '不寫任何檔')

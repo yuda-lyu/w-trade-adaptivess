@@ -69,7 +69,7 @@ describe('迴圈檢查之兩條機械提示:單峰交付、選集與他節點相
                 '',
                 line('try_keep2.mjs', 'f-keep2', -25.6),
             ]
-            assert.deepEqual(fullRowsOf([...ls, 7, null]), [
+            assert.deepStrictEqual(fullRowsOf([...ls, 7, null]), [
                 { pick: 'try_keep1.mjs', selHash: 'f-keep1', S: 11.1 },
                 { pick: 'try_bt.mjs', selHash: 'f-bt', S: 16.6 },
                 { pick: 'try_nullS.mjs', selHash: 'f-nullS', S: null },
@@ -87,22 +87,22 @@ describe('迴圈檢查之兩條機械提示:單峰交付、選集與他節點相
             assert(peakHintOf(r6, 'p6').startsWith(PEAK_HEAD) && isEvalHint(peakHintOf(r6, 'p6')))
             let r5 = fullRowsOf(peakLines('p5', 41.3, [3.7, -12.4, 8.9, 15.2]))
             //鑑別前提: r5 = r6 少一個其餘之版本(其餘之中位 6.3 亦遠低於一半, 只差個數)
-            assert.equal(peakHintOf(r5, 'p5'), null, '相異 5 個')
+            assert.strictEqual(peakHintOf(r5, 'p5'), null, '相異 5 個')
         })
 
         it('單峰交付:交付版非最高、S 為 0 或負 ⇒ 不提示;與另一版同分(不低於其餘每一個)⇒ 提示', () => {
-            assert.equal(peakHintOf(fullRowsOf(peakLines('pa', 30.1, [30.2, 1.1, 2.3, 3.4, 4.6])), 'pa'), null, '非最高')
-            assert.equal(peakHintOf(fullRowsOf(peakLines('pb', 0, [-30.2, -1.1, -2.3, -3.4, -4.6])), 'pb'), null, 'S 為 0')
-            assert.equal(peakHintOf(fullRowsOf(peakLines('pc', -0.4, [-30.2, -1.1, -2.3, -3.4, -4.6])), 'pc'), null, 'S 為負(其餘之中位更低)')
+            assert.strictEqual(peakHintOf(fullRowsOf(peakLines('pa', 30.1, [30.2, 1.1, 2.3, 3.4, 4.6])), 'pa'), null, '非最高')
+            assert.strictEqual(peakHintOf(fullRowsOf(peakLines('pb', 0, [-30.2, -1.1, -2.3, -3.4, -4.6])), 'pb'), null, 'S 為 0')
+            assert.strictEqual(peakHintOf(fullRowsOf(peakLines('pc', -0.4, [-30.2, -1.1, -2.3, -3.4, -4.6])), 'pc'), null, 'S 為負(其餘之中位更低)')
             assert.equal(peakHintOf(fullRowsOf(peakLines('pd', 30.1, [30.1, 1.1, 2.3, 3.4, 4.6])), 'pd'), PEAK_TXT(30.1, 6, 3.4), '同分')
             //鑑別前提: S 略大於 0 者照提示
             assert.equal(peakHintOf(fullRowsOf(peakLines('pe', 0.5, [-30.2, -1.1, -2.3, -3.4, -4.6])), 'pe'), PEAK_TXT(0.5, 6, -3.4))
         })
 
         it('單峰交付:其餘之中位恰為一半不提示、略低於一半提示(奇數與偶數個;偶數個取中間兩數之平均)', () => {
-            assert.equal(peakHintOf(fullRowsOf(peakLines('q1', 40, [1.2, 15.3, 20, 25.4, 35.5])), 'q1'), null, '奇數個之中位 = 20')
+            assert.strictEqual(peakHintOf(fullRowsOf(peakLines('q1', 40, [1.2, 15.3, 20, 25.4, 35.5])), 'q1'), null, '奇數個之中位 = 20')
             assert.equal(peakHintOf(fullRowsOf(peakLines('q2', 40, [1.2, 15.3, 19.99, 25.4, 35.5])), 'q2'), PEAK_TXT(40, 6, 19.99))
-            assert.equal(peakHintOf(fullRowsOf(peakLines('q3', 40, [1.2, 15.3, 19, 21, 25.4, 35.5])), 'q3'), null, '偶數個之中位 = (19 + 21) / 2 = 20')
+            assert.strictEqual(peakHintOf(fullRowsOf(peakLines('q3', 40, [1.2, 15.3, 19, 21, 25.4, 35.5])), 'q3'), null, '偶數個之中位 = (19 + 21) / 2 = 20')
             assert.equal(peakHintOf(fullRowsOf(peakLines('q4', 40, [1.2, 15.3, 19, 20.98, 25.4, 35.5])), 'q4'), PEAK_TXT(40, 7, 19.99))
             //鑑別前提: 第三案之其餘(已排序)之中間兩數 19、21:偏低之一數 < 20 = 平均 ⇒ 中位之定義取錯者第三案會轉為提示
             let o3 = [1.2, 15.3, 19, 21, 25.4, 35.5]
@@ -116,24 +116,24 @@ describe('迴圈檢查之兩條機械提示:單峰交付、選集與他節點相
             //鑑別前提: 只留各指紋之第一列(交付 30、其餘之中位 16 ≥ 15)則不提示
             let firstOnly = fullRowsOf(ls).filter((r, i, a) => a.findIndex((y) => y.selHash === r.selHash) === i)
             assert.equal(firstOnly.length, 6)
-            assert.equal(peakHintOf(firstOnly, 'm-d'), null)
+            assert.strictEqual(peakHintOf(firstOnly, 'm-d'), null)
             //列數 7、相異之指紋 5 ⇒ 不提示(以列數計者會提示)
             let ls5 = [line('pick.mjs', 'n-d', 44), line('try_a.mjs', 'n-a', 2), line('try_a2.mjs', 'n-a', 2), line('try_b.mjs', 'n-b', 3), line('try_b2.mjs', 'n-b', 3), line('try_c.mjs', 'n-c', 4), line('try_e.mjs', 'n-e', 5)]
             assert.equal(fullRowsOf(ls5).length, 7)
-            assert.equal(peakHintOf(fullRowsOf(ls5), 'n-d'), null)
+            assert.strictEqual(peakHintOf(fullRowsOf(ls5), 'n-d'), null)
         })
 
         it('單峰交付:只有參考檔與帶成員抽樣之列、正本之指紋不在所計之列、指紋非字串 ⇒ 不提示', () => {
             let ls = [line('pick.mjs', 'r-d', 41.3), line('control.mjs', 'r-1', 1.1), line('ref_aa11bb22.mjs', 'r-2', 2.2), line('base_pick.mjs', 'r-3', 3.3), line('try_m.mjs', 'r-4', 4.4, { member: '0x2:1' }), line('try_q.mjs', 'r-5', 5.5, { mode: 'quick' }), line('try_t.mjs', 'r-6', 6.6, { period: 'train' })]
-            assert.equal(peakHintOf(fullRowsOf(ls), 'r-d'), null)
+            assert.strictEqual(peakHintOf(fullRowsOf(ls), 'r-d'), null)
             //鑑別前提: 同樣之 S 若為一般之版本即提示
             let ls2 = [line('pick.mjs', 's-d', 41.3), line('try_1.mjs', 's-1', 1.1), line('try_2.mjs', 's-2', 2.2), line('try_3.mjs', 's-3', 3.3), line('try_4.mjs', 's-4', 4.4), line('try_5.mjs', 's-5', 5.5)]
             assert.equal(peakHintOf(fullRowsOf(ls2), 's-d'), PEAK_TXT(41.3, 6, 3.3))
-            assert.equal(peakHintOf(fullRowsOf(ls2), 's-x'), null, '正本之指紋不在其中')
+            assert.strictEqual(peakHintOf(fullRowsOf(ls2), 's-x'), null, '正本之指紋不在其中')
             for (let fp of [null, undefined, '', 7]) {
-                assert.equal(peakHintOf(fullRowsOf(ls2), fp), null, String(fp))
+                assert.strictEqual(peakHintOf(fullRowsOf(ls2), fp), null, String(fp))
             }
-            assert.equal(peakHintOf(null, 's-d'), null)
+            assert.strictEqual(peakHintOf(null, 's-d'), null)
         })
 
         //it_, 選集與他節點相同之輸入之一項
@@ -147,7 +147,7 @@ describe('迴圈檢查之兩條機械提示:單峰交付、選集與他節點相
             assert.equal(twinHintOf(A, twinIndexOf([A, C])), '提示(選集與他節點相同): 交付版之選集與 cc33dd44/try_k.mjs 之完整評估逐位相同(選集指紋相同),臂組合不同(本節點多出 D27_dedup、C21_holdStruct;對方多出 D33_antiSticky)⇒ 多出之臂於評估期間未作用;審計時核對未作用之臂(不否決,由審計判定)')
             //本節點之臂為對方之真子集(只對方多出)⇒ 不列(本節點之成績未記到未作用之臂上; 例: 子節點關掉新臂之版本重現其起點)
             let D = it_('dd44ee55ff66aa77', ['A01_nt', 'D27_dedup', 'C21_holdStruct', 'A09_tpSl'], 'fpD', [rw('try_d.mjs', 'fpA')])
-            assert.equal(twinHintOf(A, twinIndexOf([A, D])), null)
+            assert.strictEqual(twinHintOf(A, twinIndexOf([A, D])), null)
             //鑑別前提: 同一列, 對方之臂改為互有出入即列
             assert.notEqual(twinHintOf(A, twinIndexOf([A, { ...D, arms: ['A01_nt', 'D27_dedup', 'A09_tpSl'] }])), null)
             //臂組合相同(次序不同亦同)
@@ -155,16 +155,16 @@ describe('迴圈檢查之兩條機械提示:單峰交付、選集與他節點相
             assert.equal(twinHintOf(A, twinIndexOf([A, E])), '提示(選集與他節點相同): 交付版之選集與 ee55ff66/try_e.mjs 之完整評估逐位相同(選集指紋相同),臂組合亦相同 ⇒ 兩者為同一成品,不作互相獨立之佐證(不否決,由審計判定)')
             assert(isEvalHint(twinHintOf(A, twinIndexOf([A, E]))) && twinHintOf(A, twinIndexOf([A, E])).startsWith(TWIN_HEAD))
             //自身之列不命中; 無正本之指紋者不提示
-            assert.equal(twinHintOf(A, twinIndexOf([A])), null)
-            assert.equal(twinHintOf({ ...A, fingerprint: null }, twinIndexOf([A, B])), null)
+            assert.strictEqual(twinHintOf(A, twinIndexOf([A])), null)
+            assert.strictEqual(twinHintOf({ ...A, fingerprint: null }, twinIndexOf([A, B])), null)
         })
 
         it('選集與他節點相同:驗證類之節點與其方向所指名要重複之對象之間不比(兩個方向皆然);其他之驗證類照比', () => {
             let A = it_('aa11bb22cc33dd44', ['A01_nt'], 'fpA', [], 'verify', ['bb22cc33dd44ee55'])
             let B = it_('bb22cc33dd44ee55', ['A01_nt'], 'fpB', [rw('pick.mjs', 'fpA')])
-            assert.equal(twinHintOf(A, twinIndexOf([A, B])), null, '本節點為驗證類, 對方為其指名之對象')
+            assert.strictEqual(twinHintOf(A, twinIndexOf([A, B])), null, '本節點為驗證類, 對方為其指名之對象')
             let V = it_('cc33dd44ee55ff66', ['A01_nt'], 'fpV', [rw('pick.mjs', 'fpB')], 'verify', ['bb22cc33dd44ee55'])
-            assert.equal(twinHintOf(B, twinIndexOf([B, V])), null, '對方為驗證類, 本節點為其指名之對象')
+            assert.strictEqual(twinHintOf(B, twinIndexOf([B, V])), null, '對方為驗證類, 本節點為其指名之對象')
             let W = it_('dd44ee55ff66aa77', ['A01_nt'], 'fpW', [rw('pick.mjs', 'fpB')], 'verify', ['ff66aa77bb88cc99'])
             assert.equal(twinHintOf(B, twinIndexOf([B, W])), '提示(選集與他節點相同): 交付版之選集與 dd44ee55/pick.mjs 之完整評估逐位相同(選集指紋相同),臂組合亦相同 ⇒ 兩者為同一成品,不作互相獨立之佐證(不否決,由審計判定)', '他節點之驗證類而未指名本節點')
             //探索類之 targets 不作用(只有驗證類才排除)
@@ -176,7 +176,7 @@ describe('迴圈檢查之兩條機械提示:單峰交付、選集與他節點相
             //各驗證類之指名之對象皆為他節點(不含本例之任一方)
             let V1 = it_('aa11bb22cc33dd44', ['A01_nt', 'C21_holdStruct'], 'fpV1', [], 'verify', ['ff66aa77bb88cc99'])
             let V2 = it_('bb22cc33dd44ee55', ['C21_holdStruct', 'A01_nt'], 'fpV2', [rw('pick.mjs', 'fpV1')], 'verify', ['ff66aa77bb88cc99'])
-            assert.equal(twinHintOf(V1, twinIndexOf([V1, V2])), null, '兩方皆驗證類、同臂')
+            assert.strictEqual(twinHintOf(V1, twinIndexOf([V1, V2])), null, '兩方皆驗證類、同臂')
             //本節點為驗證類、對方為探索類(同臂、未指名)⇒ 列「同一成品」
             let X = { ...V2, id: 'cc33dd44ee55ff66', type: 'explore', targets: [] }
             assert.equal(twinHintOf(V1, twinIndexOf([V1, X])), '提示(選集與他節點相同): 交付版之選集與 cc33dd44/pick.mjs 之完整評估逐位相同(選集指紋相同),臂組合亦相同 ⇒ 兩者為同一成品,不作互相獨立之佐證(不否決,由審計判定)')
@@ -189,7 +189,7 @@ describe('迴圈檢查之兩條機械提示:單峰交付、選集與他節點相
             //同時命中 V2(不列)、V3(臂組合不同)、X(同一成品)⇒ 2 個節點, 臂組合不同者在前
             assert.equal(twinHintOf(V1, twinIndexOf([V1, V2, V3, X])), '提示(選集與他節點相同): 交付版之選集與 2 個節點之完整評估逐位相同(選集指紋相同)—— dd44ee55/try_v3.mjs:臂組合不同(本節點多出 C21_holdStruct)⇒ 多出之臂於評估期間未作用,審計時核對未作用之臂;cc33dd44/pick.mjs:臂組合相同 ⇒ 同一成品,不作互相獨立之佐證(不否決,由審計判定)')
             //只有不列者 ⇒ 無提示(不以「0 個節點」成句)
-            assert.equal(twinHintOf(V1, twinIndexOf([V1, V2, { ...V2, id: 'ee55ff66aa77bb88' }])), null)
+            assert.strictEqual(twinHintOf(V1, twinIndexOf([V1, V2, { ...V2, id: 'ee55ff66aa77bb88' }])), null)
         })
 
         it('選集與他節點相同:命中多個節點 ⇒ 臂組合不同者在前(其內依 id)、列至 3 個,其餘列個數與 id;同一對方只列一次(其正本亦為此選集者取交付檔之列,否則取最後一列;多個檔註明)', () => {
@@ -426,7 +426,7 @@ describe('迴圈檢查之兩條機械提示:單峰交付、選集與他節點相
             assert.deepEqual(x.treeIssues(2), ['自報 S 34.2 與重跑 33.7 不符', tw2], '樹之 raw.issues 同一份')
             assert(x.mdOf(2).split('\n').some((l) => l.startsWith('- 迴圈檢查: ') && l.includes(tw2)), '節點文件(.md)之迴圈檢查')
             assert.deepEqual(x.hintsOf(4), [], '對方刪除後移除')
-            assert.equal(x.P.records.getNodeDoc(x.ids[5]), null, '鑑別前提: 5 已刪除')
+            assert.strictEqual(x.P.records.getNodeDoc(x.ids[5]), null, '鑑別前提: 5 已刪除')
             //較早之輪之節點(1: 單峰交付)不在本輪之輪末重寫
             assert.equal(x.jsonText(1), before1)
             //看板(輪末重產): 2 之臂標「選集與他節點相同」; 1 未重產 ⇒ 無「單峰交付」(採納後依證據重算 S, 只核臂與起點兩欄)

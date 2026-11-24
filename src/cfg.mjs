@@ -3,7 +3,7 @@ import os from 'os'
 import path from 'path'
 import { rsiNumOf, RSI_NUM_KINDS } from './arsi/rsiNums.mjs'
 import { agentsCheck } from './arsi/inputs.mjs'
-import { evalScoreOf } from './eval/cfgNum.mjs'
+import { evalScoreOf, FREQ_BANDS_ORDER_CODE } from './eval/cfgNum.mjs'
 
 
 //專案根(唯一之路徑錨點)與設定載入; 設定內之相對路徑一律以專案根解析
@@ -49,23 +49,6 @@ let tms = (s) => Date.parse(`${s}Z`)
  * let s = isoOf(tms('2022-07-01T00:00:00'))
  */
 let isoOf = (ms) => new Date(ms).toISOString().slice(0, 19)
-
-//freqBandsCheck, settings.score.freqBands 之順序(排程第 612 項 ②; R-EV-57; R-EV-44 ④之二): 月均單之分段界線 [b1, b2] 須 b1 ≤ b2(順序顛倒者之「中」段恆空、搜尋地圖之格〔scoreOf 之 cell〕無意義 ⇒ 給了而無效即拒絕)
-//  比較取評估器之 evalScoreOf 之轉換值(數字字串依數值比較: ['9', '10'] 合格); 他種之無效(非陣列、非非負數等)不在此處理(留待組裝時之預檢: invalid score.…, 訊息與離開碼不變)
-//  本檢查置於讀設定處而不在 evalScoreOf: 評估器之指紋不得因本項而改變(src/eval/*.mjs 與 src/cli/eval.mjs 不動); 直接以 API 組 st 者不經此處(列 sgud 已知限制: 待下次動評估器時移入 evalScoreOf 之單一來源)
-let FREQ_BANDS_MSG = 'invalid score.freqBands: must be two non-negative numbers with b1 <= b2'
-let freqBandsCheck = (score) => {
-    let sc = null
-    try {
-        sc = evalScoreOf(score, 'score')
-    }
-    catch (err) {
-        return
-    }
-    if (sc.freqBands[0] > sc.freqBands[1]) {
-        throw new Error(FREQ_BANDS_MSG)
-    }
-}
 
 //getSettings, 讀專案根之 settings.json; 路徑欄(eval.ledgerDir、rsi.root、records.*)轉為絕對路徑
 //  dispatch.skillsRoot 未給時取使用者家目錄下之 .claude/skills(派工套件 w-dispatch-ai 之所在; 見 arsi/dispatchers.mjs)
@@ -114,8 +97,16 @@ let getSettings = () => {
     if (st.agents !== undefined && st.agents !== null) {
         agentsCheck(st.agents, 'settings.agents')
     }
-    //判讀之門檻之順序(settings.score.freqBands 之 b1 ≤ b2; R-EV-57): 給了而顛倒 ⇒ 拋固定訊息(不帶輸入值)
-    freqBandsCheck(st.score)
+    //判讀之門檻之順序(settings.score.freqBands 之 b1 ≤ b2; R-EV-57 ③): 單一來源在評估器之 evalScoreOf(順序顛倒者拋固定訊息、不帶輸入值, 錯誤帶 code = FREQ_BANDS_ORDER_CODE; API 直呼 scoreOf / makeProject 者亦經它)
+    //  讀設定處只攔這一種 —— 不評估之入口(g_build、tools 等)凡讀 settings.json 者亦拒(先於任何寫入); 他種之無效(非陣列、非非負數等)不在此處理(留待組裝時之預檢: invalid score.…, 訊息與離開碼不變)
+    try {
+        evalScoreOf(st.score, 'score')
+    }
+    catch (err) {
+        if (err && err.code === FREQ_BANDS_ORDER_CODE) {
+            throw err
+        }
+    }
     st.FD_ROOT = FD_ROOT
     return st
 }
@@ -406,10 +397,11 @@ let CLI_MODE_OWN = {
 
 //CLI_MODE_NEEDS, 模式內旗標之相依: 進入檔名 → 模式 → { 旗標: [至少須同時給其一之旗標] }; 不合 ⇒ 拒收(同上)
 //  frontier: 列出前緣不帶任何寫出之旗標; --to 只隨 --rearm(改掛); --base、--why、--claim 只隨 --close 或 --rearm(原: 單獨給之 --base、--to、--why、--claim 被靜默忽略;
-//    排程第 481 項之核實: --base 原只隨 --rearm、與 --close 並用被拒收 ⇒ 結案無從以起點指明, 同臂之提案不論起點全部結案; 今 --close 亦收 --base,與 --rearm 對稱)
+//    排程第 481 項之核實: --base 原只隨 --rearm、與 --close 並用被拒收 ⇒ 結案無從以起點指明, 同臂之提案不論起點全部結案; 今 --close 亦收 --base,與 --rearm 對稱);
+//    --close 須隨 --why(排程第 614 項 ③ X3: 結案須記理由; 原 --close 缺 --why 不拒、理由記為空字串 —— 與 --rearm 之「--why 必給」對稱; 訊息 invalid --close: must be used with --why)
 let CLI_MODE_NEEDS = {
     rsi: {
-        frontier: { to: ['rearm'], base: ['close', 'rearm'], why: ['close', 'rearm'], claim: ['close', 'rearm'] },
+        frontier: { to: ['rearm'], base: ['close', 'rearm'], why: ['close', 'rearm'], claim: ['close', 'rearm'], close: ['why'] },
     },
 }
 
@@ -608,7 +600,7 @@ let cliGuard = (entry, opt = {}) => {
     }
 }
 
-//inputMsgOf, 設定之輸入不合之錯誤之訊息(R-EV-54): 屬 settings.guard / source.libraryRoot / rsi.rankBy / rsi.formGate / rsi.backfill(R-REC-54、R-RUN-13) / 設定檔之節、路徑欄與派工設定(getSettings)/ settings.backtest 本身(invalid backtest: must be an object; 其下之鍵為 invalid backtest.<鍵>, 由 configMsgOf 認得)/ settings.score.freqBands 之順序(R-EV-57; getSettings 之 freqBandsCheck)者回其固定訊息(invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy、invalid settings.…、invalid backtest:、invalid score.freqBands:), 其餘回 null(照舊拋出)
+//inputMsgOf, 設定之輸入不合之錯誤之訊息(R-EV-54): 屬 settings.guard / source.libraryRoot / rsi.rankBy / rsi.formGate / rsi.backfill(R-REC-54、R-RUN-13) / 設定檔之節、路徑欄與派工設定(getSettings)/ settings.backtest 本身(invalid backtest: must be an object; 其下之鍵為 invalid backtest.<鍵>, 由 configMsgOf 認得)/ settings.score.freqBands 之順序(R-EV-57; getSettings 攔下 evalScoreOf 之 FREQ_BANDS_ORDER_CODE)者回其固定訊息(invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy、invalid settings.…、invalid backtest:、invalid score.freqBands:), 其餘回 null(照舊拋出)
 //  與 eval/barGrid.mjs 之 configMsgOf(評估器; 認得 invalid eval. / periods. / backtest. 等)分開(configMsgOf 亦認 invalid score.): 本檔之前綴屬設定檔之節與路徑欄、禁區字樣之來源、rsi.rankBy、派工設定等, 不屬評估器之預檢; 入口以 `configMsgOf(err) || inputMsgOf(err)` 判定
 /**
  * 設定之輸入不合之錯誤之訊息: invalid guard.…、invalid source.libraryRoot、invalid rsi.rankBy / formGate / backfill、invalid settings.… 回其訊息(單行), 其餘回傳 null

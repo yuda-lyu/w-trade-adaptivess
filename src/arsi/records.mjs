@@ -157,6 +157,18 @@ let FORM_LABELS = { mechanism: '〔機制〕', clue: '〔線索〕' }
  * formLabelOf(null) // => '未歸類'
  */
 let formLabelOf = (f) => (FORMS.includes(f) ? FORM_LABELS[f] : '未歸類')
+//armKeyOf, 臂之「集合」之鍵(去重、排序、以 + 連接; 單一實作 —— 領域層對應方向與節點之來源方向、做夢範本之前次方向回顧皆用它; 排程第 614 項 ③ X2):
+//  方向之 arms 含重複者入前緣時以去重後之臂(領域層之 normArms), 節點之規格 arms 為集合 ⇒ 比對須同樣去重, 否則含重複臂之方向對不到來源方向(排程第 481 項之核實; R-EV-57); 非陣列 ⇒ ''
+/**
+ * 臂之集合之鍵:去重、排序後以 + 連接(含重複或次序不同之同一集合得同一鍵);非陣列回空字串
+ *
+ * @param {*} arms 輸入臂 id 之陣列
+ * @returns {String} 回傳鍵
+ * @example
+ * armKeyOf(['B14_pitKey', 'A01_nt', 'A01_nt']) // => 'A01_nt+B14_pitKey'
+ * armKeyOf(null) // => ''
+ */
+let armKeyOf = (arms) => (Array.isArray(arms) ? [...new Set(arms)].sort().join('+') : '')
 /**
  * 臂目錄提案之 kind 合法值('new' 新臂、'layer' 新層、'revise' 修訂、'retire' 停用)
  *
@@ -979,4 +991,4 @@ let createFileRecords = (opt) => {
 }
 
 
-export { NODE_SCHEMA, DREAM_SCHEMA, TRUST, ACTIONS, OUTCOMES, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, TASK_LABELS, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_COVERAGE, OVERVIEW_PROGRESS, OVERVIEW_RISK, OVERVIEW_LABELS, CLAIM_VERDICTS, CLAIM_LABELS, FORMS, FORM_LABELS, formLabelOf, ARM_KINDS, ARM_LABELS, checkArmProposals, armProposalLine, checkNodeAgentPart, checkDreamAgentPart, tallyDream, renderNodeMd, renderDreamMd, createFileRecords, roundName }
+export { NODE_SCHEMA, DREAM_SCHEMA, TRUST, ACTIONS, OUTCOMES, IMPROVE_KINDS, IMPROVE_LABELS, DIR_VERDICTS, DIR_LABELS, TASK_TYPES, TASK_LABELS, EXPAND_DECISIONS, EXPAND_LABELS, OVERVIEW_COVERAGE, OVERVIEW_PROGRESS, OVERVIEW_RISK, OVERVIEW_LABELS, CLAIM_VERDICTS, CLAIM_LABELS, FORMS, FORM_LABELS, formLabelOf, armKeyOf, ARM_KINDS, ARM_LABELS, checkArmProposals, armProposalLine, checkNodeAgentPart, checkDreamAgentPart, tallyDream, renderNodeMd, renderDreamMd, createFileRecords, roundName }

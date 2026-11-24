@@ -73,10 +73,10 @@ describe('只留求解窗已結束之席:評估器之 opt.afterFitOnly(規則 R-
         let ev = makeEvaluator(L, { ...CFG, fitEnd: FIT_A })
         let o = { accept, fromBar: 739, toBar: 1290 }
         let m0 = ev.evalPolicy(pickAll, o)
-        assert.equal(m0.afterFit, undefined)
+        assert.strictEqual(m0.afterFit, undefined)
         for (let v of [undefined, null, false]) {
             let m1 = ev.evalPolicy(pickAll, { ...o, afterFitOnly: v })
-            assert.deepEqual(noMs(m1), noMs(m0), String(v))
+            assert.deepStrictEqual(noMs(m1), noMs(m0), String(v))
             assert(!Object.prototype.hasOwnProperty.call(m1, 'afterFit'))
         }
     })
@@ -174,7 +174,7 @@ describe('只留求解窗已結束之席:評估器之 opt.afterFitOnly(規則 R-
         let m2 = ev.evalPolicy(pickF, o)
         let { afterFit, ...rest1 } = m1
         assert(afterFit && m2.afterFit === undefined)
-        assert.deepEqual(noMs(rest1), noMs(m2))
+        assert.deepStrictEqual(noMs(rest1), noMs(m2))
         assert(m1.op.byGroup.length === 3, '三個子帳皆有席')
         assert(m1.nullSideAct && m1.nullSideAct.draws === 16)
     })
@@ -195,7 +195,7 @@ describe('只留求解窗已結束之席:評估器之 opt.afterFitOnly(規則 R-
         let m2 = ev.evalPolicy(pickF, o)
         let { afterFit, ...rest1 } = m1
         assert(afterFit.seatsDropped > 0 && afterFit.seatsKept > 0)
-        assert.deepEqual(noMs(rest1), noMs(m2))
+        assert.deepStrictEqual(noMs(rest1), noMs(m2))
         //所留之席只有子帳 0(與「只回所留之席」者之歸因相同)
         assert.deepEqual(m1.op.byGroup.map((g) => g.group), m2.op.byGroup.map((g) => g.group))
     })
@@ -231,7 +231,7 @@ describe('只留求解窗已結束之席:評估器之 opt.afterFitOnly(規則 R-
         }
         let m2 = ev.evalPolicy(pickAll, o2)
         assert.equal(c2, 1)
-        assert.equal(m2.ext, undefined, '檢查所見者(空)即其後所用者, 診斷未被執行')
+        assert.strictEqual(m2.ext, undefined, '檢查所見者(空)即其後所用者, 診斷未被執行')
         //第一次即讀得診斷 ⇒ 拒絕
         let c3 = 0
         let o3 = {
@@ -255,7 +255,7 @@ describe('只留求解窗已結束之席:評估器之 opt.afterFitOnly(規則 R-
         assert.equal(m0.afterFit.seatsKept, FIX.length)
         let { afterFit, ...rest } = m0
         assert(afterFit)
-        assert.deepEqual(noMs(rest), noMs(ev0.evalPolicy(pickAll, o)))
+        assert.deepStrictEqual(noMs(rest), noMs(ev0.evalPolicy(pickAll, o)))
         //做多之終點早於帳本起點(負棒序): 做多之席不留(只留已設且 ≥ 0 之做空之席)
         let evNeg = makeEvaluator(L, { ...CFG, fitEnd: { long: '2022-06-01T00:00:00', short: T738 } })
         assert(Array.from(evNeg.meta.fitEndBar).some((v) => v < -1))
@@ -367,24 +367,24 @@ describe('只留求解窗已結束之席:評估器之 opt.afterFitOnly(規則 R-
             return { ids, group, ...(r.tag === undefined ? {} : { tag: r.tag }) }
         }
         let m2 = ev.evalPolicy(pickF, { accept: acc, fromBar: 739, toBar: 1290 })
-        assert.deepEqual(noMs(m.nullSideAct), noMs(m2.nullSideAct))
-        assert.deepEqual(noMs(m.null), noMs(m2.null))
+        assert.deepStrictEqual(noMs(m.nullSideAct), noMs(m2.nullSideAct))
+        assert.deepStrictEqual(noMs(m.null), noMs(m2.null))
         return nDisc
     }
 
     it('未算虛無 ⇒ 組成對照皆為 null;每相位之決策數 < 2 ⇒ 不分段(halves 為 null)', () => {
         let ev = makeEvaluator(L, { ...CFG, fitEnd: FIT_A })
         let m0 = ev.evalPolicy(pickAll, { accept, fromBar: 739, toBar: 1290, afterFitOnly: true, nullDraws: 0 })
-        assert.equal(m0.nullSideAct, null)
+        assert.strictEqual(m0.nullSideAct, null)
         assert(m0.afterFit.halves.every((h) => h.sideAct === null))
         //各相位只有 1 個決策(相位 0: 780;相位 3: 798)
         let m1 = ev.evalPolicy(pickAll, { accept, fromBar: 779, toBar: 800, afterFitOnly: true })
         assert.deepEqual(m1.op.nDecisions, [1, 1])
-        assert.equal(m1.afterFit.halves, null)
+        assert.strictEqual(m1.afterFit.halves, null)
         //一個相位有 2 個決策、另一個只有 1 個(相位 0: 780、822;相位 3: 798)⇒ 任一相位 < 2 即不分段
         let m2 = ev.evalPolicy(pickAll, { accept, fromBar: 779, toBar: 830, afterFitOnly: true })
         assert.deepEqual(m2.op.nDecisions, [2, 1])
-        assert.equal(m2.afterFit.halves, null)
+        assert.strictEqual(m2.afterFit.halves, null)
     })
 
     it('所留之席皆無(只挑求解窗未結束之側)⇒ 不拋錯:所留 0、等效年化 0、組成對照 null', () => {
@@ -394,7 +394,7 @@ describe('只留求解窗已結束之席:評估器之 opt.afterFitOnly(規則 R-
         assert.equal(m.afterFit.seatsKept, 0)
         assert.equal(m.afterFit.seatsDropped, shorts.length)
         assert.equal(m.op.eqYr.mean, 0)
-        assert.equal(m.nullSideAct, null)
+        assert.strictEqual(m.nullSideAct, null)
         assert(m.afterFit.halves.every((h) => h.eqYr.mean === 0 && h.sideAct === null && h.orders === 0))
     })
 })
@@ -479,7 +479,7 @@ describe('命令列之 --period postfit(求解窗後段;規則 R-EV-41)', functi
         assert.deepEqual(o.metrics.afterFit, m.afterFit)
         assert(o.metrics.afterFit.seatsDropped > 0 && o.metrics.op.bySide.short.orders === 0, '只留做多之席')
         //主控已定: 此段為佐證 ⇒ 結果檔之 score 為 null(不計 S)、不印判讀列
-        assert.equal(o.score, null)
+        assert.strictEqual(o.score, null)
         assert('score' in o)
         assert(/此結果不是正本/.test(r.out) && /效度限制: /.test(r.out) && /求解窗後段之分段/.test(r.out) && /求解窗後段之席/.test(r.out), r.out.slice(0, 1500))
         assert(/至多一個決策間隔/.test(r.out), '效度限制含最後一個決策之視窗跨過回測期起點')
@@ -495,7 +495,7 @@ describe('命令列之 --period postfit(求解窗後段;規則 R-EV-41)', functi
         let lg = logOf(root)
         assert.equal(lg.length, 1)
         assert.equal(lg[0].period, 'postfit')
-        assert.equal(lg[0].S, null)
+        assert.strictEqual(lg[0].S, null)
         assert.equal(lg[0].selHash, m.selHash)
     })
 
@@ -563,7 +563,7 @@ describe('命令列之 --period postfit(求解窗後段;規則 R-EV-41)', functi
         let o1 = JSON.parse(fs.readFileSync(fo, 'utf8'))
         assert.equal(o1.member.tag, '0x5bd1e995:1')
         assert.equal(o1.period.name, 'postfit')
-        assert.equal(o1.score, null)
+        assert.strictEqual(o1.score, null)
         assert.deepEqual(o1.metrics.afterFit, direct(root, { member: { salt: 0x5bd1e995, half: 1 } }).m.afterFit)
         let fo2 = path.join(root, 'o2.json')
         let r2 = run(root, ['--mode', 'full', '--period', 'postfit', '--phases', '3', '--out', fo2])
@@ -656,7 +656,7 @@ describe('命令列之 --period postfit(求解窗後段;規則 R-EV-41)', functi
         assert.equal(r2.status, 0, r2.out.slice(0, 800))
         let o2 = JSON.parse(fs.readFileSync(fo, 'utf8'))
         assert.deepEqual(o2.metrics.op.nDecisions, [1])
-        assert.equal(o2.metrics.afterFit.halves, null)
+        assert.strictEqual(o2.metrics.afterFit.halves, null)
         //邊界: 終點 = 第 1283 棒(2023-01-30T20:00:00)⇒ 段 = 第 1284 ~ 1289 棒, 相位 0 之決策棒 1284 恰為段之起點 ⇒ 含
         let fit2 = '2023-01-30T20:00:00'
         assert.equal(barOfIso(fit2), 1283)

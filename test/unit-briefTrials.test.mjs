@@ -11,9 +11,9 @@ describe('briefTrials:任務書條款之隨機對照', function () {
 
     it('activeTrial:只取進行中且已到起始輪次者;一次一個', () => {
         let trials = [{ id: 'X1', status: 'adopted', since: 1 }, { id: 'X2', status: 'open', since: 5 }, { id: 'X3', status: 'dropped', since: 1 }]
-        assert.equal(activeTrial(4, trials), null)
+        assert.strictEqual(activeTrial(4, trials), null)
         assert.equal(activeTrial(5, trials).id, 'X2')
-        assert.equal(activeTrial(null, trials), null, '不知輪次(重做、驗證時之呼叫)不指派')
+        assert.strictEqual(activeTrial(null, trials), null, '不知輪次(重做、驗證時之呼叫)不指派')
         assert(TRIALS.filter((t) => t.status === 'open').length <= 1, '一次只開一個試驗')
         for (let t of TRIALS) {
             assert(t.id && t.title && t.metric && Number.isInteger(t.since), `試驗 ${t.id} 須寫明條款、事先定之指標與起始輪次`)

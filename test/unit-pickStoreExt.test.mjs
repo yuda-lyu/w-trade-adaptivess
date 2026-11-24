@@ -54,7 +54,7 @@ describe('共同儲存區:各列之擴充診斷之看板值(規則 R-REC-31)', f
     it('extRowOf:每個物件型之診斷一列(依名稱排序);board / flag / notContent / subset 取原值(不改寫、不截斷);未帶或空白者 null;board 收有限數字(含 0);出錯者只有 error(前 120 字);其他鍵不帶出;非物件者略過', () => {
         let r = PS.extRowOf({ ext: EXT })
         assert.deepEqual(Object.keys(r), Object.keys(EXPECT), '依名稱排序、非物件之診斷(陣列、null、數字)略過')
-        assert.deepEqual(r, EXPECT)
+        assert.deepStrictEqual(r, EXPECT)
         assert.equal(r.iota.board, 'b'.repeat(80), '不截斷(看板之表格另行截 32 字)')
         assert.equal(r.beta.board, 'a|b\nc', '原值(看板之表格另行清理直線與換行)')
         assert.deepEqual(PS.extRowOf({}), {})
@@ -64,7 +64,7 @@ describe('共同儲存區:各列之擴充診斷之看板值(規則 R-REC-31)', f
         assert.deepEqual(PS.extRowOf({ ext: 'x' }), {}, 'ext 非物件 ⇒ 空')
         assert.deepEqual(PS.extRowOf({ ext: {} }), {})
         //board 為字串之原值亦含前後空白者(只判定有無,不修剪);Infinity 與 -Infinity 為無值
-        assert.deepEqual(PS.extRowOf({ ext: { a: { board: '  v ' }, b: { board: Infinity }, c: { board: -Infinity }, d: { board: -3.5 } } }), {
+        assert.deepStrictEqual(PS.extRowOf({ ext: { a: { board: '  v ' }, b: { board: Infinity }, c: { board: -Infinity }, d: { board: -3.5 } } }), {
             a: { board: '  v ', flag: null, notContent: null, subset: null },
             b: { board: null, flag: null, notContent: null, subset: null },
             c: { board: null, flag: null, notContent: null, subset: null },
@@ -103,7 +103,7 @@ describe('共同儲存區:各列之擴充診斷之看板值(規則 R-REC-31)', f
         let keys = Object.keys(x)
         assert.equal(keys.indexOf('ext'), keys.indexOf('backtest') + 1)
         assert.equal(keys.indexOf('holdout'), keys.indexOf('ext') + 1)
-        assert.deepEqual(x.ext, EXPECT)
+        assert.deepStrictEqual(x.ext, EXPECT)
         assert.deepEqual(infoOf(doc('aaaaaaaaaaaaaaa1', 1, undefined)).ext, {})
         //舊節點文件缺 harness.raw 時亦為 {}(不拋錯)
         assert.deepEqual(infoOf({ nodeId: 'bbbbbbbbbbbbbbb2', round: 1, spec: { arms: ['A01_nt'], base: null }, harness: { ok: true, score: { S: 1 } } }).ext, {})
@@ -128,7 +128,7 @@ describe('共同儲存區:各列之擴充診斷之看板值(規則 R-REC-31)', f
             let idx = JSON.parse(fs.readFileSync(path.join(dir, 'index.json'), 'utf8'))
             let by = Object.fromEntries(idx.items.map((it) => [it.id, it.ext]))
             ids.forEach((id, k) => {
-                assert.deepEqual(by[id], want[k], id)
+                assert.deepStrictEqual(by[id], want[k], id)
                 //節點文件(JSON 往返後)之 ext 與總表之同一份: 總表有值之各鍵(診斷名、鍵逐一核對)皆等於節點文件之原值(出錯者取前 120 字)
                 let fromDoc = JSON.parse(fs.readFileSync(path.join(st.records.nodeDir, `${id}.json`), 'utf8')).harness.raw.metrics.ext || {}
                 for (let nm of Object.keys(by[id])) {
@@ -139,7 +139,7 @@ describe('共同儲存區:各列之擴充診斷之看板值(規則 R-REC-31)', f
                         }
                     }
                 }
-                assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, id, 'info.json'), 'utf8')).ext, by[id], `${id} info.json`)
+                assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, id, 'info.json'), 'utf8')).ext, by[id], `${id} info.json`)
             })
             let defKey = 'ext.<診斷名>.board / flag / notContent / subset'
             let ks = FIELD_DEFS.map(([k]) => k)

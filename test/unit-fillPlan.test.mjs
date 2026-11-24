@@ -26,7 +26,7 @@ describe('附算與補算之計畫(規則 R-REC-34)', function () {
         assert.deepEqual(p.tasks[0].keys.ext, { dB: { pick: 'p1', evaluator: 'E1', diag: 'hb1' }, dC: { pick: 'p1', evaluator: 'E1', diag: 'hc1' } })
         assert.deepEqual(p.tasks[1].keys.ext, { dA: { pick: 'p2', evaluator: 'E1', diag: 'ha1' } })
         assert.deepEqual(p.backlog, { postfit: [], ext: { dA: [], dB: [], dC: [] } })
-        assert.deepEqual(p.registry, { dA: { hash: 'ha1', since: null }, dB: { hash: 'hb1', since: null }, dC: { hash: 'hc1', since: null } })
+        assert.deepStrictEqual(p.registry, { dA: { hash: 'ha1', since: null }, dB: { hash: 'hb1', since: null }, dC: { hash: 'hc1', since: null } })
         assert.equal(p.nCurrent, 0)
         //targets: 只有 n2 入待算; 其餘之須算者入 backlog(依 id 排序)
         let q = planFill({ nodes, diags, registry: null, evaluator: 'E1', now: NOW, targets: ['n2'] })
@@ -59,7 +59,7 @@ describe('附算與補算之計畫(規則 R-REC-34)', function () {
         let p = planFill({ nodes, diags, registry: reg, evaluator: 'E1', now: NOW })
         assert.equal(p.nCurrent, 1)
         assert.deepEqual(p.tasks.map((t) => [t.nodeId, t.postfit, t.ext]), [['a0', false, ['dA']], ['a2', true, ['dA']], ['a3', true, ['dA']], ['a4', false, ['dA']], ['a5', true, []]])
-        assert.equal(p.tasks[3].keys.postfit, null)
+        assert.strictEqual(p.tasks[3].keys.postfit, null)
         assert.deepEqual(p.tasks[3].keys.ext.dA, { pick: 'pd', evaluator: 'E1', diag: 'ha1' })
         assert.deepEqual(p.tasks[1].keys.postfit, { pick: 'pa2new', evaluator: 'E1' })
         //force: 只作用於 targets 內者(a1 全部重算; 其餘照常計入 backlog)
@@ -88,9 +88,9 @@ describe('附算與補算之計畫(規則 R-REC-34)', function () {
         let prev = { dA: { hash: 'ha1', since: null }, dB: { hash: 'hb0', since: '2026-01-01T00:00:00Z' }, dOld: { hash: 'ho', since: null } }
         let r = registryOf(prev, diags, NOW)
         //dA 同雜湊 ⇒ 沿用 since(null); dB 改寫 ⇒ since = NOW; dC 新增 ⇒ since = NOW; dOld 已移除 ⇒ 不留; 依名排序
-        assert.deepEqual(r, { dA: { hash: 'ha1', since: null }, dB: { hash: 'hb1', since: NOW }, dC: { hash: 'hc1', since: NOW } })
+        assert.deepStrictEqual(r, { dA: { hash: 'ha1', since: null }, dB: { hash: 'hb1', since: NOW }, dC: { hash: 'hc1', since: NOW } })
         assert.deepEqual(Object.keys(r), ['dA', 'dB', 'dC'])
-        assert.deepEqual(registryOf(null, diags, NOW), { dA: { hash: 'ha1', since: null }, dB: { hash: 'hb1', since: null }, dC: { hash: 'hc1', since: null } })
+        assert.deepStrictEqual(registryOf(null, diags, NOW), { dA: { hash: 'ha1', since: null }, dB: { hash: 'hb1', since: null }, dC: { hash: 'hc1', since: null } })
         //已有 since 而雜湊相同者照留
         assert.deepEqual(registryOf({ dA: { hash: 'ha1', since: '2026-02-02T00:00:00Z' } }, [{ name: 'dA', hash: 'ha1' }], NOW), { dA: { hash: 'ha1', since: '2026-02-02T00:00:00Z' } })
         let nodes = [
@@ -171,9 +171,9 @@ describe('附算與補算之計畫(規則 R-REC-34)', function () {
         o2.metrics.afterFit.halves = null
         o2.metrics.afterFit.sideActRecent = null
         let r2 = postfitRowOf(o2)
-        assert.equal(r2.comp, null)
-        assert.equal(r2.halves, null)
-        assert.deepEqual(r2.recent, { comp: null, halves: null })
+        assert.strictEqual(r2.comp, null)
+        assert.strictEqual(r2.halves, null)
+        assert.deepStrictEqual(r2.recent, { comp: null, halves: null })
         //回測期之結果、失敗之結果、無 afterFit 者拋錯
         let msg = 'invalid result: must be an ok result of --period postfit'
         assert.throws(() => postfitRowOf({ ...pfResult(false), period: { name: 'backtest' } }), (e) => e.message === msg)
@@ -204,13 +204,13 @@ describe('附算與補算之計畫(規則 R-REC-34)', function () {
         assert.deepEqual(Object.keys(d2.ext), ['dA', 'dB'])
         assert.deepEqual(d2.ext.dB, { key: { ...kP, diag: 'hb2' }, at: 'T2', value: { board: 5 } })
         //前次之結構版本不同 / 節點不同 ⇒ 視同無
-        assert.deepEqual(fillDocOf({ ...d1, schema: 'other' }, { nodeId: 'n1', at: 'T3' }), { schema: FP.FILL_SCHEMA, nodeId: 'n1', postfit: null, ext: {} })
-        assert.deepEqual(fillDocOf(d1, { nodeId: 'n9', at: 'T3' }), { schema: FP.FILL_SCHEMA, nodeId: 'n9', postfit: null, ext: {} })
+        assert.deepStrictEqual(fillDocOf({ ...d1, schema: 'other' }, { nodeId: 'n1', at: 'T3' }), { schema: FP.FILL_SCHEMA, nodeId: 'n1', postfit: null, ext: {} })
+        assert.deepStrictEqual(fillDocOf(d1, { nodeId: 'n9', at: 'T3' }), { schema: FP.FILL_SCHEMA, nodeId: 'n9', postfit: null, ext: {} })
         assert.deepEqual(postfitOfFill(d1, kP), { at: 'T1', row: { seatsKept: 3 } })
-        assert.equal(postfitOfFill(d1, { pick: 'p1', evaluator: 'E2' }), null)
-        assert.equal(postfitOfFill(d1, { pick: 'p2', evaluator: 'E1' }), null)
-        assert.equal(postfitOfFill({ ...d1, schema: 'other' }, kP), null)
-        assert.equal(postfitOfFill(null, kP), null)
+        assert.strictEqual(postfitOfFill(d1, { pick: 'p1', evaluator: 'E2' }), null)
+        assert.strictEqual(postfitOfFill(d1, { pick: 'p2', evaluator: 'E1' }), null)
+        assert.strictEqual(postfitOfFill({ ...d1, schema: 'other' }, kP), null)
+        assert.strictEqual(postfitOfFill(null, kP), null)
     })
 
     it('fillLinesOf:有結果者一列(成功 / 失敗之計數與失敗者);有待補算者另一列(含補齊之指令);皆無者為空', function () {

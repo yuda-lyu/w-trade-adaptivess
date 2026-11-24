@@ -122,7 +122,7 @@ describe('成員重抽之半庫帳本(memberLedger)與命令列之 --member', fu
         assert.equal(seen.length, L.n)
         assert.deepEqual(seen, Array.from({ length: L.n }, (_, s) => tieBaseOf(s)))
         assert.equal(new Set(seen).size, L.n, '各策略之值兩兩相異')
-        assert.equal(L.srcIdx, undefined)
+        assert.strictEqual(L.srcIdx, undefined)
     })
 
     it('兩半互不重疊且合為全庫;半庫帳本之各逐策略欄(含 cls 每策略 3 值)與其於全庫時逐位相同;逐棒之欄與延遲讀取之欄共用;不改動原帳本', () => {
@@ -368,9 +368,9 @@ describe('成員重抽之半庫帳本(memberLedger)與命令列之 --member', fu
         }
         for (let k of ['keySym', 'keyTh', 'keyOr']) {
             let M = memberLedger({ ...L, [k]: null }, SALT, 0)
-            assert.equal(M[k], null, `舊帳本無 ${k} 者為 null`)
+            assert.strictEqual(M[k], null, `舊帳本無 ${k} 者為 null`)
         }
-        assert.equal(memberLedger({ ...L, keySym: null, keyTh: null, keyOr: null }, SALT, 0).keySym, null, '舊帳本無三個條件欄者各為 null')
+        assert.strictEqual(memberLedger({ ...L, keySym: null, keyTh: null, keyOr: null }, SALT, 0).keySym, null, '舊帳本無三個條件欄者各為 null')
         assert.equal(A0.n > 0, true)
         //L.srcIdx 給而不合者拒絕建評估器(型別以內部槽判定: 偽造原型者亦拒; null / undefined 視同未給)
         let nt = new Int32Array(A0.n)
@@ -525,7 +525,7 @@ describe('成員重抽之半庫帳本(memberLedger)與命令列之 --member', fu
             assert.notEqual(a.o.metrics.selHash, full.o.metrics.selHash)
             let log = logOf(root)
             assert.equal(log.length, 3)
-            assert.deepEqual(log.map((x) => x.member), [undefined, '0x5bd1e995:0', '0x5bd1e995:1'])
+            assert.deepStrictEqual(log.map((x) => x.member), [undefined, '0x5bd1e995:0', '0x5bd1e995:1'])
             assert(!('member' in log[0]))
             assert(log.every((x) => x.ok === true && typeof x.selHash === 'string'))
         })
@@ -561,7 +561,7 @@ describe('成員重抽之半庫帳本(memberLedger)與命令列之 --member', fu
                 assert.deepEqual(lastOut.member, { tag: `0x${salt.toString(16)}:${half}`, salt, half })
             }
             let log = logOf(root)
-            assert.deepEqual(log.map((x) => x.member), [undefined, '0x5bd1e995:0', '0x5bd1e995:1'])
+            assert.deepStrictEqual(log.map((x) => x.member), [undefined, '0x5bd1e995:0', '0x5bd1e995:1'])
             assert(log.every((x) => x.ok === false && x.code === 'PICK_RUN'), '失敗之列亦記(帶 member)')
         })
 
@@ -603,7 +603,7 @@ describe('成員重抽之半庫帳本(memberLedger)與命令列之 --member', fu
             assert.deepEqual(b.o.member, { tag: '0x5bd1e995:1', salt: SALT, half: 1 })
             assert.deepEqual(z.o.member, { tag: '0x0:0', salt: 0, half: 0 })
             let log = logOf(root)
-            assert.deepEqual(log.map((x) => [x.ok, x.code, x.member]), [[false, 'PICK_SCAN', undefined], [false, 'PICK_SCAN', '0x5bd1e995:1'], [false, 'PICK_SCAN', '0x0:0']])
+            assert.deepStrictEqual(log.map((x) => [x.ok, x.code, x.member]), [[false, 'PICK_SCAN', undefined], [false, 'PICK_SCAN', '0x5bd1e995:1'], [false, 'PICK_SCAN', '0x0:0']])
         })
 
         it('挑選模組頂層改內建物件(完整性錯誤、離開碼 3):評估紀錄之列與失敗之結果檔亦帶 member;未給 --member 者無', () => {
@@ -615,7 +615,7 @@ describe('成員重抽之半庫帳本(memberLedger)與命令列之 --member', fu
             assert.equal(b.status, 3, b.out.slice(0, 400))
             assert(a.o && a.o.code === 'EVAL_INTEGRITY' && !('member' in a.o))
             assert.deepEqual(b.o.member, { tag: '0x7:0', salt: 7, half: 0 })
-            assert.deepEqual(logOf(root).map((x) => [x.code, x.member]), [['EVAL_INTEGRITY', undefined], ['EVAL_INTEGRITY', '0x7:0']])
+            assert.deepStrictEqual(logOf(root).map((x) => [x.code, x.member]), [['EVAL_INTEGRITY', undefined], ['EVAL_INTEGRITY', '0x7:0']])
         })
 
         it('--member 之格式不合:不評估、離開碼 2、不寫結果檔、不記評估紀錄(不靜默改用全庫);訊息固定、不帶輸入值;旗標重複給者亦拒(argOf 只取第一個,其餘會被靜默忽略)', () => {
@@ -624,19 +624,19 @@ describe('成員重抽之半庫帳本(memberLedger)與命令列之 --member', fu
                 let r = run(root, args)
                 assert.equal(r.status, 2, `${what}: ${r.out.slice(0, 300)}`)
                 assert(/invalid --member: must be <salt>:<half>/.test(r.out) && !r.out.includes('secret-token-xyz'), what)
-                assert.equal(r.o, null, `${what}: 不寫結果檔`)
+                assert.strictEqual(r.o, null, `${what}: 不寫結果檔`)
             }
             for (let v of ['5', '0x5bd1e995', '0x5bd1e995:2', 'abc:0', '4294967296:0', '0x1ffffffff:0', '0x100000000:0', `0x${'f'.repeat(400)}:0`, `${'9'.repeat(400)}:0`, '+5:0', '0x5bd1e995g:0', '-1:0', '1:0:1', '0x:0', '0xzz:1', '1.5:0', ':0', '12345:', ' 12:0', '9999999999999999999999:0', 'secret-token-xyz:0']) {
                 let r = run(root, ['--member', v])
                 assert.equal(r.status, 2, `${v}: ${r.out.slice(0, 300)}`)
                 assert(/invalid --member: must be <salt>:<half>/.test(r.out), v)
                 assert(!r.out.includes('secret-token-xyz'), '不回顯輸入值')
-                assert.equal(r.o, null, `${v}: 不寫結果檔`)
+                assert.strictEqual(r.o, null, `${v}: 不寫結果檔`)
             }
             //只給旗標而無值
             let r = run(root, ['--member'])
             assert.equal(r.status, 2, r.out.slice(0, 300))
-            assert.equal(r.o, null)
+            assert.strictEqual(r.o, null)
             assert(!fs.existsSync(path.join(root, 'rsi', 'work', 'w1', '.evals.log')), '未評估者不記評估紀錄')
         })
 

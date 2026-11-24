@@ -300,9 +300,9 @@ describe('每根 K 棒之時長之一般化(規則 R-EV-44)', function () {
         it('trainFromBarOf:未給 / null / false ⇒ null;true ⇒ 訓練期起點之棒序(早於帳本起點者為 0);非布林、起點不在格線上、起點晚於終點 ⇒ 拋錯', () => {
             let meta = { time0: TIME0, barHours: 24 }
             let st = (v, start = '2020-07-01T00:00:00') => ({ eval: { trainFromStart: v }, periods: { train: { start } } })
-            assert.equal(trainFromBarOf({ eval: {} }, meta, 500), null)
-            assert.equal(trainFromBarOf(st(null), meta, 500), null)
-            assert.equal(trainFromBarOf(st(false), meta, 500), null)
+            assert.strictEqual(trainFromBarOf({ eval: {} }, meta, 500), null)
+            assert.strictEqual(trainFromBarOf(st(null), meta, 500), null)
+            assert.strictEqual(trainFromBarOf(st(false), meta, 500), null)
             assert.equal(trainFromBarOf(st(true), meta, 500), 182, '2020-01-01 → 2020-07-01 = 182 日')
             assert.equal(trainFromBarOf(st(true, '2019-12-01T00:00:00'), meta, 500), 0)
             assert.equal(trainFromBarOf(st(true, '2020-07-01T04:00:00'), { time0: TIME0, barHours: 4 }, 5000), 182 * 6 + 1)
@@ -366,7 +366,7 @@ describe('每根 K 棒之時長之一般化(規則 R-EV-44)', function () {
             assert(m.period.firstEvalDecision >= m.period.evalFrom && m.period.firstDecision < m.period.evalFrom, `${m.period.firstDecision} / ${m.period.firstEvalDecision}`)
             let fp0 = path.join(t.dir, 'train0.json')
             assert.equal(run(mkProj('cli0b'), ['--pick', 'pick_all.mjs', '--mode', 'quick', '--period', 'train', '--out', fp0]).status, 0)
-            assert.equal(JSON.parse(fs.readFileSync(fp0, 'utf8')).metrics.period.evalFrom, null, '未給: 自第一個決策起(評估期間之起點為 null)')
+            assert.strictEqual(JSON.parse(fs.readFileSync(fp0, 'utf8')).metrics.period.evalFrom, null, '未給: 自第一個決策起(評估期間之起點為 null)')
         })
 
         it('g_backtest.mjs(標準配置:評估帳本 = 全期帳本之前綴):true ⇒ 兩帳本各以自身之棒序換算下界、核對不誤報、ntAll 只計 [訓練期起點, 終點);未給 ⇒ 自帳本起點;設定不合 ⇒ 離開碼 2', () => {
@@ -493,7 +493,7 @@ describe('每根 K 棒之時長之一般化(規則 R-EV-44)', function () {
             }
             assert.equal(pair[1][0], pair[0][0], '--period train')
             assert.equal(pair[1][1], pair[0][1], '回測期')
-            assert.equal(JSON.parse(pair[1][0]).metrics.period.evalFrom, null)
+            assert.strictEqual(JSON.parse(pair[1][0]).metrics.period.evalFrom, null)
         })
 
         it('g_backtest.mjs:評估帳本之 time0 與全期帳本不同(早一日、同一時刻之進場以各自之棒序表示)⇒ 兩帳本各以自身之 time0 換算下界,核對不誤報', () => {
@@ -840,7 +840,7 @@ describe('文字不寫死策略庫之事實(規則 R-REC-36)', function () {
                 //資源閘關閉: 參考設定之門檻依全機負載而定, 測試之成敗不得隨機器之負載而變
                 resources: {},
             }
-            assert.equal(base.score.sideFlow, undefined, '前提: 套件之參考設定未設 score.sideFlow(未設之案才是內建值)')
+            assert.strictEqual(base.score.sideFlow, undefined, '前提: 套件之參考設定未設 score.sideFlow(未設之案才是內建值)')
             fs.mkdirSync(path.join(root, 'rsi', 'toolbox', 'metrics'), { recursive: true })
             fs.mkdirSync(path.join(root, 'arms'), { recursive: true })
             fs.copyFileSync(path.join(FD_ROOT, 'arms', 'base.json'), path.join(root, 'arms', 'base.json'))
@@ -903,7 +903,7 @@ console.log('RESULT ' + JSON.stringify(res))
             assert.equal(res.rv.length, 1)
             assert.equal(res.rv[0].ok, true, JSON.stringify(res.rv))
             assert(typeof res.a === 'string', '驗證後之節點文件須有「下單之做空比例」一列(合成帳本兩側皆有下單)')
-            assert.equal(res.cleared, null, '清空後該列不在')
+            assert.strictEqual(res.cleared, null, '清空後該列不在')
             assert.equal(res.k, 1, '補算有變動之節點數')
             assert(typeof res.b === 'string', '補算後之節點文件須有該列')
             return res

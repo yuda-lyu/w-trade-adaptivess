@@ -277,7 +277,7 @@ describe('庫況體檢(libStats 與 tools/libCheck.mjs)', function () {
             for (let args of [[], ['--json']]) {
                 let x = run(r, args)
                 assert.equal(x.status, 2, `${what} ${args.join(' ')}: ${x.stdout}${x.stderr}`)
-                assert.equal(x.stdout, want === undefined ? msgOf(r) : want, what)
+                assert.strictEqual(x.stdout, want === undefined ? msgOf(r) : want, what)
                 assert.equal(x.stderr, '', `${what}: 無例外堆疊`)
                 assert(!x.stdout.includes('secret-token-xyz'), `${what}: 不回顯設定之內容`)
             }

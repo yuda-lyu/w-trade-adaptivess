@@ -195,7 +195,7 @@ describe('量尺之並列與選配之主鍵(規則 R-REC-49)', function () {
             }
         }
         assert(Math.abs(r.kendall - (C - D) / Math.sqrt((n0 - n1) * (n0 - n2))) < 1e-12)
-        assert.deepEqual(rankCompareOf([{ id: 'z', key: 1, content: 1 }]).spearman, null)
-        assert.equal(rankCompareOf([], {}).firstKey, null)
+        assert.deepStrictEqual(rankCompareOf([{ id: 'z', key: 1, content: 1 }]).spearman, null)
+        assert.strictEqual(rankCompareOf([], {}).firstKey, null)
     })
 })

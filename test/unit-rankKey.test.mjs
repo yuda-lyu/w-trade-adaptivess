@@ -264,7 +264,7 @@ describe('排序鍵:量尺、參考節點、補位之底與「最佳」(規則 R
                 assert.equal(x.board, y.board, `看板(${name})`)
                 assert.equal(x.map, y.map, `搜尋地圖(${name})`)
                 assert.deepEqual(x.refs.map((r) => r.nodeId), y.refs.map((r) => r.nodeId), `參考節點(${name})`)
-                assert.deepEqual(x.carriers, y.carriers, `補位(${name})`)
+                assert.deepStrictEqual(x.carriers, y.carriers, `補位(${name})`)
             }
             for (let [name, v] of [['NaN', NaN], ['Infinity', Infinity], ['-Infinity', -Infinity]]) {
                 let patch = (n) => {
@@ -276,7 +276,7 @@ describe('排序鍵:量尺、參考節點、補位之底與「最佳」(規則 R
                 let x = mk({ rp: 'mild', neOf: () => ({ delta: 23.56 }), patch })
                 assert.equal(x.board, y.board, `看板(${name})`)
                 assert.equal(x.map, y.map, `搜尋地圖(${name})`)
-                assert.deepEqual(x.carriers, y.carriers, `補位(${name})`)
+                assert.deepStrictEqual(x.carriers, y.carriers, `補位(${name})`)
             }
             //鑑別前提: 有限之差會改變次序
             let z = mk({ rp: 'mild', neOf: (x) => ({ delta: x.k === 1 ? 23.56 : 0 }) })

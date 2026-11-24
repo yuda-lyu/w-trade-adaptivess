@@ -124,7 +124,7 @@ describe('外部序列之對位(alignSeries)', function () {
         ]
         let stat = {}
         let a = alignSeries(rows, kp, 4, stat)
-        assert.deepEqual(Array.from(a).map((v) => (Number.isNaN(v) ? null : v)), [null, 3.25, 0, -0.5])
+        assert.deepStrictEqual(Array.from(a).map((v) => (Number.isNaN(v) ? null : v)), [null, 3.25, 0, -0.5])
         assert.equal(stat.conflict, 1)
         assert.equal(stat.conflictSample, '2024-01-01T00:00:00')
         assert.equal(stat.invalid, 1)
@@ -149,7 +149,7 @@ describe('外部序列之對位(alignSeries)', function () {
         ]
         let stat = { endTime: '2024-01-01T12:00:00', time0: '2024-01-01T00:00:00' }
         let a = alignSeries(rows, kp, 3, stat)
-        assert.deepEqual(Array.from(a).map((v) => (Number.isNaN(v) ? null : v)), [1, null, 3])
+        assert.deepStrictEqual(Array.from(a).map((v) => (Number.isNaN(v) ? null : v)), [1, null, 3])
         assert.equal(stat.conflict, 0)
         assert.equal(stat.rows, 9)
         assert.equal(stat.matched, 3)
@@ -234,7 +234,7 @@ describe('建帳本之外部序列(buildLedger 之 seriesDir)', function () {
         //無此欄之帳本(含舊帳本): seriesNames 為空陣列、ser 為 null
         let LA = loadLedger(outA)
         assert.deepEqual(LA.seriesNames, [])
-        assert.equal(LA.ser, null)
+        assert.strictEqual(LA.ser, null)
     })
 
     it('重建於同一資料夾而不再給 seriesDir ⇒ 移除舊之 ser.f64(名稱與欄不致不符)', async () => {
@@ -246,7 +246,7 @@ describe('建帳本之外部序列(buildLedger 之 seriesDir)', function () {
         assert.deepEqual(meta.seriesNames, [])
         let L = loadLedger(out)
         assert.deepEqual(L.seriesNames, [])
-        assert.equal(L.ser, null)
+        assert.strictEqual(L.ser, null)
     })
 
     it('seriesDir 不存在 ⇒ 不建入並於記錄註明;空夾 ⇒ 不建入', async () => {

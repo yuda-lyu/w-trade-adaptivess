@@ -94,14 +94,14 @@ describe('進入檔之拒跑:角色之環境變數與判定表', function () {
         assert.equal(agentRoleOf({ ARSI_AGENT_ROLE: 'node' }), 'node')
         assert.equal(agentRoleOf({ ARSI_AGENT_ROLE: 'dream' }), 'dream')
         for (let v of ['', 'NODE', 'Dream', 'audit', '1', ' node']) {
-            assert.equal(agentRoleOf({ ARSI_AGENT_ROLE: v }), null, JSON.stringify(v))
+            assert.strictEqual(agentRoleOf({ ARSI_AGENT_ROLE: v }), null, JSON.stringify(v))
         }
-        assert.equal(agentRoleOf({}), null)
-        assert.equal(agentRoleOf(null), null)
+        assert.strictEqual(agentRoleOf({}), null)
+        assert.strictEqual(agentRoleOf(null), null)
         assert.deepEqual(agentEnvOf('node'), { ARSI_AGENT_ROLE: 'node' })
         assert.deepEqual(agentEnvOf('dream'), { ARSI_AGENT_ROLE: 'dream' })
         for (let r of ['audit', 'probe', '', undefined, 'NODE']) {
-            assert.equal(agentEnvOf(r), null, String(r))
+            assert.strictEqual(agentEnvOf(r), null, String(r))
         }
     })
 
@@ -346,7 +346,7 @@ describe('進入檔之拒跑:合成專案實跑(命令列程式與工具)', func
             let outB = args.includes('--out') ? fs.readFileSync(path.join(wd, 'full_a.json'), 'utf8') : null
             assert.equal(b.status, a.status, what)
             assert.equal(maskMs(b.stdout), maskMs(a.stdout), what)
-            assert.equal(maskMs(outB), maskMs(outA), `${what}: 結果檔`)
+            assert.strictEqual(maskMs(outB), maskMs(outA), `${what}: 結果檔`)
             assert(!/拒跑/.test(b.stdout), what)
         }
     })

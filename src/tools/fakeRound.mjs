@@ -36,7 +36,9 @@ st.records = { nodeDir: path.join(root, 'rsi/records/nodes'), dreamDir: path.joi
 st.backtest = { ...(st.backtest || {}), resultDir: path.join(root, 'private-backtest') } //假輪次之回測期結果不與正式者混放(全期帳本仍用正式之私有根)
 
 let example = fs.readFileSync(P('examples', 'pick_example.mjs'), 'utf8')
+//普通節點與重做之交付以範例為底(範例為〔機制〕之寫法: 逐策略之入選條件, 入選隻數是結果; 本檔只以字串替換其 accept 與臂; 排程第 616 項)
 //特別之節點(見下方 firstId; 計畫第 1 個)用「訓練期可過階梯 1」之挑法(近 210 日勝率升冪; 已知回測期 fail), 以走到回測期旗標與否決之路徑
+//  winAsc 取前 K(依名次)屬〔線索〕之寫法, 保留為夾具: 它是假輪次走回測期旗標與否決之路徑所需之「訓練期過而回測期 fail」之成品, 不是範例之寫法, 也不代表節點任務之交付
 let winAsc = `export const meta = { arms: [], params: { lookbackDays: 210, minClosed: 5, take: 40, maxHold: 30 }, desc: '假節點: 近210日勝率(升冪)前40; 同時持倉<30' }
 export default function pick(ctx) {
     let cfg = meta.params

@@ -38,7 +38,7 @@ let nodeOf = ({ a, lr, bt, tr, sizeMax, flags, sel = 'selX', release = null, k =
 describe('側別曝險之判定(verifyExposure.mjs;規則 R-REC-48)', function () {
     it('設定之解讀:false = 關閉;未給或不合者用預設(不拋錯);flags 可為空陣列', () => {
         assert.deepEqual(EXPOSURE_DEFAULT, { flags: ['fixedState', 'placeboTiming'], minShift: 0.1 })
-        assert.equal(exposureCfgOf(false), null)
+        assert.strictEqual(exposureCfgOf(false), null)
         for (let v of [undefined, null, true, 'on', 3, [], {}]) {
             assert.deepEqual(exposureCfgOf(v), { flags: ['fixedState', 'placeboTiming'], minShift: 0.1 }, JSON.stringify(v))
         }
@@ -131,8 +131,8 @@ describe('側別曝險之判定(verifyExposure.mjs;規則 R-REC-48)', function (
         let e = exposureOf(nodeOf(base), cfg)
         assert.equal(exposureHintOf(e), `${EXPOSURE_HEAD}交付版之優勢可能來自側別之曝險(固定側別)⇒ 不作為補位之底與方向之起點(主控可逐案放行;不否決,由審計判定)`)
         assert.equal(isExposureHint(exposureHintOf(e)), true)
-        assert.equal(exposureHintOf(ok), null)
-        assert.equal(exposureHintOf(exposureOf(nodeOf({ ...base, lr: 0.5, a: 0.5 }), cfg)), null)
+        assert.strictEqual(exposureHintOf(ok), null)
+        assert.strictEqual(exposureHintOf(exposureOf(nodeOf({ ...base, lr: 0.5, a: 0.5 }), cfg)), null)
         //理由不含門檻之值
         assert(!/0\.1|0\.9|2\.5|0\.4/.test(exposureHintOf(e)))
     })
@@ -236,14 +236,14 @@ describe('側別曝險之效果(makeProject;規則 R-REC-48)', function () {
             n.raw.train = { longRatio: 0.3, tags: [], shortShare: 0.6 }
             n.raw.metrics = metricsOf({ lr: 0.62, bt: 0.45, k: 2 })
         })
-        assert.deepEqual(P.domain.carriers().D30_volumeCut, { arms: ['D30_volumeCut'], base: null })
+        assert.deepStrictEqual(P.domain.carriers().D30_volumeCut, { arms: ['D30_volumeCut'], base: null })
         //放行(綁選集指紋)⇒ 照取; 指紋改變 ⇒ 失效
         P.rsi.setEvidence(ex, { exposureRelease: { selHash: 'sel-ex', why: 'w', at: '2026-01-01T00:00:00.000Z' } }, { ref: 't', note: 'n' })
         assert.equal(P.domain.carriers().D30_volumeCut.base, ex)
         P.rsi.store.updateNode(ex, (n) => {
             n.raw.selHash = 'sel-ex2'
         })
-        assert.deepEqual(P.domain.carriers().D30_volumeCut, { arms: ['D30_volumeCut'], base: null })
+        assert.deepStrictEqual(P.domain.carriers().D30_volumeCut, { arms: ['D30_volumeCut'], base: null })
     })
 
     it('判定關閉(settings.rsi.exposure = false)⇒ 底照取曝險者、閘門與方向不拒、看板與搜尋地圖無標示', () => {
@@ -532,8 +532,8 @@ describe('放行之工具 tools/exposure.mjs(規則 R-REC-48)', function () {
         let u = run(['--undo', '--node', ids.ex.slice(0, 10), '--why', '撤銷'])
         assert.equal(u.status, 0, u.stdout + u.stderr)
         let P2 = projOf()
-        assert.equal(P2.rsi.store.getNode(ids.ex).evidence.exposureRelease, null)
-        assert.equal(P2.records.getNodeDoc(ids.ex).control.exposureRelease, null)
+        assert.strictEqual(P2.rsi.store.getNode(ids.ex).evidence.exposureRelease, null)
+        assert.strictEqual(P2.records.getNodeDoc(ids.ex).control.exposureRelease, null)
         assert.equal(P2.rsi.store.getNode(ids.ex).raw.issues.filter(isExposureHint).length, 1)
         assert.deepEqual([P2.rsi.store.getNode(ids.ex).score.S, P2.rsi.store.getNode(ids.ex).score.ladder], [sc['selT-ex'].S, sc['selT-ex'].ladder])
     })

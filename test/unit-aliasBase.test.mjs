@@ -138,7 +138,7 @@ describe('起點為別名(選集與較早之節點相同)時之一致處理(規�
                 let alias = put(P, { arms: [aliasArm], round: 2, S: 63.5, sel: 'sel-c', k: 2 })
                 assert.deepEqual([...P.rsi.aliasMap()], [[alias, canon]])
                 let c0 = carrierOf(P, 'D30_volumeCut')
-                assert.deepEqual(c0, { arms: ['D30_volumeCut'], base: null }, `只有別名可信 ⇒ 無底: ${JSON.stringify(bad)}`)
+                assert.deepStrictEqual(c0, { arms: ['D30_volumeCut'], base: null }, `只有別名可信 ⇒ 無底: ${JSON.stringify(bad)}`)
                 //另有一個可信之非別名節點 ⇒ 取它
                 let z = put(P, { arms: ['A04_act'], round: 3, S: 37.62, sel: 'sel-z', k: 3 })
                 assert.equal(carrierOf(P, 'D30_volumeCut').base, z)
@@ -155,7 +155,7 @@ describe('起點為別名(選集與較早之節點相同)時之一致處理(規�
                 return aliasMap0(...a)
             }
             //冷啟動(樹上無節點): 單臂根節點、不求別名表
-            assert.deepEqual(carrierOf(P, 'D30_volumeCut'), { arms: ['D30_volumeCut'], base: null })
+            assert.deepStrictEqual(carrierOf(P, 'D30_volumeCut'), { arms: ['D30_volumeCut'], base: null })
             assert.equal(calls, 0, '無候選 ⇒ 不讀樹求別名表')
             let a = put(P, { arms: ['A01_nt'], round: 1, S: 55.5, sel: 's1', k: 1 })
             put(P, { arms: ['A04_act'], round: 1, S: 49.5, sel: 's2', k: 2 })
@@ -166,7 +166,7 @@ describe('起點為別名(選集與較早之節點相同)時之一致處理(規�
             assert.equal(calls, 1, '一次出計畫求值求一次別名表')
             assert.deepEqual(cs.D30_volumeCut, { arms: ['A05_nKeys', 'D30_volumeCut'], base: b })
             assert.deepEqual(cs.E39_skipWeekend, { arms: ['A05_nKeys', 'E39_skipWeekend'], base: b })
-            assert.deepEqual(cs.A02_ntPit, { arms: ['A02_ntPit'], base: null }, '其他層照舊為單臂根節點')
+            assert.deepStrictEqual(cs.A02_ntPit, { arms: ['A02_ntPit'], base: null }, '其他層照舊為單臂根節點')
             assert.notEqual(a, b)
             //同鍵者依 id: 兩個無別名之節點同 S 時取 id 較小者
             let { P: P2 } = mk()
@@ -250,7 +250,7 @@ describe('起點為別名(選集與較早之節點相同)時之一致處理(規�
             //(1) 先別名、後正本
             let a1 = P.proposeDirection({ type: 'explore', arms: ARMS, base: alias, rationale: '同一探索' }, 5)
             let a2 = P.proposeDirection({ type: 'explore', arms: ARMS, base: canon, rationale: '同一探索' }, 5)
-            assert.deepEqual([a1.ok, a2.ok, a2.note, a2.nodeId, a2.baseUsed], [true, false, '前緣已有同規格', a1.nodeId, undefined])
+            assert.deepStrictEqual([a1.ok, a2.ok, a2.note, a2.nodeId, a2.baseUsed], [true, false, '前緣已有同規格', a1.nodeId, undefined])
             assert.equal(frontierOf(P, ARMS).length, 1)
             //(2) 先正本、後別名(另一組臂)
             let arms2 = ['A01_nt', 'B15_newKey']
@@ -430,7 +430,7 @@ describe('起點為別名(選集與較早之節點相同)時之一致處理(規�
             let hk2 = await P2.domain.hooks.afterRound({ round: 1, nodes: [] })
             assert(hk2.lines.some((l) => l.includes('方向 1 條(入前緣 1)')), JSON.stringify(hk2.lines))
             assert(!hk2.lines.some((l) => l.includes('方向之起點') || l.includes('別名')), JSON.stringify(hk2.lines))
-            assert.equal((P2.records.getDreamDoc(1).harness || {}).addendum, undefined)
+            assert.strictEqual((P2.records.getDreamDoc(1).harness || {}).addendum, undefined)
         })
     })
 })
