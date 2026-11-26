@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
@@ -636,7 +636,7 @@ describe('前緣之操作與來源方向(重複臂、改掛至已結案之同規
             }
         })
 
-        it('--close 並用 --rearm 而改掛側於預檢即不合(前緣無此提案、目的臂不在目錄、前綴模糊)⇒ 兩者皆不執行(離開碼 1、印「未改掛: …」與「兩者皆未執行」、前緣全部不動、鎖釋放); 預檢通過者依序執行', () => {
+        it('--close 並用 --rearm 而改掛側於預檢即不合(前緣無此提案、前綴模糊)⇒ 兩者皆不執行(離開碼 1、印「未改掛: …」與「兩者皆未執行」、前緣全部不動、鎖釋放); 預檢通過者依序執行(目的臂不在目錄者於命令列即拒〔離開碼 2〕,見 unit-armArgs;函數層之預檢見上一案)', () => {
             let { root, P } = mkProject()
             let c1 = { arms: ARMS, base: null }
             let q1 = { arms: ['A04_act'], base: `a1${'0'.repeat(14)}` }
@@ -646,8 +646,7 @@ describe('前緣之操作與來源方向(重複臂、改掛至已結案之同規
             }
             let st3 = () => [statusOf(P, c1), statusOf(P, q1), statusOf(P, q2)]
             for (let [why, args] of [
-                ['前緣無此提案', ['--rearm', 'A05_x', '--to', 'A02_ntPit']],
-                ['目的臂不在目錄', ['--rearm', 'A04_act', '--to', 'Z99_none', '--base', 'a10']],
+                ['前緣無此提案', ['--rearm', 'A05_nKeys', '--to', 'A02_ntPit']],
                 ['前綴模糊(改掛側)', ['--rearm', 'A04_act', '--to', 'A02_ntPit', '--base', 'a1']],
             ]) {
                 let r = rsiCli(root, ['--mode', 'frontier', '--close', KEY, ...args, '--why', '測試'])

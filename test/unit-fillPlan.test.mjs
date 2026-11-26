@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import * as FP from '../src/domain/fillPlan.mjs'
 
 

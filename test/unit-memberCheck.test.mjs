@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
@@ -84,7 +84,9 @@ describe('成員穩健性之附算與「成員依賴」之提示(規則 R-REC-51
             assert.deepEqual(VM.memberCheckOf({ minLadder: '2', maxNegHalves: ' 1 ', nullDraws: '8' }, {}), { ...def, minLadder: 2, maxNegHalves: 1, nullDraws: 8 })
             //讀數之使用: 提示之判定用轉換值(中位 0.55: 門檻 '0.6' ⇒ 命中、門檻預設 0.5 ⇒ 不命中)
             let rowOf = (md) => ({ K: 6, kind: 'builtin', applicable: true, retention: { median: md, min: md, n: 6 }, nNeg: 0 })
-            assert.notStrictEqual(VM.memberHintOf(rowOf(0.55), VM.memberCheckOf({ minRetention: '0.6' })), null)
+            //x 非 null 且非 undefined: notStrictEqual(x, null) 對 undefined 亦通過 ⇒ 明示之等價式(排程第 622 項 ①)
+            let hintMin = VM.memberHintOf(rowOf(0.55), VM.memberCheckOf({ minRetention: '0.6' }))
+            assert.ok(hintMin !== null && hintMin !== undefined)
             assert.strictEqual(VM.memberHintOf(rowOf(0.55), VM.memberCheckOf({})), null)
             assert.strictEqual(VM.memberHintOf(rowOf(0.6), VM.memberCheckOf({ minRetention: '0.6' })), null, '恰為門檻者不命中')
             assert.equal(VM.memberCheckOf({ minLadder: 0 }).minLadder, 0, '0 合格')

@@ -3,6 +3,13 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 
+//【排程第 622 項 ① 起】全庫之測試檔皆 `import assert from 'assert/strict'`(寬鬆之檔 0): 本工具之守門改為
+//    ⓐ 寬鬆之檔(nLoose)須為 0 —— 新增一個 `import assert from 'assert'` 即紅;
+//    ⓑ 任何檔對寬鬆 assert 模組之匯入(預設 / 命名空間 / 具名 / require / 動態 import)皆列為 looseImports, 除 LOOSE_IMPORT_ALLOW(守門本身之前提案)外須為 0;
+//    ⓒ 負向之斷言(notEqual、notStrictEqual、notDeepEqual、notDeepStrictEqual)之前兩個引數含 null / undefined 者(weakNeg)須為 0 ——
+//       嚴格版之 notStrictEqual(x, null) 對 undefined 亦通過(寬鬆版之 notEqual(x, null) 要求 x 非 null 且非 undefined), 須寫成明示之等價式 `assert.ok(x !== null && x !== undefined)`;
+//    ⓓ 防空集合: 掃描之呼叫數(nAssertCalls)須達 1000 以上。
+//  以下為原(排程第 614 項④)之寬鬆斷言盤點(scanSource / auditDir 之 calls、flagged 等; 對寬鬆之檔仍有效 —— 供守門本身之測試與日後誤入之寬鬆檔):
 //非嚴格斷言之盤點工具(規則 R-PKG-12; 排程第 614 項④): 掃測試檔(test/*.test.mjs), 列出「非嚴格之 assert.deepEqual / notDeepEqual / equal / notEqual」之呼叫及其期望值之寫法
 //  背景: Node(24.22.1 實測)之非嚴格 assert.deepEqual 對「期望陣列中之 null 元素」不比對(`deepEqual(['m'], [null])` 不拋; 任何深度之陣列內皆然;
 //        物件之屬性、純量、實際為 null 而期望非 null 者照拋); null 與 undefined 於寬鬆比較下互通(`equal(undefined, null)`、`deepEqual([null], [undefined])` 不拋)
@@ -232,7 +239,8 @@ let tokensOf = (expr) => {
                         f.nullInArray = true
                     }
                 }
-                else if (w === 'undefined') {
+                else if (w === 'undefined' || w === 'void') {
+                    //`void 0` 即 undefined(寫法之一; 負向斷言之 weakNeg 與正向之 flagged 同判)
                     f.hasUndef = true
                 }
                 else if (!/^\d/.test(w) && !['true', 'false', 'NaN', 'Infinity'].includes(w)) {
@@ -259,6 +267,77 @@ let importKind = (src) => {
     }
     return 'none'
 }
+
+//LOOSE_IMPORT_ALLOW, 允許匯入寬鬆 assert 模組之測試檔(守門本身之前提案: 驗「寬鬆版對 null 與 undefined 互通」等 Node 之行為, 須以寬鬆版為對照)
+let LOOSE_IMPORT_ALLOW = ['test/unit-assertStrict.test.mjs']
+
+//LOOSE_IMPORT_RES, 對寬鬆 assert 模組(來源 'assert' 或 'node:assert'; `assert/strict` 不是)之匯入:
+//  ① import(預設 / 命名空間 / 具名 / 副作用; 空白可省: `import{equal}from'assert'`)、② `export … from 'assert'`、
+//  ③ 以「唯一之字面值引數」呼叫之載入(被呼叫者為 require、import、getBuiltinModule 或另一次呼叫之結果〔`createRequire(import.meta.url)('assert')`〕: `require('assert')`、`import('assert')`、`process.getBuiltinModule('assert')`)
+//  `import` 之後不得緊接 `.`(`import.meta`)或 `:`(物件之鍵 `import: …`)—— 否則其後之 'assert' 字串會被誤判; 一般函數之呼叫(`it('assert')`、`src.includes('assert')`)不算
+//  已知之漏報: 反引號之動態 import(`import(\`assert\`)`); 已知之誤報: 無(被呼叫者限定)
+let LOOSE_IMPORT_RES = () => [
+    /(?<![\w$.])import(?![\w$.:])[^'";()]*?(['"])(?:node:)?assert\1/g,
+    /(?<![\w$.])export(?![\w$.:])[^'";()]*?\bfrom\s*(['"])(?:node:)?assert\1/g,
+    /(?:(?<![\w$.])require|(?<![\w$.])import|\bgetBuiltinModule|\))\s*\(\s*(['"])(?:node:)?assert\1\s*\)/g,
+]
+
+/**
+ * 掃描一份測試檔之原始碼,回傳其對寬鬆 assert 模組之匯入(不含 assert/strict;落在字串、註解、樣板內者不計)
+ *
+ * @param {String} src 輸入原始碼
+ * @returns {Array<Object>} 回傳 [{ line, text }]
+ * @example
+ * looseImportsOf("import a from 'assert'\nimport b from 'assert/strict'").length // => 1
+ */
+let looseImportsOf = (src) => {
+    let mask = codeMask(src)
+    let out = []
+    for (let re of LOOSE_IMPORT_RES()) {
+        let m
+        while ((m = re.exec(src))) {
+            if (mask[m.index] === 1) {
+                out.push({ line: src.slice(0, m.index).split('\n').length, text: m[0].replace(/\s+/g, ' ') })
+            }
+        }
+    }
+    return out.sort((a, b) => a.line - b.line)
+}
+
+//NEG_CALL_RE, 負向斷言之呼叫起首(寬鬆與嚴格之名皆含; 其前不得為識別字元或點)
+let NEG_CALL_RE = () => /(?<![\w$.])assert\.(?:strict\.)?(notEqual|notStrictEqual|notDeepEqual|notDeepStrictEqual)\s*(?:\?\.\s*)?\(/g
+
+/**
+ * 掃描一份測試檔之原始碼,回傳「前兩個引數含 null / undefined 記號」之負向斷言(嚴格版對 undefined 亦通過, 較寬鬆版弱;須改寫為明示之等價式)
+ *
+ * @param {String} src 輸入原始碼
+ * @returns {Array<Object>} 回傳 [{ method, line }]
+ * @example
+ * weakNegOf("assert.notEqual(x, null)").map((w) => w.method) // => ['notEqual']
+ */
+let weakNegOf = (src) => {
+    let mask = codeMask(src)
+    let out = []
+    let re = NEG_CALL_RE()
+    let m
+    while ((m = re.exec(src))) {
+        if (mask[m.index] === 0) {
+            continue
+        }
+        let args = argsOf(src, m.index + m[0].length - 1)
+        let hit = [args[0], args[1]].some((a) => {
+            let t = tokensOf(a || '')
+            return t.hasNull || t.hasUndef
+        })
+        if (hit) {
+            out.push({ method: m[1], line: src.slice(0, m.index).split('\n').length })
+        }
+    }
+    return out
+}
+
+//CALL_ANY_RE, 任何 assert 呼叫(`assert(` 與 `assert.<方法>(`)之起首: 防空集合之計數用
+let CALL_ANY_RE = () => /(?<![\w$.])assert(?:\.\w+)?\s*\(/g
 
 /**
  * 掃描一份測試檔之原始碼,回傳其非嚴格斷言之呼叫(deepEqual / notDeepEqual / equal / notEqual)
@@ -310,10 +389,33 @@ let scanSource = (src) => {
  */
 let auditDir = (dir) => {
     let files = fs.readdirSync(dir).filter((f) => f.endsWith('.test.mjs')).sort()
-    let out = { nFiles: files.length, nLoose: 0, nStrict: 0, nNone: 0, calls: [], nNaive: 0, unsupported: [], noneFiles: [] }
+    let out = { nFiles: files.length, nLoose: 0, nStrict: 0, nNone: 0, calls: [], nNaive: 0, unsupported: [], noneFiles: [], looseFiles: [], looseImports: [], looseImportsBad: [], weakNeg: [], weakNegBad: [], nAssertCalls: 0 }
     for (let f of files) {
         let src = fs.readFileSync(path.join(dir, f), 'utf8')
         let r = scanSource(src)
+        //排程第 622 項 ①: 寬鬆之檔、對寬鬆模組之匯入、含 null / undefined 之負向斷言、呼叫總數(防空集合)
+        if (r.kind === 'loose') {
+            out.looseFiles.push(`test/${f}`)
+        }
+        for (let li of looseImportsOf(src)) {
+            out.looseImports.push({ file: `test/${f}`, ...li })
+            if (!LOOSE_IMPORT_ALLOW.includes(`test/${f}`)) {
+                out.looseImportsBad.push({ file: `test/${f}`, ...li })
+            }
+        }
+        for (let w of weakNegOf(src)) {
+            out.weakNeg.push({ file: `test/${f}`, ...w })
+            //允許之檔(守門本身之前提案: 示範嚴格版對 undefined 亦通過)不計為違規
+            if (!LOOSE_IMPORT_ALLOW.includes(`test/${f}`)) {
+                out.weakNegBad.push({ file: `test/${f}`, ...w })
+            }
+        }
+        let mk = codeMask(src)
+        let cr = CALL_ANY_RE()
+        let cm
+        while ((cm = cr.exec(src))) {
+            out.nAssertCalls += mk[cm.index] === 1 ? 1 : 0
+        }
         out[r.kind === 'loose' ? 'nLoose' : r.kind === 'strict' ? 'nStrict' : 'nNone']++
         if (r.kind === 'none') {
             out.noneFiles.push(`test/${f}`)
@@ -338,16 +440,17 @@ let auditDir = (dir) => {
 }
 
 /**
- * 防空集合檢查: 掃描範圍壞了(找不到測試檔、全數判為嚴格、掃描漏數)時為 false(盤點之結果不算數)
+ * 防空集合檢查: 掃描範圍壞了(找不到測試檔、檔數過少、檔數不合、掃到之斷言呼叫過少、寬鬆之檔之呼叫漏數)時為 false(盤點之結果不算數)
+ * (排程第 622 項 ① 之前: 要求有寬鬆之檔 —— 全庫改嚴格後寬鬆之檔為 0 才是常態, 改以全部之斷言呼叫數 nAssertCalls ≥ 1000 判掃描未落空)
  *
  * @param {Object} r 輸入 auditDir 之結果
  * @returns {Boolean} 回傳是否合理
  * @example
  * isSane(auditDir('./test')) // => true
  */
-let isSane = (r) => r.nFiles >= 50 && r.nLoose > 0 && r.nLoose + r.nStrict + r.nNone === r.nFiles && r.calls.length > 0 && r.calls.length >= Math.floor(r.nNaive * 0.9) && r.calls.length <= r.nNaive
+let isSane = (r) => r.nFiles >= 50 && r.nLoose + r.nStrict + r.nNone === r.nFiles && r.nAssertCalls >= 1000 && (r.nLoose === 0 || (r.calls.length > 0 && r.calls.length >= Math.floor(r.nNaive * 0.9) && r.calls.length <= r.nNaive))
 
-export { scanSource, auditDir, isSane, METHODS, STRICT_OF }
+export { scanSource, auditDir, isSane, looseImportsOf, weakNegOf, LOOSE_IMPORT_ALLOW, METHODS, STRICT_OF }
 
 
 //命令列
@@ -356,7 +459,8 @@ if (isMain) {
     let iDir = process.argv.indexOf('--dir')
     let testDir = iDir >= 0 ? path.resolve(process.argv[iDir + 1]) : path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
     let r = auditDir(testDir)
-    console.log(`掃描 ${r.nFiles} 檔(非嚴格 ${r.nLoose}、嚴格 ${r.nStrict}、無 assert 匯入 ${r.nNone});非嚴格斷言之呼叫 ${r.calls.length}(粗算 ${r.nNaive})`)
+    console.log(`掃描 ${r.nFiles} 檔(非嚴格 ${r.nLoose}、嚴格 ${r.nStrict}、無 assert 匯入 ${r.nNone});斷言呼叫共 ${r.nAssertCalls};非嚴格斷言之呼叫 ${r.calls.length}(粗算 ${r.nNaive})`)
+    console.log(`  對寬鬆 assert 模組之匯入 ${r.looseImports.length}(允許之檔以外 ${r.looseImportsBad.length};允許 = ${LOOSE_IMPORT_ALLOW.join('、')});含 null / undefined 之負向斷言(嚴格版較弱,須寫成明示之等價式)${r.weakNeg.length}(允許之檔以外 ${r.weakNegBad.length})`)
     console.log(`  依方法: ${Object.entries(r.byMethod).map(([k, v]) => `${k} ${v}`).join('、')}`)
     console.log(`  含 null / undefined 期望值之正向斷言(deepEqual、equal): ${r.flagged.length};期望值含識別字(靜態無從得知內容)${r.opaque};呼叫辨識不涵蓋之寫法 ${r.unsupported.length};匯入不被辨識之檔 ${r.nNone}`)
     if (process.argv.includes('--list')) {
@@ -369,10 +473,19 @@ if (isMain) {
         for (let f of r.noneFiles) {
             console.log(`  ${f} 匯入不被辨識(非 assert 或 assert/strict 之預設匯入)`)
         }
+        for (let f of r.looseFiles) {
+            console.log(`  ${f} 為寬鬆之檔(import assert from 'assert')`)
+        }
+        for (let i of r.looseImportsBad) {
+            console.log(`  ${i.file}:${i.line} 對寬鬆 assert 模組之匯入: ${i.text}`)
+        }
+        for (let w of r.weakNegBad) {
+            console.log(`  ${w.file}:${w.line} ${w.method} 之前兩個引數含 null / undefined(改寫為 assert.ok(x !== null && x !== undefined))`)
+        }
     }
     if (!isSane(r)) {
         console.log('防空集合檢查不過: 掃描範圍或掃描結果不合理(結果不算數)')
         process.exit(2)
     }
-    process.exit(r.flagged.length || r.unsupported.length || r.nNone ? 1 : 0)
+    process.exit(r.flagged.length || r.unsupported.length || r.nNone || r.nLoose || r.looseImportsBad.length || r.weakNegBad.length ? 1 : 0)
 }

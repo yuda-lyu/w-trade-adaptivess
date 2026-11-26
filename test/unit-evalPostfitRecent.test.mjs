@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
@@ -50,6 +50,11 @@ let selfFilter = (pick) => (ctx) => {
     return { ids, group }
 }
 let pickOf = (o, ks) => Object.fromEntries(ks.map((k) => [k, o[k]]))
+//zeroOf, 各欄之零取 +0(-0 與 +0 視為同一個零): excess = r4(觀測 - 虛無均值)於 half 0(替換者即該席本身,差只是浮點之雜訊)時,
+//  組成對照(afterFit.sideActRecent)與擴充診斷(api.replaceNull)兩條路徑各算而可得 -0 或 +0; 零之正負號不是契約之一部分 ——
+//  JSON 與文字輸出皆為 0(JSON.stringify(-0) === '0'; `${-0}` === '0'),評估結果檔、節點文件與看板皆不可見; 其餘各欄(含非零之 excess)仍逐值嚴格比對
+//  (排程第 622 項 ①: 整庫改 assert/strict 後之唯一轉紅站點; 判定為測試期望之粒度,非產品缺陷 —— 見 sgud/exp 該條)
+let zeroOf = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v === 0 ? 0 : v]))
 
 describe('求解窗後段之近期活躍度版之組成對照:metrics.afterFit.sideActRecent(規則 R-EV-42)', function () {
     let t
@@ -89,14 +94,14 @@ describe('求解窗後段之近期活躍度版之組成對照:metrics.afterFit.s
                     let w = viaReplace(ev, { fromBar: 739, toBar: 1290, seed: sd + SEED_WHOLE, half, draws: 16 })
                     assert.equal(w.m.op.eqYr.mean, m.op.eqYr.mean, '同一選集(所留之席)')
                     assert.equal(w.r.draws, 16)
-                    assert.deepEqual(af.sideActRecent, { draws: 16, half, actDays: 90, ...pickOf(w.r, ['mean', 'sd', 'p', 'z', 'excess']) }, `全段 fit ${JSON.stringify(fit)} seed ${sd} half ${half}`)
+                    assert.deepEqual(zeroOf(af.sideActRecent), zeroOf({ draws: 16, half, actDays: 90, ...pickOf(w.r, ['mean', 'sd', 'p', 'z', 'excess']) }), `全段 fit ${JSON.stringify(fit)} seed ${sd} half ${half}`)
                     //各段: 以單一棒切開之一般評估 = 該段(決策數與該段之等效年化相同)
                     for (let g = 0; g < 2; g++) {
                         let h = af.halves[g]
                         let s = viaReplace(ev, { fromBar: g === 0 ? 739 : CUT, toBar: g === 0 ? CUT : 1290, seed: sd + SEED_HALF + g * SEED_HALF_STEP, half, draws: 16 })
                         assert.deepEqual(s.m.op.nDecisions, h.nDecisions, '以切點重現之段 = 前段 / 後段')
                         assert.equal(s.m.op.eqYr.mean, h.eqYr.mean)
-                        assert.deepEqual(h.sideActRecent, { draws: 16, half, actDays: 90, ...pickOf(s.r, ['mean', 'sd', 'p', 'z', 'excess']) }, `段 ${g} fit ${JSON.stringify(fit)} seed ${sd} half ${half}`)
+                        assert.deepEqual(zeroOf(h.sideActRecent), zeroOf({ draws: 16, half, actDays: 90, ...pickOf(s.r, ['mean', 'sd', 'p', 'z', 'excess']) }), `段 ${g} fit ${JSON.stringify(fit)} seed ${sd} half ${half}`)
                         if (half === 0) {
                             continue
                         }

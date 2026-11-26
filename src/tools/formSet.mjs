@@ -1,6 +1,5 @@
-import path from 'path'
 import { settingsOrExit, argStrOf, cliGuard } from '../cfg.mjs'
-import { peekRunLock } from '../arsi/runner.mjs'
+import { takeRoundLockOrExit } from '../arsi/roundLock.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 import { FORMS, formLabelOf } from '../arsi/records.mjs'
@@ -15,7 +14,7 @@ cliGuard('formSet')
 //  node tools/formSet.mjs                                                     列出樹上全部已執行之節點之形式(〔機制〕/〔線索〕/ 未歸類; 來源: 審計所定、主控補記; 未歸類者另列節點之自標)
 //  node tools/formSet.mjs --node <id 或前綴> --form <mechanism|clue|none> --why <理由>    補記(none = 清除: 記 null ⇒ 未歸類)
 //  只寫樹上該節點之 evidence.form(附出處與理由)與節點文件之 control.form 並重產看板與搜尋地圖; S、階梯、選集指紋不變(變了即報錯, 離開碼 1)
-//  輪次進行中不得執行(離開碼 3; 補位之底與量尺於輪中由迴圈讀寫)
+//  輪次進行中不得執行(離開碼 3; 補位之底與量尺於輪中由迴圈讀寫); 補記時取輪次鎖(takeRoundLockOrExit; 持有至行程結束 ⇒ 看與寫之間輪次不能起跑、兩個寫入之工具不能並行; 排程第 622 項 ②; 原: 只 peekRunLock)
 let st = settingsOrExit()
 let P = makeProjectOrExit(st, {})
 P.rsi.init()
@@ -46,11 +45,9 @@ if (typeof key !== 'string' || typeof formArg !== 'string' || typeof why !== 'st
     console.error('用法: --node <id 或前綴> --form <mechanism|clue|none> --why <理由>')
     process.exit(2)
 }
-let lock = peekRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
-if (lock.running) {
+takeRoundLockOrExit(st.rsi.root, (lock) => {
     console.error(`輪次進行中(pid ${lock.pid}): 請於輪次結束後再執行`)
-    process.exit(3)
-}
+})
 let hits = executed().filter((n) => n.id.startsWith(key))
 if (hits.length !== 1) {
     //訊息不帶輸入之前綴(K9)

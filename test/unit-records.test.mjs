@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
 import { NODE_SCHEMA, DREAM_SCHEMA, IMPROVE_KINDS, DIR_VERDICTS, TASK_TYPES, EXPAND_DECISIONS, OVERVIEW_COVERAGE, OVERVIEW_PROGRESS, OVERVIEW_RISK, checkNodeAgentPart, checkDreamAgentPart, tallyDream, renderNodeMd, renderDreamMd, createFileRecords, roundName } from '../src/arsi/records.mjs'

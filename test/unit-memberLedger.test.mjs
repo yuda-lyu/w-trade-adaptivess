@@ -1,5 +1,5 @@
 /* eslint-disable no-extend-native -- 違約樣本: 本檔刻意暫時改寫內建原型(測後一律還原), 驗半庫帳本之入口比對 */
-import assert from 'assert'
+import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
@@ -145,8 +145,9 @@ describe('成員重抽之半庫帳本(memberLedger)與命令列之 --member', fu
             assert.equal(M.meta, L.meta)
             assert.equal(M.dir, L.dir)
             assert.equal(M.px, L.px, 'K 線欄共用')
-            assert.notEqual(L.fac, null, '前提: 合成帳本有因子欄')
-            assert.notEqual(L.ser, null, '前提: 合成帳本有外部序列欄')
+            //負向之寬鬆斷言(notEqual(x, null))要求 x 非 null 且非 undefined; 嚴格版 notStrictEqual 對 undefined 亦通過 ⇒ 改寫為明示之等價式(排程第 622 項 ①)
+            assert.ok(L.fac !== null && L.fac !== undefined, '前提: 合成帳本有因子欄')
+            assert.ok(L.ser !== null && L.ser !== undefined, '前提: 合成帳本有外部序列欄')
             assert.equal(M.fac, L.fac, '因子序列欄共用(延遲讀取)')
             assert.equal(M.ser, L.ser, '外部序列欄共用(延遲讀取)')
             assert(!Object.keys(M).includes('fac') && !Object.keys(M).includes('ser'), 'fac / ser 同 loadLedger: 不可列舉')

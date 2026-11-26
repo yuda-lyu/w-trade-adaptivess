@@ -1,5 +1,5 @@
 /* eslint-disable no-extend-native -- 違約樣本: 本檔刻意暫時改寫內建物件(測後一律以 keepAsync 還原), 驗共同儲存區於挑選模組改內建物件時中止更新 */
-import assert from 'assert'
+import assert from 'assert/strict'
 import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'

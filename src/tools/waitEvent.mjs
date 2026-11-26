@@ -1,6 +1,7 @@
 import path from 'path'
 import { settingsOrExit, cliGuard, argNumOf, timeMsOf } from '../cfg.mjs'
 import { waitRunEnd } from '../arsi/waitEnd.mjs'
+import { roundLockPathOf } from '../arsi/roundLock.mjs'
 
 //命令列之旗標只認 --timeout-min、--since、--poll-sec(TOOL_FLAGS.waitEvent; 空白分隔): 等號、未列、重複、無值、多餘之值一律拒收(離開碼 2; 於讀設定之前; 訊息固定、不帶輸入值; 原: 靜默忽略而等到預設之時限)
 cliGuard('waitEvent')
@@ -18,7 +19,7 @@ let st = settingsOrExit()
 //  原: `Number(abc)` 為 NaN ⇒ 逾時之計時器與取樣間隔皆為 NaN ⇒ 永不結束 / 永看不到結束事件; --since 無效 ⇒ NaN ⇒ 比較恆假
 let fdLogs = path.join(st.rsi.root, 'logs')
 let fpEvents = path.join(fdLogs, 'events.jsonl')
-let fpLock = path.join(fdLogs, 'round.lock')
+let fpLock = roundLockPathOf(st.rsi.root)
 let i0 = process.argv.indexOf('--since')
 let since = i0 >= 0 ? timeMsOf(process.argv[i0 + 1]) : Date.now()
 let timeoutMs = argNumOf('timeout-min', 'timerMin', 110) * 60000

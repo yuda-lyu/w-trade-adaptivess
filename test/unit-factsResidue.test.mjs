@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
 import { EVAL_NUMS } from '../src/eval/cfgNum.mjs'

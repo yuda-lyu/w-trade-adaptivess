@@ -151,7 +151,9 @@ describe('任務書之舊預設(規則 R-REC-55)', function () {
         let calm = [(def.baseShort.backtest + def.baseShort.train) / 2, (def.baseShort.backtest + def.baseShort.train) / 2]
         assert.equal(VER.sideFlowIssue(calm[0], calm[1], null), null, '前提: 全體隨機之比例附近不列')
         let hot = [0.99, 0.99]
-        assert.notEqual(VER.sideFlowIssue(hot[0], hot[1], null), null, '前提: 極端偏空者於內建門檻下列出')
+        //負向之斷言(x 非 null 且非 undefined)寫成明示之等價式: assert/strict 之 notEqual(x, null) 對 undefined 亦通過(排程第 622 項 ①)
+        let issueHot = VER.sideFlowIssue(hot[0], hot[1], null)
+        assert.ok(issueHot !== null && issueHot !== undefined, '前提: 極端偏空者於內建門檻下列出')
         //無效之值 ⇒ 該鍵取內建值(與未給相同); 數字字串 ⇒ 同其數值
         for (let sf of [null, 'x', 5, [], { hi: null }, { hi: 'x' }, { hi: -1 }, { hi: 0 }, { lo: null }, { lo: -2 }, { baseShort: null }, { baseShort: { backtest: 0 } }, { baseShort: { train: 'a' } }, { baseShort: { backtest: 2 } }]) {
             let st = { rsi: {}, score: { sideFlow: sf } }
@@ -165,7 +167,8 @@ describe('任務書之舊預設(規則 R-REC-55)', function () {
         for (let [bt, tr] of [[0.7, 0.7], [0.5, 0.5], [0.61, 0.59]]) {
             assert.equal(VER.sideFlowIssueOfSt(bt, tr, st2), VER.sideFlowIssueOfSt(bt, tr, st3), `數字字串同其數值: ${bt}/${tr}`)
         }
-        assert.notEqual(VER.sideFlowIssueOfSt(0.7, 0.7, st3), null, '前提: 自訂之門檻(0.4 × 1.5 = 0.6)下 0.7 列出')
+        let issueSt3 = VER.sideFlowIssueOfSt(0.7, 0.7, st3)
+        assert.ok(issueSt3 !== null && issueSt3 !== undefined, '前提: 自訂之門檻(0.4 × 1.5 = 0.6)下 0.7 列出')
         assert.equal(VER.sideFlowIssueOfSt(0.5, 0.5, st3), null, '前提: 自訂之門檻下 0.5 不列(內建之基準下則另論)')
     })
 

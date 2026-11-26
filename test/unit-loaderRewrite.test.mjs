@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
 import { loadPick, loadExt } from '../src/eval/pickLoader.mjs'

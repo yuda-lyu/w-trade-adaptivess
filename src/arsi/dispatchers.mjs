@@ -3,6 +3,7 @@ import os from 'os'
 import path from 'path'
 import { createRequire } from 'module'
 import genDiagStreamMasker from 'wsemi/src/genDiagStreamMasker.mjs'
+import maskDiagText from 'wsemi/src/maskDiagText.mjs'
 import { agentEnvOf } from './agentRole.mjs'
 import { rsiNumOf } from './rsiNums.mjs'
 import { isPlain, objReq, strReq, strOpt, boolOpt, agentsCheck } from './inputs.mjs'
@@ -24,7 +25,8 @@ let numOr = (v, kind, def) => {
 //  ⑥ 全部 opencode 條目之 stderr 經共用之串流遮罩器(wsemi 之 genDiagStreamMasker; 秘密 = 本次讀到之金鑰; 排程第 486 項之使用端)後附寫到派工紀錄檔同夾之 <主檔名>.stderr.log
 //     輸出以列為單位(收到換行才交出該列; 每列 = maskDiagText(該列); 與塊之切法無關); 已登錄之秘密(含跨塊與跨列者)、網址帳密、憑證鍵值對與 Bearer 皆整段遮到; 長列分段之切點避開整段命中; 二進位塊以 UTF-8 串流解碼
 //     已知限制(wsemi 之 genDiagStreamMasker 之 JSDoc): 未登錄之憑證值若為引號內含換行者, 第二列起不被視為憑證值(逐列遮罩之結果; 原: 整批完整列合成一塊遮, 視塊之切法可能整段遮到); 已登錄之秘密不受此限
-//     另: 派工結果之 error 欄(派工套件取 stderr 尾段至多 300 字元, 只遮當次所用之金鑰)不經本庫之秘密清單(既有; 見 sgud 之已知限制)
+//  ⑧ 派工結果之 error 欄(派工套件取 stderr 尾段, 只遮當次所用之金鑰; 金鑰檔所列之其他金鑰若出現於該尾段則原樣留下)另經本庫之秘密清單(secretsOf)以 wsemi 之 maskDiagText(串流遮罩器之一次性形式; 同一組規則)遮一次, 再截至 300 字元:
+//     先遮再截(截斷若先於遮罩, 會切開金鑰而使留下之前段不被辨認)、一處(makeDispatch 回傳之函數記入 errs 之處; 成功時 error 為 null 不經此; 主模型與各備援、claude 與 opencode、派工例外皆走同一處)
 
 //PROBE_PROMPT, 探測備援用之極小提示詞
 let PROBE_PROMPT = '只回覆兩個字: OK'
@@ -155,6 +157,8 @@ let makeDispatch = (opt) => {
     let secrets = secretsOf(env, [...new Set(['OPENCODE_GO_KEYS', ...(Array.isArray(wda.providers) ? wda.providers.map((p) => p && p.envVar).filter((x) => typeof x === 'string' && x) : [])])])
     //訂閱之用量守門之預設門檻(與起跑前之額度檢查同一設定: 專案設定 rsi.preflight.quotaMaxPercent); 非有限數取 95
     let gateMax = numOr(maxPercent, 'num', 95)
+    //errTextOf, 派工結果之 error 欄之留存文字(⑧): 先以本庫之秘密清單遮罩(金鑰檔所列之全部金鑰, 不只當次所用者)、再截至 300 字元; maskDiagText 永不拋(內部失敗回 ***)
+    let errTextOf = (e) => maskDiagText(String(e || ''), secrets).slice(0, 300)
 
     //agentEnv(規則 R-RUN-11): 節點與做夢之 agent 子行程另帶 ARSI_AGENT_ROLE = 角色(經 w-dispatch-ai 之 opt.env 只注入該次子行程; 不寫入本行程之環境)
     //  ⇒ agent 所起之指令執行寫檔或起行程之進入檔與模式即被拒跑(src/domain/agentEntries.mjs); 其他角色不帶
@@ -273,7 +277,7 @@ let makeDispatch = (opt) => {
             if (r.ok) {
                 return { ...r, agent: info, tried: errs }
             }
-            errs.push({ model: info.model, error: String(r.error || '').slice(0, 300), ...(r.quota === true ? { quota: true } : {}) })
+            errs.push({ model: info.model, error: errTextOf(r.error), ...(r.quota === true ? { quota: true } : {}) })
         }
         //quota: 鏈上每一家皆因額度而未完成(任一家為其他原因之失敗者不標: 該次失敗另有成因, 照既有流程處理)
         let quota = errs.length > 0 && errs.every((e) => e.quota === true)

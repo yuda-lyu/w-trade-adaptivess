@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import { gradeOf, gradeRank, gradeVetoed, gradeLabel, GRADES, pUpper } from '../src/domain/backtestGrade.mjs'
 import { backtestCfg } from '../src/domain/backtestCfg.mjs'
 

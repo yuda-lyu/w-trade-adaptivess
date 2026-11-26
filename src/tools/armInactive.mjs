@@ -1,6 +1,5 @@
-import path from 'path'
 import { settingsOrExit, argStrOf, cliGuard } from '../cfg.mjs'
-import { peekRunLock } from '../arsi/runner.mjs'
+import { takeRoundLockOrExit } from '../arsi/roundLock.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
@@ -16,7 +15,7 @@ cliGuard('armInactive')
 //  node tools/armInactive.mjs --node <id 或前綴> --arms <a,b | none> --why <理由> [--offdef <a,b>]
 //    --offdef: --arms 之中「依修訂後之定義不屬該臂」者(主控審定臂之修訂後用); 該臂不再計入「已試」, 無其他節點時由補位載體再試
 //  只寫樹上該節點之 evidence.inactiveArms(附出處與理由)並重產看板與搜尋地圖; S、階梯、選集指紋不變(變了即報錯)
-//  輪次進行中不得執行(看板與載體於輪中由迴圈讀寫)
+//  輪次進行中不得執行(看板與載體於輪中由迴圈讀寫); 補記時取輪次鎖(takeRoundLockOrExit; 持有至行程結束; 排程第 622 項 ②; 原: 只 peekRunLock)
 let st = settingsOrExit()
 let P = makeProjectOrExit(st, {})
 P.rsi.init()
@@ -39,11 +38,9 @@ if (typeof armsArg !== 'string' || typeof why !== 'string' || !why.trim()) {
     console.error('用法: --node <id 或前綴> --arms <a,b | none> --why <理由>')
     process.exit(2)
 }
-let lock = peekRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
-if (lock.running) {
+takeRoundLockOrExit(st.rsi.root, (lock) => {
     console.error(`輪次進行中(pid ${lock.pid}): 請於輪次結束後再執行`)
-    process.exit(3)
-}
+})
 let hits = executed().filter((n) => n.id.startsWith(key))
 if (hits.length !== 1) {
     //訊息不帶輸入之前綴(K9; 排程第 611 項 ②; 原: `節點 <前綴>: 符合 N 個`)

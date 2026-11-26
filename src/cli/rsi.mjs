@@ -6,7 +6,9 @@ import { peekRound } from '../engineApi.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { roundName, armKeyOf } from '../arsi/records.mjs'
 import { runRounds, acquireRunLock, appendEvent, readEvents, trailingFailures, planGateOf, roundOkOf, stopFileOf, stopFileExists } from '../arsi/runner.mjs'
+import { takeRoundLockOrExit, roundLockPathOf } from '../arsi/roundLock.mjs'
 import { checkQuota } from '../arsi/dispatchers.mjs'
+import { armListMsgOf } from '../domain/armCatalog.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 import { preflightOf, resourceCfgOf } from '../arsi/rsiNums.mjs'
 import { phaseCountOfMetrics, phaseCountOfAll, phaseText } from '../domain/factsText.mjs'
@@ -141,7 +143,18 @@ let stopAtStart = () => {
         process.exit(3)
     }
 }
+//lockOrExit, 寫入型模式(init、board、validate、annotate、dirtype)寫入前取輪次鎖(排程第 622 項 ②; R-RUN-15; 與輪次、reverify、extfill、fill、frontier 之結案與改掛同一把):
+//  取不到(另有輪次或重算執行中 / 鎖疑似卡住)⇒ 本次不執行、離開碼 3(同 reverify 等之慣例: 訊息印於標準輸出); 取得後持有至行程結束(含 process.exit); 引數之檢查皆須先於本函數(用法之錯不因鎖而改變)
+//  原: 這五個模式不取鎖 ⇒ 輪次進行中可同時改寫樹與節點文件(validate)、做夢文件(annotate、dirtype)、看板與共同儲存區(board、init)
+let lockOrExit = (doing) => takeRoundLockOrExit(st.rsi.root, (lk) => {
+    console.log(`未執行: 有輪次或另一次重算執行中(pid ${lk.pid};自 ${lk.startedAt});等它結束再${doing}`)
+})
 let { rsi } = P
+//--mode init: rsi.init()(建狀態根、當前策略檔)本身即寫入 ⇒ 於其前取鎖(其餘寫入型模式於各自之區塊內、引數檢查之後取)
+let lockBeforeInit = mode === 'init'
+if (lockBeforeInit) {
+    lockOrExit('建立')
+}
 rsi.init()
 
 if (mode === 'init') {
@@ -149,6 +162,7 @@ if (mode === 'init') {
     console.log(`init 完成: 狀態根 ${st.rsi.root};可選臂 ${P.selectable.length};樹上節點 ${b.nNodes};未試之臂 ${b.untried}`)
 }
 else if (mode === 'board') {
+    lockOrExit('重產看板')
     console.log(JSON.stringify(P.writeBoard()))
     //共同儲存「自適應挑選策略」區亦一併重產(規則 R-REC-25; 主控審定或補記保留期之正負號後)
     let ps = await P.pickStore()
@@ -192,7 +206,7 @@ else if (mode === 'round') {
     //起跑前自檢之數值(lockStaleHours、quotaMaxPercent、maxConsecutiveFailures)依 K3、K4、K7 取值(preflightOf: 數字字串轉數值、無效者用預設; 排程第 595 項; 與 tools/quota.mjs、領域之派工器同一取值)
     let pre = (st.rsi && st.rsi.preflight) || {}
     let preNum = preflightOf(st.rsi)
-    let lock = acquireRunLock(path.join(fdLogs, 'round.lock'), { staleMs: preNum.lockStaleHours * 3600000 })
+    let lock = acquireRunLock(roundLockPathOf(st.rsi.root), { staleMs: preNum.lockStaleHours * 3600000 })
     if (!lock.ok) {
         let msg = lock.why === 'stale'
             ? `本次不啟動: 鎖檔之行程(pid ${lock.pid};自 ${lock.startedAt})仍在而心跳已逾時(最後 ${lock.beatAt}),疑似卡住 —— 須人查明後處理`
@@ -512,6 +526,8 @@ else if (mode === 'round') {
 }
 else if (mode === 'validate') {
     //對已入樹而尚無回測期旗標之節點補算(--force: 全部重算); 只印旗標
+    //與輪次共用同一把鎖(R-RUN-4、R-RUN-15): 文件轉版、重算分數、重掃操作紀錄與補算旗標皆改寫樹與節點文件, 不得與輪次並行
+    lockOrExit('補算旗標')
     let nMig = P.migrateDocs()
     if (nMig) {
         console.log(`節點文件轉為新版規格: ${nMig} 份`)
@@ -531,7 +547,7 @@ else if (mode === 'reverify') {
     //--only <id 前綴,…>: 只重跑指名之節點(只增輸出之改動後補算少數節點之新欄; 數字會變之改版不得用 —— 樹上會混有新舊數字); 於取鎖與重掃之前解析(onlyOf)
     let only = onlyOf()
     //與輪次共用同一把鎖(R-RUN-4): 重算會改寫樹與節點文件, 不得與輪次並行; 排程器於重算期間觸發之起跑亦因此不啟動
-    let lockV = acquireRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
+    let lockV = acquireRunLock(roundLockPathOf(st.rsi.root))
     if (!lockV.ok) {
         console.log(`未執行: 有輪次或另一次重算執行中(pid ${lockV.pid};自 ${lockV.startedAt});等它結束再重算`)
         process.exit(3)
@@ -553,7 +569,7 @@ else if (mode === 'extfill') {
     //停止檔(排程第 545 項; R-RUN-12; extFill 經 fill 執行而同承): 開始前已有 ⇒ 本次不補算(stopAtStart); 進行中才建立者 ⇒ 已取者做完、輸出之末列寫「因停止檔提前結束」與已完成 / 未完成數
     stopAtStart()
     //與輪次共用同一把鎖(R-RUN-4): 補算會改寫樹與節點文件, 不得與輪次並行
-    let lockV = acquireRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
+    let lockV = acquireRunLock(roundLockPathOf(st.rsi.root))
     if (!lockV.ok) {
         console.log(`未執行: 有輪次或另一次重算執行中(pid ${lockV.pid};自 ${lockV.startedAt});等它結束再補算`)
         process.exit(3)
@@ -619,7 +635,7 @@ else if (mode === 'fill') {
     //停止檔(排程第 545 項; R-RUN-12): 開始前已有 ⇒ 本次不補算(stopAtStart); 補算進行中才建立者由 fill 之工作者於取下一個成品之前檢查(已取者做完、正常結束、摘要寫明「因停止檔提前結束」與已完成 / 未完成之成品數)
     stopAtStart()
     //與輪次共用同一把鎖(R-RUN-4): 附算會改寫樹與節點文件, 不得與輪次並行
-    let lockV = acquireRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
+    let lockV = acquireRunLock(roundLockPathOf(st.rsi.root))
     if (!lockV.ok) {
         console.log(`未執行: 有輪次或另一次重算執行中(pid ${lockV.pid};自 ${lockV.startedAt});等它結束再補算`)
         process.exit(3)
@@ -652,18 +668,32 @@ else if (mode === 'frontier') {
     let claimArg = () => {
         let i = process.argv.indexOf('--claim'); let v = i > 0 ? process.argv[i + 1] : undefined; return typeof v === 'string' && /^[0-9a-f]{8}$/.test(v) ? v : undefined
     }
-    let cl = argOf('close', '')
-    let ra = argOf('rearm', '')
-    let doClose = !!cl && cl !== true
-    let doRearm = !!ra && ra !== true
+    //臂參數(--close、--rearm、--to)一律取命令列之原字串(argStrOf; 排程第 622 項 ③; K4): 原以 argOf 讀 ⇒ `--close 0` 轉成數值 0 而被當成未給(不結案、離開碼 0)
+    let cl = argStrOf('close', undefined)
+    let ra = argStrOf('rearm', undefined)
+    //旗標給了即為動作(值為空字串亦然: 原 `!!cl` 把空字串當成未給); 無值者已於上之 cliMsgOf 拒收
+    let doClose = typeof cl === 'string'
+    let doRearm = typeof ra === 'string'
     //改掛(規則 R-ARM-4): node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why "<理由>" [--base <起點 id 或其前綴>]
     //  主控通過新臂後, 把做夢「暫掛於既有臂」之未執行方向改掛新臂; 只改臂之歸屬、不改方向之內容; 輪次進行中不得執行
     //  用法於任何動作之前檢查(含與 --close 並用者: 原先結案、其後才報用法而半途停止; 排程第 614 項 ③)
-    let toArg = doRearm ? argOf('to', '') : ''
+    let toArg = doRearm ? argStrOf('to', '') : ''
     let whyArg = doRearm ? argStrOf('why', '') : ''
     if (doRearm && (!toArg || toArg === true || !whyArg || whyArg === true)) {
         console.log('用法: node g_rsi.mjs --mode frontier --rearm <臂+臂> --to <臂+臂> --why "<理由>" [--base <起點 id 或其前綴>] [--claim <主張鍵>]')
         process.exit(2)
+    }
+    //臂參數對照臂目錄(生效目錄 = 基底 + 擴充; 排程第 622 項 ③; 複審 L-3、L-4): 不在目錄者拒收(離開碼 2; 先於取鎖與任何動作; 訊息固定、不回顯輸入之臂)
+    //  --close、--rearm 之原臂只看是否在目錄(已停用之臂之提案仍須能結案、改掛); --to 之目的臂須為可選(規格不收不可選之臂)
+    //  原: `--close 0` 不執行而離開碼 0; 臂不在目錄者只印「結案 0 條」/「前緣內無尚未執行之提案 <臂>」/「臂 <臂> 不在目錄」(回顯輸入)
+    for (let [nm, v, sel] of [['close', cl, false], ['rearm', ra, false], ['to', doRearm ? toArg : undefined, true]]) {
+        if (v !== undefined) {
+            let m = armListMsgOf(nm, v, P.catalog.arms, sel)
+            if (m !== null) {
+                console.log(m)
+                process.exit(2)
+            }
+        }
     }
     //並用而兩者之臂為同一集合: 結案後改掛側必然無提案可改(結案與改掛之篩選相同)⇒ 恆為半途動作 ⇒ 拒收(離開碼 2; 先於取鎖與任何動作; 複審 L2-1)
     if (doClose && doRearm && armKeyOf(String(cl).split('+')) === armKeyOf(String(ra).split('+'))) {
@@ -673,7 +703,7 @@ else if (mode === 'frontier') {
     //結案與改掛同取輪次鎖(同一把; 與輪次、重算、附算不得並行 —— 前緣於輪次進行中會被改寫); 結束(含 process.exit)時釋放
     let lockF = null
     if (doClose || doRearm) {
-        lockF = acquireRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
+        lockF = acquireRunLock(roundLockPathOf(st.rsi.root))
         if (!lockF.ok) {
             console.log(`未執行: 有輪次或重算執行中(pid ${lockF.pid});等它結束再${doClose && doRearm ? '結案與改掛' : doClose ? '結案' : '改掛'}`)
             process.exit(3)
@@ -742,7 +772,12 @@ else if (mode === 'annotate') {
     //於某輪之做夢文件加迴圈註記: node g_rsi.mjs --mode annotate --round 1 --file <註記文字檔(UTF-8)>
     let rd = argNumOf('round', 'posInt', 0)
     let fpTxt = argOf('file', '')
-    let ok = rd > 0 && fpTxt && fpTxt !== true && fs.existsSync(String(fpTxt)) && P.annotateDream(rd, fs.readFileSync(String(fpTxt), 'utf8').trim())
+    //引數合格才取鎖與寫入(用法之錯照舊印用法、不取鎖); 與輪次共用同一把鎖(R-RUN-15)
+    let argsOk = rd > 0 && fpTxt && fpTxt !== true && fs.existsSync(String(fpTxt))
+    if (argsOk) {
+        lockOrExit('註記')
+    }
+    let ok = argsOk && P.annotateDream(rd, fs.readFileSync(String(fpTxt), 'utf8').trim())
     console.log(ok ? `已註記 ${roundName(rd)}` : '未註記(用法: --mode annotate --round N --file <文字檔>;或該輪無做夢文件)')
 }
 else if (mode === 'dirtype') {
@@ -754,7 +789,12 @@ else if (mode === 'dirtype') {
         items = JSON.parse(fs.readFileSync(String(fpJs), 'utf8'))
     }
     catch (err) {}
-    let r = rd > 0 && Array.isArray(items) && items.length ? P.setDirectionTypes(rd, items) : { ok: false, why: '用法: --mode dirtype --round N --file <JSON 檔: [{ index, type, claim }]>' }
+    //引數合格才取鎖與寫入(用法之錯照舊印用法、不取鎖); 與輪次共用同一把鎖(R-RUN-15)
+    let argsOk = rd > 0 && Array.isArray(items) && items.length
+    if (argsOk) {
+        lockOrExit('補記')
+    }
+    let r = argsOk ? P.setDirectionTypes(rd, items) : { ok: false, why: '用法: --mode dirtype --round N --file <JSON 檔: [{ index, type, claim }]>' }
     console.log(r.ok ? `已補記 ${roundName(rd)} 之 ${items.length} 條方向之任務類型` : `未補記(${r.why})`)
 }
 else if (mode === 'status') {

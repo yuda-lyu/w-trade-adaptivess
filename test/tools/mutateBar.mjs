@@ -892,7 +892,7 @@ let M = [
     ['EX16', 'src/domain/domain.mjs', [["${xMark(n) ? `;**${xMark(n).slice(1, -1)}**` : ''}", ""]], ['unit-exposure']], //搜尋地圖之譜系不標
     ['EX17', 'src/domain/domain.mjs', [["let xNote = ex.hit ? (ex.released ? ';側別曝險(已放行)' : ';側別曝險(不作為起點)') : ''", "let xNote = ''"]], ['unit-exposure']], //任務書之參考節點不註明
     ['EX18', 'src/tools/exposure.mjs', [["if (!undo && !e.hit) {", "if (false) {"]], ['unit-exposure']], //非曝險者亦放行
-    ['EX19', 'src/tools/exposure.mjs', [["if (lock.running) {", "if (false) {"]], ['unit-exposure']], //輪次進行中不拒
+    ['EX19', 'src/tools/exposure.mjs', [["takeRoundLockOrExit(st.rsi.root, (lock) => {", "if (false) takeRoundLockOrExit(st.rsi.root, (lock) => {"]], ['unit-exposure']], //輪次進行中不拒(錨點隨 peekRunLock 改為 takeRoundLockOrExit 而更新; 排程第 622 項)
     ['EX20', 'src/tools/exposure.mjs', [["doc.control = { ...(doc.control || {}), exposureRelease: rec ? { fingerprint: rec.selHash, why: rec.why, at: rec.at } : null }", "void 0"]], ['unit-exposure']], //節點文件不同步
     ['EX21', 'src/tools/exposure.mjs', [["P.refreshEvalHints([n.id])", "void 0"]], ['unit-exposure']], //提示不即時改寫
     ['EX22', 'src/arsi/records.mjs', [["if (isObj(d.control) && isObj(d.control.exposureRelease)) {", "if (false) {"]], ['unit-exposure']], //節點文件不渲染放行
@@ -1287,7 +1287,7 @@ let M = [
     ['TM54', 'src/arsi/dispatchers.mjs', [["quotaMaxPercent: numOr(c.quotaMaxPercent, 'num', cfg.quotaMaxPercent) }", "quotaMaxPercent: Number.isFinite(c.quotaMaxPercent) ? c.quotaMaxPercent : cfg.quotaMaxPercent }"]], ['unit-rsiNums']], //備援條目自己之字串門檻被主模型之門檻取代
     ['TM43', 'src/arsi/dispatchers.mjs', [["let mx = numOr(cfg.quotaMaxPercent, 'num', gateMax)\n        let row =", "let mx = Number.isFinite(cfg.quotaMaxPercent) ? cfg.quotaMaxPercent : gateMax\n        let row ="]], ['unit-rsiNums']], //額度查詢之角色門檻不收字串
     ['TM44', 'src/arsi/dispatchers.mjs', [["let mx2 = numOr(c.quotaMaxPercent, 'num', mx)", "let mx2 = Number.isFinite(c.quotaMaxPercent) ? c.quotaMaxPercent : mx"]], ['unit-rsiNums']], //備援條目之門檻不收字串
-    ['TM45', 'src/arsi/dispatchers.mjs', [["let gateMax = numOr(maxPercent, 'num', 95)\n\n    //agentEnv", "let gateMax = Number.isFinite(maxPercent) ? maxPercent : 95\n\n    //agentEnv"]], ['unit-rsiNums']], //派工之 maxPercent 不收字串
+    ['TM45', 'src/arsi/dispatchers.mjs', [["let gateMax = numOr(maxPercent, 'num', 95)\n    //errTextOf", "let gateMax = Number.isFinite(maxPercent) ? maxPercent : 95\n    //errTextOf"]], ['unit-rsiNums']], //派工之 maxPercent 不收字串(錨點隨 errTextOf 之插入而更新; 排程第 622 項)
     ['TM46', 'src/domain/texts.mjs', [["一個節點至多 ${maxArmsOf(st.rsi)} 臂。", "一個節點至多 ${st.rsi.maxArmsPerNode} 臂。"]], ['unit-rsiNums']], //任務書寫原值(與閘門不同值)
     ['TM47', 'src/domain/sideRead.mjs', [["let n = rsiNumOf(x, 'int2')", "let n = Number.isInteger(x) && x >= 2 ? x : null"]], ['unit-rsiNums']], //側別讀數之整數鍵不收字串
     ['TM48', 'src/domain/backtestCfg.mjs', [["let pAbove = reqNumOf(gr.pAbove, 0.05, 'backtest.grade.pAbove', 'unit')", "let pAbove = gr.pAbove === undefined ? 0.05 : gr.pAbove"]], ['unit-rsiNums']], //pAbove 不檢
@@ -1697,7 +1697,7 @@ let M = [
     ['FM12', 'src/arsi/records.mjs', [["            out.push(`- 形式(審計所定): ${FORM_LABELS[au.form]}`)\n", ""]], ['unit-formRecord']], //節點文件不列審計所定
     ['FM13', 'src/arsi/records.mjs', [["        out.push(`- 形式(主控補記${typeof c.at === 'string' ? `;${c.at.slice(0, 10)}` : ''};以此為準): ${formLabelOf(c.form)}${typeof c.why === 'string' && c.why ? ` —— ${c.why}` : ''}`)\n", ""]], ['unit-formRecord']], //節點文件不列主控補記
     ['FM14', 'src/arsi/records.mjs', [["            out.push(`- 形式: ${FORM_LABELS[a.form]}`)\n", ""]], ['unit-formRecord']], //做夢文件不列形式
-    ['FM15', 'src/tools/formSet.mjs', [["if (lock.running) {", "if (false) {"]], ['unit-formRecord']], //輪次進行中不拒
+    ['FM15', 'src/tools/formSet.mjs', [["takeRoundLockOrExit(st.rsi.root, (lock) => {", "if (false) takeRoundLockOrExit(st.rsi.root, (lock) => {"]], ['unit-formRecord']], //輪次進行中不拒(錨點隨 peekRunLock 改為 takeRoundLockOrExit 而更新; 排程第 622 項)
     ['FM16', 'src/tools/formSet.mjs', [["let fv = formArg.trim() === 'none' ? null : formArg.trim()", "let fv = formArg.trim()"]], ['unit-formRecord']], //none 不清除
     ['FM17', 'src/tools/formSet.mjs', [["    doc.control = { ...(doc.control || {}), form: { form: fv, why: why.trim().slice(0, 300), at: new Date().toISOString() } }\n", ""]], ['unit-formRecord']], //節點文件不同步
     ['FM18', 'src/tools/formSet.mjs', [["let b = P.writeBoard()", "let b = { nNodes: 0 }"]], ['unit-formRecord']], //看板不重產
@@ -1797,7 +1797,7 @@ let M = [
     ['CL12', 'src/cli/rsi.mjs', [["armKeyOf(String(cl).split('+')) === armKeyOf(String(ra).split('+'))", "String(cl) === String(ra)"]], ['unit-frontierOps']], //臂相同之判定不計次序與重複(寫法不同之同一集合漏判)
     ['CL13', 'src/domain/domain.mjs', [["        let id = idOf(spec)\n        let ex = rsi.store.getNode(id)\n", "        let id = idOf(spec)\n        if (dry) {\n            return { ok: true, dry: true, nodeId: id, arms: spec.arms, round: null }\n        }\n        let ex = rsi.store.getNode(id)\n"]], ['unit-frontierOps']], //預檢於節點 / 待執行提案之檢查之前即返回
     //  AS 系列(R-PKG-12; 非嚴格斷言之盤點工具與動態盤點之預載)
-    ['AS01', 'test/tools/auditAssert.mjs', [["        if (mask[m.index] === 0) {", "        if (false) {"]], ['unit-assertStrict']], //不略過字串、註解內之字樣
+    ['AS01', 'test/tools/auditAssert.mjs', [["文字內提到 assert.deepEqual( )\n        if (mask[m.index] === 0) {", "文字內提到 assert.deepEqual( )\n        if (false) {"]], ['unit-assertStrict']], //不略過字串、註解內之字樣(錨點加註解列以與 weakNegOf 之同形列區分; 排程第 622 項)
     ['AS02', 'test/tools/auditAssert.mjs', [["                    if (stack.includes('[')) {", "                    if (true) {"]], ['unit-assertStrict']], //物件屬性之 null 亦記為陣列內
     ['AS03', 'test/tools/auditAssert.mjs', [["let isKey = prev === '.' || (next === ':' && stack[stack.length - 1] === '{')", "let isKey = false"]], ['unit-assertStrict']], //屬性名與物件之鍵亦當值
     ['AS04', 'test/tools/auditAssert.mjs', [["let CALL_RE = () => new RegExp(`(?<![\\\\w$.])assert", "let CALL_RE = () => new RegExp(`assert"]], ['unit-assertStrict']], //他物件 / 他識別字之同名方法亦計
@@ -1868,6 +1868,51 @@ let M = [
     ['PE09', 'examples/pick_example.mjs', [["            ids.push(s)\n", "            ids.push(s)\n            if (ids.length >= 40) {\n                break\n            }\n"]], ['unit-briefDefaults']], //以計數截斷(固定席數)而不用 .slice(
     ['PE10', 'examples/pick_example.mjs', [["return sig.mode === 1 ? book.openLong < 25 : book.openShort < 25", "return sig.mode === 1 ? book.openLong < 26 : book.openShort < 25"]], ['unit-briefDefaults']], //accept 之做多上限與 meta.params.maxHoldPerSide 不同
     ['SM09', 'src/arsi/dispatchers.mjs', [["let sm = genDiagStreamMasker(secrets)\n    let started = false", "let started = false\n    let sm = null\n    let get = () => (sm = sm || genDiagStreamMasker(secrets))"], ["            put(sm.push(chunk))\n", "            put(get().push(chunk))\n"], ["            put(sm.flush())\n", "            put(get().flush())\n"]], ['unit-stderrMask'], 'equiv'], //遮罩器延到第一塊才建(行為等價: 秘密清單為建立時之快照, 同一次派工內不變)
+    //── 排程第 622 項 ⓪: 派工結果之 error 欄經本庫之秘密清單遮罩(R-RUN-8 ⑧; dispatchers.mjs 之 errTextOf; unit-errMask): EM01 ~ EM05 ──
+    ['EM01', 'src/arsi/dispatchers.mjs', [["maskDiagText(String(e || ''), secrets).slice(0, 300)", "String(e || '').slice(0, 300)"]], ['unit-errMask']], //遮罩移除(只留截斷)
+    ['EM02', 'src/arsi/dispatchers.mjs', [["maskDiagText(String(e || ''), secrets).slice(0, 300)", "maskDiagText(String(e || '').slice(0, 300), secrets)"]], ['unit-errMask']], //先截後遮(跨 300 字元之金鑰被切開而漏遮)
+    ['EM03', 'src/arsi/dispatchers.mjs', [["maskDiagText(String(e || ''), secrets)", "maskDiagText(String(e || ''), [])"]], ['unit-errMask']], //秘密清單為空(只留內建之樣式; 金鑰檔所列之金鑰不遮)
+    ['EM04', 'src/arsi/dispatchers.mjs', [["maskDiagText(String(e || ''), secrets).slice(0, 300)", "maskDiagText(String(e || ''), secrets).slice(0, 3000)"]], ['unit-errMask']], //截斷之長度改變
+    ['EM05', 'src/arsi/dispatchers.mjs', [["error: errTextOf(r.error)", "error: String(r.error || '').slice(0, 300)"]], ['unit-errMask']], //記入 errs 之處繞過遮罩
+    //── 排程第 622 項 ②: 寫入型入口取輪次鎖(R-RUN-15; src/arsi/roundLock.mjs、src/cli/rsi.mjs、src/tools/*; unit-roundLock): RL01 ~ RL15 ──
+    ['RL01', 'src/cli/rsi.mjs', [["    lockOrExit('建立')\n", ""]], ['unit-roundLock']], //--mode init 不取鎖
+    ['RL02', 'src/cli/rsi.mjs', [["    lockOrExit('重產看板')\n", ""]], ['unit-roundLock']], //--mode board 不取鎖
+    ['RL03', 'src/cli/rsi.mjs', [["    lockOrExit('補算旗標')\n", ""]], ['unit-roundLock']], //--mode validate 不取鎖
+    ['RL04', 'src/cli/rsi.mjs', [["        lockOrExit('註記')\n", "        void 0\n"]], ['unit-roundLock']], //--mode annotate 不取鎖
+    ['RL05', 'src/cli/rsi.mjs', [["        lockOrExit('補記')\n", "        void 0\n"]], ['unit-roundLock']], //--mode dirtype 不取鎖
+    ['RL06', 'src/tools/formSet.mjs', [["takeRoundLockOrExit(st.rsi.root, (lock) => {\n    console.error(`輪次進行中(pid ${lock.pid}): 請於輪次結束後再執行`)\n})\n", ""]], ['unit-roundLock']], //formSet 不取鎖
+    ['RL07', 'src/tools/exposure.mjs', [["takeRoundLockOrExit(st.rsi.root, (lock) => {\n    console.error(`輪次進行中(pid ${lock.pid}): 請於輪次結束後再執行`)\n})\n", ""]], ['unit-roundLock']], //exposure 不取鎖
+    ['RL08', 'src/tools/armInactive.mjs', [["takeRoundLockOrExit(st.rsi.root, (lock) => {\n    console.error(`輪次進行中(pid ${lock.pid}): 請於輪次結束後再執行`)\n})\n", ""]], ['unit-roundLock']], //armInactive 不取鎖
+    ['RL09', 'src/tools/armDecide.mjs', [["takeRoundLockOrExit(st.rsi.root, (lock) => {", "if (false) takeRoundLockOrExit(st.rsi.root, (lock) => {"]], ['unit-roundLock']], //armDecide 不取鎖(通過與不採)
+    ['RL10', 'src/tools/armDecide.mjs', [["takeRoundLockOrExit(st.rsi.root, (lock) => {", "if (accept) takeRoundLockOrExit(st.rsi.root, (lock) => {"]], ['unit-roundLock']], //armDecide 只於通過時取鎖(不採不取: 原行為)
+    ['RL11', 'src/arsi/roundLock.mjs', [["    process.on('exit', () => lock.release())\n", ""]], ['unit-roundLock']], //取得後不釋放(鎖檔殘留)
+    ['RL12', 'src/arsi/roundLock.mjs', [["        process.exit(3)\n", "        process.exit(4)\n"]], ['unit-roundLock']], //取不到之離開碼不為 3
+    ['RL13', 'src/arsi/roundLock.mjs', [["path.join(stateRoot, 'logs', 'round.lock')", "path.join(stateRoot, 'logs', 'write.lock')"]], ['unit-roundLock']], //另用一個鎖檔(與輪次、重算不互斥)
+    ['RL14', 'src/cli/rsi.mjs', [["let lockBeforeInit = mode === 'init'\nif (lockBeforeInit) {\n    lockOrExit('建立')\n}\nrsi.init()\n", "rsi.init()\nlet lockAfterInit = mode === 'init'\nif (lockAfterInit) {\n    lockOrExit('建立')\n}\n"]], ['unit-roundLock']], //--mode init 於 rsi.init() 之後才取鎖(全新狀態根之策略檔先於鎖寫入)
+    ['RL15', 'src/cli/rsi.mjs', [["    if (argsOk) {\n        lockOrExit('註記')\n    }\n", "    lockOrExit('註記')\n"]], ['unit-roundLock']], //annotate 於引數檢查之前取鎖(用法之錯因鎖而變為離開碼 3)
+    //── 排程第 622 項 ③: --close / --rearm / --to 取原字串並對照臂目錄(src/cli/rsi.mjs、src/domain/armCatalog.mjs; unit-armArgs): AA01 ~ AA08 ──
+    ['AA01', 'src/cli/rsi.mjs', [["            if (m !== null) {\n                console.log(m)\n                process.exit(2)\n            }\n", ""]], ['unit-armArgs']], //不對照臂目錄(不在者不拒)
+    ['AA02', 'src/cli/rsi.mjs', [["let cl = argStrOf('close', undefined)", "let cl = argOf('close', undefined)"]], ['unit-armArgs']], //--close 取數值轉型之值(`--close 0` 被當成未給)
+    ['AA03', 'src/domain/armCatalog.mjs', [["ids.every((x) => byId.has(x) &&", "ids.every((x) => [...byId.keys()].some((k) => k.startsWith(x)) &&"]], ['unit-armArgs']], //以前綴比對(`A01` 亦合格)
+    ['AA04', 'src/domain/armCatalog.mjs', [["(selectable !== true || byId.get(x).selectable === true)", "true"]], ['unit-armArgs']], //--to 不要求可選
+    ['AA05', 'src/cli/rsi.mjs', [["['to', doRearm ? toArg : undefined, true]", "['to', undefined, true]"]], ['unit-armArgs']], //--to 不對照臂目錄
+    ['AA06', 'src/domain/armCatalog.mjs', [["ids.length > 0 && ids.every(", "ids.length > 0 && ids.some("]], ['unit-armArgs']], //部分不在者放行(合格之部分被結案)
+    ['AA07', 'src/domain/armCatalog.mjs', [["joined with +`", "joined with + (${raw})`"]], ['unit-armArgs']], //訊息回顯輸入
+    ['AA08', 'src/cli/rsi.mjs', [["let doClose = typeof cl === 'string'", "let doClose = !!cl && cl !== true"]], ['unit-armArgs'], 'equiv'], //空字串之值被當成未給(行為等價: 帶值旗標之空字串已由 cliMsgOf 先拒〔`must be written as --close <arm>… (a value is required)`、離開碼 2〕,到不了此處; 原 `!!cl` 之差只在 0 與空字串,0 已由 argStrOf 取原字串而不再是 0)
+    //── 排程第 622 項 ①: 整庫改嚴格之守門(test/tools/auditAssert.mjs、test/unit-assertStrict.test.mjs): AU01 ~ AU09 ──
+    ['AU01', 'test/tools/auditAssert.mjs', [["            out.looseFiles.push(`test/${f}`)", "            void 0"]], ['unit-assertStrict']], //寬鬆之檔不列入 looseFiles
+    ['AU02', 'test/tools/auditAssert.mjs', [["                out.looseImportsBad.push({ file: `test/${f}`, ...li })", "                void 0"]], ['unit-assertStrict']], //對寬鬆模組之匯入不列為違規
+    ['AU03', 'test/tools/auditAssert.mjs', [["        if (hit) {\n            out.push({ method: m[1]", "        if (false) {\n            out.push({ method: m[1]"]], ['unit-assertStrict']], //含 null 之負向斷言不被辨認
+    ['AU04', 'test/tools/auditAssert.mjs', [["r.nAssertCalls >= 1000 &&", "r.nAssertCalls >= 0 &&"]], ['unit-assertStrict']], //防空集合之門檻失效
+    ['AU05', 'test/tools/auditAssert.mjs', [["[args[0], args[1]].some((a) => {", "[args[1]].some((a) => {"]], ['unit-assertStrict']], //負向斷言只看第二個引數(null 在前者漏)
+    ['AU06', 'test/tools/auditAssert.mjs', [["|\\bgetBuiltinModule|\\))\\s*\\(\\s*(['\"])(?:node:)?assert\\1\\s*\\)/g,\n", "|\\bgetBuiltinModule)\\s*\\(\\s*(['\"])(?:node:)?assert\\1\\s*\\)/g,\n"]], ['unit-assertStrict']], //經 createRequire(…)('assert') 之載入(被呼叫者為另一次呼叫之結果)不被辨認
+    ['AU10', 'test/tools/auditAssert.mjs', [["/(?<![\\w$.])import(?![\\w$.:])[^'\";()]*?(['\"])(?:node:)?assert\\1/g", "/(?<![\\w$.])import\\s+[^'\";()]*?\\s+from\\s+(['\"])(?:node:)?assert\\1/g"]], ['unit-assertStrict']], //import 之匯入要求空白(`import{equal}from'assert'` 與副作用匯入 `import 'assert'` 漏)
+    ['AU13', 'test/tools/auditAssert.mjs', [["/(?<![\\w$.])import(?![\\w$.:])[^'\";()]*?(['\"])(?:node:)?assert\\1/g", "/(?<![\\w$.])import[^'\";()]*?(['\"])(?:node:)?assert\\1/g"]], ['unit-assertStrict']], //import 之後不排除 `.` 與 `:`(`import.meta.url` 之後之 'assert' 字串被誤判為匯入)
+    ['AU11', 'test/tools/auditAssert.mjs', [["else if (w === 'undefined' || w === 'void') {", "else if (w === 'undefined') {"]], ['unit-assertStrict']], //`void 0` 不視為 undefined
+    ['AU12', 'test/tools/auditAssert.mjs', [["assert\\.(?:strict\\.)?(notEqual|notStrictEqual|notDeepEqual|notDeepStrictEqual)\\s*(?:\\?\\.\\s*)?\\(", "assert\\.(notEqual|notStrictEqual|notDeepEqual|notDeepStrictEqual)\\s*\\("]], ['unit-assertStrict']], //負向斷言之辨認不含 assert.strict. 前綴與可選呼叫
+    ['AU07', 'test/unit-aliasBase.test.mjs', [["import assert from 'assert/strict'", "import assert from 'assert'"]], ['unit-assertStrict']], //新增一個寬鬆之檔(全庫之盤點須轉紅)
+    ['AU08', 'test/unit-fillRun.test.mjs', [["assert.ok(fst.registry.dA.since !== null && fst.registry.dA.since !== undefined, '診斷改寫後 dA 之 since 已登錄')", "assert.notEqual(fst.registry.dA.since, null, '診斷改寫後 dA 之 since 已登錄')"]], ['unit-assertStrict']], //新增一個含 null 之負向斷言(全庫之盤點須轉紅)
+    ['AU09', 'test/unit-aliasBase.test.mjs', [["import assert from 'assert/strict'\n", "import assert from 'assert/strict'\nimport looseExtra from 'assert'\n"]], ['unit-assertStrict']], //嚴格之檔另匯入寬鬆模組
 ]
 
 let args = process.argv.slice(2)

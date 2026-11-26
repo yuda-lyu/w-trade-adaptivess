@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
 import { getSettings } from '../src/cfg.mjs'
@@ -234,7 +234,8 @@ describe('附算與補算之執行(規則 R-REC-34)', function () {
         let r = await P.fill({ runEval, storeAfter: false })
         assert.deepEqual(calls.slice(n2).map((c) => [ids.indexOf(c.nodeId), c.kind, argOfA(c.args, '--ext-only')]).sort(), [[0, 'ext', 'dA'], [1, 'ext', 'dA'], [2, 'ext', 'dA']])
         let fst = JSON.parse(fs.readFileSync(path.join(st.rsi.root, 'fill_state.json'), 'utf8'))
-        assert.notEqual(fst.registry.dA.since, null)
+        //負向之寬鬆斷言(notEqual(x, null))要求非 null 且非 undefined ⇒ 嚴格版改寫為明示之等價式(排程第 622 項 ①)
+        assert.ok(fst.registry.dA.since !== null && fst.registry.dA.since !== undefined, '診斷改寫後 dA 之 since 已登錄')
         assert.strictEqual(fst.registry.dB.since, null)
         assert.deepEqual(r.results.map((x) => x.ext.ok), [['dA'], ['dA'], ['dA']])
         //其後之完整評估(harness_full.json 之 at 晚於 since)且樹上有值 ⇒ 不補: 以節點 0 為例(去掉其補算檔之 dA、正本時刻改為未來)

@@ -163,4 +163,27 @@ let decideArgsOf = (p, opt = {}) => {
     return { args }
 }
 
-export { ARM_ID, mkArm, proposalOf, decideArgsOf }
+//armListMsgOf, 命令列之臂參數(--close、--rearm、--to: 以 + 連接之臂 id)之檢查(排程第 622 項 ③): 依命令列之原字串逐一對照臂目錄, 不在者拒收
+//  回傳固定之訊息(不帶輸入之臂; V19、K9)或 null(合格); 目錄之臂以其 id 完全相同才算(不去空白、不分大小寫、不收前綴、空段如 `A++B` 不合);
+//  selectable 為 true 者另要求每個臂為可選(改掛之目的臂: 規格不收不可選之臂); 否則只看是否在目錄(結案與改掛之原臂可為已停用之臂: 前緣內尚有其提案時須能結案)
+//  原: 以 argOf 取值(`--close 0` 轉成數值 0 而被當成未給 ⇒ 不結案、離開碼 0); 臂不在目錄者不拒(結案 0 條 / 無提案), 改掛之訊息回顯輸入之臂
+/**
+ * 命令列之臂參數之檢查:原字串以 + 切開,每個臂 id 皆須在臂目錄內(selectable 為 true 者另須可選);回傳固定之拒收訊息或 null
+ *
+ * @param {String} nm 輸入旗標名(不含 --;只用於訊息之旗標名,為程式常數)
+ * @param {*} raw 輸入命令列之原字串(非字串、空字串一律不合)
+ * @param {Array<Object>} arms 輸入臂目錄之臂(生效目錄之 arms:{ id, selectable }…)
+ * @param {Boolean} [selectable=false] 輸入是否須為可選之臂,預設 false
+ * @returns {String|null} 回傳固定之拒收訊息(不帶輸入值)或 null(合格)
+ * @example
+ * armListMsgOf('close', '0', [{ id: 'A01_nt', selectable: true }])
+ * // => 'invalid --close: must be arm ids of the arm catalog, joined with +'
+ */
+let armListMsgOf = (nm, raw, arms, selectable = false) => {
+    let byId = new Map((Array.isArray(arms) ? arms : []).filter((a) => a && typeof a.id === 'string').map((a) => [a.id, a]))
+    let ids = typeof raw === 'string' ? raw.split('+') : []
+    let ok = ids.length > 0 && ids.every((x) => byId.has(x) && (selectable !== true || byId.get(x).selectable === true))
+    return ok ? null : `invalid --${nm}: must be ${selectable === true ? 'selectable ' : ''}arm ids of the arm catalog, joined with +`
+}
+
+export { ARM_ID, mkArm, proposalOf, decideArgsOf, armListMsgOf }

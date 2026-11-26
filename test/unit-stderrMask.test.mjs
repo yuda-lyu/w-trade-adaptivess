@@ -223,6 +223,10 @@ describe('派工:錯誤輸出之串流遮罩(wsemi genDiagStreamMasker;第 486 �
         for (let w of ['STDERR_PIECE', 'safeCut', 'RE_CRED']) {
             assert.ok(!src.includes(w), `不應再有 ${w}`)
         }
-        assert.ok(!/import\s+maskDiagText/.test(src), '不再直接匯入 maskDiagText(遮罩由串流遮罩器負責)')
+        //串流之留存(makeStderrSink)不直接呼叫 maskDiagText(遮罩由串流遮罩器負責); 排程第 622 項 ⓪ 另以 maskDiagText(一次性形式)遮派工結果之 error 欄 ⇒ 全檔之呼叫只有 errTextOf 一處(unit-errMask)
+        let code = src.replace(/^\s*\/\/.*$/gm, '')
+        let sink = code.slice(code.indexOf('let makeStderrSink'), code.indexOf('let isQuotaFail'))
+        assert.ok(sink.includes('genDiagStreamMasker(secrets)') && !/maskDiagText/.test(sink), 'makeStderrSink 不直接用 maskDiagText(遮罩由串流遮罩器負責)')
+        assert.equal((code.match(/maskDiagText\(/g) || []).length, 1, 'maskDiagText 之呼叫全檔只有 errTextOf 一處')
     })
 })

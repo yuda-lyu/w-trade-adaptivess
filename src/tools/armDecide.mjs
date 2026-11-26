@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { settingsOrExit, argOf, argStrOf, cliGuard, FD_ROOT } from '../cfg.mjs'
-import { peekRunLock } from '../arsi/runner.mjs'
+import { takeRoundLockOrExit } from '../arsi/roundLock.mjs'
 import { ARM_LABELS, armProposalLine } from '../arsi/records.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { decideArgsOf } from '../domain/armCatalog.mjs'
@@ -23,7 +23,7 @@ cliGuard('armDecide')
 //    停用(retire): 無選項(理由取 --why)
 //    --why-file / --desc-file <檔>: 自檔讀取文字(UTF-8; 內容較長或含引號時用)
 //  機制說明(desc)預設取提案之 mechanism; 主控應先改成「機制之中性描述」(不含結論與數字)再通過
-//  輪次進行中不得通過(輪次行程已載入舊目錄, 做夢卻會讀到新目錄 ⇒ 所提之新臂被迴圈擋下); 不採不受此限
+//  輪次進行中不得通過(輪次行程已載入舊目錄, 做夢卻會讀到新目錄 ⇒ 所提之新臂被迴圈擋下); 不採亦取輪次鎖(提案帳與輪末之彙整同一份; 排程第 622 項 ②; 原: 不採不受此限)
 //  不合(參數不足、審定後之目錄不合等)⇒ 提案帳與擴充檔皆不變(引擎於寫入前試建目錄)
 let st = settingsOrExit()
 //本工具不派工 ⇒ 換上不派工之派工器(不讀派工用之金鑰)
@@ -74,13 +74,11 @@ if (accept === reject || !why) {
     console.error('用法: --id <提案 id> --accept | --reject,並給 --why <審查意見>(或 --why-file <檔>)')
     process.exit(2)
 }
-if (accept) {
-    let lock = peekRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
-    if (lock.running) {
-        console.error(`輪次進行中(pid ${lock.pid}): 目錄不得於輪中變動,請於輪次結束後再通過`)
-        process.exit(3)
-    }
-}
+//取輪次鎖(takeRoundLockOrExit; 持有至行程結束; 排程第 622 項 ②): 通過與不採皆寫提案帳(<狀態根>/governance/; 輪末由做夢彙整之提案亦寫同一份帳 ⇒ 不採亦不得與輪次並行);
+//  通過另改生效目錄(輪次行程已載入舊目錄)⇒ 用字分開; 原: 只於通過時 peekRunLock(只看一眼; 不採不受此限 ⇒ 不採與輪末之彙整可同時寫提案帳)
+takeRoundLockOrExit(st.rsi.root, (lock) => {
+    console.error(accept ? `輪次進行中(pid ${lock.pid}): 目錄不得於輪中變動,請於輪次結束後再通過` : `輪次進行中(pid ${lock.pid}): 提案帳於輪末由做夢彙整,請於輪次結束後再不採`)
+})
 //--selectable: 值只收 true / false(字串; 已於上之 cliGuard 檢查〔CLI_VALUES.armDecide〕; K5: 0、1 與其他字串皆非布林); 原: `!(selArg === false || selArg === 'false')` ⇒ `--selectable 0`、`abc` 皆取 true
 let selArg = argStrOf('selectable', null)
 let o = decideArgsOf(p, {

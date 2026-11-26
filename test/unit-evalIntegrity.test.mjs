@@ -1,5 +1,5 @@
 /* eslint-disable no-extend-native, accessor-pairs -- 違約樣本: 本檔刻意暫時改寫內建原型(測後一律以 keep 還原), 驗評估器之偵測 */
-import assert from 'assert'
+import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'

@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import { loadLedger } from '../src/eval/ledger.mjs'
 import { makeTmp, writeSynthLedger, makeTrainEvaluator as makeEvaluator } from './tools/synthLedger.mjs'
 //makeEvaluator: 合成帳本即訓練期帳本 ⇒ makeTrainEvaluator 補上 L.ntStatic 再建評估器(見 test/tools/synthLedger.mjs)

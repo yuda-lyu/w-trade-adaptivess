@@ -1,6 +1,5 @@
-import path from 'path'
 import { settingsOrExit, argStrOf, cliGuard } from '../cfg.mjs'
-import { peekRunLock } from '../arsi/runner.mjs'
+import { takeRoundLockOrExit } from '../arsi/roundLock.mjs'
 import { makeProjectOrExit } from '../domain/domain.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 
@@ -15,7 +14,7 @@ cliGuard('exposure')
 //  node tools/exposure.mjs --undo --node <id 或前綴> --why <理由>   撤銷: 記 evidence.exposureRelease = null
 //  放行綁選集指紋: 重做或 reverify 使選集指紋改變者放行自動失效(須重新放行); 只對判為側別曝險之節點放行; 撤銷只對已放行者
 //  寫入後: S、階梯不變(變了即報錯, 離開碼 1); 節點文件之 control.exposureRelease 同步; 該節點之「提示(側別曝險)」即時改寫; 重產看板與搜尋地圖
-//  輪次進行中不得執行(看板、載體與迴圈檢查於輪中由迴圈讀寫); 判定關閉(settings.rsi.exposure = false)者只列出此事
+//  輪次進行中不得執行(看板、載體與迴圈檢查於輪中由迴圈讀寫); 放行 / 撤銷時取輪次鎖(takeRoundLockOrExit; 持有至行程結束; 排程第 622 項 ②; 原: 只 peekRunLock); 判定關閉(settings.rsi.exposure = false)者只列出此事
 let st = settingsOrExit()
 let P = makeProjectOrExit(st, {})
 P.rsi.init()
@@ -45,11 +44,9 @@ if (!P.exposureOn) {
     console.error('側別曝險之判定已關閉(settings.rsi.exposure = false): 無須放行')
     process.exit(2)
 }
-let lock = peekRunLock(path.join(st.rsi.root, 'logs', 'round.lock'))
-if (lock.running) {
+takeRoundLockOrExit(st.rsi.root, (lock) => {
     console.error(`輪次進行中(pid ${lock.pid}): 請於輪次結束後再執行`)
-    process.exit(3)
-}
+})
 let hits = executed().filter((n) => n.id.startsWith(key))
 if (hits.length !== 1) {
     //訊息不帶輸入之前綴(K9; 排程第 611 項 ②; 原: `節點 <前綴>: 符合 N 個`)

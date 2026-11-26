@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'

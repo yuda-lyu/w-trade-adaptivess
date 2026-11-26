@@ -1,5 +1,5 @@
 /* eslint-disable no-template-curly-in-string -- 診斷之原始碼字串(寫入合成專案之 metrics/)內含樣板字面值 */
-import assert from 'assert'
+import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
 import { pathToFileURL } from 'url'

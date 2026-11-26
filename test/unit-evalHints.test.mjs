@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
@@ -149,7 +149,9 @@ describe('迴圈檢查之兩條機械提示:單峰交付、選集與他節點相
             let D = it_('dd44ee55ff66aa77', ['A01_nt', 'D27_dedup', 'C21_holdStruct', 'A09_tpSl'], 'fpD', [rw('try_d.mjs', 'fpA')])
             assert.strictEqual(twinHintOf(A, twinIndexOf([A, D])), null)
             //鑑別前提: 同一列, 對方之臂改為互有出入即列
-            assert.notEqual(twinHintOf(A, twinIndexOf([A, { ...D, arms: ['A01_nt', 'D27_dedup', 'A09_tpSl'] }])), null)
+            //負向之寬鬆斷言(notEqual(x, null))要求非 null 且非 undefined ⇒ 嚴格版改寫為明示之等價式(排程第 622 項 ①)
+            let hintD = twinHintOf(A, twinIndexOf([A, { ...D, arms: ['A01_nt', 'D27_dedup', 'A09_tpSl'] }]))
+            assert.ok(hintD !== null && hintD !== undefined, '對方之臂互有出入 ⇒ 列提示')
             //臂組合相同(次序不同亦同)
             let E = it_('ee55ff66aa77bb88', ['C21_holdStruct', 'A01_nt', 'D27_dedup'], 'fpE', [rw('try_e.mjs', 'fpA')])
             assert.equal(twinHintOf(A, twinIndexOf([A, E])), '提示(選集與他節點相同): 交付版之選集與 ee55ff66/try_e.mjs 之完整評估逐位相同(選集指紋相同),臂組合亦相同 ⇒ 兩者為同一成品,不作互相獨立之佐證(不否決,由審計判定)')
@@ -169,7 +171,8 @@ describe('迴圈檢查之兩條機械提示:單峰交付、選集與他節點相
             assert.equal(twinHintOf(B, twinIndexOf([B, W])), '提示(選集與他節點相同): 交付版之選集與 dd44ee55/pick.mjs 之完整評估逐位相同(選集指紋相同),臂組合亦相同 ⇒ 兩者為同一成品,不作互相獨立之佐證(不否決,由審計判定)', '他節點之驗證類而未指名本節點')
             //探索類之 targets 不作用(只有驗證類才排除)
             let X = it_('ee55ff66aa77bb88', ['A01_nt'], 'fpX', [rw('pick.mjs', 'fpB')], 'explore', ['bb22cc33dd44ee55'])
-            assert.notEqual(twinHintOf(B, twinIndexOf([B, X])), null)
+            let hintX = twinHintOf(B, twinIndexOf([B, X]))
+            assert.ok(hintX !== null && hintX !== undefined, '探索類之 targets 不作用 ⇒ 列提示')
         })
 
         it('選集與他節點相同:兩方皆為驗證類而臂組合相同 ⇒ 不列(刻意之重複驗證);兩方皆驗證類而臂組合不同 ⇒ 列;一方驗證類、一方探索類而臂組合相同且未指名 ⇒ 列「同一成品」;同時命中應列與不列者 ⇒ 只列應列者', () => {

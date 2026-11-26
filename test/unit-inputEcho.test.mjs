@@ -1,5 +1,5 @@
 /* eslint-disable no-template-curly-in-string -- 本檔之盤點案以正規式比對原始碼之片段(含 ${…}) */
-import assert from 'assert'
+import assert from 'assert/strict'
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'

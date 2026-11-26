@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import path from 'path'
 import { loadLedger } from '../src/eval/ledger.mjs'
 import { makeTmp, writeSynthLedger, makeTrainEvaluator as makeEvaluator } from './tools/synthLedger.mjs'

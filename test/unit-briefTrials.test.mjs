@@ -1,4 +1,4 @@
-import assert from 'assert'
+import assert from 'assert/strict'
 import path from 'path'
 import { getSettings } from '../src/cfg.mjs'
 import { makeTexts } from '../src/domain/texts.mjs'
