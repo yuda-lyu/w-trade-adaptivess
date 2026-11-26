@@ -1,12 +1,12 @@
 {
   "name": "w-trade-adaptivess",
-  "version": "1.0.59",
+  "version": "1.0.60",
   "description": "A framework for searching adaptive strategy-picking policies over a quantitative-trading strategy library: a no-lookahead evaluator (pick contract, ledger, nulls and diagnostics), agentic nodes that write picking modules, an agentic dream that audits and synthesizes, and a controller layer, all running on the recursive search engine w-recursi.",
   "main": "dist/w-trade-adaptivess.umd.js",
   "dependencies": {
-    "w-recursi": "^1.0.30",
-    "w-trade-backtest": "^1.1.56",
-    "wsemi": "^1.9.81"
+    "w-recursi": "^1.0.31",
+    "w-trade-backtest": "^1.1.57",
+    "wsemi": "^1.9.82"
   },
   "devDependencies": {
     "w-package-tools": "^1.1.32"
