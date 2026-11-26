@@ -1,7 +1,7 @@
 import path from 'path'
 import { createRequire } from 'module'
 import { settingsOrExit, cliGuard, argNumOf } from '../cfg.mjs'
-import { checkQuota } from '../arsi/dispatchers.mjs'
+import { checkQuota, makeErrText } from '../arsi/dispatchers.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 import { preflightOf } from '../arsi/rsiNums.mjs'
 
@@ -18,6 +18,8 @@ let st = settingsOrExit()
 //  --max 給了而不是有限數 ⇒ 已於上之 cliGuard 拒收(CLI_VALUES.quota; 排程第 607 項; 原: 靜默取設定之值 —— `--max abc` 以為在試算 abc 卻是 95); 此處取檢查合格之轉換值(K4)
 let preNum = preflightOf(st.rsi)
 let max = argNumOf('max', 'num', preNum.quotaMaxPercent)
+//errText: 查詢失敗之訊息印出前之遮罩(排程第 655 項 ②; R-RUN-8 ⑨; 與 checkQuota 之 row.note 同一個 errTextOf 與同一組秘密清單; 先遮再截)
+let errText = makeErrText({ skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile })
 let q = await checkQuota({ agents: st.agents || {}, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, maxPercent: max, probe: process.argv.includes('--probe') })
 for (let r of q.rows) {
     console.log(`${r.role}(${r.model}): ${r.windows.map((w) => `${w.label} ${w.percent === null ? '—' : `${w.percent}%`}${w.resetAt ? `(重置 ${String(w.resetAt).slice(0, 16)}Z)` : ''}`).join(' | ') || '—'}${r.blocked ? ` 【已達起跑門檻 ${r.maxPercent}%】` : ''}${r.note ? ` (${r.note})` : ''}`)
@@ -30,7 +32,7 @@ if (process.argv.includes('--all')) {
         console.log(qc && qc.ok === true && Array.isArray(qc.windows) ? `Claude 訂閱之全部視窗: ${qc.windows.map((w) => `${w.label} ${w.usedPercent}%`).join(' | ')}` : 'Claude 訂閱之全部視窗: 查詢失敗')
     }
     catch (err) {
-        console.log(`Claude 訂閱之全部視窗: 查詢失敗(${String((err && err.message) || err).slice(0, 120)})`)
+        console.log(`Claude 訂閱之全部視窗: 查詢失敗(${errText(String((err && err.message) || err), { max: 120 })})`)
     }
 }
 console.log(q.ok ? `此刻起跑: 不會被額度擋下(起跑門檻 ${max}%)` : `此刻起跑: 會被擋下 —— ${q.why}(可加 --force 起跑一次)`)

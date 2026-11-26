@@ -27,6 +27,9 @@ let numOr = (v, kind, def) => {
 //     已知限制(wsemi 之 genDiagStreamMasker 之 JSDoc): 未登錄之憑證值若為引號內含換行者, 第二列起不被視為憑證值(逐列遮罩之結果; 原: 整批完整列合成一塊遮, 視塊之切法可能整段遮到); 已登錄之秘密不受此限
 //  ⑧ 派工結果之 error 欄(派工套件取 stderr 尾段, 只遮當次所用之金鑰; 金鑰檔所列之其他金鑰若出現於該尾段則原樣留下)另經本庫之秘密清單(secretsOf)以 wsemi 之 maskDiagText(串流遮罩器之一次性形式; 同一組規則)遮一次, 再截至 300 字元:
 //     先遮再截(截斷若先於遮罩, 會切開金鑰而使留下之前段不被辨認)、一處(makeDispatch 回傳之函數記入 errs 之處; 成功時 error 為 null 不經此; 主模型與各備援、claude 與 opencode、派工例外皆走同一處)
+//  ⑨ 與 error 欄同源之其他輸出(排程第 655 項 ②): 起跑前額度查詢失敗之 row.note(checkQuota; 印於 g_rsi.mjs 與 tools/quota.mjs)、g_rsi.mjs 之 run-failed 事件之 error、補做夢拋錯之堆疊與輪次失敗之狀態檔與日誌、額度查詢失敗與 Claude 用量查詢失敗之印出,
+//     皆經同一個 errTextOf(本檔之單一定義; 遮罩 = maskDiagText 加 secretsOfWda 之秘密清單, 含其內建樣式〔網址帳密、Bearer、憑證鍵值對〕; 先遮再截, 截斷長度各依原值: 120 / 160 / 300 / 500 / 2000, 日誌不截); 無派工套件在手之呼叫端(g_rsi.mjs、tools/quota.mjs)以 makeErrText 取同一組秘密清單(取不到 ⇒ 只用內建之樣式, 不拋)
+//     不在範圍: 派工紀錄檔 agent_aN.log 內 stdout 之原樣附寫、使用端以 inject.dispatch 換上之自訂派工器
 
 //PROBE_PROMPT, 探測備援用之極小提示詞
 let PROBE_PROMPT = '只回覆兩個字: OK'
@@ -46,6 +49,38 @@ let secretsOf = (env, keyVars) => {
         }
     }
     return [...out]
+}
+
+//secretsOfWda, 金鑰變數 = 預設 OPENCODE_GO_KEYS 與派工套件條目表所列之 envVar(makeDispatch 與 checkQuota 共用; 取代各自內嵌之同一段)
+let secretsOfWda = (wda, env) => secretsOf(env, [...new Set(['OPENCODE_GO_KEYS', ...(Array.isArray(wda.providers) ? wda.providers.map((p) => p && p.envVar).filter((x) => typeof x === 'string' && x) : [])])])
+
+//errTextOf, 錯誤文字之留存(單一定義; ⑧、⑨): 先以秘密清單遮罩(maskDiagText 為串流遮罩器之一次性形式, 同一組規則; 永不拋, 內部失敗回 ***)、再截(opt.firstLine 者先取第一列; opt.max 為截斷長度, 預設 300)
+//  先遮再截: 截斷若先於遮罩, 會切開金鑰而使留下之前段不被辨認; e 為空值 ⇒ 空字串
+let errTextOf = (e, secrets, opt) => {
+    let { max = 300, firstLine = false } = isPlain(opt) ? opt : {}
+    let s = maskDiagText(String(e || ''), secrets)
+    return (firstLine ? s.split('\n')[0] : s).slice(0, max)
+}
+
+//makeErrText, 取得 errTextOf 之包裝供無派工器在手之呼叫端(g_rsi.mjs、tools/quota.mjs): 秘密清單同 makeDispatch(金鑰檔所列之全部金鑰), 只有失敗之路徑會呼叫, 呼叫時才讀
+//  讀到非空之清單才留用; 空清單(派工套件載不入、金鑰檔讀不了〔readEnvFile 對不存在之檔回 {}, 與空檔無從分辨〕)不留用 ⇒ 下次呼叫重讀(長時間之行程內, 一次讀不到不致使其後整個行程都不辨認金鑰)
+//  讀不到時只剩 maskDiagText 之內建樣式(網址帳密、Bearer、憑證鍵值對)照遮 —— 清單所列之金鑰此時無從辨認(已知限制); 永不拋(失敗之路徑不得再因遮罩而失敗)
+//  opt: { skillsRoot, envFile, inject: { wda } }(同 makeDispatch; 無效者視為未給); 回 (e, opt) → 字串, opt 同 errTextOf 之第三引數
+let makeErrText = (opt) => {
+    let secrets = []
+    return (e, o) => {
+        if (secrets.length === 0) {
+            try {
+                let ov = isPlain(opt) ? opt : {}
+                let inject = isPlain(ov.inject) ? ov.inject : {}
+                let wda = inject.wda || createRequire(import.meta.url)(path.join(String(ov.skillsRoot), 'node_modules', 'w-dispatch-ai'))
+                let env = ov.envFile && fs.existsSync(ov.envFile) ? wda.readEnvFile(ov.envFile) : {}
+                secrets = secretsOfWda(wda, env)
+            }
+            catch (err) {}
+        }
+        return errTextOf(e, secrets, o)
+    }
 }
 
 //makeStderrSink, 錯誤輸出之留存: 以 wsemi 之串流遮罩器(genDiagStreamMasker; 排程第 486 項之使用端; 診斷輸出與遮罩規格 §2)逐列遮罩後附寫; push(chunk) 收區塊、flush() 收尾(無換行之尾段)
@@ -154,11 +189,9 @@ let makeDispatch = (opt) => {
     let wda = inject.wda || createRequire(import.meta.url)(path.join(skillsRoot, 'node_modules', 'w-dispatch-ai'))
     let env = envFile && fs.existsSync(envFile) ? wda.readEnvFile(envFile) : {}
     let keysOf = (name) => String(env[name] || '').split(/[,;]/).map((s) => s.trim()).filter(Boolean)
-    let secrets = secretsOf(env, [...new Set(['OPENCODE_GO_KEYS', ...(Array.isArray(wda.providers) ? wda.providers.map((p) => p && p.envVar).filter((x) => typeof x === 'string' && x) : [])])])
+    let secrets = secretsOfWda(wda, env)
     //訂閱之用量守門之預設門檻(與起跑前之額度檢查同一設定: 專案設定 rsi.preflight.quotaMaxPercent); 非有限數取 95
     let gateMax = numOr(maxPercent, 'num', 95)
-    //errTextOf, 派工結果之 error 欄之留存文字(⑧): 先以本庫之秘密清單遮罩(金鑰檔所列之全部金鑰, 不只當次所用者)、再截至 300 字元; maskDiagText 永不拋(內部失敗回 ***)
-    let errTextOf = (e) => maskDiagText(String(e || ''), secrets).slice(0, 300)
 
     //agentEnv(規則 R-RUN-11): 節點與做夢之 agent 子行程另帶 ARSI_AGENT_ROLE = 角色(經 w-dispatch-ai 之 opt.env 只注入該次子行程; 不寫入本行程之環境)
     //  ⇒ agent 所起之指令執行寫檔或起行程之進入檔與模式即被拒跑(src/domain/agentEntries.mjs); 其他角色不帶
@@ -277,7 +310,7 @@ let makeDispatch = (opt) => {
             if (r.ok) {
                 return { ...r, agent: info, tried: errs }
             }
-            errs.push({ model: info.model, error: errTextOf(r.error), ...(r.quota === true ? { quota: true } : {}) })
+            errs.push({ model: info.model, error: errTextOf(r.error, secrets), ...(r.quota === true ? { quota: true } : {}) })
         }
         //quota: 鏈上每一家皆因額度而未完成(任一家為其他原因之失敗者不標: 該次失敗另有成因, 照既有流程處理)
         let quota = errs.length > 0 && errs.every((e) => e.quota === true)
@@ -334,6 +367,8 @@ let checkQuota = async (opt) => {
     let wda = inject.wda || createRequire(import.meta.url)(path.join(skillsRoot, 'node_modules', 'w-dispatch-ai'))
     let env = envFile && fs.existsSync(envFile) ? wda.readEnvFile(envFile) : {}
     let keysOf = (name) => String(env[name] || '').split(/[,;]/).map((s) => s.trim()).filter(Boolean)
+    //row.note 之查詢失敗文字經 errTextOf(⑨): 與 makeDispatch 同一組秘密清單
+    let secrets = secretsOfWda(wda, env)
     let norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
     let gateMax = numOr(maxPercent, 'num', 95)
     //probeFree, 以極小之提示詞試一次免費池之條目(短逾時); 回 true = 因額度而不可用(派工套件回 errorType 'quota'), 其他結果(成功、逾時、斷線、例外)皆 false
@@ -470,7 +505,7 @@ let checkQuota = async (opt) => {
             }
         }
         catch (err) {
-            row.note = `用量查詢失敗(不擋): ${String((err && err.message) || err).slice(0, 120)}`
+            row.note = `用量查詢失敗(不擋): ${errTextOf(String((err && err.message) || err), secrets, { max: 120 })}`
         }
         rows.push(row)
     }
@@ -483,5 +518,5 @@ let checkQuota = async (opt) => {
 }
 
 
-export { makeDispatch, checkQuota }
+export { makeDispatch, checkQuota, errTextOf, makeErrText }
 export default makeDispatch

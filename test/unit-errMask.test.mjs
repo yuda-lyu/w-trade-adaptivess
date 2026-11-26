@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { makeDispatch } from '../src/arsi/dispatchers.mjs'
 import { FD_ROOT, makeTmp } from './tools/synthLedger.mjs'
+import { K1, K2, leaksOf } from './tools/errMaskKit.mjs'
 
 
 //派工結果之 error 欄之遮罩(R-RUN-8 ⑧; 排程第 622 項 ⓪): 派工套件取 stderr 尾段為 error、只遮當次所用之金鑰;
@@ -12,8 +13,6 @@ import { FD_ROOT, makeTmp } from './tools/synthLedger.mjs'
 //    ② 「先遮再截」= 金鑰跨 300 字元之截斷邊界(起點自 270 至 305)時結果仍不含該金鑰之任何 6 字元以上之前段(截斷先於遮罩者留下前段)
 //    ③ 「其餘不變」= 無秘密之錯誤文字原樣(至多 300 字元)、成功之結果 error 為 null、鏈上之串接格式不變、quota 之判定不受影響
 //  修前(tadm9 之工作樹): `String(r.error || '').slice(0, 300)`,不經本庫之秘密清單
-let K1 = 'oc_sk_TESTKEY00000001'
-let K2 = 'oc_sk_TESTKEY00000002'
 let LOW = {
     rolling: { percent: 0, resetsAt: '2026-01-01T05:00:00.000Z' },
     weekly: { percent: 10, resetsAt: '2026-01-05T00:00:00.000Z' },
@@ -49,20 +48,6 @@ let fakeWda = ({ tail, claudeError = null, throws = null }) => {
 }
 let FREE = { kind: 'opencode', id: 'oc:opencode/m-free' }
 let MAIN = { kind: 'opencode', id: 'ocgo:opencode-go/m', timeoutMin: 1 }
-//任一把金鑰之 6 字元以上之前段(截斷先於遮罩時留下者)
-let leaksOf = (s) => [K1, K2, 'OTHER_TOKEN_VALUE'].filter((k) => {
-    for (let n = 6; n <= k.length; n++) {
-        for (let i = 0; i + n <= k.length; i++) {
-            if (i === 0 && s.includes(k.slice(0, n))) {
-                return true
-            }
-            if (i + n === k.length && s.includes(k.slice(i))) {
-                return true
-            }
-        }
-    }
-    return false
-})
 
 describe('派工:結果之 error 欄經本庫之秘密清單遮罩(R-RUN-8 ⑧;排程第 622 項 ⓪)', function () {
     this.timeout(60000)
@@ -178,11 +163,11 @@ describe('派工:結果之 error 欄經本庫之秘密清單遮罩(R-RUN-8 ⑧;�
         assert.ok(!rQ.error.includes(K2))
     })
 
-    it('結構: 遮罩在 makeDispatch 一處(記入 errs 之處經 errTextOf);src 內不再有「先截再遮」之寫法', () => {
+    it('結構: 記入 errs 之處經 errTextOf(模組之單一定義; 排程第 655 項 ② 自 makeDispatch 之區域函數改為模組層級,與額度查詢等同源輸出共用);先遮(maskDiagText)再截(.slice);src 內不再有「先截再遮」之寫法', () => {
         let src = fs.readFileSync(path.join(FD_ROOT, 'src', 'arsi', 'dispatchers.mjs'), 'utf8')
         assert.equal((src.match(/errs\.push\(/g) || []).length, 1, '記入 errs 之處只有一處')
-        assert.ok(/errs\.push\(\{ model: info\.model, error: errTextOf\(r\.error\)/.test(src))
-        assert.ok(/let errTextOf = \(e\) => maskDiagText\(String\(e \|\| ''\), secrets\)\.slice\(0, 300\)/.test(src), '先遮(maskDiagText)再截(.slice)')
+        assert.ok(/errs\.push\(\{ model: info\.model, error: errTextOf\(r\.error, secrets\)/.test(src))
+        assert.ok(/let errTextOf = \(e, secrets, opt\) => \{\s*let \{ max = 300, firstLine = false \} = isPlain\(opt\) \? opt : \{\}\s*let s = maskDiagText\(String\(e \|\| ''\), secrets\)\s*return \(firstLine \? s\.split\('\\n'\)\[0\] : s\)\.slice\(0, max\)/.test(src), '先遮(maskDiagText)再截(.slice)')
         assert.ok(!/String\(r\.error \|\| ''\)\.slice\(0, 300\)/.test(src), '舊寫法(先截,不遮)不再出現')
     })
 })

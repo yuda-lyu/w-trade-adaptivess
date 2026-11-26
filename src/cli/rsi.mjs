@@ -7,7 +7,7 @@ import { makeProjectOrExit } from '../domain/domain.mjs'
 import { roundName, armKeyOf } from '../arsi/records.mjs'
 import { runRounds, acquireRunLock, appendEvent, readEvents, trailingFailures, planGateOf, roundOkOf, stopFileOf, stopFileExists } from '../arsi/runner.mjs'
 import { takeRoundLockOrExit, roundLockPathOf } from '../arsi/roundLock.mjs'
-import { checkQuota } from '../arsi/dispatchers.mjs'
+import { checkQuota, makeErrText } from '../arsi/dispatchers.mjs'
 import { armListMsgOf } from '../domain/armCatalog.mjs'
 import { guardEntry } from '../domain/agentEntries.mjs'
 import { preflightOf, resourceCfgOf } from '../arsi/rsiNums.mjs'
@@ -219,6 +219,8 @@ else if (mode === 'round') {
     let quota = null
     //額度之查詢參數、快照(只留角色、視窗名與百分比)與前後對照之文字(每輪之耗用; 供估「還能跑幾輪」)
     let quotaArgs = () => ({ agents: st.agents || {}, skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile, maxPercent: preNum.quotaMaxPercent })
+    //errText, 失敗之訊息(額度查詢失敗、補做夢失敗與輪次失敗之事件 error)印出或記入事件檔前之遮罩(排程第 655 項 ②; R-RUN-8 ⑨): 與 error 欄同一個 errTextOf 與同一組秘密清單(金鑰檔所列之全部金鑰), 先遮再截
+    let errText = makeErrText({ skillsRoot: st.dispatch.skillsRoot, envFile: st.dispatch.envFile })
     let snapOf = (q) => (q ? q.rows.map((r) => ({ role: r.role, windows: r.windows.map((w) => ({ label: w.label, percent: w.percent })) })) : null)
     let quotaLine = (a, b) => {
         if (!a || !b) {
@@ -261,7 +263,7 @@ else if (mode === 'round') {
                 }
             }
             catch (err) {
-                console.log(`額度查詢失敗(不擋): ${String((err && err.message) || err).slice(0, 160)}`)
+                console.log(`額度查詢失敗(不擋): ${errText(String((err && err.message) || err), { max: 160 })}`)
             }
         }
         if (why) {
@@ -291,7 +293,8 @@ else if (mode === 'round') {
                 hk = await P.redream(pd.round)
             }
             catch (err) {
-                hk = { lines: [], dream: null, failed: true, errors: [String((err && err.stack) || err).slice(0, 500)] }
+                //補做夢拋錯之堆疊(併入輪末鉤子之 errors: 寫入 ROUND.json 之 hook.errors、日誌與事件 run-failed)經 errText(排程第 655 項 ②)
+                hk = { lines: [], dream: null, failed: true, errors: [errText(String((err && err.stack) || err), { max: 500 })] }
             }
             P.monitor.stop()
             let delivered = !!(hk && hk.dream)
@@ -333,7 +336,7 @@ else if (mode === 'round') {
             if (!delivered) {
                 P.setStatus({ stage: 'dream-failed', done: true, redream: null, error: `補做夢仍未交付(${roundName(pd.round)})` })
                 P.log(`補做夢失敗: ${roundName(pd.round)} 仍未交付做夢文件;本次不起新輪`)
-                ev({ event: 'run-failed', round: pd.round, reason: 'redream', error: ((hk && hk.errors) || []).join(';').slice(0, 300) })
+                ev({ event: 'run-failed', round: pd.round, reason: 'redream', error: errText(((hk && hk.errors) || []).join(';'), { max: 300 }) })
                 process.exit(1)
             }
             ev({ event: 'round-done', round: pd.round, ok: !hookFailed, recovered: true, wallMin, hookFailed, summary: old ? relOf(fpRound) : null, ...(hk && hk.fill ? { fill: hk.fill } : {}), ...(quotaNow ? { quota: quotaNow } : {}) })
@@ -367,9 +370,10 @@ else if (mode === 'round') {
         }
         catch (err) {
             P.monitor.stop()
-            P.setStatus({ stage: 'error', done: true, error: String((err && err.stack) || err).slice(0, 2000) })
-            P.log(`輪次失敗: ${String((err && err.stack) || err)}`)
-            ev({ event: 'run-failed', round, error: String((err && err.message) || err).split('\n')[0].slice(0, 300) })
+            //同一個 err 之三處輸出(狀態檔之 error、日誌、事件)一律經 errText(原: 狀態檔與日誌原樣寫入堆疊, 其首列即事件所記之訊息)
+            P.setStatus({ stage: 'error', done: true, error: errText(String((err && err.stack) || err), { max: 2000 }) })
+            P.log(`輪次失敗: ${errText(String((err && err.stack) || err), { max: Infinity })}`)
+            ev({ event: 'run-failed', round, error: errText(String((err && err.message) || err), { max: 300, firstLine: true }) })
             process.exit(1)
         }
         let resources = P.monitor.stats()

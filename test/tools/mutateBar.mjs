@@ -1287,7 +1287,7 @@ let M = [
     ['TM54', 'src/arsi/dispatchers.mjs', [["quotaMaxPercent: numOr(c.quotaMaxPercent, 'num', cfg.quotaMaxPercent) }", "quotaMaxPercent: Number.isFinite(c.quotaMaxPercent) ? c.quotaMaxPercent : cfg.quotaMaxPercent }"]], ['unit-rsiNums']], //備援條目自己之字串門檻被主模型之門檻取代
     ['TM43', 'src/arsi/dispatchers.mjs', [["let mx = numOr(cfg.quotaMaxPercent, 'num', gateMax)\n        let row =", "let mx = Number.isFinite(cfg.quotaMaxPercent) ? cfg.quotaMaxPercent : gateMax\n        let row ="]], ['unit-rsiNums']], //額度查詢之角色門檻不收字串
     ['TM44', 'src/arsi/dispatchers.mjs', [["let mx2 = numOr(c.quotaMaxPercent, 'num', mx)", "let mx2 = Number.isFinite(c.quotaMaxPercent) ? c.quotaMaxPercent : mx"]], ['unit-rsiNums']], //備援條目之門檻不收字串
-    ['TM45', 'src/arsi/dispatchers.mjs', [["let gateMax = numOr(maxPercent, 'num', 95)\n    //errTextOf", "let gateMax = Number.isFinite(maxPercent) ? maxPercent : 95\n    //errTextOf"]], ['unit-rsiNums']], //派工之 maxPercent 不收字串(錨點隨 errTextOf 之插入而更新; 排程第 622 項)
+    ['TM45', 'src/arsi/dispatchers.mjs', [["let gateMax = numOr(maxPercent, 'num', 95)\n\n    //agentEnv", "let gateMax = Number.isFinite(maxPercent) ? maxPercent : 95\n\n    //agentEnv"]], ['unit-rsiNums']], //派工之 maxPercent 不收字串(錨點隨 errTextOf 之插入〔排程第 622 項〕與移至模組層級〔第 655 項〕而更新)
     ['TM46', 'src/domain/texts.mjs', [["一個節點至多 ${maxArmsOf(st.rsi)} 臂。", "一個節點至多 ${st.rsi.maxArmsPerNode} 臂。"]], ['unit-rsiNums']], //任務書寫原值(與閘門不同值)
     ['TM47', 'src/domain/sideRead.mjs', [["let n = rsiNumOf(x, 'int2')", "let n = Number.isInteger(x) && x >= 2 ? x : null"]], ['unit-rsiNums']], //側別讀數之整數鍵不收字串
     ['TM48', 'src/domain/backtestCfg.mjs', [["let pAbove = reqNumOf(gr.pAbove, 0.05, 'backtest.grade.pAbove', 'unit')", "let pAbove = gr.pAbove === undefined ? 0.05 : gr.pAbove"]], ['unit-rsiNums']], //pAbove 不檢
@@ -1869,11 +1869,12 @@ let M = [
     ['PE10', 'examples/pick_example.mjs', [["return sig.mode === 1 ? book.openLong < 25 : book.openShort < 25", "return sig.mode === 1 ? book.openLong < 26 : book.openShort < 25"]], ['unit-briefDefaults']], //accept 之做多上限與 meta.params.maxHoldPerSide 不同
     ['SM09', 'src/arsi/dispatchers.mjs', [["let sm = genDiagStreamMasker(secrets)\n    let started = false", "let started = false\n    let sm = null\n    let get = () => (sm = sm || genDiagStreamMasker(secrets))"], ["            put(sm.push(chunk))\n", "            put(get().push(chunk))\n"], ["            put(sm.flush())\n", "            put(get().flush())\n"]], ['unit-stderrMask'], 'equiv'], //遮罩器延到第一塊才建(行為等價: 秘密清單為建立時之快照, 同一次派工內不變)
     //── 排程第 622 項 ⓪: 派工結果之 error 欄經本庫之秘密清單遮罩(R-RUN-8 ⑧; dispatchers.mjs 之 errTextOf; unit-errMask): EM01 ~ EM05 ──
-    ['EM01', 'src/arsi/dispatchers.mjs', [["maskDiagText(String(e || ''), secrets).slice(0, 300)", "String(e || '').slice(0, 300)"]], ['unit-errMask']], //遮罩移除(只留截斷)
-    ['EM02', 'src/arsi/dispatchers.mjs', [["maskDiagText(String(e || ''), secrets).slice(0, 300)", "maskDiagText(String(e || '').slice(0, 300), secrets)"]], ['unit-errMask']], //先截後遮(跨 300 字元之金鑰被切開而漏遮)
+    //(排程第 655 項 ② 把 errTextOf 自 makeDispatch 內之區域函數改為模組層級之單一定義 ⇒ 錨點隨之更新: 「let s = maskDiagText(…)」「.slice(0, max)」「errTextOf(r.error, secrets)」)
+    ['EM01', 'src/arsi/dispatchers.mjs', [["let s = maskDiagText(String(e || ''), secrets)", "let s = String(e || '')"]], ['unit-errMask']], //遮罩移除(只留截斷)
+    ['EM02', 'src/arsi/dispatchers.mjs', [["let s = maskDiagText(String(e || ''), secrets)", "let s = maskDiagText(String(e || '').slice(0, max), secrets)"]], ['unit-errMask']], //先截後遮(跨 300 字元之金鑰被切開而漏遮)
     ['EM03', 'src/arsi/dispatchers.mjs', [["maskDiagText(String(e || ''), secrets)", "maskDiagText(String(e || ''), [])"]], ['unit-errMask']], //秘密清單為空(只留內建之樣式; 金鑰檔所列之金鑰不遮)
-    ['EM04', 'src/arsi/dispatchers.mjs', [["maskDiagText(String(e || ''), secrets).slice(0, 300)", "maskDiagText(String(e || ''), secrets).slice(0, 3000)"]], ['unit-errMask']], //截斷之長度改變
-    ['EM05', 'src/arsi/dispatchers.mjs', [["error: errTextOf(r.error)", "error: String(r.error || '').slice(0, 300)"]], ['unit-errMask']], //記入 errs 之處繞過遮罩
+    ['EM04', 'src/arsi/dispatchers.mjs', [[": s).slice(0, max)", ": s).slice(0, max * 10)"]], ['unit-errMask']], //截斷之長度改變
+    ['EM05', 'src/arsi/dispatchers.mjs', [["error: errTextOf(r.error, secrets)", "error: String(r.error || '').slice(0, 300)"]], ['unit-errMask']], //記入 errs 之處繞過遮罩
     //── 排程第 622 項 ②: 寫入型入口取輪次鎖(R-RUN-15; src/arsi/roundLock.mjs、src/cli/rsi.mjs、src/tools/*; unit-roundLock): RL01 ~ RL15 ──
     ['RL01', 'src/cli/rsi.mjs', [["    lockOrExit('建立')\n", ""]], ['unit-roundLock']], //--mode init 不取鎖
     ['RL02', 'src/cli/rsi.mjs', [["    lockOrExit('重產看板')\n", ""]], ['unit-roundLock']], //--mode board 不取鎖
@@ -1913,6 +1914,24 @@ let M = [
     ['AU07', 'test/unit-aliasBase.test.mjs', [["import assert from 'assert/strict'", "import assert from 'assert'"]], ['unit-assertStrict']], //新增一個寬鬆之檔(全庫之盤點須轉紅)
     ['AU08', 'test/unit-fillRun.test.mjs', [["assert.ok(fst.registry.dA.since !== null && fst.registry.dA.since !== undefined, '診斷改寫後 dA 之 since 已登錄')", "assert.notEqual(fst.registry.dA.since, null, '診斷改寫後 dA 之 since 已登錄')"]], ['unit-assertStrict']], //新增一個含 null 之負向斷言(全庫之盤點須轉紅)
     ['AU09', 'test/unit-aliasBase.test.mjs', [["import assert from 'assert/strict'\n", "import assert from 'assert/strict'\nimport looseExtra from 'assert'\n"]], ['unit-assertStrict']], //嚴格之檔另匯入寬鬆模組
+    //── 排程第 655 項 ①: tools/pickStore.mjs、tools/searchMap.mjs 取輪次鎖(R-RUN-15; unit-roundLock): RL16 ~ RL19 ──
+    ['RL16', 'src/tools/pickStore.mjs', [["takeRoundLockOrExit(st.rsi.root, (lock) => {\n    console.error(`輪次進行中(pid ${lock.pid}): 請於輪次結束後再執行`)\n})\n", ""]], ['unit-roundLock']], //pickStore 不取鎖
+    ['RL17', 'src/tools/searchMap.mjs', [["takeRoundLockOrExit(st.rsi.root, (lock) => {\n    console.error(`輪次進行中(pid ${lock.pid}): 請於輪次結束後再執行`)\n})\n", ""]], ['unit-roundLock']], //searchMap 不取鎖
+    ['RL18', 'src/tools/pickStore.mjs', [["takeRoundLockOrExit(st.rsi.root, (lock) => {\n    console.error(`輪次進行中(pid ${lock.pid}): 請於輪次結束後再執行`)\n})\n", ""], ["console.log(`共同儲存區: ", "takeRoundLockOrExit(st.rsi.root, (lock) => {\n    console.error(`輪次進行中(pid ${lock.pid}): 請於輪次結束後再執行`)\n})\nconsole.log(`共同儲存區: "]], ['unit-roundLock']], //pickStore 於寫入之後才取鎖(首次寫入時鎖尚未取得)
+    ['RL19', 'src/tools/searchMap.mjs', [["takeRoundLockOrExit(st.rsi.root, (lock) => {\n    console.error(`輪次進行中(pid ${lock.pid}): 請於輪次結束後再執行`)\n})\nP.rsi.init()\n", "P.rsi.init()\ntakeRoundLockOrExit(st.rsi.root, (lock) => {\n    console.error(`輪次進行中(pid ${lock.pid}): 請於輪次結束後再執行`)\n})\n"]], ['unit-roundLock']], //searchMap 於 rsi.init()(全新狀態根之策略檔先於鎖寫入)之後才取鎖
+    //── 排程第 655 項 ②: 與 error 欄同源之輸出經 errTextOf(R-RUN-8 ⑨; unit-errMaskSites): EK01 ~ EK12 ──
+    ['EK01', 'src/arsi/dispatchers.mjs', [["errTextOf(String((err && err.message) || err), secrets, { max: 120 })", "String((err && err.message) || err).slice(0, 120)"]], ['unit-errMaskSites']], //row.note 不遮
+    ['EK02', 'src/arsi/dispatchers.mjs', [["errTextOf(String((err && err.message) || err), secrets, { max: 120 })", "errTextOf(String((err && err.message) || err).slice(0, 120), secrets, { max: 120 })"]], ['unit-errMaskSites']], //row.note 先截後遮(跨 120 字元之金鑰被切開)
+    ['EK03', 'src/cli/rsi.mjs', [["error: errText(String((err && err.message) || err), { max: 300, firstLine: true }) })", "error: String((err && err.message) || err).split('\\n')[0].slice(0, 300) })"]], ['unit-errMaskSites']], //輪次失敗之事件之 error 不遮
+    ['EK04', 'src/cli/rsi.mjs', [["{ max: 300, firstLine: true }", "{ max: 300 }"]], ['unit-errMaskSites']], //輪次失敗之事件之 error 不只取第一列(多列訊息之第二列入事件)
+    ['EK05', 'src/cli/rsi.mjs', [["error: errText(String((err && err.stack) || err), { max: 2000 }) })", "error: String((err && err.stack) || err).slice(0, 2000) })"]], ['unit-errMaskSites']], //輪次失敗之狀態檔不遮
+    ['EK06', 'src/cli/rsi.mjs', [["輪次失敗: ${errText(String((err && err.stack) || err), { max: Infinity })}", "輪次失敗: ${String((err && err.stack) || err)}"]], ['unit-errMaskSites']], //輪次失敗之日誌不遮
+    ['EK07', 'src/cli/rsi.mjs', [["${errText(String((err && err.message) || err), { max: 160 })}", "${String((err && err.message) || err).slice(0, 160)}"]], ['unit-errMaskSites']], //額度查詢失敗之印出不遮
+    ['EK08', 'src/cli/rsi.mjs', [["error: errText(((hk && hk.errors) || []).join(';'), { max: 300 }) })", "error: ((hk && hk.errors) || []).join(';').slice(0, 300) })"]], ['unit-errMaskSites']], //補做夢失敗之事件之 error 不遮
+    ['EK09', 'src/tools/quota.mjs', [["查詢失敗(${errText(String((err && err.message) || err), { max: 120 })})", "查詢失敗(${String((err && err.message) || err).slice(0, 120)})"]], ['unit-errMaskSites']], //tools/quota.mjs --all 之查詢失敗不遮
+    ['EK10', 'src/arsi/dispatchers.mjs', [["                secrets = secretsOfWda(wda, env)\n", "                secrets = []\n"]], ['unit-errMaskSites']], //makeErrText 不取金鑰檔所列之金鑰(只用內建之樣式)
+    ['EK11', 'src/arsi/dispatchers.mjs', [["let secrets = secretsOfWda(wda, env)\n    let norm", "let secrets = []\n    let norm"]], ['unit-errMaskSites']], //checkQuota 之秘密清單為空
+    ['EK12', 'src/cli/rsi.mjs', [["errors: [errText(String((err && err.stack) || err), { max: 500 })] }", "errors: [String((err && err.stack) || err).slice(0, 500)] }"]], ['unit-errMaskSites']], //補做夢拋錯之堆疊(併入 hook.errors)不遮
 ]
 
 let args = process.argv.slice(2)
